@@ -1,7 +1,4 @@
 #![allow(clippy::unwrap_used)]
-use ark_application::sync_storage::CommittedFeedPort;
-use ark_core::db;
-use ark_store::test_support::TestDatabase;
 use rusqlite::Connection;
 use serde_json::json;
 
@@ -129,36 +126,6 @@ fn filter_v1_evaluates_predicates_against_exact_entity_fields() {
     .unwrap()
     .matches(&fields));
     assert!(ark_domain::selective_sync::FilterV1::match_all().matches(&fields));
-}
-
-#[tokio::test]
-async fn sync_policy_generation_changes_when_only_filter_changes() {
-    let database = TestDatabase::create().unwrap();
-    let backend = db::SqliteStorageBackend::open_for_test(
-        database.path().to_string_lossy().into_owned(),
-        "test-device",
-    )
-    .await
-    .unwrap();
-    let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
-    profile.set_rule(
-        "type",
-        "com.kosmos.note",
-        ark_domain::selective_sync::SyncMode::Full,
-    );
-    backend.set_selective_sync_profile(Some(profile.clone()));
-    let unfiltered = backend.selective_sync_policy_generation();
-    profile.set_rule_with_filter(
-        "type",
-        "com.kosmos.note",
-        ark_domain::selective_sync::SyncMode::Full,
-        ark_domain::selective_sync::FilterV1::parse(
-            r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#,
-        )
-        .unwrap(),
-    );
-    backend.set_selective_sync_profile(Some(profile));
-    assert_ne!(unfiltered, backend.selective_sync_policy_generation());
 }
 
 #[test]

@@ -9,17 +9,17 @@
 //! no background task has had a chance to release its authorizer clone, so
 //! `Arc::strong_count` on the storage backend stays above one.
 
-use ark_core::replication_storage::IntegrationReplicationBackend;
-use ark_core::sync_transport::IrohSessionTransport;
+use crate::replication_storage::IntegrationReplicationBackend;
+use crate::sync_transport::IrohSessionTransport;
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use ark_core::db::SqliteStorageBackend;
-use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::sync_bind::SyncBind;
-use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use crate::db::SqliteStorageBackend;
+use crate::iroh_transport::{IrohConfig, IrohTransport};
+use crate::sync_bind::SyncBind;
+use crate::sync_transport::{SyncTransport, TransportEvent};
 use ark_sync::protocol::LanSyncMessage;
 use iroh::RelayMode;
 

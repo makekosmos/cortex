@@ -39,6 +39,10 @@ pub(crate) async fn load_or_generate_secret_key_via_actor(
 pub use ark_net::iroh::*;
 
 #[cfg(test)]
+#[path = "iroh_transport/stop_teardown_tests.rs"]
+mod stop_teardown_tests;
+
+#[cfg(test)]
 mod tests {
     use rusqlite::Connection;
 

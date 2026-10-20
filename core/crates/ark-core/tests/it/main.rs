@@ -14,7 +14,6 @@ mod iroh_bidirectional_network;
 mod iroh_data_admission;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
-mod iroh_stop_teardown;
 mod iroh_ticket_pairing;
 mod phase2_slice2_object_versions;
 mod phase3_agenda_contract;
@@ -33,7 +32,6 @@ mod phase3_migration_system;
 mod phase3_validation;
 mod proptest_invariants;
 mod relay_round_trip;
-mod relay_transport_events;
 mod support;
 mod type_registry_slice1;
 

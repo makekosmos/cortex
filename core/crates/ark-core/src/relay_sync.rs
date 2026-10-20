@@ -12,6 +12,10 @@ mod pairing_retry_tests;
 #[path = "relay_sync/revoked_device_catchup_tests.rs"]
 mod revoked_device_catchup_tests;
 
+#[cfg(test)]
+#[path = "relay_sync/transport_events_tests.rs"]
+mod transport_events_tests;
+
 include!("relay_types.rs");
 include!("relay_impl_1.rs");
 include!("relay_impl_2.rs");

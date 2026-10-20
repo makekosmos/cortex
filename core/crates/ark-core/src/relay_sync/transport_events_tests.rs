@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use ark_core::db::SqliteStorageBackend;
-use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
-use ark_core::replication_storage::PeerIdentityBackend;
-use ark_core::sync_server::SyncRuntimeStorage;
-use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
+use crate::db::SqliteStorageBackend;
+use crate::relay_sync::{RelaySync, RelaySyncConfig};
+use crate::replication_storage::PeerIdentityBackend;
+use crate::sync_server::SyncRuntimeStorage;
+use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_sync::protocol::{LanSyncMessage, PROTOCOL_VERSION};
 use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
 
@@ -46,7 +46,7 @@ impl IrohSessionTransport for StubTransport {
     }
     fn set_outbound_authorizer(
         &self,
-        _: Arc<dyn ark_core::sync_transport::OutboundIntegrationFrameAuthorizer>,
+        _: Arc<dyn crate::sync_transport::OutboundIntegrationFrameAuthorizer>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -63,8 +63,8 @@ impl IrohSessionTransport for StubTransport {
         &self,
         _: &str,
         _: LanSyncMessage,
-    ) -> Result<ark_core::sync_transport::AddressedSendOutcome, String> {
-        Ok(ark_core::sync_transport::AddressedSendOutcome::Sent)
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
+        Ok(crate::sync_transport::AddressedSendOutcome::Sent)
     }
     fn disconnect_peer(
         &self,
@@ -210,7 +210,7 @@ async fn transport_dropped_evicts_all_peers() {
     wait_for_peer(&relay).await;
     assert_eq!(
         relay.get_connected_peer_entries().await,
-        vec![ark_core::sync_server::PeerEntry {
+        vec![crate::sync_server::PeerEntry {
             device_id: "peer-x".to_string(),
             device_name: "Peer X".to_string(),
             platform: None,
@@ -246,7 +246,7 @@ async fn disconnect_with_own_device_id_is_ignored() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(
         relay.get_connected_peer_entries().await,
-        vec![ark_core::sync_server::PeerEntry {
+        vec![crate::sync_server::PeerEntry {
             device_id: "peer-x".to_string(),
             device_name: "Peer X".to_string(),
             platform: None,
