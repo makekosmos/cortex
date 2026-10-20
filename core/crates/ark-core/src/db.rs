@@ -90,8 +90,6 @@ pub use ark_store::integration_replication::{
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
     use std::sync::{Arc, Mutex};
 
     use super::*;
@@ -113,17 +111,12 @@ mod tests {
         count_for_type as count_pending_for_type, insert_pending_object, replay_pending_for_type,
     };
     use ark_store::schema::*;
-    use ark_store::snapshot::{
-        default_rollback_restore_for_test, restore_snapshot_with_hooks,
-        validate_snapshot_id_for_test,
-    };
     use ark_store::usage_queries::merge_top_apps;
     use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};
 
     include!("db/tests_core.rs");
-    include!("db/tests_snapshot.rs");
     include!("db/tests_sync.rs");
     include!("db/tests_integration_replication.rs");
     include!("db/tests_integration_replication_issuer_lookup.rs");

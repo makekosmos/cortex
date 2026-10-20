@@ -2,7 +2,7 @@
 // Snapshot restore (KOS-51)
 // ---------------------------------------------------------------------------
 //
-// Atomic restore живой ARK DB из snapshot'а в Core-owned `backups/` директории
+// Atomic restore живой ARK DB из snapshot'а в Store-owned `backups/` директории
 // (sibling директория рядом с ark.db, туда же пишет db_backup scheduler).
 //
 // Гарантии:
@@ -38,12 +38,15 @@ mod restore_journal;
 pub use manifest::backup_to_file_chunked_verified;
 use manifest::{is_manifest_file, is_uncommitted_backup, verify_snapshot_manifest};
 pub use restore::restore_snapshot;
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub use restore::restore_snapshot_with_hooks;
+#[cfg(test)]
+#[path = "snapshot/contract_tests.rs"]
+mod contract_tests;
 pub use restore_journal::recover_interrupted_restore;
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn backup_connection_to_file(
     connection: &Connection,
@@ -93,7 +96,7 @@ pub struct RestoreReport {
     pub links: i64,
 }
 
-/// `<dir(ark.db)>/backups` — единственная директория, из которой Core
+/// `<dir(ark.db)>/backups` — единственная директория, из которой Store
 /// принимает snapshot'ы на restore.
 pub fn backups_dir(db_path: &str) -> PathBuf {
     let db = Path::new(db_path);
@@ -123,13 +126,13 @@ fn validate_snapshot_id(id: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn validate_snapshot_id_for_test(id: &str) -> Result<(), String> {
     validate_snapshot_id(id)
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn leave_restore_journal_for_test(
     connection: &Connection,
@@ -141,7 +144,7 @@ pub fn leave_restore_journal_for_test(
 }
 
 /// Разрешённый путь snapshot'а: `<backups>/<basename>` + проверка, что
-/// canonical parent — это именно Core-owned backups dir.
+/// canonical parent совпадает с настроенной backups-директорией.
 fn resolve_snapshot_path(db_path: &str, id: &str) -> Result<PathBuf, String> {
     validate_snapshot_id(id)?;
     let dir = backups_dir(db_path);
@@ -325,7 +328,7 @@ fn validate_staged(
     Ok((true, true, None))
 }
 
-/// `db_backup_list`: только regular files из Core-owned `backups/`.
+/// `db_backup_list`: только regular files из `backups/`.
 pub fn list_snapshots(db_path: &str) -> Result<Vec<SnapshotEntry>, String> {
     let dir = backups_dir(db_path);
     if !dir.is_dir() {
@@ -428,7 +431,7 @@ fn default_rollback_restore(conn: &mut Connection, path: &Path) -> Result<(), St
     .map_err(|e| e.to_string())
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn default_rollback_restore_for_test(conn: &mut Connection, path: &Path) -> Result<(), String> {
     default_rollback_restore(conn, path)

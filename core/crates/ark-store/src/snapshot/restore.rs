@@ -213,7 +213,7 @@ fn restore_snapshot_impl(
     Ok(report)
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn restore_snapshot_with_hooks(
     conn: &mut Connection,

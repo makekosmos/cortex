@@ -1,34 +1,64 @@
 // KOS-51: unit-level snapshot restore тесты. RPC-level покрытие —
 // src/main/tests/snapshot_restore.rs.
 
+#![allow(clippy::unwrap_used)]
+
+use super::*;
+use crate::objects::list_objects;
+use crate::snapshot::backup_to_file_chunked_verified as backup_to_file_chunked;
+use rusqlite::Connection;
+use std::fs;
 use std::io::Write;
 
-#[path = "tests_snapshot/legacy_startup_restore.rs"]
+#[path = "legacy_startup_restore.rs"]
 mod legacy_startup_restore;
 
-/// File-backed DB в tempdir (restore работает с `db_path`, in-memory
-/// не подходит). Возвращает (TempDir, db_path, conn).
-fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
-    let dir = crate::test_support::temp_dir();
+fn setup_file_db() -> (tempfile::TempDir, String, Connection) {
+    let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("ark.db");
     let db_str = db_path.to_str().unwrap().to_string();
-    let conn = open_db(&db_str).unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    let conn = crate::open::open_db(&db_str).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     (dir, db_str, conn)
 }
 
+fn make_object(id: &str, type_id: &str, title: &str) -> ark_domain::types::ArkObject {
+    ark_domain::types::ArkObject {
+        id: id.to_owned(),
+        type_id: type_id.to_owned(),
+        type_version: "0.0.0-legacy".to_owned(),
+        title: title.to_owned(),
+        content_json: serde_json::json!({"title": title}),
+        props_json: serde_json::json!({}),
+        created_at: "2026-01-01T00:00:00.000Z".to_owned(),
+        updated_at: "2026-01-01T00:00:00.000Z".to_owned(),
+        deleted_at: None,
+    }
+}
+
+fn make_object_type(id: &str, name: &str) -> ark_domain::types::ObjectType {
+    ark_domain::types::ObjectType {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        schema_json: "{}".to_owned(),
+        ui_schema_json: "{}".to_owned(),
+        created_at: "2026-01-01T00:00:00.000Z".to_owned(),
+        updated_at: "2026-01-01T00:00:00.000Z".to_owned(),
+        system_locked: false,
+    }
+}
+
 fn seed_object(conn: &Connection, id: &str, title: &str) {
-    ark_store::type_registry::upsert_object_type(conn, &make_object_type("snapshot_type", "Note"))
+    crate::type_registry::upsert_object_type(conn, &make_object_type("snapshot_type", "Note"))
         .unwrap();
-    ark_store::objects::upsert_object_compat(conn, &make_object(id, "snapshot_type", title))
-        .unwrap();
+    crate::objects::upsert_object_compat(conn, &make_object(id, "snapshot_type", title)).unwrap();
 }
 
 /// Пишет snapshot текущей live DB в `<db_dir>/backups/<name>`.
 fn make_snapshot(conn: &Connection, db_path: &str, name: &str) {
     let dir = backups_dir(db_path);
     fs::create_dir_all(&dir).unwrap();
-    ark_store::snapshot::backup_connection_to_file(conn, dir.join(name).to_str().unwrap()).unwrap();
+    crate::snapshot::backup_connection_to_file(conn, dir.join(name).to_str().unwrap()).unwrap();
 }
 
 #[test]
@@ -104,7 +134,7 @@ fn restore_rolls_back_to_pre_restore_state_when_post_verify_fails() {
         list_objects(&conn).unwrap().is_empty(),
         "rollback must restore the PRE-RESTORE live state, not the snapshot"
     );
-    ark_store::open::check_integrity(&conn).unwrap();
+    crate::open::check_integrity(&conn).unwrap();
 
     // Успешный откат подчищает staging и rollback — в backups/ остаётся
     // только исходный snapshot.
@@ -180,7 +210,7 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     // а не данные snapshot'а.
     let preserved_path = backups_dir(&db_path).join(preserved[0]);
     let preserved_conn = Connection::open(&preserved_path).unwrap();
-    ark_store::open::check_integrity(&preserved_conn).unwrap();
+    crate::open::check_integrity(&preserved_conn).unwrap();
     assert!(
         list_objects(&preserved_conn).unwrap().is_empty(),
         "preserved snapshot must hold the PRE-RESTORE state"
@@ -188,8 +218,8 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     drop(preserved_conn);
 
     drop(conn);
-    ark_store::snapshot::recover_interrupted_restore(&db_path).unwrap();
-    let mut conn = ark_store::open::open_db(&db_path).unwrap();
+    crate::snapshot::recover_interrupted_restore(&db_path).unwrap();
+    let mut conn = crate::open::open_db(&db_path).unwrap();
     let report = restore_snapshot(&mut conn, &db_path, preserved[0]).unwrap();
     assert!(report.restored);
     assert_eq!(report.objects, 0);
@@ -197,7 +227,7 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
         list_objects(&conn).unwrap().is_empty(),
         "restoring the preserved snapshot must return live DB to pre-restore state"
     );
-    ark_store::open::check_integrity(&conn).unwrap();
+    crate::open::check_integrity(&conn).unwrap();
 }
 
 #[test]
@@ -376,11 +406,8 @@ fn restore_replaces_live_content_and_stays_valid() {
     // Расходимся: удаляем snapshot-объект, добавляем новый.
     conn.execute("DELETE FROM objects WHERE id = 'obj-a'", [])
         .unwrap();
-    ark_store::objects::upsert_object_compat(
-        &conn,
-        &make_object("obj-b", "snapshot_type", "after"),
-    )
-    .unwrap();
+    crate::objects::upsert_object_compat(&conn, &make_object("obj-b", "snapshot_type", "after"))
+        .unwrap();
 
     let report = restore_snapshot(&mut conn, &db_path, "ark.db.backup-1").unwrap();
     assert!(report.restored);
@@ -389,5 +416,5 @@ fn restore_replaces_live_content_and_stays_valid() {
     let objects = list_objects(&conn).unwrap();
     assert_eq!(objects.len(), 1);
     assert_eq!(objects[0].id, "obj-a");
-    ark_store::open::check_integrity(&conn).unwrap();
+    crate::open::check_integrity(&conn).unwrap();
 }

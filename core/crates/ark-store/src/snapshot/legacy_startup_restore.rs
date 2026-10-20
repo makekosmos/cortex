@@ -4,7 +4,7 @@ use super::*;
 /// made. The resulting current-schema backup remains verifiable and restorable.
 #[test]
 fn startup_migrates_legacy_database_before_verified_backup_and_restore() {
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("ark.db");
     let db_str = db_path.to_str().unwrap().to_string();
 
@@ -45,16 +45,16 @@ fn startup_migrates_legacy_database_before_verified_backup_and_restore() {
         .unwrap();
     drop(legacy);
 
-    let mut conn = ark_store::open::open_db(&db_str).unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
-    let migrated = ark_store::load_all::load_all(&conn).unwrap();
+    let mut conn = crate::open::open_db(&db_str).unwrap();
+    crate::open::init_schema(&conn).unwrap();
+    let migrated = crate::load_all::load_all(&conn).unwrap();
     assert_eq!(migrated.todos.len(), 1);
     assert_eq!(migrated.todos[0].id, "legacy-task");
 
     let snapshot_id = "ark.db.backup-v1-legacy-migration";
     fs::create_dir_all(backups_dir(&db_str)).unwrap();
     let snapshot_path = backups_dir(&db_str).join(snapshot_id);
-    ark_store::snapshot::backup_to_file_chunked_verified(
+    crate::snapshot::backup_to_file_chunked_verified(
         &db_str,
         snapshot_path.to_str().unwrap(),
         4,
@@ -73,16 +73,16 @@ fn startup_migrates_legacy_database_before_verified_backup_and_restore() {
     )
     .unwrap();
     assert_eq!(
-        ark_store::load_all::load_all(&conn).unwrap().todos[0].title,
+        crate::load_all::load_all(&conn).unwrap().todos[0].title,
         "live change"
     );
 
     let report = restore_snapshot(&mut conn, &db_str, snapshot_id).unwrap();
     assert!(report.restored);
     assert_eq!(report.objects, 1);
-    let restored = ark_store::load_all::load_all(&conn).unwrap();
+    let restored = crate::load_all::load_all(&conn).unwrap();
     assert_eq!(restored.todos.len(), 1);
     assert_eq!(restored.todos[0].id, "legacy-task");
     assert_eq!(restored.todos[0].title, "Keep through restore");
-    ark_store::open::check_integrity(&conn).unwrap();
+    crate::open::check_integrity(&conn).unwrap();
 }
