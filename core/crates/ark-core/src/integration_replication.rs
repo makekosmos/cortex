@@ -32,7 +32,6 @@ pub use contracts::{
     IntegrationVerificationStatus, IssuerEncryptionKey, IssuerEncryptionKeyForPublish, NodeStatus,
     Reauthorization,
 };
-pub use outbound::{
-    node_may_receive_integration_frames, validate_outbound_signed_sync,
-    validate_outbound_signed_sync_with_transport,
-};
+#[cfg(test)]
+pub use outbound::node_may_receive_integration_frames;
+pub use outbound::{validate_outbound_signed_sync, validate_outbound_signed_sync_with_transport};

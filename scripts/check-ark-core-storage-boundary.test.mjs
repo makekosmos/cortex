@@ -68,6 +68,7 @@ test("the baseline inventory distinguishes inline tests from production code", a
       "pub fn ready() {}",
       "#[cfg(test)] mod tests {",
       '  const QUERY: &str = "SELECT id FROM objects";',
+      '  const DIAGNOSTIC: &str = "sync profile savepoint release failed";',
       "}",
     ].join("\n"),
   });

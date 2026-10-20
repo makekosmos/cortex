@@ -1,8 +1,8 @@
 use ark_core::type_registry::{
-    canonical_schema_hash, insert_type_version, list_type_versions, register_alias, resolve_alias,
-    set_base_type, set_current_version, set_status, AliasRecord, TypeRegistration, TypeVersion,
+    canonical_schema_hash, list_type_versions, register_alias, resolve_alias, set_base_type,
+    set_current_version, set_status, AliasRecord, TypeRegistration, TypeVersion,
 };
-use ark_store::type_registry::register_type;
+use ark_store::type_registry::{insert_type_version, register_type};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 

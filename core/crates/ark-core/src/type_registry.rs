@@ -7,6 +7,6 @@ pub use ark_store::type_registry::{
     set_current_version, set_status,
 };
 pub use version_storage::{
-    canonical_schema_hash, insert_type_version, legacy_compatibility_version, AliasRecord,
-    TypeGetResponse, TypeRegistration, TypeSummary, TypeVersion, LEGACY_VERSION,
+    canonical_schema_hash, legacy_compatibility_version, AliasRecord, TypeGetResponse,
+    TypeRegistration, TypeSummary, TypeVersion, LEGACY_VERSION,
 };
