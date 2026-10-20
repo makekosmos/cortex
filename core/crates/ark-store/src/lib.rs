@@ -59,6 +59,8 @@ mod load_and_clear_tests;
 #[cfg(test)]
 mod pending_objects_and_integrity_tests;
 #[cfg(test)]
+mod phase2_object_versions_tests;
+#[cfg(test)]
 mod query_contract_tests;
 #[cfg(test)]
 mod schema_migration_contract_tests;
