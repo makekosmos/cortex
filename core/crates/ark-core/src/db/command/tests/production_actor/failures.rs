@@ -111,8 +111,7 @@ async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
     (directory, handle, owner)
 }
 
-#[tokio::test]
-async fn production_actor_recovers_interrupted_restore_before_ready() {
+async fn leave_partial_restore() -> (tempfile::TempDir, String) {
     let directory = tempfile::tempdir().unwrap();
     let path = actor_path(&directory);
     let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
@@ -134,6 +133,21 @@ async fn production_actor_recovers_interrupted_restore_before_ready() {
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
         .await
         .unwrap();
+    (directory, path)
+}
+
+fn restore_journal_value(path: &str) -> String {
+    Connection::open(path)
+        .unwrap()
+        .query_row("SELECT value FROM restore_journal_test", [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
+#[tokio::test]
+async fn production_actor_recovers_interrupted_restore_before_ready() {
+    let (_directory, path) = leave_partial_restore().await;
 
     let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
         .await
@@ -151,6 +165,39 @@ async fn production_actor_recovers_interrupted_restore_before_ready() {
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn production_actor_refuses_ready_when_restore_intent_is_corrupt() {
+    let (directory, path) = leave_partial_restore().await;
+    let intent_path = directory.path().join(".actor.db.restore-intent.json");
+    std::fs::write(&intent_path, b"not-json").unwrap();
+
+    let opened = DbHandle::open(path.clone(), "actor-test-device".into()).await;
+
+    assert!(matches!(opened, Err(DbError::RecoveryRequired)));
+    assert_eq!(restore_journal_value(&path), "partial");
+    assert_eq!(std::fs::read(&intent_path).unwrap(), b"not-json");
+}
+
+#[tokio::test]
+async fn production_actor_refuses_ready_when_restore_capsule_is_missing() {
+    let (directory, path) = leave_partial_restore().await;
+    let intent_path = directory.path().join(".actor.db.restore-intent.json");
+    let intent: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&intent_path).unwrap()).unwrap();
+    let operation_id = intent["operation_id"].as_str().unwrap();
+    let capsule_path = directory
+        .path()
+        .join(format!(".actor.db.restore-live-{operation_id}.db"));
+    std::fs::remove_file(&capsule_path).unwrap();
+
+    let opened = DbHandle::open(path.clone(), "actor-test-device".into()).await;
+
+    assert!(matches!(opened, Err(DbError::RecoveryRequired)));
+    assert_eq!(restore_journal_value(&path), "partial");
+    assert!(intent_path.exists());
+    assert!(!capsule_path.exists());
 }
 
 fn failure_probe_state(handle: &DbHandle, operation_id: &str) -> (i64, i64) {
