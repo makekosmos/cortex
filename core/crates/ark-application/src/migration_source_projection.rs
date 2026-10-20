@@ -1,5 +1,6 @@
 mod inventory;
 mod native_sources;
+mod planning;
 mod report;
 
 use crate::canonical_compatibility::{CanonicalIdentity, MappingContext};
@@ -10,16 +11,19 @@ pub use inventory::{
     BlockedItem, MigrationPreflightReport, PreflightType, SourceKind, SourceRecord,
 };
 pub use native_sources::inventory_snapshot;
+pub use planning::{
+    plan_objects_from_snapshot, ObjectPlan, ObjectPlanError, PlannedItem, CONTRACT_VERSION,
+};
 pub use report::preflight_from_snapshot;
 
-pub fn mapping_context(snapshot: &SourceSnapshot) -> Result<MappingContext, String> {
-    let aliases: BTreeMap<String, CanonicalIdentity> =
+pub(super) fn canonical_aliases() -> Result<BTreeMap<String, CanonicalIdentity>, String> {
+    Ok(
         ark_domain::canonical_type::definitions::canonical_type_registrations()?
-            .iter()
+            .into_iter()
             .flat_map(|registration| {
-                registration.aliases.iter().map(move |alias| {
+                registration.aliases.into_iter().map(move |alias| {
                     (
-                        alias.alias.clone(),
+                        alias.alias,
                         CanonicalIdentity::new(
                             registration.type_id.clone(),
                             registration.version.clone(),
@@ -27,7 +31,12 @@ pub fn mapping_context(snapshot: &SourceSnapshot) -> Result<MappingContext, Stri
                     )
                 })
             })
-            .collect();
+            .collect(),
+    )
+}
+
+pub fn mapping_context(snapshot: &SourceSnapshot) -> Result<MappingContext, String> {
+    let aliases = canonical_aliases()?;
     let existing_object_ids = snapshot
         .object_identities
         .iter()

@@ -80,9 +80,20 @@ fn error_item(code: String, detail: String) -> preflight::BlockedItem {
 
 /// Compose every read-only checkpoint without creating migration tables or rows.
 pub fn plan_phase3(conn: &Connection) -> Result<MigrationPlan, MigrationError> {
-    let source = preflight::preflight_phase3(conn).map_err(MigrationError::Preflight)?;
+    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)
+        .map_err(MigrationError::Preflight)?;
+    let mapping_context = ark_application::migration_source_projection::mapping_context(&snapshot)
+        .map_err(MigrationError::Preflight)?;
+    let source = ark_application::migration_source_projection::preflight_from_snapshot(
+        &snapshot,
+        &mapping_context,
+    )
+    .map_err(MigrationError::Preflight)?;
     let registry = migration_registry::preflight_registry(conn);
-    let objects = migration_objects::plan_objects(conn, MIGRATION_TIME);
+    let objects = ark_application::migration_source_projection::plan_objects_from_snapshot(
+        &snapshot,
+        MIGRATION_TIME,
+    );
 
     let mut blocked = source.blocked.clone();
     let mut errors = source.errors.clone();

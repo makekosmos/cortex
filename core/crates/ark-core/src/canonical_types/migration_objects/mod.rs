@@ -1,5 +1,4 @@
 mod apply;
-mod native;
 pub use apply::stable_link_id;
 
 mod execute;
