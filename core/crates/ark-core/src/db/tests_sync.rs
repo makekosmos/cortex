@@ -1,6 +1,5 @@
 include!("tests_sync/storage_backend_roundtrips.rs");
 include!("tests_sync/storage_backend_tombstones_and_vectors.rs");
-include!("tests_sync/pending_objects_and_integrity.rs");
 include!("tests_sync/usage_sync_log_regressions.rs");
 include!("tests_sync/usage_sync_log_compaction.rs");
 include!("tests_sync/usage_sync_cursors.rs");

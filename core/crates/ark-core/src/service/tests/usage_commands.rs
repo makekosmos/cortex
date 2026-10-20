@@ -55,36 +55,20 @@ async fn usage_span_command_commits_days_and_rolls_back_invalid_timestamp() {
     .unwrap_err();
     assert!(error.contains("invalid usage span timestamp"), "{error}");
 
-    let connection = get_db_handle(&state)
-        .map(|db| db.shared_connection_for_test())
-        .unwrap();
-    let guard = connection.lock().unwrap();
-    let usage_days: i64 = guard
-        .query_row("SELECT COUNT(*) FROM usage_days", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(usage_days, 2);
-    let failed_device_head: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM usage_sync_heads WHERE device_id = ?1",
-            ["usage-command-invalid-device"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(failed_device_head, 0);
-    let failed_device_log: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM usage_sync_log WHERE device_id = ?1",
-            ["usage-command-invalid-device"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(failed_device_log, 0);
-    let failed_device_versions: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM usage_sync_versions WHERE entity_id LIKE ?1",
-            ["usage-day:usage-command-invalid-device:%"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(failed_device_versions, 0);
+    let persisted = ark_store::test_support::UsageRollbackFixture::inspect(
+        &fixture.db_path(),
+        "usage-command-device",
+    )
+    .unwrap();
+    assert_eq!(persisted.usage_days, 2);
+
+    let invalid_device = ark_store::test_support::UsageRollbackFixture::inspect(
+        &fixture.db_path(),
+        "usage-command-invalid-device",
+    )
+    .unwrap();
+    assert_eq!(invalid_device.usage_days, 0);
+    assert_eq!(invalid_device.sync_heads, 0);
+    assert_eq!(invalid_device.sync_log, 0);
+    assert_eq!(invalid_device.sync_versions, 0);
 }
