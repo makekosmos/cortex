@@ -136,20 +136,18 @@ impl SqliteStorageBackend {
         if entity.entity_type == "todo" && entity.deleted == Some(true) {
             let mut canonical = entity.clone();
             canonical.entity_type = "object".into();
-            return crate::canonical_types::facades::apply_remote_task_delete(conn, &canonical)
+            return ark_store::sync_entities::apply_remote_task_delete(conn, &canonical)
                 .map(|outcome| (outcome, Vec::new()));
         }
         if matches!(entity.entity_type.as_str(), "project" | "tag") && entity.deleted == Some(true)
         {
             let mut canonical = entity.clone();
             canonical.entity_type = "object".into();
-            return crate::canonical_types::facades::apply_canonical_object_entity(
-                conn, &canonical,
-            )
-            .map(|outcome| (outcome, Vec::new()));
+            return ark_store::sync_entities::apply_canonical_object_entity(conn, &canonical)
+                .map(|outcome| (outcome, Vec::new()));
         }
         if entity.entity_type == "object" && entity.deleted == Some(true) {
-            return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
+            return ark_store::sync_entities::apply_canonical_object_entity(conn, entity)
                 .map(|outcome| (outcome, Vec::new()));
         }
 
@@ -239,10 +237,11 @@ impl SqliteStorageBackend {
                     outcome = ark_application::sync_storage::InboundApplyOutcome::Pending;
                     Ok(())
                 } else {
-                    crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
-                        .map(|applied| {
+                    ark_store::sync_entities::apply_canonical_object_entity(conn, entity).map(
+                        |applied| {
                             outcome = applied;
-                        })
+                        },
+                    )
                 }
             }
             "object_link" => serde_json::from_value::<ObjectLink>(value)

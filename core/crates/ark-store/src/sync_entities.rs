@@ -4,8 +4,10 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde_json::Value;
 
 mod apply;
+mod canonical_apply;
 mod policy_bound;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
+pub use canonical_apply::{apply_canonical_object_entity, apply_remote_task_delete};
 pub use policy_bound::read_policy_bound_page;
 
 fn load_usage_sequence_page(

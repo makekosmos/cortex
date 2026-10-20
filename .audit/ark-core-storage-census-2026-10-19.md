@@ -1,6 +1,6 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 54 typed operations and 897 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 54 typed operations and 881 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
@@ -79,10 +79,10 @@ Generated from the current Core source. The scanner found 54 typed operations an
 | inline_test | SQLite operation | 2 |
 | inline_test | SQLite type or import | 4 |
 | production | rusqlite dependency | 1 |
-| production | SQL literal | 34 |
+| production | SQL literal | 26 |
 | production | SQLite lifecycle | 9 |
-| production | SQLite operation | 36 |
-| production | SQLite type or import | 135 |
+| production | SQLite operation | 29 |
+| production | SQLite type or import | 134 |
 | test_file | SQL literal | 288 |
 | test_file | SQLite lifecycle | 80 |
 | test_file | SQLite operation | 247 |

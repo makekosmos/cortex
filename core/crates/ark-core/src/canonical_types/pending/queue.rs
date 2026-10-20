@@ -80,7 +80,7 @@ pub fn replay_pending_for_type(
                     &row.awaited_type_version,
                 )?;
             }
-            crate::canonical_types::facades::apply_canonical_object_entity(conn, &entity)?;
+            ark_store::sync_entities::apply_canonical_object_entity(conn, &entity)?;
             ark_store::pending_objects::delete(
                 conn,
                 &row.id,
