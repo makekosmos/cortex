@@ -143,20 +143,6 @@ impl ApplyRegistryEventsCommand {
     }
 }
 
-pub(super) fn require_registry_peer_admitted(
-    transaction: &Transaction<'_>,
-    device_id: &str,
-) -> Result<(), DbError> {
-    let admitted = ark_store::device_registry::is_device_admitted(transaction, device_id)
-        .map_err(DbError::Storage)?
-        .unwrap_or(false);
-    if admitted {
-        Ok(())
-    } else {
-        Err(DbError::Permission("sync_peer_not_admitted".into()))
-    }
-}
-
 pub(super) fn apply_events(
     transaction: &Transaction<'_>,
     events: &[RegistryEvent],

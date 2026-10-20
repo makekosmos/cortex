@@ -212,7 +212,12 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
             self.local_device_id.as_deref(),
             self.policy_identity.as_ref(),
         )?;
-        super::device_registry_sync::require_registry_peer_admitted(transaction, peer_id)?;
+        let peer_is_admitted = ark_store::device_registry::is_device_admitted(transaction, peer_id)
+            .map_err(DbError::Storage)?
+            .unwrap_or(false);
+        if !peer_is_admitted {
+            return Err(DbError::Permission("sync_peer_not_admitted".into()));
+        }
         let message_id = self.message_id;
         let payload = serde_json::to_string(&self.entity)
             .map_err(|error| DbError::from_application_error(error.to_string()))?;
