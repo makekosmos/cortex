@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use super::DbHandle;
 
 mod adapter;
+#[cfg(test)]
 mod apply;
+mod core_task;
 #[cfg(test)]
 mod signed_integration;
 

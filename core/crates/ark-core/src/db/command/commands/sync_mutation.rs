@@ -1,9 +1,5 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::db::SqliteStorageBackend;
-use crate::types::SyncEntity;
-use ark_application::sync_storage::ReplayNotice;
+use super::super::{CommandContext, DbError};
 use ark_application::sync_storage::{OutboundProgress, OutboundProgressWrite};
-use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,71 +80,5 @@ fn map_outbound_progress_test_failure(
         ark_store::writer::TransactionFailure::Commit(error) => {
             DbError::CommitFailed(error.to_string())
         }
-    }
-}
-
-struct SqliteInboundSyncEntitySession<'transaction, 'connection>(
-    &'transaction Transaction<'connection>,
-);
-
-impl ark_application::sync_storage::SyncEntityMutationSession
-    for SqliteInboundSyncEntitySession<'_, '_>
-{
-    fn apply_entity(
-        &mut self,
-        entity: &SyncEntity,
-        authenticated_peer_id: Option<&str>,
-    ) -> Result<
-        (
-            ark_application::sync_storage::InboundApplyOutcome,
-            Vec<ReplayNotice>,
-        ),
-        String,
-    > {
-        match authenticated_peer_id {
-            Some(peer_id) => SqliteStorageBackend::apply_authenticated_entity_in_transaction(
-                self.0, entity, peer_id,
-            ),
-            None => SqliteStorageBackend::apply_entity_in_transaction(self.0, entity),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct ApplySyncEntityCommand {
-    entity: SyncEntity,
-}
-
-impl ApplySyncEntityCommand {
-    pub(crate) fn new(entity: SyncEntity) -> Self {
-        Self { entity }
-    }
-}
-
-impl sealed::Sealed for ApplySyncEntityCommand {}
-
-impl DbCommand for ApplySyncEntityCommand {
-    type Output = Vec<ReplayNotice>;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_system_sync()?;
-        let mut session = SqliteInboundSyncEntitySession(transaction);
-        let (_, notices) = ark_application::sync_storage::apply_inbound_sync_entity(
-            &mut session,
-            &self.entity,
-            None,
-        )
-        .map_err(DbError::from_application_error)?;
-        Ok(notices)
     }
 }

@@ -49,7 +49,10 @@ mod task_merge_batch_task;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
+pub(in crate::db::command) use task::InboundEntityTask;
 pub(in crate::db::command) use task::InboxReceiptTask;
+#[cfg(test)]
+pub(in crate::db::command) use task::TypedCommand;
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, CanonicalGameUpsertTask,
     ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
@@ -57,8 +60,8 @@ pub(in crate::db::command) use task::{
     LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
     LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
     ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,
-    TypedCommand, TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask,
-    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
+    TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask,
+    UsageSequenceMigrationTask, WriterTask,
 };
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task_merge_batch_task::map_failure as map_task_merge_batch_failure;

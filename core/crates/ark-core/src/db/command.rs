@@ -1,4 +1,6 @@
-use rusqlite::{Connection, Transaction};
+use rusqlite::Connection;
+#[cfg(test)]
+use rusqlite::Transaction;
 use std::sync::Arc;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
@@ -16,12 +18,12 @@ pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand, AppendLocalRegistryEventCommand,
     AppendTaskMergeOperationRequest, ApplyRegistryEventsCommand,
-    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, ApplyTaskMergeBatchCommand,
-    AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError, AuthorizedTransportKeyQuery,
-    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
-    CommittedFeedProgressCommand, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
-    EnrollPairedDeviceCommand, GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand,
-    IntegrationAdminOutput, IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    ApplySignedIntegrationFrameCommand, ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite,
+    AuthenticatedCoreTaskWriteError, AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery,
+    CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
+    CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand, EnrollPairedDeviceCommand,
+    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand, IntegrationAdminOutput,
+    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
     LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
     LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery,
     LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
@@ -177,6 +179,7 @@ mod sealed {
     pub trait Sealed {}
 }
 
+#[cfg(test)]
 pub(crate) trait DbCommand: sealed::Sealed + Send + 'static {
     type Output: Send + 'static;
 

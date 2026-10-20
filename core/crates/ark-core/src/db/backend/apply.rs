@@ -43,28 +43,6 @@ impl SqliteStorageBackend {
         Self::apply_entity_blocking_inner(transaction, entity)
     }
 
-    pub(in crate::db) fn apply_authenticated_entity_in_transaction(
-        transaction: &Transaction<'_>,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-    ) -> Result<
-        (
-            ark_application::sync_storage::InboundApplyOutcome,
-            Vec<ark_application::sync_storage::ReplayNotice>,
-        ),
-        String,
-    > {
-        let removed: Vec<String> =
-            ark_store::sync_kv::get_sync_kv(transaction, "sync.removed_peers")?
-                .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-                .transpose()?
-                .unwrap_or_default();
-        if removed.iter().any(|peer| peer == authenticated_peer_id) {
-            return Err("sync_peer_removed".into());
-        }
-        Self::apply_entity_blocking_inner(transaction, entity)
-    }
-
     fn apply_entity_blocking_inner(
         conn: &Connection,
         entity: &SyncEntity,
@@ -260,13 +238,4 @@ impl SqliteStorageBackend {
         }
         Ok((outcome, replay_notices))
     }
-}
-
-pub(super) fn is_full_core_task(entity: &SyncEntity) -> bool {
-    entity.entity_type == "object"
-        && entity.deleted != Some(true)
-        && entity.data.get("typeId").and_then(Value::as_str) == Some("core.task")
-        && entity.data.get("typeVersion").and_then(Value::as_str) == Some("0.1.0")
-        && entity.data.contains_key("contentJson")
-        && entity.data.contains_key("propsJson")
 }

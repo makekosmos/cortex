@@ -31,7 +31,10 @@ mod usage_sequence_migration;
 mod usage_sync_log;
 pub(crate) use error::store_error_from_sqlite;
 pub use error::{StoreError, StoreErrorKind};
-pub use inbound_entity::{AuthenticatedInboundEntityError, AuthenticatedInboundEntityOutcome};
+pub use inbound_entity::{
+    AuthenticatedInboundEntityError, AuthenticatedInboundEntityOutcome, InboundEntityOutcome,
+    PendingObjectType,
+};
 pub use iroh_identity::IrohIdentityWrites;
 use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};

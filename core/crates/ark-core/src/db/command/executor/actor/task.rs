@@ -1,14 +1,18 @@
+#[cfg(test)]
+use super::super::super::DbCommand;
 use super::super::super::{
     AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome, TaskWriteOperationResult,
 };
-use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceCommand};
+use super::super::super::{CommandContext, DbError, DbMaintenanceCommand};
 use ark_store::writer::{SqliteWriter, TransactionFailure};
 use tokio::sync::oneshot;
 mod committed_feed_progress;
 mod core_task_write;
+mod inbound_entity;
 mod inbox_receipt;
 pub(in crate::db::command) use committed_feed_progress::CommittedFeedProgressTask;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
+pub(in crate::db::command) use inbound_entity::InboundEntityTask;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use inbox_receipt::map_inbox_receipt_error;
 pub(in crate::db::command) use inbox_receipt::InboxReceiptTask;
@@ -68,12 +72,14 @@ pub(in crate::db::command) fn settle<T: 'static>(
     (status, publish)
 }
 
+#[cfg(test)]
 pub(in crate::db::command) struct TypedCommand<C: DbCommand> {
     pub context: CommandContext,
     pub command: C,
     pub reply: oneshot::Sender<Result<C::Output, DbError>>,
 }
 
+#[cfg(test)]
 impl<C: DbCommand> WriterTask for TypedCommand<C> {
     fn run(
         self: Box<Self>,

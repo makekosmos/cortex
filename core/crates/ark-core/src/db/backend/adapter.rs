@@ -1,4 +1,4 @@
-use super::apply::is_full_core_task;
+use super::core_task::is_full_core_task;
 use super::SqliteStorageBackend;
 use crate::db::{
     ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
@@ -243,15 +243,25 @@ include!("adapter/committed_feed.rs");
 #[async_trait::async_trait]
 impl SyncEntityMutationPort for SqliteStorageBackend {
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
-        let notices = self
+        let result = self
             .db
-            .submit(
+            .apply_inbound_entity(
                 CommandContext::sync_system(CommandClass::SyncLive),
-                crate::db::ApplySyncEntityCommand::new(entity.clone()),
+                entity.clone(),
             )
             .await
             .map_err(|error| error.to_string())?;
-        publish_replay_notices(notices);
+        publish_replay_notices(result.replay_notices);
+        if let Some(pending) = result.pending_object_type {
+            crate::events::emit_event(serde_json::json!({
+                "event": "sync_error",
+                "code": "unknown_type_version",
+                "entity_type": "object",
+                "entity_id": pending.entity_id,
+                "awaited_type_id": pending.type_id,
+                "awaited_type_version": pending.type_version,
+            }));
+        }
         Ok(())
     }
 }

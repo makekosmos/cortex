@@ -13,12 +13,57 @@ pub struct AuthenticatedInboundEntityOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InboundEntityOutcome {
+    pub outcome: InboundApplyOutcome,
+    pub replay_notices: Vec<ReplayNotice>,
+    pub pending_object_type: Option<PendingObjectType>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingObjectType {
+    pub entity_id: String,
+    pub type_id: String,
+    pub type_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticatedInboundEntityError {
     Receipt(InboxReceiptWriteError),
     Mutation(String),
 }
 
 impl SqliteWriter {
+    pub fn apply_inbound_entity(
+        &mut self,
+        entity: ark_domain::types::SyncEntity,
+    ) -> Result<InboundEntityOutcome, StoreTransactionFailure<String>> {
+        self.write_with_capabilities(|capabilities| {
+            crate::sync_entities::apply_inbound_entity(capabilities.transaction, &entity).map(
+                |(outcome, replay_notices)| InboundEntityOutcome {
+                    pending_object_type: pending_object_type(&entity, outcome),
+                    outcome,
+                    replay_notices,
+                },
+            )
+        })
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn apply_inbound_entity_on_connection(
+        connection: &mut super::Connection,
+        entity: ark_domain::types::SyncEntity,
+    ) -> Result<InboundEntityOutcome, super::TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::sync_entities::apply_inbound_entity(transaction, &entity).map(
+                |(outcome, replay_notices)| InboundEntityOutcome {
+                    pending_object_type: pending_object_type(&entity, outcome),
+                    outcome,
+                    replay_notices,
+                },
+            )
+        })
+    }
+
     /// Receives and applies one authenticated non-core.task entity in a single
     /// immediate transaction, including its committed-feed append.
     pub fn apply_authenticated_inbound_entity(
@@ -47,6 +92,27 @@ impl SqliteWriter {
             apply_inbound_entity(transaction, write, entity)
         })
     }
+}
+
+fn pending_object_type(
+    entity: &ark_domain::types::SyncEntity,
+    outcome: InboundApplyOutcome,
+) -> Option<PendingObjectType> {
+    if outcome != InboundApplyOutcome::Pending || entity.entity_type != "object" {
+        return None;
+    }
+    let type_id = entity.data.get("typeId")?.as_str()?.to_owned();
+    let type_version = entity
+        .data
+        .get("typeVersion")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("0.0.0-legacy")
+        .to_owned();
+    Some(PendingObjectType {
+        entity_id: entity.id.clone(),
+        type_id,
+        type_version,
+    })
 }
 
 fn apply_inbound_entity(
@@ -173,7 +239,9 @@ fn apply_inbound_entity(
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthenticatedInboundEntityError, AuthenticatedInboundEntityOutcome};
+    use super::{
+        AuthenticatedInboundEntityError, AuthenticatedInboundEntityOutcome, PendingObjectType,
+    };
     use crate::committed_feed::InboxState;
     use crate::writer::{SqliteWriter, TransactionFailure};
     use ark_application::sync_storage::{InboundApplyOutcome, InboxReceiptWrite};
@@ -338,5 +406,38 @@ mod tests {
         assert_eq!(result.state, InboxState::Pending);
         assert_eq!(result.pending_type_id.as_deref(), Some("custom.book"));
         assert_eq!(count(&connection, "ark_committed_feed"), 0);
+    }
+
+    #[test]
+    fn unauthenticated_unknown_object_returns_a_post_commit_diagnostic() {
+        let mut connection = setup();
+        crate::canonical_migrations::objects::ensure_object_state_schema(&connection)
+            .expect("canonical object state schema initializes");
+        let entity = entity(
+            "object",
+            "object-pending",
+            serde_json::json!({
+                "typeId":"custom.book", "typeVersion":"1.2.3", "title":"Book",
+                "contentJson":{"type":"doc","content":[]}, "propsJson":{},
+                "createdAt":"2026-10-20T00:00:00Z", "updatedAt":"2026-10-20T00:00:00Z",
+                "deletedAt":null
+            }),
+            "2026-10-20T00:00:00.000Z:000001:peer",
+            1,
+        );
+
+        let result = SqliteWriter::apply_inbound_entity_on_connection(&mut connection, entity)
+            .expect("unknown object type is durably pending");
+
+        assert_eq!(result.outcome, InboundApplyOutcome::Pending);
+        assert_eq!(
+            result.pending_object_type,
+            Some(PendingObjectType {
+                entity_id: "object-pending".into(),
+                type_id: "custom.book".into(),
+                type_version: "1.2.3".into(),
+            })
+        );
+        assert_eq!(count(&connection, "sync_pending_objects"), 1);
     }
 }

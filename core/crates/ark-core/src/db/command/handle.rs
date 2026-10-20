@@ -1,8 +1,10 @@
 use super::*;
-use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, WriterTask};
+#[cfg(test)]
+use executor::actor::TypedCommand;
+use executor::actor::{ActorOwner, ActorShared, TypedMaintenance, WriterTask};
 #[cfg(test)]
 use rusqlite::OpenFlags;
-#[cfg(debug_assertions)]
+#[cfg(test)]
 use rusqlite::TransactionBehavior;
 use std::time::Instant;
 
@@ -11,6 +13,7 @@ mod authenticated_inbound_entity;
 mod committed_feed_progress;
 mod core_task_write;
 mod external_ref;
+mod inbound_entity;
 mod inbox_receipt;
 mod integration_admin;
 mod iroh_identity;
@@ -115,6 +118,7 @@ impl DbHandle {
         }
     }
 
+    #[cfg(test)]
     pub(crate) async fn submit<C: DbCommand>(
         &self,
         context: CommandContext,
@@ -358,7 +362,7 @@ fn map_admission_error(error: executor::AdmissionError) -> DbError {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 fn spawn_test_submit<C: DbCommand>(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,
