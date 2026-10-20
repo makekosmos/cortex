@@ -175,3 +175,19 @@ test("a clean Core source tree passes the ownership gate", async (t) => {
   });
   assert.deepEqual(await collectStorageViolations(paths), []);
 });
+
+test("the checked-out Core tree has no production SQLite code references", async () => {
+  const production = (await collectStorageViolations()).filter(
+    ({ scope }) => scope === "production",
+  );
+  assert.deepEqual(
+    production.map(({ path: file, category }) => ({ path: file, category })),
+    [
+      {
+        path: "core/crates/ark-core/Cargo.toml",
+        category: "rusqlite dependency",
+      },
+    ],
+    "remove the remaining Core rusqlite dependency after migrating debug test support",
+  );
+});
