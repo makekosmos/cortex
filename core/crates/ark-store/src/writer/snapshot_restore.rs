@@ -1,4 +1,5 @@
 use super::SqliteWriter;
+#[cfg(feature = "test-support")]
 use rusqlite::Connection;
 
 impl SqliteWriter {
