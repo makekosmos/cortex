@@ -32,7 +32,7 @@ pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<V
 
 pub(super) async fn load_all(state: &Arc<ServiceState>) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(db::CommandContext::engine(), db::ObjectReadQuery::LoadAll)
+        .query_with_store(db::CommandContext::engine(), db::ObjectReadQuery::LoadAll)
         .await
         .map_err(|error| error.to_string())
 }

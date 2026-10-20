@@ -2,7 +2,7 @@ use super::*;
 
 async fn object_read(state: &ServiceState, query: db::ObjectReadQuery) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(db::CommandContext::engine(), query)
+        .query_with_store(db::CommandContext::engine(), query)
         .await
         .map_err(|error| error.to_string())
 }

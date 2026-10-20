@@ -218,6 +218,51 @@ impl DbHandle {
         }
     }
 
+    pub(crate) async fn query_with_store<Q: StoreReadQuery>(
+        &self,
+        context: CommandContext,
+        query: Q,
+    ) -> Result<Q::Output, DbError> {
+        if context.class != query.class() {
+            return Err(DbError::Invalid("database query class mismatch".into()));
+        }
+        let weight = query.weight();
+        if weight == 0 || weight > super::MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+        match &self.backend {
+            HandleBackend::Actor(actor) => {
+                let shared = Arc::clone(actor);
+                let _admission = actor.admit_read(query.class(), &context.source, weight)?;
+                tokio::task::spawn_blocking(move || {
+                    let _admission = _admission;
+                    let _snapshot = shared
+                        .readers
+                        .read()
+                        .unwrap_or_else(|error| error.into_inner());
+                    let mut reader =
+                        ark_store::read_snapshot::SqliteReader::open_read_only(&shared.path)
+                            .map_err(|error| DbError::Storage(error.to_string()))?;
+                    reader
+                        .with_read_snapshot(|capabilities| query.read(&context, &capabilities))
+                        .map_err(map_store_read_failure)
+                })
+                .await
+                .map_err(|error| DbError::Storage(error.to_string()))?
+            }
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(connection) => {
+                let _admission = self
+                    .admission
+                    .try_acquire(query.class(), &context.source, weight)
+                    .map_err(map_admission_error)?;
+                spawn_test_store_query(Arc::clone(connection), context, query, _admission)
+                    .await
+                    .map_err(|error| DbError::Storage(error.to_string()))?
+            }
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn shared_connection_for_test(&self) -> Arc<Mutex<Connection>> {
         match &self.backend {
@@ -343,6 +388,24 @@ fn spawn_test_query<Q: DbQuery>(
     })
 }
 
+#[cfg(debug_assertions)]
+fn spawn_test_store_query<Q: StoreReadQuery>(
+    connection: Arc<Mutex<Connection>>,
+    context: CommandContext,
+    query: Q,
+    _admission: executor::AdmissionPermit,
+) -> tokio::task::JoinHandle<Result<Q::Output, DbError>> {
+    tokio::task::spawn_blocking(move || {
+        let _admission = _admission;
+        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
+        ark_store::read_snapshot::test_support::with_read_snapshot(
+            &mut connection,
+            |capabilities| query.read(&context, &capabilities),
+        )
+        .map_err(map_store_read_failure)
+    })
+}
+
 impl DbOwner {
     pub(crate) async fn shutdown(&mut self, deadline: Instant) -> Result<(), DbError> {
         self.actor.shutdown(deadline).await
@@ -379,4 +442,16 @@ fn open_reader(path: &str) -> Result<Connection, DbError> {
         .pragma_update(None, "query_only", true)
         .map_err(|error| DbError::Storage(error.to_string()))?;
     Ok(connection)
+}
+
+fn map_store_read_failure(
+    error: ark_store::read_snapshot::ReadSnapshotFailure<DbError>,
+) -> DbError {
+    match error {
+        ark_store::read_snapshot::ReadSnapshotFailure::Begin(error)
+        | ark_store::read_snapshot::ReadSnapshotFailure::Commit(error) => {
+            DbError::Storage(error.to_string())
+        }
+        ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
+    }
 }

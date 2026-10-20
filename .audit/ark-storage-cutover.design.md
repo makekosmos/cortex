@@ -68,3 +68,33 @@ Store may use transaction-scoped capability types internally to group SQL by per
 Nested savepoints stay private to Store behavior methods. On success Store releases the savepoint. On operation failure it rolls back to and releases the savepoint, preserving the operation error. If rollback or release fails, the returned typed failure records both the operation and cleanup errors. Store generates unique savepoint names for nested scopes. Signed replication returns a typed replay outcome so Core does not inspect SQLite constraint codes.
 
 The verified Store-owned writer paths cover local usage writes, local object upsert and delete, local book-cover writes, canonical game upserts, local `core.task` writes, and authenticated `core.task` writes. The local task path keeps its `object.upsert.v1` receipt, task mutation, object readback, and returned commit in one Store transaction. The authenticated task path keeps policy identity, peer admission, inbox receipt, stale handling, task mutation, and inbox acknowledgement in one Store transaction, with orchestration in Application. Actor tests prove rollback after persistence/commit failures; replay, stale payload, policy change, and idempotency regressions pass. Core still has the generic raw transaction path for other operations and retains raw SQLite dependencies. The current census and operation map identify the next cutovers.
+
+## Object read cutover sketch
+
+The first read-family cutover covers all `ObjectReadQuery` variants and keeps Engine request dispatch and JSON serialization in Core. Store owns the read-only connection, deferred transaction, and SQL. The query body receives callback-scoped `ReadCapabilities` with `objects()` and `canonical()` operations; it never receives a connection, transaction, SQL, raw row, or generic query function.
+
+```rust
+pub struct SqliteReader { connection: Connection }
+
+pub enum ReadSnapshotFailure<E> {
+    Begin(StoreError),
+    Operation(E),
+    Commit(StoreError),
+}
+
+impl SqliteReader {
+    pub fn open_read_only(path: &str) -> Result<Self, StoreError>;
+    pub fn with_read_snapshot<T, E>(
+        &mut self,
+        operation: impl for<'snapshot> FnOnce(ReadCapabilities<'snapshot>) -> Result<T, E>,
+    ) -> Result<T, ReadSnapshotFailure<E>>;
+}
+```
+
+Store creates owned result capabilities from the private transaction. Their methods delegate to the existing Store readers. Canonical asset-source validation uses `ark_domain::canonical_type`; the SQL and `AssetSourceError` move from Core to Store. The `CanonicalGame` query continues returning a required `GameRecord`, `WriteSnapshot` continues returning a required `ObjectWriteSnapshot`, and `Get` continues serializing an absent object as JSON `null`.
+
+Core keeps its actor admission permit and reader barrier around `SqliteReader::with_read_snapshot`, then maps begin and commit failures to the existing storage error. The callback maps operation failures through the existing `DbError` path. It remains synchronous, and only owned values may leave the callback. `DbQuery` still has unrelated raw-connection callers during this staged migration; track those as outstanding, and remove the legacy contract when the remaining query families move. Do not add a Store enum that mirrors the Engine query variants.
+
+The design review compared a behavior-capabilities API with a closed Store request/result dispatcher. The cross-judge recommended behavior capabilities (22/25 vs. 18/25): object and canonical capabilities fit the accepted boundary better than a parallel Store enum that mirrors Engine operations. The selected shape also keeps the competing design's explicit Engine-JSON constraint and begin/operation/commit failure checks. The review was design-only; signatures above are reconciled against current Store return types, including required canonical-game and write-snapshot results.
+
+Implementation is in progress in `ark-store::read_snapshot` and `ark-store::read_capabilities`. All `ObjectReadQuery` variants use this Store read path; Core retains JSON shaping and admission/barrier ordering. Canonical asset-source SQL is Store-owned. The only connection-taking entry point is behind the explicit `test-support` feature for Core's debug-only in-memory backend. Store tests prove two reads retain one snapshot while a writer commits and prove operation failures keep their typed stage. At this checkpoint, `ark-store` passed 101 tests, `ark-core` passed 613 tests (one skipped), and targeted Clippy passed. Other Core `DbQuery` implementations still use the legacy connection contract and remain in scope.

@@ -218,6 +218,20 @@ pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
     ) -> Result<Self::Output, DbError>;
 }
 
+pub(crate) trait StoreReadQuery: sealed::Sealed + Send + 'static {
+    type Output: Send + 'static;
+
+    fn class(&self) -> CommandClass;
+
+    fn weight(&self) -> usize;
+
+    fn read(
+        self,
+        context: &CommandContext,
+        capabilities: &ark_store::ReadCapabilities<'_>,
+    ) -> Result<Self::Output, DbError>;
+}
+
 #[derive(Clone, Debug, thiserror::Error)]
 pub(crate) enum DbError {
     #[error("database command admission is saturated")]

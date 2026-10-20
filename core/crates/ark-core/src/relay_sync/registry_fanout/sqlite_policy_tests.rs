@@ -261,7 +261,7 @@ async fn set_note_policy(peer: &ActorPeer, mode: SyncMode, expected_revision: Op
 async fn note_title(peer: &ActorPeer, id: &str) -> Option<String> {
     let value = peer
         .db
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             ObjectReadQuery::Get(id.to_owned()),
         )

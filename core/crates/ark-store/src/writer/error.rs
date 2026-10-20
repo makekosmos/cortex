@@ -14,7 +14,7 @@ pub enum StoreErrorKind {
     Other,
 }
 
-pub(super) fn store_error_from_sqlite(error: rusqlite::Error) -> StoreError {
+pub(crate) fn store_error_from_sqlite(error: rusqlite::Error) -> StoreError {
     let kind = match &error {
         rusqlite::Error::SqliteFailure(code, _) => match code.code {
             rusqlite::ErrorCode::DiskFull => StoreErrorKind::DiskFull,

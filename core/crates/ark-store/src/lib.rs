@@ -1,4 +1,5 @@
 pub mod book_cover;
+pub mod canonical_asset_sources;
 pub mod canonical_game;
 pub mod canonical_migrations;
 pub mod committed_feed;
@@ -17,6 +18,8 @@ pub mod objects;
 pub mod open;
 pub mod operation_receipt;
 pub mod pending_objects;
+mod read_capabilities;
+pub mod read_snapshot;
 pub mod schema;
 pub mod snapshot;
 pub mod source_snapshot;
@@ -34,6 +37,8 @@ pub mod usage_mutation;
 pub mod usage_queries;
 pub mod usage_sync_log;
 pub mod writer;
+
+pub use read_capabilities::{CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities};
 
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 

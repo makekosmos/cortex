@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::facades::{asset_sources, AssetSourceError};
+use ark_core::canonical_types::facades::AssetSourceError;
 use ark_core::types::ArkObject;
+use ark_store::canonical_asset_sources::asset_sources;
 use rusqlite::Connection;
 use serde_json::json;
 

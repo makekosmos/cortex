@@ -118,7 +118,7 @@ pub(super) async fn set_task_policy(
 pub(super) async fn task_title(peer: &ActorPeer, id: &str) -> Option<String> {
     let value = peer
         .db
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             ObjectReadQuery::Get(id.to_owned()),
         )
@@ -134,7 +134,7 @@ pub(super) async fn write_task(peer: &ActorPeer, id: &str, title: &str) {
     let expected_snapshot = if existing {
         let value = peer
             .db
-            .query(
+            .query_with_store(
                 CommandContext::engine(),
                 ObjectReadQuery::WriteSnapshot(id.to_owned()),
             )
