@@ -15,8 +15,9 @@ pub(in crate::db::command) use task::{
     DeleteObjectTypeTask, DeleteTrashedTask, ExternalRefUpsertTask, LocalBookCoverTask,
     LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
     LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
-    ReplaceObjectLinkTask, SyncProgressWriteTask, TypedCommand, TypedMaintenance,
-    UpsertObjectLinkTask, UpsertObjectTypeTask, UsageSequenceMigrationTask, WriterTask,
+    ReplaceObjectLinkTask, SyncProgressWriteTask, TrackedAppMutationTask, TypedCommand,
+    TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageSequenceMigrationTask,
+    WriterTask,
 };
 
 struct Slot {

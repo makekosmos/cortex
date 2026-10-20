@@ -232,15 +232,15 @@ pub(super) async fn upsert_tracked_app(
     tracked_app: TrackedApp,
     device_id: Option<String>,
 ) -> Result<Value, String> {
+    use ark_application::tracked_app_mutation::{TrackedAppMutation, TrackedAppUpsert};
+
     let entity = get_db_handle(state)?
-        .submit(
+        .submit_tracked_app_mutation(
             db::CommandContext::engine(),
-            db::TrackedAppUpsertCommand::new(
-                crate::application::legacy_mutation::TrackedAppUpsert {
-                    tracked_app,
-                    device_id: local_write_device_id(device_id),
-                },
-            ),
+            TrackedAppMutation::Upsert(Box::new(TrackedAppUpsert {
+                tracked_app,
+                device_id: local_write_device_id(device_id),
+            })),
         )
         .await
         .map_err(|error| error.to_string())?;
@@ -253,15 +253,15 @@ pub(super) async fn delete_tracked_app(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
+    use ark_application::tracked_app_mutation::{TrackedAppDelete, TrackedAppMutation};
+
     let entity = get_db_handle(state)?
-        .submit(
+        .submit_tracked_app_mutation(
             db::CommandContext::engine(),
-            db::TrackedAppDeleteCommand::new(
-                crate::application::legacy_mutation::TrackedAppDelete {
-                    id,
-                    device_id: local_write_device_id(device_id),
-                },
-            ),
+            TrackedAppMutation::Delete(TrackedAppDelete {
+                id,
+                device_id: local_write_device_id(device_id),
+            }),
         )
         .await
         .map_err(|error| error.to_string())?;

@@ -30,8 +30,8 @@ pub(crate) use commands::{
     ReceiveInboxReceiptCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
     RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
     SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TaskWriteOperationResult,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UsageCompleteThroughQuery,
-    UsageReadQuery, ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;

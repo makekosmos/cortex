@@ -4,12 +4,14 @@ mod authenticated_task;
 mod error;
 mod sync_key_value;
 mod task_objects;
+mod tracked_app_mutation;
 mod type_mutation;
 mod usage_sequence_migration;
 use error::store_error_from_sqlite;
 pub use error::{StoreError, StoreErrorKind};
 use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
+pub use tracked_app_mutation::TrackedAppMutationWrites;
 
 #[derive(Debug)]
 pub enum StoreTransactionFailure<E> {

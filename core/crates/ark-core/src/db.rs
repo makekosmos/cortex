@@ -42,9 +42,8 @@ pub(crate) use command::{
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
     RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome,
     RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand,
-    SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
-    VerifyRegistryHandshakeQuery,
+    SystemReadQuery, TaskConflictSetQuery, TypeReadQuery, UsageCompleteThroughQuery,
+    UsageReadQuery, ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{
     acknowledge_outbound_identity, begin_outbound_policy_identity,

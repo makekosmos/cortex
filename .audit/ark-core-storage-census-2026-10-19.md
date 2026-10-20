@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 51 typed operations and 861 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 49 typed operations and 860 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 26 | immediate write transaction |
+| `DbCommand` | 24 | immediate write transaction |
 | `DbQuery` | 24 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -26,8 +26,6 @@ Generated from the current Core source. The scanner found 51 typed operations an
 | `DbCommand` | `ApplySignedIntegrationFrameCommand` | [core/crates/ark-core/src/db/command/commands/integration_replication.rs:103](../core/crates/ark-core/src/db/command/commands/integration_replication.rs:103) |
 | `DbCommand` | `LegacyDeleteCommand` | [core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_delete.rs:20](../core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_delete.rs:20) |
 | `DbCommand` | `LegacyGraphWriteCommand` | [core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_graph.rs:20](../core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_graph.rs:20) |
-| `DbCommand` | `TrackedAppUpsertCommand` | [core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:22](../core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:22) |
-| `DbCommand` | `TrackedAppDeleteCommand` | [core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:55](../core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:55) |
 | `DbCommand` | `CommittedFeedProgressCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70) |
 | `DbCommand` | `ApplySyncEntityCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:230](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:230) |
 | `DbCommand` | `ApplyAuthenticatedSyncEntityCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:291](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:291) |
@@ -79,8 +77,8 @@ Generated from the current Core source. The scanner found 51 typed operations an
 | production | SQL literal | 20 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 23 |
-| production | SQLite type or import | 126 |
-| test_file | SQL literal | 288 |
+| production | SQLite type or import | 123 |
+| test_file | SQL literal | 289 |
 | test_file | SQLite lifecycle | 80 |
 | test_file | SQLite operation | 247 |
-| test_file | SQLite type or import | 55 |
+| test_file | SQLite type or import | 56 |

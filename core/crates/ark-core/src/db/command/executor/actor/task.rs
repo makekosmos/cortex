@@ -19,6 +19,8 @@ mod type_mutation;
 pub(in crate::db::command) use type_mutation::{
     DeleteObjectTypeTask, RegisterPackageTypesTask, UpsertObjectTypeTask,
 };
+mod tracked_app_mutation;
+pub(in crate::db::command) use tracked_app_mutation::TrackedAppMutationTask;
 
 /// Delivers a reply. The writer calls it only after the slot is released, so a
 /// caller that receives the reply can submit again without hitting the barrier.

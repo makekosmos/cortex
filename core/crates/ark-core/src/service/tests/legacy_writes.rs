@@ -215,6 +215,14 @@ async fn legacy_entity_writes_bump_version_vector() {
             )
             .unwrap();
         assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+        let tracked_app_tombstones: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["tracked-app-legacy", "tracked_app"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tracked_app_tombstones, 1, "tracked-app deletion is synced");
         let legacy_deleted_at: Option<String> = guard
             .query_row(
                 "SELECT deleted_at FROM objects WHERE id = 'todo-batch-1'",

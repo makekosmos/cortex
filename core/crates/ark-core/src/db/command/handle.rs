@@ -13,6 +13,7 @@ mod sync_progress_write;
 mod system_mutation;
 #[cfg(debug_assertions)]
 mod test_writer;
+mod tracked_app_mutation;
 mod type_mutation;
 mod usage;
 mod usage_sequence_migration;

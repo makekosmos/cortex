@@ -99,7 +99,7 @@ impl DbHandle {
     }
 }
 
-fn validate(
+pub(in crate::db::command::handle) fn validate(
     context: &CommandContext,
     command_type: &'static str,
     payload: &impl serde::Serialize,
@@ -118,7 +118,7 @@ fn validate(
 }
 
 #[cfg(debug_assertions)]
-fn test_admission(
+pub(in crate::db::command::handle) fn test_admission(
     handle: &DbHandle,
     context: &CommandContext,
     weight: usize,
@@ -130,7 +130,7 @@ fn test_admission(
 }
 
 #[cfg(debug_assertions)]
-async fn spawn_test_type_mutation<T, F>(
+pub(in crate::db::command::handle) async fn spawn_test_type_mutation<T, F>(
     connection: Arc<Mutex<rusqlite::Connection>>,
     admission: executor::AdmissionPermit,
     operation: F,
@@ -153,7 +153,9 @@ where
 }
 
 #[cfg(debug_assertions)]
-fn map_store_failure(failure: ark_store::writer::StoreTransactionFailure<String>) -> DbError {
+pub(in crate::db::command::handle) fn map_store_failure(
+    failure: ark_store::writer::StoreTransactionFailure<String>,
+) -> DbError {
     use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};
     match failure {
         StoreTransactionFailure::Begin(error) => match error.kind {

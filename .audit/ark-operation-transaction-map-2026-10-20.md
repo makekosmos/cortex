@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 51 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus eight extracted Store writer paths, by responsibility. The current inventory has **26 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the 49 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus ten extracted Store writer paths, by responsibility. The current inventory has **24 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, tracked-app mutations, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -50,16 +50,16 @@ These operations return results to their Core callers; no direct network or othe
 | DbQuery | `ValidateOutboundSignedFrameQuery` | `core/crates/ark-core/src/db/command/commands/integration_replication.rs:23` |
 | DbQuery | `IntegrationReadQuery` | `core/crates/ark-core/src/db/command/commands/integration_read.rs:59` |
 
-### Legacy mutations — 4 operations
+### Legacy and tracked-app mutations — 4 operations
 
-**Core:** command wrappers use Core `SqliteLegacyMutationSession`. **Persistence:** Store has legacy-entity mutation helpers, but the session implementation and indirect calls must be traced before assigning complete Store ownership. Writes use the immediate transaction. This is an ownership gap, not evidence that all mutation SQL is in Core.
+**Core:** still owns canonical legacy graph writes and deletes through its migration facades. **Store:** owns tracked-app persistence, revision-vector and tombstone changes in one immediate transaction. This cut removes tracked-app writes from Core's generic transaction path; canonical legacy writes remain an ownership gap.
 
 | Kind | Operation | Implementation |
 |---|---|---|
+| StoreWriterTask | `TrackedAppMutation::Upsert` | `core/crates/ark-core/src/db/command/executor/actor/task/tracked_app_mutation.rs` → `ark_store::writer::SqliteWriter::apply_tracked_app_mutation` |
+| StoreWriterTask | `TrackedAppMutation::Delete` | `core/crates/ark-core/src/db/command/executor/actor/task/tracked_app_mutation.rs` → `ark_store::writer::SqliteWriter::apply_tracked_app_mutation` |
 | DbCommand | `LegacyDeleteCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_delete.rs:20` |
 | DbCommand | `LegacyGraphWriteCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/legacy_graph.rs:20` |
-| DbCommand | `TrackedAppUpsertCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:22` |
-| DbCommand | `TrackedAppDeleteCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:55` |
 
 ### Sync policy, entity/feed transfer, KV, and usage log — 19 operations
 
@@ -139,12 +139,12 @@ These operations return results to their Core callers; no direct network or othe
 | Task writes and inbox policy | 2 | 1 | 0 | 0 | 3 |
 | Device registry | 0 | 4 | 5 | 0 | 9 |
 | Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
-| Legacy mutations | 0 | 4 | 0 | 0 | 4 |
+| Legacy mutations | 2 | 2 | 0 | 0 | 4 |
 | Sync policy, transfer, KV, usage log | 2 | 5 | 12 | 0 | 19 |
 | Task merge | 0 | 4 | 1 | 0 | 5 |
 | Type registry | 3 | 0 | 1 | 0 | 4 |
 | System, object, and usage reads | 1 | 2 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **8** | **26** | **24** | **1** | **59** |
+| **Total** | **10** | **24** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

@@ -26,6 +26,7 @@ pub mod sync_tombstones;
 pub mod sync_versions;
 pub mod task_merge;
 pub mod task_mutation;
+mod tracked_app_mutation;
 pub mod type_registry;
 pub mod usage;
 pub mod usage_history;
