@@ -14,20 +14,11 @@ async fn editing_legacy_task_builds_mutation_from_the_new_bootstrap_baseline() {
     .unwrap();
 
     let id = "legacy-task-bootstrap";
-    with_write_tx(&state, |connection| {
-        let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
-            .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(connection, &object)?;
-        connection
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-                 VALUES (?1, '2026-10-01T00:00:00.000Z:000001:legacy', 0)",
-                [id],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
+    let storage =
+        ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path()).unwrap();
+    storage
+        .seed_legacy_task(task(id, "before"), "2026-10-01T00:00:00.000Z:000001:legacy")
+        .unwrap();
 
     let snapshot = object_snapshot(&state, id).await;
     handle_request(
@@ -42,28 +33,20 @@ async fn editing_legacy_task_builds_mutation_from_the_new_bootstrap_baseline() {
     .await
     .unwrap();
 
-    let (bootstrap_count, title_operations) = with_conn(&state, |connection| {
-        let bootstrap_count = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_bootstraps WHERE object_id = ?1",
-                [id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let title_operations = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_operations
-                 WHERE object_id = ?1 AND unit = '\"title\"'
-                   AND operation_json LIKE '%\"after\"%'",
-                [id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((bootstrap_count, title_operations))
-    })
-    .unwrap();
-    assert_eq!(bootstrap_count, 1);
-    assert_eq!(title_operations, 1);
+    let stored = storage.inspect(id).unwrap();
+    assert_eq!(
+        stored.bootstrap.map(|bootstrap| bootstrap.object.title),
+        Some("before".into())
+    );
+    assert_eq!(
+        stored.operation_count,
+        ark_domain::task_merge::TaskMergeUnit::ALL.len() as i64 + 1
+    );
+    assert!(stored
+        .title_conflicts
+        .is_some_and(|set| set.variants.iter().any(|operation| {
+            operation.value == ark_domain::task_merge::TaskMergeValue::Field(json!("after"))
+        })));
     let object = handle_request(&state, Request::GetObject { id: id.into() })
         .await
         .unwrap();
@@ -84,20 +67,11 @@ async fn deleting_legacy_task_uses_the_same_bootstrap_conflict_set_it_persists()
     .unwrap();
 
     let id = "legacy-task-delete-bootstrap";
-    with_write_tx(&state, |connection| {
-        let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
-            .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(connection, &object)?;
-        connection
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-                 VALUES (?1, '2026-10-01T00:00:00.000Z:000001:legacy', 0)",
-                [id],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
+    let storage =
+        ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path()).unwrap();
+    storage
+        .seed_legacy_task(task(id, "before"), "2026-10-01T00:00:00.000Z:000001:legacy")
+        .unwrap();
 
     let snapshot = object_snapshot(&state, id).await;
     handle_request(
@@ -112,24 +86,19 @@ async fn deleting_legacy_task_uses_the_same_bootstrap_conflict_set_it_persists()
     .await
     .unwrap();
 
+    let stored = storage.inspect(id).unwrap();
+    assert!(stored.object.is_none());
+    assert!(stored.bootstrap.is_some());
     assert!(
-        with_conn(&state, |connection| ark_store::objects::get_object(
-            connection, id
-        ))
-        .unwrap()
-        .is_none()
-    );
-    let bootstrap_count = with_conn(&state, |connection| {
-        connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_bootstraps WHERE object_id = ?1",
-                [id],
-                |row| row.get::<_, i64>(0),
+        stored.existence_operations.iter().any(|operation| {
+            matches!(
+                operation.value,
+                ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
             )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
-    assert_eq!(bootstrap_count, 1);
+        }),
+        "persisted object-existence operations: {:?}",
+        stored.existence_operations
+    );
 }
 
 #[tokio::test]
@@ -145,35 +114,15 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
     .await
     .unwrap();
 
-    with_write_tx(&state, |connection| {
-        let object = ark_store::object_write::prepare_object(
-            connection,
+    let storage =
+        ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path()).unwrap();
+    storage
+        .seed_legacy_task(
             task("rollback-task-mutation", "before"),
+            "2026-10-01T00:00:00.000Z:000001:legacy",
         )
-        .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(connection, &object)?;
-        connection
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-                 VALUES ('rollback-task-mutation', '2026-10-01T00:00:00.000Z:000001:legacy', 0)",
-                [],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
-
-    with_write_tx(&state, |connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER reject_local_task_journal
-                 BEFORE INSERT ON task_merge_journal
-                 WHEN NEW.record_kind = 'operation'
-                 BEGIN SELECT RAISE(ABORT, 'injected task journal failure'); END;",
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+        .unwrap();
+    storage.reject_operation_journal_writes().unwrap();
 
     assert!(handle_request(
         &state,
@@ -187,94 +136,19 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
     .await
     .is_err());
 
-    let counts = with_conn(&state, |connection| {
-        let object_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let bootstrap_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_bootstraps
-                 WHERE object_id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let operation_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_operations
-                 WHERE object_id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let journal_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_journal
-                 WHERE record_id IN (
-                     SELECT bootstrap_id FROM task_merge_bootstraps
-                     WHERE object_id = 'rollback-task-mutation'
-                 )",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let link_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_links
-                 WHERE source_object_id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let tombstone_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let revision_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_sync_versions
-                 WHERE object_id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let feed_rows = connection
-            .query_row(
-                "SELECT COUNT(*) FROM ark_committed_feed
-                 WHERE entity_id = 'rollback-task-mutation'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let vector: Option<String> =
-            ark_store::sync_kv::get_sync_kv(connection, ark_store::VERSION_VECTOR_KEY)?;
-        let vector_has_object = vector
-            .as_deref()
-            .map(serde_json::from_str::<ark_domain::types::VersionVector>)
-            .transpose()
-            .map_err(|error| error.to_string())?
-            .is_some_and(|value| value.contains_key("rollback-task-mutation"));
-        Ok((
-            object_rows,
-            bootstrap_rows,
-            operation_rows,
-            journal_rows,
-            link_rows,
-            tombstone_rows,
-            revision_rows,
-            feed_rows,
-            vector_has_object,
-        ))
-    })
-    .unwrap();
-    assert_eq!(counts, (1, 0, 0, 0, 0, 0, 1, 0, false));
+    let stored = storage.inspect("rollback-task-mutation").unwrap();
+    assert_eq!(
+        stored.object.as_ref().map(|object| object.title.as_str()),
+        Some("before")
+    );
+    assert!(stored.bootstrap.is_none());
+    assert_eq!(stored.operation_count, 0);
+    assert_eq!(stored.journal_count, 0);
+    assert_eq!(stored.link_count, 0);
+    assert_eq!(stored.tombstone_count, 0);
+    assert_eq!(stored.revision_count, 1);
+    assert_eq!(stored.committed_feed_count, 0);
+    assert!(!stored.version_vector_has_object);
     let object = handle_request(
         &state,
         Request::GetObject {
