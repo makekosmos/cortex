@@ -1,4 +1,6 @@
-use super::{Connection, SqliteWriter, StoreTransactionFailure, TransactionFailure};
+#[cfg(debug_assertions)]
+use super::{Connection, TransactionFailure};
+use super::{SqliteWriter, StoreTransactionFailure};
 use crate::data_platform::SyncProfileWriteError;
 use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
 

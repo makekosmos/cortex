@@ -1,5 +1,8 @@
-use super::type_mutation::{spawn_test_type_mutation, test_admission, validate};
+use super::type_mutation::validate;
+#[cfg(debug_assertions)]
+use super::type_mutation::{spawn_test_type_mutation, test_admission};
 use super::*;
+#[cfg(debug_assertions)]
 use ark_store::writer::SqliteWriter;
 use executor::actor::IrohIdentityKeyTask;
 

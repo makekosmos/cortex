@@ -1,4 +1,6 @@
-use super::{Connection, SqliteWriter, StoreTransactionFailure, TransactionFailure};
+#[cfg(debug_assertions)]
+use super::{Connection, TransactionFailure};
+use super::{SqliteWriter, StoreTransactionFailure};
 
 impl SqliteWriter {
     pub fn compact_usage_sync_log(
