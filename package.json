@@ -35,7 +35,7 @@
     "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs",
     "test:desktop-tooling": "node --test desktop/scripts/build-package-components.e2e.test.mjs",
     "test:ark-db-writers": "node --test scripts/audit-ark-db-writers.test.mjs && node scripts/audit-ark-db-writers.mjs --check",
-    "test:ark-core-storage-boundary": "node --test scripts/check-ark-core-storage-boundary.test.mjs",
+    "test:ark-core-storage-boundary": "node --test scripts/check-ark-core-storage-boundary*.test.mjs",
     "test:ark-core-storage-census": "node --test scripts/audit-ark-core-storage-census.test.mjs"
   },
   "devDependencies": {

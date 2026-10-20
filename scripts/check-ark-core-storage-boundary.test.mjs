@@ -24,38 +24,6 @@ async function fixture(t, { manifest, source, files = {} }) {
   return { root, crateRoot, sourceRoot, manifestPath };
 }
 
-test("the default scan covers integration tests and examples across the whole Core crate", async (t) => {
-  const paths = await fixture(t, {
-    manifest: '[dependencies]\nserde = "1"\n',
-    source: "pub fn ready() {}\n",
-  });
-  const integrationTest = path.join(paths.crateRoot, "tests", "it", "direct_sql.rs");
-  const example = path.join(paths.crateRoot, "examples", "direct_sql.rs");
-  await mkdir(path.dirname(integrationTest), { recursive: true });
-  await mkdir(path.dirname(example), { recursive: true });
-  await writeFile(
-    integrationTest,
-    'fn fixture(conn: &rusqlite::Connection) { conn.execute("SELECT 1", []).unwrap(); }\n',
-  );
-  await writeFile(example, 'fn main() { let _ = rusqlite::Connection::open("ark.db"); }\n');
-
-  const violations = await collectStorageViolations({
-    sourceRoot: paths.crateRoot,
-    manifestPath: paths.manifestPath,
-    root: paths.root,
-  });
-  assert.ok(
-    violations.some(
-      ({ path: file, scope }) => file.endsWith("tests/it/direct_sql.rs") && scope === "test_file",
-    ),
-  );
-  assert.ok(
-    violations.some(
-      ({ path: file, scope }) => file.endsWith("examples/direct_sql.rs") && scope === "production",
-    ),
-  );
-});
-
 test("the boundary checker ignores comments but finds SQLite code and SQL literals", async (t) => {
   const paths = await fixture(t, {
     manifest: '[dependencies]\nserde = "1"\n',
