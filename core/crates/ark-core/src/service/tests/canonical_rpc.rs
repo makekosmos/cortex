@@ -70,13 +70,14 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             .as_str()
             .is_some_and(|version| version.starts_with("0.0.0+legacy.")));
         let mut event_rx = crate::events::subscribe();
-        let before = with_conn(&state, |conn| {
-            Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
-                    .map_err(|e| e.to_string())?,
-                ark_store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")?,
-            ))
-        })
+        let before_objects = handle_request(&state, Request::ListObjects).await.unwrap();
+        let before_versions = handle_request(
+            &state,
+            Request::GetSyncKv {
+                key: "lan_sync.version_vector".into(),
+            },
+        )
+        .await
         .unwrap();
         let unknown_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object",
@@ -88,15 +89,23 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         }))
         .unwrap();
         assert!(handle_request(&state, unknown_request).await.is_err());
-        let after = with_conn(&state, |conn| {
-            Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
-                    .map_err(|e| e.to_string())?,
-                ark_store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")?,
-            ))
-        })
-        .unwrap();
-        assert_eq!(before, after);
+        assert_eq!(
+            handle_request(&state, Request::ListObjects).await.unwrap(),
+            before_objects,
+            "rejected object is not visible through the public list API"
+        );
+        assert_eq!(
+            handle_request(
+                &state,
+                Request::GetSyncKv {
+                    key: "lan_sync.version_vector".into(),
+                },
+            )
+            .await
+            .unwrap(),
+            before_versions,
+            "rejected object does not advance the sync version vector"
+        );
         let failed_object_event = received_upsert_for(&mut event_rx, "rpc-unknown");
         assert!(
             !failed_object_event,
@@ -319,14 +328,11 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
         result.unwrap_err(),
         "canonical_ingress:invalid_request:canonical_version_required"
     );
-    let object_count = with_conn(&state, |conn| {
-        conn.query_row("SELECT COUNT(*) FROM objects", [], |row| {
-            row.get::<_, i64>(0)
-        })
-        .map_err(|error| error.to_string())
-    })
-    .unwrap();
-    assert_eq!(object_count, 0);
+    assert_eq!(
+        handle_request(&state, Request::ListObjects).await.unwrap(),
+        json!([]),
+        "rejected object is not visible through the public list API"
+    );
     fixture.shutdown().await;
 }
 
@@ -361,23 +367,23 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         result.unwrap_err(),
         "canonical_ingress:invalid_request:canonical_field:/unexpected"
     );
-    let (objects, versions) = with_conn(&state, |conn| {
-        let objects = conn
-            .query_row("SELECT COUNT(*) FROM objects", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .map_err(|error| error.to_string())?;
-        let versions = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sync_kv WHERE key = 'lan_sync.version_vector'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((objects, versions))
-    })
-    .unwrap();
-    assert_eq!((objects, versions), (0, 0));
+    assert_eq!(
+        handle_request(&state, Request::ListObjects).await.unwrap(),
+        json!([]),
+        "invalid canonical payload leaves object storage unchanged"
+    );
+    assert_eq!(
+        handle_request(
+            &state,
+            Request::GetSyncKv {
+                key: "lan_sync.version_vector".into(),
+            },
+        )
+        .await
+        .unwrap(),
+        Value::Null,
+        "invalid canonical payload does not create sync state"
+    );
     fixture.shutdown().await;
 }
 
