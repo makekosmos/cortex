@@ -3,6 +3,12 @@ use std::collections::HashMap;
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 use sha2::{Digest, Sha256};
 
+#[path = "sync_storage_progress.rs"]
+mod sync_progress_write;
+pub use sync_progress_write::{
+    apply_sync_progress_write, SyncProgressWrite, SyncProgressWriteError, SyncProgressWriteSession,
+};
+
 pub use crate::sync_policy::PolicyIdentity;
 pub use crate::task_merge::{
     TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,

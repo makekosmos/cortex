@@ -44,9 +44,9 @@ pub(crate) use command::{
     PrepareTaskMergeBatchCommand, PublishIntegrationCredentialEnvelopeCommand,
     ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, RegistryDeviceEnabledQuery,
     RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, RestoreSnapshotCommand,
-    SaveLocalSyncProfileCommand, SetSyncKeyValueCommand, SignRegistryHandshakeCommand,
-    SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    TypeReadQuery, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand, SystemReadQuery,
+    TaskConflictSetQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{

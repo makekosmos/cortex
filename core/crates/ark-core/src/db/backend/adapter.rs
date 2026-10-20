@@ -53,9 +53,9 @@ async fn store_progress_value<T: Serialize + ?Sized>(
     let raw = serde_json::to_string(value).map_err(|error| error.to_string())?;
     storage
         .db
-        .submit(
+        .set_sync_progress(
             CommandContext::sync_system(CommandClass::SyncLive),
-            crate::db::SetSyncKeyValueCommand::new(key.to_owned(), raw),
+            ark_application::sync_storage::SyncProgressWrite::new(key.to_owned(), raw),
         )
         .await
         .map_err(|error| error.to_string())
@@ -275,14 +275,13 @@ impl PeerProgressPort for SqliteStorageBackend {
     ) -> Result<(), String> {
         let raw = serde_json::to_string(vector).map_err(|error| error.to_string())?;
         self.db
-            .submit(
+            .set_sync_progress(
                 CommandContext::sync_system(CommandClass::SyncLive),
-                crate::db::SetSyncKeyValueCommand::with_policy_identity(
+                ark_application::sync_storage::SyncProgressWrite::new(
                     ark_store::VERSION_VECTOR_KEY.to_owned(),
                     raw,
-                    local_device_id.to_owned(),
-                    policy_identity.clone(),
-                ),
+                )
+                .with_policy_identity(local_device_id.to_owned(), policy_identity.clone()),
             )
             .await
             .map_err(|error| error.to_string())

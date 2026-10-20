@@ -30,10 +30,10 @@ pub(crate) use commands::{
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
     RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
     RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
-    SetSyncKeyValueCommand, SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery,
-    TaskWriteOperationResult, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
-    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TaskWriteOperationResult,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;

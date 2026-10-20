@@ -1,5 +1,41 @@
 use super::*;
 
+#[tokio::test]
+async fn sync_progress_write_commits_through_store_owned_actor_transaction() {
+    let directory = tempfile::tempdir().unwrap();
+    let database_path = directory.path().join("sync-progress.db");
+    let (handle, mut owner) = DbHandle::open(
+        database_path.to_string_lossy().into_owned(),
+        "local-device".into(),
+    )
+    .await
+    .unwrap();
+
+    handle
+        .set_sync_progress(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            ark_application::sync_storage::SyncProgressWrite::new(
+                "sync.progress.test".into(),
+                "persisted".into(),
+            ),
+        )
+        .await
+        .unwrap();
+    let value = handle
+        .query(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            GetSyncKeyValueQuery::new("sync.progress.test".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(value.as_deref(), Some("persisted"));
+
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+}
+
 fn profile_rule(resource_id: String) -> ark_application::sync_policy::SyncProfileRule {
     ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),

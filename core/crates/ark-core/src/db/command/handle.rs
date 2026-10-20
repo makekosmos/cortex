@@ -9,6 +9,7 @@ mod external_ref;
 mod local_sync_key_value_write;
 mod object_link_mutation;
 mod object_mutation;
+mod sync_progress_write;
 mod system_mutation;
 #[cfg(debug_assertions)]
 mod test_writer;
