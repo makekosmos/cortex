@@ -1,5 +1,5 @@
 use super::super::executor::actor::{
-    AppendLocalRegistryEventTask, EnrollPairedDeviceTask, WriterTask,
+    AppendLocalRegistryEventTask, EnrollPairedDeviceTask, SignRegistryHandshakeTask, WriterTask,
 };
 use super::*;
 use ark_domain::device_registry::SigningPublicKey;
@@ -7,6 +7,62 @@ use ark_domain::device_registry::SigningPublicKey;
 use ark_store::writer::SqliteWriter as StoreWriter;
 
 impl DbHandle {
+    pub(crate) async fn sign_registry_handshake(
+        &self,
+        context: CommandContext,
+        signer_device_id: String,
+        transcript: ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, DbError> {
+        if context.class != CommandClass::Interactive {
+            return Err(DbError::Invalid("database command class mismatch".into()));
+        }
+        context.require_engine()?;
+        let weight = serde_json::to_vec(&transcript).map_or(usize::MAX, |bytes| {
+            signer_device_id.len().saturating_add(bytes.len())
+        });
+        if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+        let candidate_secret_key_hex = ark_net::iroh::generate_secret_key_candidate();
+        match &self.backend {
+            HandleBackend::Actor(actor) => {
+                let (reply, response) = tokio::sync::oneshot::channel();
+                let task: Box<dyn WriterTask> = Box::new(SignRegistryHandshakeTask {
+                    signer_device_id,
+                    transcript,
+                    candidate_secret_key_hex,
+                    reply,
+                });
+                actor.admit(context.class, &context.source, weight, task)?;
+                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
+            }
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(connection) => {
+                let admission = self
+                    .admission
+                    .try_acquire(context.class, &context.source, weight)
+                    .map_err(map_admission_error)?;
+                tokio::task::spawn_blocking({
+                    let connection = Arc::clone(connection);
+                    move || {
+                        let _admission = admission;
+                        let mut connection =
+                            connection.lock().unwrap_or_else(|error| error.into_inner());
+                        StoreWriter::sign_registry_handshake_on_connection(
+                            &mut connection,
+                            &signer_device_id,
+                            &transcript,
+                            &candidate_secret_key_hex,
+                        )
+                        .map_err(executor::actor::map_registry_local_mutation_failure)
+                    }
+                })
+                .await
+                .map_err(|error| DbError::Storage(error.to_string()))?
+            }
+        }
+    }
+
     pub(crate) async fn append_local_registry_event(
         &self,
         context: CommandContext,

@@ -173,12 +173,10 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
     ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
         self.db
-            .submit(
+            .sign_registry_handshake(
                 CommandContext::engine(),
-                crate::db::SignRegistryHandshakeCommand::new(
-                    local_device_id.to_owned(),
-                    transcript.clone(),
-                ),
+                local_device_id.to_owned(),
+                transcript.clone(),
             )
             .await
             .map_err(|error| error.to_string())

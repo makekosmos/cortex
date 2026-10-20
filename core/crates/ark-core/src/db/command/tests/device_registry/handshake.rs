@@ -35,9 +35,10 @@ async fn production_storage_signs_and_verifies_only_active_registry_identities()
     })
     .unwrap();
     let proof = handle
-        .submit(
+        .sign_registry_handshake(
             CommandContext::engine(),
-            SignRegistryHandshakeCommand::new("local-device".into(), transcript.clone()),
+            "local-device".into(),
+            transcript.clone(),
         )
         .await
         .unwrap();

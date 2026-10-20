@@ -1,6 +1,9 @@
 use super::task::{settle, Publish, WriterTask};
 use crate::db::DbError;
-use ark_domain::device_registry::{RegistryCommand, RegistryEvent, SigningPublicKey};
+use ark_domain::device_registry::{
+    RegistryCommand, RegistryEvent, RegistryHandshakeProof, RegistryHandshakeTranscript,
+    SigningPublicKey,
+};
 use ark_store::writer::{
     DeviceEnrollmentOutcome, RegistryLocalMutationError, SqliteWriter, StoreTransactionFailure,
 };
@@ -46,6 +49,38 @@ pub(in crate::db::command) struct EnrollPairedDeviceTask {
     pub transport_public_key: String,
     pub candidate_secret_key_hex: String,
     pub reply: oneshot::Sender<Result<DeviceEnrollmentOutcome, DbError>>,
+}
+
+pub(in crate::db::command) struct SignRegistryHandshakeTask {
+    pub signer_device_id: String,
+    pub transcript: RegistryHandshakeTranscript,
+    pub candidate_secret_key_hex: String,
+    pub reply: oneshot::Sender<Result<RegistryHandshakeProof, DbError>>,
+}
+
+impl WriterTask for SignRegistryHandshakeTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self {
+            signer_device_id,
+            transcript,
+            candidate_secret_key_hex,
+            reply,
+        } = *self;
+        let result = writer
+            .sign_registry_handshake(&signer_device_id, &transcript, &candidate_secret_key_hex)
+            .map_err(map_failure);
+        settle(result, reply, on_error)
+    }
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
 }
 
 impl WriterTask for EnrollPairedDeviceTask {

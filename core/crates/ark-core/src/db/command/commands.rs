@@ -30,9 +30,7 @@ pub(crate) use device_registry_admission::{
     RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
 };
 pub(crate) use device_registry_command::AppendLocalRegistryEventCommand;
-pub(crate) use device_registry_handshake::{
-    SignRegistryHandshakeCommand, VerifyRegistryHandshakeQuery,
-};
+pub(crate) use device_registry_handshake::VerifyRegistryHandshakeQuery;
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
 };

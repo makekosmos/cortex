@@ -1,62 +1,8 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript,
 };
-use rusqlite::Transaction;
 use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct SignRegistryHandshakeCommand {
-    signer_device_id: String,
-    transcript: RegistryHandshakeTranscript,
-}
-
-impl SignRegistryHandshakeCommand {
-    pub(crate) fn new(signer_device_id: String, transcript: RegistryHandshakeTranscript) -> Self {
-        Self {
-            signer_device_id,
-            transcript,
-        }
-    }
-}
-
-impl sealed::Sealed for SignRegistryHandshakeCommand {}
-
-impl DbCommand for SignRegistryHandshakeCommand {
-    type Output = RegistryHandshakeProof;
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()?;
-        let signer = DeviceId::parse(self.signer_device_id)
-            .map_err(|error| DbError::Invalid(error.to_string()))?;
-        let registry =
-            ark_store::device_registry::load_registry(transaction).map_err(DbError::Storage)?;
-        let device = known_registry_device(&registry, &signer)?;
-        let secret = crate::iroh_transport::load_or_generate_secret_key(transaction)
-            .map_err(DbError::Storage)?;
-        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret.to_bytes());
-        let local_public_key =
-            ark_domain::device_registry::SigningPublicKey::from_bytes(*secret.public().as_bytes())
-                .map_err(|error| DbError::Invalid(error.to_string()))?;
-        if device.signing_public_key != local_public_key {
-            return Err(DbError::Conflict(
-                "device_registry_local_identity_conflict".into(),
-            ));
-        }
-        self.transcript
-            .sign(signer, &signing_key)
-            .map_err(|error| DbError::Invalid(error.to_string()))
-    }
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct VerifyRegistryHandshakeQuery {

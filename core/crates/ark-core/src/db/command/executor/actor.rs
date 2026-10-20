@@ -28,7 +28,7 @@ pub(in crate::db::command) use registry_local::map_failure as map_registry_local
 #[cfg(debug_assertions)]
 use registry_local_mutation_task as registry_local;
 pub(in crate::db::command) use registry_local_mutation_task::{
-    AppendLocalRegistryEventTask, EnrollPairedDeviceTask,
+    AppendLocalRegistryEventTask, EnrollPairedDeviceTask, SignRegistryHandshakeTask,
 };
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]

@@ -37,9 +37,9 @@ pub(crate) use command::{
     LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
     PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery,
     RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, RestoreSnapshotCommand,
-    SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand, SystemReadQuery,
-    TaskConflictSetQuery, TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery,
-    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    SaveLocalSyncProfileCommand, SystemReadQuery, TaskConflictSetQuery, TypeReadQuery,
+    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{
     receive_inbox_payload, set_inbox_state, InboxState, MAX_FEED_DELIVERY_BYTES,

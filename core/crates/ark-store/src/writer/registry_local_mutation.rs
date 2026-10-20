@@ -3,7 +3,8 @@ use super::Connection;
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, RegistryCommand, RegistryEvent,
-    RegistryEventDraft, RegistryHead, RegistryOperation, SigningPublicKey,
+    RegistryEventDraft, RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHead,
+    RegistryOperation, SigningPublicKey,
 };
 use rusqlite::Transaction;
 
@@ -41,6 +42,31 @@ impl WriteCapabilities<'_, '_> {
 }
 
 impl RegistryLocalWrites<'_, '_> {
+    pub fn sign_handshake(
+        &mut self,
+        signer_device_id: &str,
+        transcript: &RegistryHandshakeTranscript,
+        candidate_secret_key_hex: &str,
+    ) -> Result<RegistryHandshakeProof, RegistryLocalMutationError> {
+        let signer = DeviceId::parse(signer_device_id).map_err(registry_error)?;
+        let secret = load_or_insert_secret(self.transaction, candidate_secret_key_hex)?;
+        let local_key = signing_public_key(&secret)?;
+        let registry = crate::device_registry::load_registry(self.transaction)
+            .map_err(RegistryLocalMutationError::Storage)?;
+        let device = registry.device(&signer).ok_or_else(|| {
+            RegistryLocalMutationError::Permission("device_registry_peer_unknown".into())
+        })?;
+        if device.signing_public_key != local_key {
+            return Err(RegistryLocalMutationError::Conflict(
+                "device_registry_local_identity_conflict".into(),
+            ));
+        }
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret.to_bytes());
+        transcript
+            .sign(signer, &signing_key)
+            .map_err(registry_error)
+    }
+
     pub fn append_event(
         &mut self,
         actor_device_id: &str,
@@ -355,6 +381,43 @@ fn registry_error(
 }
 
 impl SqliteWriter {
+    #[cfg(debug_assertions)]
+    pub fn sign_registry_handshake_on_connection(
+        connection: &mut Connection,
+        signer_device_id: &str,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        candidate_secret_key_hex: &str,
+    ) -> Result<
+        ark_domain::device_registry::RegistryHandshakeProof,
+        StoreTransactionFailure<RegistryLocalMutationError>,
+    > {
+        Self::write_with_capabilities_on_connection(connection, |capabilities| {
+            capabilities.registry_local_mutation().sign_handshake(
+                signer_device_id,
+                transcript,
+                candidate_secret_key_hex,
+            )
+        })
+    }
+
+    pub fn sign_registry_handshake(
+        &mut self,
+        signer_device_id: &str,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        candidate_secret_key_hex: &str,
+    ) -> Result<
+        ark_domain::device_registry::RegistryHandshakeProof,
+        StoreTransactionFailure<RegistryLocalMutationError>,
+    > {
+        self.write_with_capabilities(|capabilities| {
+            capabilities.registry_local_mutation().sign_handshake(
+                signer_device_id,
+                transcript,
+                candidate_secret_key_hex,
+            )
+        })
+    }
+
     pub fn append_local_registry_event(
         &mut self,
         actor_device_id: &str,
