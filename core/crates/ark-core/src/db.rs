@@ -51,6 +51,7 @@ pub use open::backup_to_file_chunked;
 
 mod integration_replication_admission;
 mod integration_replication_apply;
+#[cfg(test)]
 mod integration_replication_common;
 mod integration_replication_credentials;
 mod integration_replication_export;
