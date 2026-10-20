@@ -172,6 +172,8 @@ async fn legacy_entity_writes_bump_version_vector() {
     let shared = get_db_handle(&state)
         .map(|db| db.shared_connection_for_test())
         .unwrap();
+    let failure_fixture =
+        ark_store::test_support::LegacyWriteFailureFixture::open(&db_path).unwrap();
     {
         let guard = shared.lock().unwrap();
         let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
@@ -301,13 +303,7 @@ async fn legacy_entity_writes_bump_version_vector() {
             .unwrap();
         assert_eq!(tracked_app_tombstone, 1);
 
-        guard
-            .execute_batch(
-                "CREATE TRIGGER fail_legacy_batch BEFORE INSERT ON object_sync_versions
-             WHEN NEW.object_id = 'todo-fail-2'
-             BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END;",
-            )
-            .unwrap();
+        failure_fixture.install_todo_batch_failure().unwrap();
     }
     let failed = handle_request(
         &state,
@@ -318,42 +314,19 @@ async fn legacy_entity_writes_bump_version_vector() {
     )
     .await;
     assert!(failed.is_err());
-    {
-        let guard = shared.lock().unwrap();
-        for id in ["todo-fail-1", "todo-fail-2"] {
-            let object_count: i64 = guard
-                .query_row("SELECT COUNT(*) FROM objects WHERE id = ?1", [id], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            let version_count: i64 = guard
-                .query_row(
-                    "SELECT COUNT(*) FROM object_sync_versions WHERE object_id = ?1",
-                    [id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            let link_count: i64 = guard
-                .query_row(
-                    "SELECT COUNT(*) FROM object_links \
-                     WHERE source_object_id = ?1 OR target_object_id = ?1",
-                    [id],
-                    |row| row.get(0),
-                )
-                .unwrap();
-            assert_eq!(object_count, 0, "failed batch must roll back object {id}");
-            assert_eq!(version_count, 0, "failed batch must roll back version {id}");
-            assert_eq!(link_count, 0, "failed batch must roll back links for {id}");
-        }
-        guard
-            .execute_batch(
-                "DROP TRIGGER fail_legacy_batch;
-                 CREATE TRIGGER fail_legacy_delete BEFORE INSERT ON sync_tombstones
-                 WHEN NEW.id = 'project-legacy'
-                 BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END;",
-            )
-            .unwrap();
+    for id in ["todo-fail-1", "todo-fail-2"] {
+        let state = failure_fixture.inspect_batch_todo(id).unwrap();
+        assert_eq!(
+            state,
+            ark_store::test_support::LegacyBatchRollbackState {
+                object_exists: false,
+                revision_exists: false,
+                links_exist: false,
+            },
+            "failed batch must roll back every write for {id}"
+        );
     }
+    failure_fixture.install_project_delete_failure().unwrap();
     let failed_delete = handle_request(
         &state,
         Request::DeleteProject {
@@ -363,25 +336,14 @@ async fn legacy_entity_writes_bump_version_vector() {
     )
     .await;
     assert!(failed_delete.is_err());
-    {
-        let guard = shared.lock().unwrap();
-        let deleted_at: Option<String> = guard
-            .query_row(
-                "SELECT deleted_at FROM objects WHERE id = 'project-legacy'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let tombstone_count: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = 'project-legacy'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(deleted_at, None, "failed delete must restore the object");
-        assert_eq!(tombstone_count, 0, "failed delete must leave no tombstone");
-    }
+    assert_eq!(
+        failure_fixture.inspect_project_delete().unwrap(),
+        ark_store::test_support::LegacyProjectDeleteState {
+            deleted_at: None,
+            tombstone_exists: false,
+        },
+        "failed delete must restore the object and leave no tombstone"
+    );
 }
 
 // -----------------------------------------------------------------------
