@@ -21,14 +21,7 @@ async fn local_registry_event_and_projection_roll_back_together() {
         .await
         .unwrap();
     handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER reject_registry_rename
-                 BEFORE UPDATE OF display_name ON device_registry_projection
-                 WHEN NEW.device_id = 'remote-device'
-                 BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;",
-            )
-            .unwrap();
+        ark_store::test_support::reject_remote_device_rename(connection).unwrap();
     });
 
     let result = handle
@@ -45,16 +38,20 @@ async fn local_registry_event_and_projection_roll_back_together() {
         .await;
     assert!(matches!(result, Err(DbError::Storage(_))));
     handle.with_connection(|connection| {
-        let (event_count, name): (i64, Option<String>) = connection
-            .query_row(
-                "SELECT (SELECT COUNT(*) FROM device_registry_events), display_name
-                 FROM device_registry_projection WHERE device_id = 'remote-device'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+        let (_, event_count, _) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        let remote_device = ark_store::device_registry::load_entries(connection)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "remote-device")
             .unwrap();
         assert_eq!(event_count, 1);
-        assert_eq!(name, None);
+        assert_eq!(remote_device.display_name, None);
     });
 
     owner
@@ -136,19 +133,23 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .is_none());
 
     handle.with_connection(|connection| {
-        let (name, disabled_event_id, event_count): (Option<String>, Option<String>, i64) =
-            connection
-                .query_row(
-                    "SELECT projection.display_name, projection.disabled_event_id,
-                            (SELECT COUNT(*) FROM device_registry_events)
-                     FROM device_registry_projection AS projection
-                     WHERE projection.device_id = 'remote-device'",
-                    [],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-                )
-                .unwrap();
-        assert_eq!(name.as_deref(), Some("Office laptop"));
-        assert_eq!(disabled_event_id.as_deref(), Some("local-device:3"));
+        let remote = ark_store::device_registry::load_identity(connection, "remote-device")
+            .unwrap()
+            .unwrap();
+        let entry = ark_store::device_registry::load_entries(connection)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "remote-device")
+            .unwrap();
+        let (_, event_count, _) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
+        assert_eq!(remote.disabled_event_id.as_deref(), Some("local-device:3"));
         assert_eq!(event_count, 3);
     });
 
@@ -161,16 +162,16 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .await
         .unwrap();
     handle.with_connection(|connection| {
-        let (name, disabled): (Option<String>, Option<String>) = connection
-            .query_row(
-                "SELECT display_name, disabled_event_id FROM device_registry_projection
-                 WHERE device_id = 'remote-device'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+        let remote = ark_store::device_registry::load_identity(connection, "remote-device")
+            .unwrap()
             .unwrap();
-        assert_eq!(name.as_deref(), Some("Office laptop"));
-        assert_eq!(disabled.as_deref(), Some("local-device:3"));
+        let entry = ark_store::device_registry::load_entries(connection)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "remote-device")
+            .unwrap();
+        assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
+        assert_eq!(remote.disabled_event_id.as_deref(), Some("local-device:3"));
     });
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))

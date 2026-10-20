@@ -61,24 +61,26 @@ async fn registry_event_batch_rolls_back_prior_events_after_sequence_conflict() 
         Err(DbError::Conflict(reason)) if reason == "device_registry_sequence_conflict"
     ));
     handle.with_connection(|connection| {
-        let count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM device_registry_events
-                 WHERE actor_device_id = 'paired-device'",
-                [],
-                |row| row.get(0),
-            )
+        let (_, _, events) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.actor_device_id().as_str() == "paired-device")
+                .count(),
+            0
+        );
+        let paired_device = ark_store::device_registry::load_entries(connection)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "paired-device")
             .unwrap();
-        assert_eq!(count, 0);
-        let display_name: Option<String> = connection
-            .query_row(
-                "SELECT display_name FROM device_registry_projection
-                 WHERE device_id = 'paired-device'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(display_name, None);
+        assert_eq!(paired_device.display_name, None);
     });
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))

@@ -8,12 +8,14 @@ use serde::Deserialize;
 use tempfile::TempDir;
 
 mod actor_log;
+mod inbox;
 mod production_actor;
 mod registry_enrollment;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
+pub use inbox::has_inbox_receipt;
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
-pub use registry_enrollment::reject_paired_device_projection;
+pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
 
 /// Owns a temporary ARK database for the full lifetime of a test.
 ///

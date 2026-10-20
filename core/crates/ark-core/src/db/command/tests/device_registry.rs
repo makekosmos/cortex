@@ -240,24 +240,26 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
     );
     assert!(retry_digest.applied_events.is_empty());
     handle.with_connection(|connection| {
-        let alias: String = connection
-            .query_row(
-                "SELECT display_name FROM device_registry_projection
-                 WHERE device_id = 'paired-device'",
-                [],
-                |row| row.get(0),
-            )
+        let paired_device = ark_store::device_registry::load_entries(connection)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "paired-device")
             .unwrap();
-        assert_eq!(alias, "Pocket device");
-        let count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM device_registry_events
-                 WHERE actor_device_id = 'paired-device'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(paired_device.display_name.as_deref(), Some("Pocket device"));
+        let (_, _, events) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.actor_device_id().as_str() == "paired-device")
+                .count(),
+            1
+        );
     });
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -292,14 +294,10 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
 
     let (secret, previous_hash) = handle.with_connection(|connection| {
         let secret = crate::iroh_transport::load_or_generate_secret_key(connection).unwrap();
-        let previous_hash = connection
-            .query_row(
-                "SELECT event_hash FROM device_registry_events
-                 WHERE actor_device_id = 'local-device' ORDER BY actor_sequence DESC LIMIT 1",
-                [],
-                |row| row.get::<_, String>(0),
-            )
-            .unwrap();
+        let (_, previous_hash) =
+            ark_store::device_registry::load_actor_head(connection, "local-device")
+                .unwrap()
+                .unwrap();
         (secret, previous_hash)
     });
     let local_key = SigningKey::from_bytes(&secret.to_bytes());
@@ -363,22 +361,12 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         Err(DbError::Permission(reason)) if reason == "sync_peer_not_admitted"
     ));
     handle.with_connection(|connection| {
-        let object_count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = 'remote-note'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let receipt_count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM ark_sync_inbox WHERE message_id = 'revoked-session-write'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(object_count, 0);
-        assert_eq!(receipt_count, 0);
+        let object = ark_store::objects::get_object(connection, "remote-note").unwrap();
+        let receipt =
+            ark_store::test_support::has_inbox_receipt(connection, "revoked-session-write")
+                .unwrap();
+        assert_eq!(object, None);
+        assert!(!receipt);
     });
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -411,14 +399,20 @@ async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
         .await
         .unwrap();
     handle.with_connection(|connection| {
-        for table in ["device_registry_events", "device_registry_projection"] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, 0, "clear_all left {count} rows in {table}");
-        }
+        let (_, event_count, _) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        assert_eq!(event_count, 0, "clear_all left registry events");
+        assert!(
+            ark_store::device_registry::load_entries(connection)
+                .unwrap()
+                .is_empty(),
+            "clear_all left registry projections"
+        );
     });
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
