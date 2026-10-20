@@ -1,65 +1,79 @@
-fn require_current_policy_identity(
-    conn: &Connection,
-    peer_device_id: &str,
-    expected: &ark_application::sync_storage::PolicyIdentity,
-) -> Result<(), String> {
-    let current = ark_store::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?
-        .map_or_else(
-            ark_application::sync_policy::default_sync_policy_identity,
-            |policy| policy.identity(),
-        );
-    if current != *expected {
-        return Err("outbound_feed_policy_changed".into());
-    }
-    Ok(())
-}
-
-pub fn begin_outbound_policy_identity(
-    conn: &Connection,
+// Test-only compatibility helpers exercise the same Store writer API as the
+// production actor without restoring SQLite access to ark-core production code.
+#[cfg(test)]
+fn begin_outbound_policy_identity(
+    connection: &mut Connection,
     peer_device_id: &str,
     identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<OutboundProgress, String> {
-    require_current_policy_identity(conn, peer_device_id, identity)?;
-    ark_store::committed_feed::begin_outbound_policy(conn, peer_device_id, identity.revision)
+    apply_outbound_progress_test(
+        connection,
+        peer_device_id,
+        identity,
+        ark_application::sync_storage::OutboundProgressMutation::Begin,
+    )
 }
 
-pub fn complete_outbound_snapshot_identity(
-    conn: &Connection,
+#[cfg(test)]
+fn complete_outbound_snapshot_identity(
+    connection: &mut Connection,
     peer_device_id: &str,
     identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<OutboundProgress, String> {
-    require_current_policy_identity(conn, peer_device_id, identity)?;
-    ark_store::committed_feed::complete_outbound_snapshot(conn, peer_device_id, identity.revision)
+    apply_outbound_progress_test(
+        connection,
+        peer_device_id,
+        identity,
+        ark_application::sync_storage::OutboundProgressMutation::CompleteSnapshot,
+    )
 }
 
-pub fn record_outbound_scan_identity(
-    conn: &Connection,
+#[cfg(test)]
+fn record_outbound_scan_identity(
+    connection: &mut Connection,
     peer_device_id: &str,
     identity: &ark_application::sync_storage::PolicyIdentity,
     scanned_through: i64,
 ) -> Result<OutboundProgress, String> {
-    require_current_policy_identity(conn, peer_device_id, identity)?;
-    ark_store::committed_feed::record_outbound_scan(
-        conn,
+    apply_outbound_progress_test(
+        connection,
         peer_device_id,
-        identity.revision,
-        scanned_through,
+        identity,
+        ark_application::sync_storage::OutboundProgressMutation::RecordScan { scanned_through },
     )
 }
 
-pub fn acknowledge_outbound_identity(
-    conn: &Connection,
+#[cfg(test)]
+fn acknowledge_outbound_identity(
+    connection: &mut Connection,
     peer_device_id: &str,
     identity: &ark_application::sync_storage::PolicyIdentity,
     position: i64,
     ack: OutboundAck,
 ) -> Result<OutboundProgress, String> {
-    require_current_policy_identity(conn, peer_device_id, identity)?;
-    ark_store::committed_feed::acknowledge_outbound(
-        conn,
+    apply_outbound_progress_test(
+        connection,
         peer_device_id,
-        identity.revision,
-        position,
-        ack,
+        identity,
+        ark_application::sync_storage::OutboundProgressMutation::Acknowledge { position, ack },
     )
+}
+
+#[cfg(test)]
+fn apply_outbound_progress_test(
+    connection: &mut Connection,
+    peer_device_id: &str,
+    identity: &ark_application::sync_storage::PolicyIdentity,
+    mutation: ark_application::sync_storage::OutboundProgressMutation,
+) -> Result<OutboundProgress, String> {
+    let write = ark_application::sync_storage::OutboundProgressWrite::new(
+        peer_device_id.to_owned(),
+        ark_application::sync_storage::OutboundProgressPolicy::Identity(identity.clone()),
+        mutation,
+    );
+    ark_store::writer::SqliteWriter::apply_outbound_progress_write_on_connection(connection, write)
+        .map_err(|failure| match failure {
+            ark_store::writer::TransactionFailure::Operation(error) => error.to_string(),
+            other => format!("{other:?}"),
+        })
 }

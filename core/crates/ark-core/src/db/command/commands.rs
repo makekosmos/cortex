@@ -49,7 +49,7 @@ pub(crate) use legacy_mutation::{LegacyDeleteCommand, LegacyGraphWriteCommand};
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
     ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,
-    CommittedFeedProgressCommand, CommittedFeedProgressOperation,
+    CommittedFeedProgressCommand,
 };
 pub(crate) use sync_policy::{
     AcceptPeerSyncPolicyCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,

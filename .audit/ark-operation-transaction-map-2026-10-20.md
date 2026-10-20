@@ -69,7 +69,7 @@ These operations return results to their Core callers; no direct network or othe
 |---|---|---|
 | StoreWriterTask | `LocalSyncKeyValueWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/local_sync_key_value_write.rs` → `ark_store::writer::SqliteWriter::set_local_sync_key_value` |
 | StoreWriterTask | `SyncProgressWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/sync_progress_write.rs` → `ark_store::writer::SqliteWriter::set_sync_progress` |
-| DbCommand | `CommittedFeedProgressCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70` |
+| StoreWriterTask | `OutboundProgressWrite` | `core/crates/ark-core/src/db/backend/adapter/committed_feed.rs` → `core/crates/ark-core/src/db/command/handle/committed_feed_progress.rs` → `core/crates/ark-core/src/db/command/executor/actor/task/committed_feed_progress.rs` → `ark_store::writer::SqliteWriter::apply_outbound_progress_write` |
 | DbCommand | `ApplySyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263` |
 | DbCommand | `ApplyAuthenticatedSyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324` |
 | StoreWriterTask | `SaveLocalSyncProfileCommand` | `core/crates/ark-core/src/db/command/handle/sync_policy_write.rs` → `core/crates/ark-core/src/db/command/executor/actor/task/sync_policy_write.rs` → `ark_store::writer::SqliteWriter::save_local_sync_profile` |

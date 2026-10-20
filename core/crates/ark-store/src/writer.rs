@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
+mod committed_feed;
 mod error;
 mod iroh_identity;
 mod sync_key_value;

@@ -219,7 +219,7 @@ mod tests {
     fn snapshot_completion_rejects_the_identity_from_an_older_accepted_policy() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-snapshot.db");
-        let conn = Connection::open(path).unwrap();
+        let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(ark_store::schema::CREATE_TABLES)
             .unwrap();
         ark_store::data_platform::ensure_schema(&conn).unwrap();
@@ -240,7 +240,7 @@ mod tests {
         )
         .unwrap()
         .identity();
-        let pending = begin_outbound_policy_identity(&conn, "peer-a", &first).unwrap();
+        let pending = begin_outbound_policy_identity(&mut conn, "peer-a", &first).unwrap();
         assert!(!pending.initial_snapshot.is_complete());
 
         let next_rule = ark_application::sync_policy::SyncProfileRule {
@@ -261,20 +261,22 @@ mod tests {
         .identity();
 
         assert_eq!(
-            complete_outbound_snapshot_identity(&conn, "peer-a", &first).unwrap_err(),
+            complete_outbound_snapshot_identity(&mut conn, "peer-a", &first).unwrap_err(),
             "outbound_feed_policy_changed"
         );
-        let restarted = begin_outbound_policy_identity(&conn, "peer-a", &next).unwrap();
+        let restarted = begin_outbound_policy_identity(&mut conn, "peer-a", &next).unwrap();
         assert!(!restarted.initial_snapshot.is_complete());
-        assert!(complete_outbound_snapshot_identity(&conn, "peer-a", &next)
-            .unwrap()
-            .initial_snapshot
-            .is_complete());
+        assert!(
+            complete_outbound_snapshot_identity(&mut conn, "peer-a", &next)
+                .unwrap()
+                .initial_snapshot
+                .is_complete()
+        );
     }
 
     #[test]
     fn bound_feed_ack_rejects_digest_or_active_mismatch_at_same_revision() {
-        let conn = db();
+        let mut conn = db();
         let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
@@ -292,10 +294,10 @@ mod tests {
         )
         .unwrap()
         .identity();
-        begin_outbound_policy_identity(&conn, "peer-a", &current).unwrap();
-        complete_outbound_snapshot_identity(&conn, "peer-a", &current).unwrap();
+        begin_outbound_policy_identity(&mut conn, "peer-a", &current).unwrap();
+        complete_outbound_snapshot_identity(&mut conn, "peer-a", &current).unwrap();
         append_committed_change(&conn, "object", "book", "r1", false, None, None).unwrap();
-        record_outbound_scan_identity(&conn, "peer-a", &current, 1).unwrap();
+        record_outbound_scan_identity(&mut conn, "peer-a", &current, 1).unwrap();
 
         for stale in [
             ark_application::sync_storage::PolicyIdentity {
@@ -311,7 +313,7 @@ mod tests {
         ] {
             assert_eq!(
                 acknowledge_outbound_identity(
-                    &conn,
+                    &mut conn,
                     "peer-a",
                     &stale,
                     1,
@@ -322,7 +324,7 @@ mod tests {
             );
         }
         let progress = acknowledge_outbound_identity(
-            &conn,
+            &mut conn,
             "peer-a",
             &current,
             1,
@@ -337,7 +339,7 @@ mod tests {
     fn policy_change_after_pinned_feed_page_prevents_sending_that_page() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-feed-page.db");
-        let conn = Connection::open(path).unwrap();
+        let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(ark_store::schema::CREATE_TABLES)
             .unwrap();
         ark_store::data_platform::ensure_schema(&conn).unwrap();
@@ -400,7 +402,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            require_current_policy_identity(&conn, "peer-a", &pinned.identity).unwrap_err(),
+            begin_outbound_policy_identity(&mut conn, "peer-a", &pinned.identity).unwrap_err(),
             "outbound_feed_policy_changed"
         );
     }

@@ -207,50 +207,11 @@ impl From<&str> for PolicyBoundReadError {
 pub type PolicyBoundSnapshotReadError = PolicyBoundReadError;
 pub type PolicyBoundFeedReadError = PolicyBoundReadError;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct OutboundProgress {
-    pub policy_generation: i64,
-    pub initial_snapshot: InitialSnapshot,
-    pub scanned_through: i64,
-    pub receipt_through: i64,
-    pub applied_through: i64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum InitialSnapshot {
-    Pending { through: i64 },
-    Complete { through: i64 },
-}
-
-impl InitialSnapshot {
-    pub fn is_complete(self) -> bool {
-        matches!(self, Self::Complete { .. })
-    }
-
-    pub fn through(self) -> i64 {
-        match self {
-            Self::Pending { through } | Self::Complete { through } => through,
-        }
-    }
-}
-
-impl Default for OutboundProgress {
-    fn default() -> Self {
-        Self {
-            policy_generation: 0,
-            initial_snapshot: InitialSnapshot::Complete { through: 0 },
-            scanned_through: 0,
-            receipt_through: 0,
-            applied_through: 0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum OutboundAck {
-    DurableReceipt,
-    Applied,
-}
+mod outbound_progress;
+pub use outbound_progress::{
+    InitialSnapshot, OutboundAck, OutboundProgress, OutboundProgressMutation,
+    OutboundProgressPolicy, OutboundProgressWrite, OutboundProgressWriteError,
+};
 
 /// Priority of an outbound sync read. Initial hydration uses a separate
 /// admission class from live changes.

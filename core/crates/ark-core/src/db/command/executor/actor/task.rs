@@ -5,7 +5,9 @@ use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceComma
 use ark_store::writer::{SqliteWriter, TransactionFailure};
 use tokio::sync::oneshot;
 
+mod committed_feed_progress;
 mod core_task_write;
+pub(in crate::db::command) use committed_feed_progress::CommittedFeedProgressTask;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;

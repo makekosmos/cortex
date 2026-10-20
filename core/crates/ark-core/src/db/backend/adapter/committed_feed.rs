@@ -1,3 +1,8 @@
+use ark_application::sync_storage::{
+    OutboundAck, OutboundProgress, OutboundProgressMutation as ProgressMutation,
+    OutboundProgressPolicy, OutboundProgressWrite, PolicyIdentity,
+};
+
 #[async_trait::async_trait]
 impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     fn selective_sync_policy_generation(&self) -> i64 {
@@ -83,7 +88,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     async fn committed_feed_delivery_page_for_peer(
         &self,
         peer_device_id: &str,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &PolicyIdentity,
         after_position: i64,
         high_watermark: i64,
         limit: usize,
@@ -117,17 +122,16 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         &self,
         peer_device_id: &str,
         policy_generation: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::BeginOutboundPolicy {
-                        peer_device_id: peer_device_id.to_owned(),
-                        policy_generation,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Generation(policy_generation),
+                    ProgressMutation::Begin,
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -139,18 +143,17 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     async fn begin_outbound_policy_identity(
         &self,
         peer_device_id: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        identity: &PolicyIdentity,
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::BeginOutboundPolicyIdentity {
-                        peer_device_id: peer_device_id.to_owned(),
-                        identity: identity.clone(),
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Identity(identity.clone()),
+                    ProgressMutation::Begin,
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -163,17 +166,16 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         &self,
         peer_device_id: &str,
         policy_generation: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::CompleteOutboundSnapshot {
-                        peer_device_id: peer_device_id.to_owned(),
-                        policy_generation,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Generation(policy_generation),
+                    ProgressMutation::CompleteSnapshot,
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -185,18 +187,17 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     async fn complete_outbound_snapshot_identity(
         &self,
         peer_device_id: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        identity: &PolicyIdentity,
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::CompleteOutboundSnapshotIdentity {
-                        peer_device_id: peer_device_id.to_owned(),
-                        identity: identity.clone(),
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Identity(identity.clone()),
+                    ProgressMutation::CompleteSnapshot,
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -210,18 +211,16 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         peer_device_id: &str,
         policy_generation: i64,
         scanned_through: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::RecordOutboundScan {
-                        peer_device_id: peer_device_id.to_owned(),
-                        policy_generation,
-                        scanned_through,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Generation(policy_generation),
+                    ProgressMutation::RecordScan { scanned_through },
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -233,20 +232,18 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     async fn record_outbound_scan_identity(
         &self,
         peer_device_id: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &PolicyIdentity,
         scanned_through: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::RecordOutboundScanIdentity {
-                        peer_device_id: peer_device_id.to_owned(),
-                        identity: identity.clone(),
-                        scanned_through,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Identity(identity.clone()),
+                    ProgressMutation::RecordScan { scanned_through },
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -260,20 +257,17 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         peer_device_id: &str,
         policy_generation: i64,
         position: i64,
-        ack: ark_application::sync_storage::OutboundAck,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ack: OutboundAck,
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::AcknowledgeOutbound {
-                        peer_device_id: peer_device_id.to_owned(),
-                        policy_generation,
-                        position,
-                        ack,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Generation(policy_generation),
+                    ProgressMutation::Acknowledge { position, ack },
+                )),
             )
             .await
             .map_err(|error| error.to_string())?
@@ -285,22 +279,19 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     async fn acknowledge_outbound_identity(
         &self,
         peer_device_id: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &PolicyIdentity,
         position: i64,
-        ack: ark_application::sync_storage::OutboundAck,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ack: OutboundAck,
+    ) -> Result<OutboundProgress, String> {
         match self
             .db
-            .submit(
+            .apply_committed_feed_progress(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::CommittedFeedProgressCommand::new(
-                    crate::db::CommittedFeedProgressOperation::AcknowledgeOutboundIdentity {
-                        peer_device_id: peer_device_id.to_owned(),
-                        identity: identity.clone(),
-                        position,
-                        ack,
-                    },
-                ),
+                crate::db::CommittedFeedProgressCommand::new(OutboundProgressWrite::new(
+                    peer_device_id.to_owned(),
+                    OutboundProgressPolicy::Identity(identity.clone()),
+                    ProgressMutation::Acknowledge { position, ack },
+                )),
             )
             .await
             .map_err(|error| error.to_string())?

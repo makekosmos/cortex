@@ -1,3 +1,4 @@
+#[cfg(test)]
 use ark_application::sync_storage::{OutboundAck, OutboundProgress};
 use rusqlite::Connection;
 

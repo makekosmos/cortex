@@ -34,7 +34,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let directory = tempfile::tempdir().unwrap();
     let source_path = directory.path().join("policy-source.db");
     let receiver_path = directory.path().join("policy-receiver.db");
-    let source = ark_store::open::open_db(source_path.to_str().unwrap()).unwrap();
+    let mut source = ark_store::open::open_db(source_path.to_str().unwrap()).unwrap();
     ark_store::open::init_schema(&source).unwrap();
     let receiver = ark_store::open::open_db(receiver_path.to_str().unwrap()).unwrap();
     ark_store::open::init_schema(&receiver).unwrap();
@@ -84,8 +84,9 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     )
     .unwrap()
     .identity();
-    let initial = begin_outbound_policy_identity(&source, "receiver-device", &excluded).unwrap();
-    complete_outbound_snapshot_identity(&source, "receiver-device", &excluded).unwrap();
+    let initial =
+        begin_outbound_policy_identity(&mut source, "receiver-device", &excluded).unwrap();
+    complete_outbound_snapshot_identity(&mut source, "receiver-device", &excluded).unwrap();
     assert_eq!(initial.initial_snapshot.through(), 1);
 
     let mut changed = original.clone();
@@ -110,7 +111,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
             through_position: 2
         }
     );
-    record_outbound_scan_identity(&source, "receiver-device", &excluded, 2).unwrap();
+    record_outbound_scan_identity(&mut source, "receiver-device", &excluded, 2).unwrap();
 
     let retained = ark_store::objects::get_object(&receiver, "book-1")
         .unwrap()
@@ -131,7 +132,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     )
     .unwrap()
     .identity();
-    let reset = begin_outbound_policy_identity(&source, "receiver-device", &included).unwrap();
+    let reset = begin_outbound_policy_identity(&mut source, "receiver-device", &included).unwrap();
     assert_eq!(
         reset.applied_through, 0,
         "widening restarts delivery progress"

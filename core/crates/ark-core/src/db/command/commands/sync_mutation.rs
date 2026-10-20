@@ -3,55 +3,13 @@ use super::inbound_policy::require_sync_policy_identity;
 use crate::db::SqliteStorageBackend;
 use crate::types::SyncEntity;
 use ark_application::sync_storage::ReplayNotice;
-use ark_application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
+use ark_application::sync_storage::{OutboundProgress, OutboundProgressWrite, PolicyIdentity};
 use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) enum CommittedFeedProgressOperation {
-    BeginOutboundPolicy {
-        peer_device_id: String,
-        policy_generation: i64,
-    },
-    CompleteOutboundSnapshot {
-        peer_device_id: String,
-        policy_generation: i64,
-    },
-    RecordOutboundScan {
-        peer_device_id: String,
-        policy_generation: i64,
-        scanned_through: i64,
-    },
-    AcknowledgeOutbound {
-        peer_device_id: String,
-        policy_generation: i64,
-        position: i64,
-        ack: OutboundAck,
-    },
-    BeginOutboundPolicyIdentity {
-        peer_device_id: String,
-        identity: PolicyIdentity,
-    },
-    CompleteOutboundSnapshotIdentity {
-        peer_device_id: String,
-        identity: PolicyIdentity,
-    },
-    RecordOutboundScanIdentity {
-        peer_device_id: String,
-        identity: PolicyIdentity,
-        scanned_through: i64,
-    },
-    AcknowledgeOutboundIdentity {
-        peer_device_id: String,
-        identity: PolicyIdentity,
-        position: i64,
-        ack: OutboundAck,
-    },
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub(crate) struct CommittedFeedProgressCommand {
-    operation: CommittedFeedProgressOperation,
+    write: OutboundProgressWrite,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,130 +18,73 @@ pub(crate) enum CommittedFeedProgress {
 }
 
 impl CommittedFeedProgressCommand {
-    pub(crate) fn new(operation: CommittedFeedProgressOperation) -> Self {
-        Self { operation }
+    pub(crate) fn new(write: OutboundProgressWrite) -> Self {
+        Self { write }
+    }
+
+    pub(in crate::db::command) fn weight(&self) -> usize {
+        self.write.weight()
+    }
+
+    pub(in crate::db::command) fn execute(
+        self,
+        context: &CommandContext,
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<CommittedFeedProgress, DbError> {
+        context.require_sync_peer_matches(&self.write.peer_device_id)?;
+        writer
+            .apply_outbound_progress_write(self.write)
+            .map(CommittedFeedProgress::Outbound)
+            .map_err(map_outbound_progress_failure)
+    }
+
+    #[cfg(debug_assertions)]
+    pub(in crate::db::command) fn execute_on_connection(
+        self,
+        context: &CommandContext,
+        connection: &mut rusqlite::Connection,
+    ) -> Result<CommittedFeedProgress, DbError> {
+        context.require_sync_peer_matches(&self.write.peer_device_id)?;
+        ark_store::writer::SqliteWriter::apply_outbound_progress_write_on_connection(
+            connection, self.write,
+        )
+        .map(CommittedFeedProgress::Outbound)
+        .map_err(map_outbound_progress_test_failure)
     }
 }
 
-impl sealed::Sealed for CommittedFeedProgressCommand {}
-
-impl DbCommand for CommittedFeedProgressCommand {
-    type Output = CommittedFeedProgress;
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
+fn map_outbound_progress_failure(
+    failure: ark_store::writer::StoreTransactionFailure<
+        ark_application::sync_storage::OutboundProgressWriteError,
+    >,
+) -> DbError {
+    use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};
+    match failure {
+        StoreTransactionFailure::Begin(error) => match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                DbError::StorageUnhealthy(error.to_string())
+            }
+            StoreErrorKind::Other => DbError::Storage(error.to_string()),
+        },
+        StoreTransactionFailure::Operation(error) => DbError::Storage(error.to_string()),
+        StoreTransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }
+}
 
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        let peer_device_id = match &self.operation {
-            CommittedFeedProgressOperation::BeginOutboundPolicy { peer_device_id, .. }
-            | CommittedFeedProgressOperation::CompleteOutboundSnapshot { peer_device_id, .. }
-            | CommittedFeedProgressOperation::RecordOutboundScan { peer_device_id, .. }
-            | CommittedFeedProgressOperation::AcknowledgeOutbound { peer_device_id, .. }
-            | CommittedFeedProgressOperation::BeginOutboundPolicyIdentity {
-                peer_device_id, ..
-            }
-            | CommittedFeedProgressOperation::CompleteOutboundSnapshotIdentity {
-                peer_device_id,
-                ..
-            }
-            | CommittedFeedProgressOperation::RecordOutboundScanIdentity {
-                peer_device_id, ..
-            }
-            | CommittedFeedProgressOperation::AcknowledgeOutboundIdentity {
-                peer_device_id, ..
-            } => peer_device_id,
-        };
-        context.require_sync_peer_matches(peer_device_id)?;
-        use CommittedFeedProgressOperation as Op;
-        match self.operation {
-            Op::BeginOutboundPolicy {
-                peer_device_id,
-                policy_generation,
-            } => ark_store::committed_feed::begin_outbound_policy(
-                transaction,
-                &peer_device_id,
-                policy_generation,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::CompleteOutboundSnapshot {
-                peer_device_id,
-                policy_generation,
-            } => ark_store::committed_feed::complete_outbound_snapshot(
-                transaction,
-                &peer_device_id,
-                policy_generation,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::RecordOutboundScan {
-                peer_device_id,
-                policy_generation,
-                scanned_through,
-            } => ark_store::committed_feed::record_outbound_scan(
-                transaction,
-                &peer_device_id,
-                policy_generation,
-                scanned_through,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::AcknowledgeOutbound {
-                peer_device_id,
-                policy_generation,
-                position,
-                ack,
-            } => ark_store::committed_feed::acknowledge_outbound(
-                transaction,
-                &peer_device_id,
-                policy_generation,
-                position,
-                ack,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::BeginOutboundPolicyIdentity {
-                peer_device_id,
-                identity,
-            } => crate::db::begin_outbound_policy_identity(transaction, &peer_device_id, &identity)
-                .map(CommittedFeedProgress::Outbound),
-            Op::CompleteOutboundSnapshotIdentity {
-                peer_device_id,
-                identity,
-            } => crate::db::complete_outbound_snapshot_identity(
-                transaction,
-                &peer_device_id,
-                &identity,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::RecordOutboundScanIdentity {
-                peer_device_id,
-                identity,
-                scanned_through,
-            } => crate::db::record_outbound_scan_identity(
-                transaction,
-                &peer_device_id,
-                &identity,
-                scanned_through,
-            )
-            .map(CommittedFeedProgress::Outbound),
-            Op::AcknowledgeOutboundIdentity {
-                peer_device_id,
-                identity,
-                position,
-                ack,
-            } => crate::db::acknowledge_outbound_identity(
-                transaction,
-                &peer_device_id,
-                &identity,
-                position,
-                ack,
-            )
-            .map(CommittedFeedProgress::Outbound),
+#[cfg(debug_assertions)]
+fn map_outbound_progress_test_failure(
+    failure: ark_store::writer::TransactionFailure<
+        ark_application::sync_storage::OutboundProgressWriteError,
+    >,
+) -> DbError {
+    match failure {
+        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        ark_store::writer::TransactionFailure::Operation(error) => {
+            DbError::Storage(error.to_string())
         }
-        .map_err(DbError::Storage)
+        ark_store::writer::TransactionFailure::Commit(error) => {
+            DbError::CommitFailed(error.to_string())
+        }
     }
 }
 

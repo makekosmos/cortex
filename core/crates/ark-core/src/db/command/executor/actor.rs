@@ -11,13 +11,14 @@ mod task;
 use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 pub(in crate::db::command) use task::{
-    AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask, DeleteObjectLinkTask,
-    DeleteObjectTypeTask, DeleteTrashedTask, ExternalRefUpsertTask, IrohIdentityKeyTask,
-    LocalBookCoverTask, LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
-    LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
-    ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,
-    TypedCommand, TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask,
-    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
+    AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask,
+    CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask, DeleteTrashedTask,
+    ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask,
+    LocalObjectDeleteTask, LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask,
+    Publish, RegisterPackageTypesTask, ReplaceObjectLinkTask, SyncPolicyWriteTask,
+    SyncProgressWriteTask, TrackedAppMutationTask, TypedCommand, TypedMaintenance,
+    UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask,
+    WriterTask,
 };
 
 struct Slot {
