@@ -10,7 +10,8 @@
 ## Completion units
 
 - [x] Establish the exact current baseline and determine the prior full-gate failure. The full check passed and was cached for disk tree `6f6c295e4e988234be7f7aa638a72b4b270fd2e4`; the apparent shell failure came from assigning the result to zsh's read-only `status` variable. The current tree includes a new audit file, so the final gate must rerun after source work.
-- [x] Cut local usage writes, Clear All, and Delete Trashed over to Store-owned transaction methods and actor tasks; delete the superseded Core command types in the same change. Focused behavior tests, formatting, Clippy, and writer census passed; this change is not committed yet.
+- [x] Cut local usage writes, Clear All, and Delete Trashed over to Store-owned transaction methods and actor tasks; delete the superseded Core command types in the same change. Focused behavior tests, formatting, Clippy, writer census, and affected checks passed; committed as `76053d6e`.
+- [x] Cut object-link upsert, delete, and replace over to Store writer operations and actor tasks; delete the superseded Core commands in the same change. Seven affected service tests, Clippy, writer census, source-size, and affected checks passed. The debug-only test adapter adds one explicitly allowlisted blocking bridge; production actor writes remain Store-owned. Committed as `843bf36b`.
 - [ ] Complete Stage 1 root-cause and exact-SHA Windows evidence.
 - [ ] Move every remaining SQLite operation, schema, query, maintenance path, and transaction owner out of `ark-core`; retain the single database and transaction boundary.
 - [ ] Inventory note: the storage-boundary checker currently reports 1,145 findings, including tests and dependency configuration, so this is a signal of remaining scope rather than a count of independent production migrations.
