@@ -91,4 +91,93 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn operation_id_is_scoped_by_principal() {
+        let mut connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("store schema initializes");
+        let engine_receipt = OperationReceipt {
+            command_type: "object.upsert".into(),
+            payload_sha256: "engine-payload".into(),
+            result_json: "{\"id\":\"engine-object\"}".into(),
+        };
+        let package_receipt = OperationReceipt {
+            command_type: "object.upsert".into(),
+            payload_sha256: "package-payload".into(),
+            result_json: "{\"id\":\"package-object\"}".into(),
+        };
+
+        let transaction = connection.transaction().expect("transaction begins");
+        insert(&transaction, "engine", "shared-id", &engine_receipt)
+            .expect("engine receipt inserts");
+        insert(
+            &transaction,
+            "application-package:reader",
+            "shared-id",
+            &package_receipt,
+        )
+        .expect("package receipt has an independent key");
+        assert_eq!(
+            load(&transaction, "engine", "shared-id").expect("engine receipt loads"),
+            Some(engine_receipt)
+        );
+        assert_eq!(
+            load(&transaction, "application-package:reader", "shared-id")
+                .expect("package receipt loads"),
+            Some(package_receipt)
+        );
+        transaction.commit().expect("principal receipts commit");
+    }
+
+    #[test]
+    fn receipt_insert_failure_rolls_back_the_callers_mutation() {
+        let mut connection = Connection::open_in_memory().expect("database opens");
+        crate::open::init_schema(&connection).expect("store schema initializes");
+        connection
+            .execute_batch(
+                "INSERT INTO objects(id, type_id, title, created_at, updated_at)
+                 VALUES ('note-1', 'com.kosmos.note', 'Before', 'now', 'now');",
+            )
+            .expect("object mutation fixture is created");
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_operation_receipt
+                 BEFORE INSERT ON ark_operation_receipts
+                 BEGIN SELECT RAISE(ABORT, 'injected receipt failure'); END;",
+            )
+            .expect("receipt failpoint installs");
+        let snapshot = crate::object_write::read_object_write_snapshot(&connection, "note-1")
+            .expect("object snapshot reads");
+        let error = crate::object_mutation::apply_local_object_delete(
+            &mut connection,
+            ark_application::object_mutation::LocalObjectDelete {
+                id: "note-1".into(),
+                expected_snapshot: Some(snapshot),
+                device_id: "device-1".into(),
+            },
+            "engine",
+            Some("operation-1"),
+        )
+        .expect_err("receipt failure aborts the Store mutation");
+        assert!(matches!(
+            error,
+            crate::writer::StoreTransactionFailure::Operation(
+                ark_application::object_mutation::ObjectDeleteError::Storage(message)
+            ) if message.contains("injected receipt failure")
+        ));
+        assert_eq!(
+            crate::objects::get_object(&connection, "note-1")
+                .expect("object reads after failed write")
+                .expect("failed transaction preserves object")
+                .title,
+            "Before"
+        );
+        let transaction = connection.transaction().expect("verification begins");
+        assert_eq!(
+            load(&transaction, "engine", "operation-1").expect("receipt lookup succeeds"),
+            None
+        );
+    }
 }

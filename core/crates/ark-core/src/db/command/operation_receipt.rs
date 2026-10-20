@@ -124,3 +124,23 @@ impl DbHandle {
         self.submit(context, command).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{CommandClass, CommandContext, CommandSource};
+
+    #[test]
+    fn operation_principal_uses_the_trusted_command_source() {
+        let engine = CommandContext::from_trusted_principal(
+            CommandClass::Interactive,
+            CommandSource::Engine,
+        );
+        let package = CommandContext::from_trusted_principal(
+            CommandClass::Interactive,
+            CommandSource::ApplicationPackage("reader".into()),
+        );
+
+        assert_eq!(engine.operation_principal(), "engine");
+        assert_eq!(package.operation_principal(), "application-package:reader");
+    }
+}
