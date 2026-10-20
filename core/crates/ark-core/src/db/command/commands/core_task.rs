@@ -1,6 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::application::objects::{ObjectWriteResult, ObjectWriteSession, StoredObjectReceipt};
 use crate::types::{ArkObject, ArkObjectWrite, ObjectLink};
+use ark_application::object_write::{ObjectWriteResult, ObjectWriteSession, StoredObjectReceipt};
 use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
 use rusqlite::Transaction;
 use serde::Serialize;
@@ -52,7 +52,7 @@ impl DbCommand for LocalCoreTaskWrite {
         let id = self.object.id.clone();
         let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
         let task_session = ark_store::task_merge::SqliteTaskMutationSession::new(transaction);
-        let result = crate::application::objects::apply_local_core_task_write(
+        let result = ark_application::task_object_write::apply_local_core_task_write(
             &object_session,
             &task_session,
             self.object,
@@ -199,7 +199,7 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
 
         let inbox_message_id = self.inbox_message_id.clone();
         let remote = decode_remote(self)?;
-        let result = crate::application::objects::apply_remote_core_task_write(
+        let result = ark_application::task_object_write::apply_remote_core_task_write(
             &object_session,
             &task_session,
             remote,

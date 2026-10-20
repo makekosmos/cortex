@@ -1,13 +1,11 @@
-use crate::canonical_types::definitions::canonical_type_registrations;
-use crate::hlc::HLC;
-use crate::types::{ArkObjectWrite, ObjectLink};
-use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
-use std::cmp::Ordering;
-
-pub use ark_application::object_write::{
+use crate::object_write::{
     NewObjectReceipt, ObjectWriteOrigin, ObjectWriteResult, ObjectWriteSession, ReceiptOutcome,
-    StoredObjectReceipt,
 };
+use crate::task_mutation::{self, TaskMutationSession};
+use ark_domain::hlc::HLC;
+use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
+use ark_domain::types::{ArkObjectWrite, ObjectLink};
+use std::cmp::Ordering;
 
 const CORE_TASK_ID: &str = "core.task";
 const CORE_TASK_VERSION: &str = "0.1.0";
@@ -22,7 +20,7 @@ enum Input {
 
 fn apply_core_task_write(
     object_session: &dyn ObjectWriteSession,
-    local_task_session: Option<&dyn crate::application::task_mutation::TaskMutationSession>,
+    local_task_session: Option<&dyn TaskMutationSession>,
     origin: ObjectWriteOrigin,
     input: Input,
 ) -> Result<ObjectWriteResult, String> {
@@ -82,7 +80,7 @@ fn apply_core_task_write(
             ark_domain::canonical_type::CanonicalIngressError::invalid("unknown_type_or_version")
                 .to_string()
         })?;
-    let registration = canonical_type_registrations()
+    let registration = ark_domain::canonical_type::definitions::canonical_type_registrations()
         .map_err(|_| {
             ark_domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
                 .to_string()
@@ -150,9 +148,9 @@ fn apply_core_task_write(
         }
         let task_session =
             local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
-        let _ = crate::application::task_mutation::apply_inbound_task_mutation(
+        let _ = task_mutation::apply_inbound_task_mutation(
             task_session,
-            crate::application::task_mutation::InboundTaskMutation::CanonicalFullSnapshot {
+            task_mutation::InboundTaskMutation::CanonicalFullSnapshot {
                 object: &object,
                 links: &links,
                 source_hlc,
@@ -179,7 +177,7 @@ fn apply_core_task_write(
     let task_device_id = device_id.as_deref().unwrap_or("ark-core-rpc-local");
     let local_task_session =
         local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
-    let task_entities = crate::application::task_mutation::apply_task_upsert(
+    let task_entities = task_mutation::apply_task_upsert(
         local_task_session,
         &object,
         &links,
@@ -210,9 +208,9 @@ fn apply_core_task_write(
     })
 }
 
-pub(crate) fn apply_local_core_task_write(
+pub fn apply_local_core_task_write(
     object_session: &dyn ObjectWriteSession,
-    task_session: &dyn crate::application::task_mutation::TaskMutationSession,
+    task_session: &dyn TaskMutationSession,
     object: ArkObjectWrite,
     expected_snapshot: Option<ObjectWriteSnapshot>,
     device_id: Option<String>,
@@ -231,9 +229,9 @@ pub(crate) fn apply_local_core_task_write(
     )
 }
 
-pub(crate) fn apply_remote_core_task_write(
+pub fn apply_remote_core_task_write(
     object_session: &dyn ObjectWriteSession,
-    task_session: &dyn crate::application::task_mutation::TaskMutationSession,
+    task_session: &dyn TaskMutationSession,
     remote: RemoteObjectWrite,
     authenticated_peer_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {
