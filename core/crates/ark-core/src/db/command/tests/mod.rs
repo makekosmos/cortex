@@ -211,14 +211,13 @@ async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
 #[tokio::test]
 async fn usage_write_returns_typed_validation_error_and_rolls_back() {
     let directory = tempfile::tempdir().unwrap();
-    let db_path = directory
-        .path()
-        .join("usage-write.db")
-        .to_string_lossy()
-        .into_owned();
-    let (handle, mut owner) = DbHandle::open(db_path, "usage-command-device".into())
-        .await
-        .unwrap();
+    let db_path = directory.path().join("usage-write.db");
+    let (handle, mut owner) = DbHandle::open(
+        db_path.to_string_lossy().into_owned(),
+        "usage-command-device".into(),
+    )
+    .await
+    .unwrap();
 
     let committed = handle
         .submit_local_usage_write(
@@ -261,38 +260,20 @@ async fn usage_write_returns_typed_validation_error_and_rolls_back() {
         "unexpected usage command result: {invalid:?}"
     );
 
-    let failed_device_rows = handle.with_connection(|connection| {
-        let usage_days: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM usage_days WHERE device_id = ?1",
-                ["usage-command-invalid-device"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let sync_heads: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM usage_sync_heads WHERE device_id = ?1",
-                ["usage-command-invalid-device"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let sync_log: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM usage_sync_log WHERE device_id = ?1",
-                ["usage-command-invalid-device"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let sync_versions: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM usage_sync_versions WHERE entity_id LIKE ?1",
-                ["usage-day:usage-command-invalid-device:%"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        (usage_days, sync_heads, sync_log, sync_versions)
-    });
-    assert_eq!(failed_device_rows, (0, 0, 0, 0));
+    let failed_device_rows = ark_store::test_support::UsageRollbackFixture::inspect(
+        &db_path,
+        "usage-command-invalid-device",
+    )
+    .unwrap();
+    assert_eq!(
+        failed_device_rows,
+        ark_store::test_support::UsageRollbackState {
+            usage_days: 0,
+            sync_heads: 0,
+            sync_log: 0,
+            sync_versions: 0,
+        }
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await

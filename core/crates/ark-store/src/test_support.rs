@@ -17,6 +17,7 @@ mod production_actor;
 mod registry_enrollment;
 mod task_merge_legacy;
 mod type_mutation;
+mod usage_rollback;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use inbox::has_inbox_receipt;
@@ -32,6 +33,7 @@ pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionAc
 pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
+pub use usage_rollback::{UsageRollbackFixture, UsageRollbackState};
 
 /// Owns a temporary ARK database for the full lifetime of a test.
 ///
