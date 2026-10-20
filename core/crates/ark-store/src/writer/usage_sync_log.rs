@@ -36,3 +36,11 @@ impl SqliteWriter {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "usage_sync_log_compaction_tests.rs"]
+mod compaction_tests;
+
+#[cfg(test)]
+#[path = "usage_sync_log_regression_tests.rs"]
+mod regression_tests;

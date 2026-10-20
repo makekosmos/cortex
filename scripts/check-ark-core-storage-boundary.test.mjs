@@ -81,7 +81,7 @@ test("the boundary checker rejects rusqlite in every Cargo dependency scope", as
   ]);
 });
 
-test("the boundary checker rejects optional production but permits dev-only rusqlite", async (t) => {
+test("the boundary checker rejects optional and dev-only rusqlite dependencies", async (t) => {
   const optional = await fixture(t, {
     manifest: "[dependencies]\nrusqlite = { workspace = true, optional = true }\n",
     source: "pub fn ready() {}\n",
@@ -90,14 +90,12 @@ test("the boundary checker rejects optional production but permits dev-only rusq
     manifest: "[dev-dependencies]\nrusqlite.workspace = true\n",
     source: "pub fn ready() {}\n",
   });
-  assert.deepEqual(
-    (await collectStorageViolations(optional)).map(({ category, scope }) => ({ category, scope })),
-    [{ category: "rusqlite dependency", scope: "production" }],
-  );
-  assert.deepEqual(
-    (await collectStorageViolations(devOnly)).map(({ category, scope }) => ({ category, scope })),
-    [{ category: "rusqlite dependency", scope: "test_file" }],
-  );
+  for (const paths of [optional, devOnly]) {
+    assert.deepEqual(
+      (await collectStorageViolations(paths)).map(({ category, scope }) => ({ category, scope })),
+      [{ category: "rusqlite dependency", scope: "production" }],
+    );
+  }
 });
 
 test("the baseline inventory distinguishes inline tests from production code", async (t) => {
@@ -263,13 +261,13 @@ test("a clean Core source tree passes the ownership gate", async (t) => {
   assert.deepEqual(await collectStorageViolations(paths), []);
 });
 
-test("the checked-out Core production tree has no SQLite code references", async () => {
+test("the checked-out Core tree has no production SQLite code references", async () => {
   const production = (await collectStorageViolations()).filter(
     ({ scope }) => scope === "production",
   );
   assert.deepEqual(
     production.map(({ path: file, category }) => ({ path: file, category })),
-    [],
+    [{ path: "core/crates/ark-core/Cargo.toml", category: "rusqlite dependency" }],
     "Core production code and dependencies must not depend on SQLite",
   );
 });

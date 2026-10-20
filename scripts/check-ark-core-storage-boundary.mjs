@@ -181,25 +181,14 @@ export async function collectStorageViolations({
       path.relative(root, file).split(path.sep).join("/"),
     ),
   );
-  let dependencySection = "";
-  for (const [index, line] of manifest.split(/\r?\n/).entries()) {
-    const section = /^\s*\[([^\]]+)\]\s*(?:#.*)?$/.exec(line)?.[1];
-    if (section) dependencySection = section;
-    if (!/^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)/.test(line)) continue;
-    const scope =
-      dependencySection === "dependencies" || dependencySection.endsWith(".dependencies")
-        ? "production"
-        : dependencySection === "dev-dependencies" ||
-            dependencySection.endsWith(".dev-dependencies")
-          ? "test_file"
-          : "other_dependency";
+  const dependency = /^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)[^\n]*/m.exec(manifest);
+  if (dependency)
     violations.push({
       path: path.relative(root, manifestPath).split(path.sep).join("/"),
-      line: index + 1,
+      line: lineAt(manifest, dependency.index),
       category: "rusqlite dependency",
-      scope,
+      scope: "production",
     });
-  }
 
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
     const source = await readFile(file, "utf8");
@@ -216,9 +205,7 @@ export async function collectStorageViolations({
 
 export async function runCheck(args = process.argv.slice(2)) {
   if (args.length) throw new Error(`unknown argument: ${args[0]}`);
-  const violations = (await collectStorageViolations()).filter(
-    ({ scope }) => scope === "production",
-  );
+  const violations = await collectStorageViolations();
   if (violations.length) {
     process.stderr.write(`ark-core storage boundary has ${violations.length} violations:\n`);
     for (const violation of violations)
@@ -228,7 +215,7 @@ export async function runCheck(args = process.argv.slice(2)) {
     return 1;
   }
   process.stdout.write(
-    "ark-core storage boundary passed: production Core has no SQLite dependency or SQL source.\n",
+    "ark-core storage boundary passed: Core has no SQLite dependency or SQL source.\n",
   );
   return 0;
 }

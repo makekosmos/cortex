@@ -13,6 +13,8 @@ mod data_platform_peer_policy_tests;
 mod data_platform_tombstones_tests;
 mod inbound;
 mod policy_bound;
+#[cfg(test)]
+mod versioned_object_matrix_tests;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
 pub use canonical_apply::{apply_canonical_object_entity, apply_remote_task_delete};
 pub use inbound::{apply_inbound_entity, apply_legacy_compat_entity};
