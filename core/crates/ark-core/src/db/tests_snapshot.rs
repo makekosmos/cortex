@@ -188,7 +188,7 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     drop(preserved_conn);
 
     drop(conn);
-    crate::db::recover_interrupted_restore(&db_path).unwrap();
+    ark_store::snapshot::recover_interrupted_restore(&db_path).unwrap();
     let mut conn = ark_store::open::open_db(&db_path).unwrap();
     let report = restore_snapshot(&mut conn, &db_path, preserved[0]).unwrap();
     assert!(report.restored);

@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
+mod bootstrap;
 mod committed_feed;
 mod device_registry;
 mod error;
@@ -29,6 +30,7 @@ mod tracked_app_mutation;
 mod type_mutation;
 mod usage_sequence_migration;
 mod usage_sync_log;
+pub use bootstrap::{StoreBootstrapError, StoreBootstrapStage};
 pub(crate) use error::store_error_from_sqlite;
 pub use error::{StoreError, StoreErrorKind};
 pub use inbound_entity::{

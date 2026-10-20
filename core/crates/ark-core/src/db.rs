@@ -10,7 +10,6 @@ pub use ark_application::sync_storage::{
 pub use ark_store::committed_feed::MAX_FEED_PAGE_SIZE;
 #[cfg(test)]
 pub use ark_store::snapshot::backup_to_file_chunked_verified as backup_to_file_chunked;
-pub(crate) use ark_store::snapshot::recover_interrupted_restore;
 pub use ark_store::snapshot::restore_snapshot;
 pub use ark_store::snapshot::{
     backups_dir, list_snapshots, schema_fingerprint, validate_snapshot, RestoreReport,

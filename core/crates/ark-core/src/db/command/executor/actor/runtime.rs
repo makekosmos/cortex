@@ -9,29 +9,25 @@ pub(super) fn actor_loop(
     bootstrap_device_id: String,
     ready: std::sync::mpsc::Sender<Result<(), DbError>>,
 ) {
-    let connection = (|| {
+    let connection = {
         let mut ledger = shared
             .ledger
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         ledger.lifecycle = Lifecycle::Migrating;
         drop(ledger);
-        crate::db::recover_interrupted_restore(&shared.path).map_err(|error| {
-            eprintln!("database restore recovery failed before startup: {error}");
-            DbError::RecoveryRequired
-        })?;
-        let connection = ark_store::open::open_db(&shared.path).map_err(DbError::Storage)?;
-        ark_store::open::init_schema(&connection).map_err(DbError::Storage)?;
-        let mut writer = SqliteWriter::from_connection(connection);
         let backup_path = format!("{}.pre-core-task.bak", shared.path);
-        ark_store::canonical_migrations::rewrite_legacy_tasks(
-            &mut writer,
-            &backup_path,
-            &bootstrap_device_id,
+        SqliteWriter::open_initialized(&shared.path, &backup_path, &bootstrap_device_id).map_err(
+            |error| {
+                if error.stage == ark_store::writer::StoreBootstrapStage::Recovery {
+                    eprintln!("database restore recovery failed before startup: {error}");
+                    DbError::RecoveryRequired
+                } else {
+                    DbError::Storage(error.to_string())
+                }
+            },
         )
-        .map_err(DbError::Storage)?;
-        Ok(writer)
-    })();
+    };
     let mut writer = match connection {
         Ok(writer) => {
             shared
