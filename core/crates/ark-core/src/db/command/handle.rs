@@ -7,6 +7,7 @@ use rusqlite::TransactionBehavior;
 use std::time::Instant;
 
 pub(in crate::db::command) mod authenticated_core_task_write;
+mod authenticated_inbound_entity;
 mod committed_feed_progress;
 mod core_task_write;
 mod external_ref;

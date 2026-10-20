@@ -14,6 +14,10 @@ pub(in crate::db::command) use inbox_receipt::map_inbox_receipt_error;
 pub(in crate::db::command) use inbox_receipt::InboxReceiptTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
+mod authenticated_inbound_entity;
+pub(in crate::db::command) use authenticated_inbound_entity::AuthenticatedInboundEntityTask;
+mod external_ref;
+pub(in crate::db::command) use external_ref::ExternalRefUpsertTask;
 mod iroh_identity;
 pub(in crate::db::command) use iroh_identity::IrohIdentityKeyTask;
 mod local_sync_key_value_write;
@@ -161,33 +165,6 @@ pub(in crate::db::command) struct ReplaceObjectLinkTask {
     pub device_id: Option<String>,
     pub reply:
         oneshot::Sender<Result<ark_application::type_mutation::ReplaceObjectLinkCommit, DbError>>,
-}
-
-pub(in crate::db::command) struct ExternalRefUpsertTask {
-    pub request: ark_application::external_ref::ExternalRefUpsert,
-    pub reply: oneshot::Sender<Result<(), DbError>>,
-}
-
-impl WriterTask for ExternalRefUpsertTask {
-    fn run(
-        self: Box<Self>,
-        writer: &mut SqliteWriter,
-        on_error: &mut dyn FnMut(&DbError),
-    ) -> (Result<(), DbError>, Publish) {
-        let Self { request, reply } = *self;
-        let result = writer
-            .upsert_external_ref(request)
-            .map_err(map_application_transaction_failure);
-        settle(result, reply, on_error)
-    }
-
-    fn cancel_before_start(self: Box<Self>) {
-        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
-    }
-
-    fn receiver_closed(&self) -> bool {
-        self.reply.is_closed()
-    }
 }
 
 macro_rules! impl_object_link_task {

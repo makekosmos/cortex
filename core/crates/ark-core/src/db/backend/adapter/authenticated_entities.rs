@@ -96,33 +96,26 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
     ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
         let inbox_payload_json =
             serde_json::to_string(entity).map_err(|error| error.to_string())?;
-        let receipt_command = match policy_identity.as_ref() {
-            Some(identity) => InboxReceiptWrite::with_policy(
-                authenticated_peer_id.to_owned(),
-                inbox_message_id.to_owned(),
-                inbox_payload_json.clone(),
-                local_device_id.to_owned(),
-                identity.clone(),
-            ),
-            None => InboxReceiptWrite::new(
-                authenticated_peer_id.to_owned(),
-                inbox_message_id.to_owned(),
-                inbox_payload_json.clone(),
-            ),
-        };
         let context = CommandContext::authenticated_peer(authenticated_peer_id.to_owned());
-        let inbox_state = self
-            .db
-            .receive_inbox_receipt(context, receipt_command)
-            .await
-            .map_err(|error| error.to_string())?;
-        if inbox_state == crate::db::InboxState::Applied {
-            return Ok(ark_application::sync_storage::InboundApplyOutcome::Applied);
-        }
-        if inbox_state == crate::db::InboxState::Pending {
-            return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
-        }
         if is_full_core_task(entity) {
+            let receipt_command = make_inbox_receipt_write(
+                authenticated_peer_id,
+                inbox_message_id,
+                inbox_payload_json.clone(),
+                local_device_id,
+                policy_identity.as_ref(),
+            );
+            let inbox_state = self
+                .db
+                .receive_inbox_receipt(context.clone(), receipt_command)
+                .await
+                .map_err(|error| error.to_string())?;
+            if inbox_state == crate::db::InboxState::Applied {
+                return Ok(ark_application::sync_storage::InboundApplyOutcome::Applied);
+            }
+            if inbox_state == crate::db::InboxState::Pending {
+                return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
+            }
             let mut command = AuthenticatedCoreTaskWrite::new(
                 entity.id.clone(),
                 entity.hlc.clone(),
@@ -152,28 +145,90 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
                 })
                 .map_err(|error| error.to_string());
         }
-        let (outcome, notices) = self
-            .db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                match policy_identity {
-                    Some(identity) => {
-                        crate::db::ApplyAuthenticatedSyncEntityCommand::with_policy_identity(
-                            entity.clone(),
-                            inbox_message_id.to_owned(),
-                            local_device_id.to_owned(),
-                            identity,
-                        )
-                    }
-                    None => crate::db::ApplyAuthenticatedSyncEntityCommand::with_message_id(
+        if matches!(entity.entity_type.as_str(), "todo" | "project" | "tag") {
+            let receipt = make_inbox_receipt_write(
+                authenticated_peer_id,
+                inbox_message_id,
+                inbox_payload_json,
+                local_device_id,
+                policy_identity.as_ref(),
+            );
+            let inbox_state = self
+                .db
+                .receive_inbox_receipt(context.clone(), receipt)
+                .await
+                .map_err(|error| error.to_string())?;
+            if inbox_state == crate::db::InboxState::Applied {
+                return Ok(ark_application::sync_storage::InboundApplyOutcome::Applied);
+            }
+            if inbox_state == crate::db::InboxState::Pending {
+                return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
+            }
+            let command = match policy_identity {
+                Some(identity) => {
+                    crate::db::ApplyAuthenticatedSyncEntityCommand::with_policy_identity(
                         entity.clone(),
                         inbox_message_id.to_owned(),
-                    ),
-                },
-            )
+                        local_device_id.to_owned(),
+                        identity,
+                    )
+                }
+                None => crate::db::ApplyAuthenticatedSyncEntityCommand::with_message_id(
+                    entity.clone(),
+                    inbox_message_id.to_owned(),
+                ),
+            };
+            let (outcome, notices) = self
+                .db
+                .submit(context, command)
+                .await
+                .map_err(|error| error.to_string())?;
+            publish_replay_notices(notices);
+            return Ok(outcome);
+        }
+        let write = make_inbox_receipt_write(
+            authenticated_peer_id,
+            inbox_message_id,
+            inbox_payload_json,
+            local_device_id,
+            policy_identity.as_ref(),
+        );
+        let result = self
+            .db
+            .submit_authenticated_inbound_entity(context, write, entity.clone())
             .await
             .map_err(|error| error.to_string())?;
-        publish_replay_notices(notices);
-        Ok(outcome)
+        if let Some(type_id) = result.pending_type_id {
+            crate::events::emit_event(serde_json::json!({
+                "event": "sync_error", "code": "unknown_type_version", "entity_type": "object",
+                "entity_id": entity.id, "awaited_type_id": type_id,
+                "awaited_type_version": entity
+                    .data
+                    .get("typeVersion")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("0.0.0-legacy"),
+            }));
+        }
+        publish_replay_notices(result.replay_notices);
+        Ok(result.outcome)
+    }
+}
+
+fn make_inbox_receipt_write(
+    peer_id: &str,
+    message_id: &str,
+    payload_json: String,
+    local_device_id: &str,
+    policy_identity: Option<&ark_application::sync_storage::PolicyIdentity>,
+) -> InboxReceiptWrite {
+    match policy_identity {
+        Some(identity) => InboxReceiptWrite::with_policy(
+            peer_id.to_owned(),
+            message_id.to_owned(),
+            payload_json,
+            local_device_id.to_owned(),
+            identity.clone(),
+        ),
+        None => InboxReceiptWrite::new(peer_id.to_owned(), message_id.to_owned(), payload_json),
     }
 }

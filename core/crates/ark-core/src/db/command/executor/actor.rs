@@ -51,14 +51,14 @@ pub(in crate::db::command) use task::task_merge_append::map_append_operation_err
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
 pub(in crate::db::command) use task::InboxReceiptTask;
 pub(in crate::db::command) use task::{
-    AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask,
-    CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask, DeleteTrashedTask,
-    ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask,
-    LocalObjectDeleteTask, LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask,
-    Publish, RegisterPackageTypesTask, ReplaceObjectLinkTask, SyncPolicyWriteTask,
-    SyncProgressWriteTask, TrackedAppMutationTask, TypedCommand, TypedMaintenance,
-    UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask,
-    WriterTask,
+    AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, CanonicalGameUpsertTask,
+    ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
+    DeleteTrashedTask, ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask,
+    LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
+    LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
+    ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,
+    TypedCommand, TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask,
+    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
 };
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task_merge_batch_task::map_failure as map_task_merge_batch_failure;
