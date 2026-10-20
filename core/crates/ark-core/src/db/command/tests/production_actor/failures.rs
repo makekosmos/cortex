@@ -1,12 +1,8 @@
 use super::*;
 use std::time::Duration;
 
-fn actor_path(directory: &tempfile::TempDir) -> String {
-    directory
-        .path()
-        .join("actor.db")
-        .to_string_lossy()
-        .into_owned()
+fn actor_path(directory: &tempfile::TempDir) -> std::path::PathBuf {
+    directory.path().join("actor.db")
 }
 
 fn engine() -> CommandContext {
@@ -32,28 +28,22 @@ impl DbCommand for CommitFailure {
         _context: &CommandContext,
         transaction: &rusqlite::Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
-        transaction
-            .execute(
-                "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(0))",
-                [],
-            )
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        transaction
-            .execute(
-                "INSERT INTO production_actor_deferred_child(parent_id) VALUES (99)",
-                [],
-            )
-            .map_err(|error| DbError::Storage(error.to_string()))?;
+        ark_store::test_support::ProductionActorFailureProbe::trigger_deferred_commit_failure(
+            transaction,
+        )
+        .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(())
     }
 }
 
-async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
+async fn open_failure_actor() -> (tempfile::TempDir, std::path::PathBuf, DbHandle, DbOwner) {
     let directory = tempfile::tempdir().unwrap();
-    let (handle, owner) = DbHandle::open(actor_path(&directory), "actor-test-device".into())
+    let path = actor_path(&directory);
+    let path_text = path.to_str().expect("test database path is valid UTF-8");
+    let (handle, owner) = DbHandle::open(path_text.to_owned(), "actor-test-device".into())
         .await
         .unwrap();
-    (directory, handle, owner)
+    (directory, path, handle, owner)
 }
 
 #[tokio::test]
@@ -119,24 +109,13 @@ async fn production_actor_refuses_ready_when_restore_capsule_is_missing() {
     assert!(!state.capsule_present);
 }
 
-fn failure_probe_state(handle: &DbHandle, operation_id: &str) -> (i64, i64) {
+fn failure_probe_state(
+    handle: &DbHandle,
+    operation_id: &str,
+) -> ark_store::test_support::ActorFailureProbeState {
     handle.with_connection(|connection| {
-        let mutations = connection
-            .query_row(
-                "SELECT COUNT(*) FROM production_actor_failure_probe",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let receipts = connection
-            .query_row(
-                "SELECT COUNT(*) FROM ark_operation_receipts
-                 WHERE operation_id = ?1",
-                [operation_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        (mutations, receipts)
+        ark_store::test_support::ProductionActorFailureProbe::inspect(connection, operation_id)
+            .unwrap()
     })
 }
 
@@ -157,14 +136,12 @@ pub(in crate::db::command::tests::production_actor) async fn apply_failure_mutat
 
 #[tokio::test]
 async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
-    let (directory, handle, mut owner) = open_failure_actor().await;
+    let (_directory, path, handle, mut owner) = open_failure_actor().await;
     handle.with_connection(|connection| {
-        connection
-            .execute_batch("CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);")
-            .unwrap();
+        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
     });
-    let competing_writer = Connection::open(actor_path(&directory)).unwrap();
-    competing_writer.execute_batch("BEGIN IMMEDIATE;").unwrap();
+    let competing_writer = ark_store::test_support::CompetingWriter::open(&path).unwrap();
+    competing_writer.begin_immediate().unwrap();
 
     let failed = apply_failure_mutation(&handle, "busy-operation", 0).await;
     let is_busy = matches!(
@@ -175,15 +152,29 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
         is_busy,
         "competing writer should make the actor return SQLITE_BUSY, got {failed:?}"
     );
-    assert_eq!(failure_probe_state(&handle, "busy-operation"), (0, 0));
+    assert_eq!(
+        failure_probe_state(&handle, "busy-operation"),
+        ark_store::test_support::ActorFailureProbeState {
+            mutations: 0,
+            receipts: 0,
+            deferred_children: 0,
+        }
+    );
 
-    competing_writer.execute_batch("ROLLBACK;").unwrap();
+    competing_writer.rollback().unwrap();
     let retry = apply_failure_mutation(&handle, "busy-operation", 0)
         .await
         .unwrap();
     assert_eq!(retry.value, "inserted:0");
     assert!(!retry.replayed);
-    assert_eq!(failure_probe_state(&handle, "busy-operation"), (1, 1));
+    assert_eq!(
+        failure_probe_state(&handle, "busy-operation"),
+        ark_store::test_support::ActorFailureProbeState {
+            mutations: 1,
+            receipts: 1,
+            deferred_children: 0,
+        }
+    );
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
@@ -193,16 +184,12 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
 
 #[tokio::test]
 async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
-    let (directory, handle, mut owner) = open_failure_actor().await;
+    let (_directory, path, handle, mut owner) = open_failure_actor().await;
     handle.with_connection(|connection| {
-        connection
-            .execute_batch("CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);")
-            .unwrap();
+        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
     });
     let page_count = handle.with_connection(|connection| {
-        connection
-            .query_row("PRAGMA page_count", [], |row| row.get::<_, u32>(0))
-            .unwrap()
+        ark_store::test_support::ProductionActorFailureProbe::page_count(connection).unwrap()
     });
     let limited_page_count = page_count + 1;
     assert_eq!(
@@ -225,33 +212,27 @@ async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
         is_full,
         "page limit should make the actor return SQLITE_FULL, got {failed:?}"
     );
-    let disk = Connection::open(actor_path(&directory)).unwrap();
-    let mutations = disk
-        .query_row(
-            "SELECT COUNT(*) FROM production_actor_failure_probe",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap();
-    let receipts = disk
-        .query_row(
-            "SELECT COUNT(*) FROM ark_operation_receipts WHERE operation_id = ?1",
-            ["full-operation"],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap();
-    assert_eq!((mutations, receipts), (0, 0));
+    assert_eq!(
+        ark_store::test_support::ProductionActorFailureProbe::inspect_path(&path, "full-operation")
+            .unwrap(),
+        ark_store::test_support::ActorFailureProbeState {
+            mutations: 0,
+            receipts: 0,
+            deferred_children: 0,
+        }
+    );
 
     let rejected = apply_failure_mutation(&handle, "later-operation", 0).await;
     assert!(rejected.is_err(), "failed actor accepted a later write");
-    let later_receipts = disk
-        .query_row(
-            "SELECT COUNT(*) FROM ark_operation_receipts WHERE operation_id = ?1",
-            ["later-operation"],
-            |row| row.get::<_, i64>(0),
+    assert_eq!(
+        ark_store::test_support::ProductionActorFailureProbe::inspect_path(
+            &path,
+            "later-operation"
         )
-        .unwrap();
-    assert_eq!(later_receipts, 0);
+        .unwrap()
+        .receipts,
+        0
+    );
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
@@ -261,19 +242,9 @@ async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
 
 #[tokio::test]
 async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
-    let (directory, handle, mut owner) = open_failure_actor().await;
+    let (_directory, path, handle, mut owner) = open_failure_actor().await;
     handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);
-                 CREATE TABLE production_actor_parent(id INTEGER PRIMARY KEY);
-                 CREATE TABLE production_actor_deferred_child(
-                     parent_id INTEGER NOT NULL,
-                     FOREIGN KEY(parent_id) REFERENCES production_actor_parent(id)
-                         DEFERRABLE INITIALLY DEFERRED
-                 );",
-            )
-            .unwrap();
+        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
     });
 
     let failed = handle
@@ -296,30 +267,18 @@ async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
     .await
     .expect("actor stayed Ready after COMMIT failed");
 
-    let disk = Connection::open(actor_path(&directory)).unwrap();
-    let mutation_rows = disk
-        .query_row(
-            "SELECT COUNT(*) FROM production_actor_failure_probe",
-            [],
-            |row| row.get::<_, i64>(0),
+    assert_eq!(
+        ark_store::test_support::ProductionActorFailureProbe::inspect_path(
+            &path,
+            "commit-failure-operation"
         )
-        .unwrap();
-    let deferred_rows = disk
-        .query_row(
-            "SELECT COUNT(*) FROM production_actor_deferred_child",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap();
-    let receipt_rows = disk
-        .query_row(
-            "SELECT COUNT(*) FROM ark_operation_receipts
-             WHERE operation_id = 'commit-failure-operation'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap();
-    assert_eq!((mutation_rows, deferred_rows, receipt_rows), (0, 0, 0));
+        .unwrap(),
+        ark_store::test_support::ActorFailureProbeState {
+            mutations: 0,
+            receipts: 0,
+            deferred_children: 0,
+        }
+    );
 
     let later = apply_failure_mutation(&handle, "after-commit-failure", 0).await;
     assert!(later.is_err(), "actor accepted a write after COMMIT failed");

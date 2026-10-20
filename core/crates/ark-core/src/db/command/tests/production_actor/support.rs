@@ -52,12 +52,11 @@ impl DbCommand for FailureMutation {
         _context: &CommandContext,
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
-        transaction
-            .execute(
-                "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(?1))",
-                [self.payload_bytes],
-            )
-            .map_err(DbError::from_test_sqlite_error)?;
+        ark_store::test_support::ProductionActorFailureProbe::insert_mutation(
+            transaction,
+            self.payload_bytes,
+        )
+        .map_err(DbError::from_test_sqlite_error)?;
         Ok(format!("inserted:{}", self.payload_bytes))
     }
 }
@@ -80,22 +79,20 @@ impl DbMaintenanceCommand for SetMaxPageCount {
         writer: &mut ark_store::writer::SqliteWriter,
     ) -> Result<Self::Output, DbError> {
         writer.with_connection_mut(|connection| {
-            connection
-                .pragma_update(None, "max_page_count", self.page_count)
-                .map_err(|error| DbError::Storage(error.to_string()))?;
-            connection
-                .query_row("PRAGMA max_page_count", [], |row| row.get(0))
-                .map_err(|error| DbError::Storage(error.to_string()))
+            ark_store::test_support::ProductionActorFailureProbe::set_max_page_count(
+                connection,
+                self.page_count,
+            )
+            .map_err(|error| DbError::Storage(error.to_string()))
         })
     }
 
     fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
-        connection
-            .pragma_update(None, "max_page_count", self.page_count)
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        connection
-            .query_row("PRAGMA max_page_count", [], |row| row.get(0))
-            .map_err(|error| DbError::Storage(error.to_string()))
+        ark_store::test_support::ProductionActorFailureProbe::set_max_page_count(
+            connection,
+            self.page_count,
+        )
+        .map_err(|error| DbError::Storage(error.to_string()))
     }
 }
 
