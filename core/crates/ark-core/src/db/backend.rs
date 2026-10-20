@@ -16,6 +16,8 @@ pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,
     device_id: Arc<Mutex<String>>,
     selective_profile: Arc<Mutex<Option<ark_domain::selective_sync::SelectiveSyncProfile>>>,
+    #[cfg(debug_assertions)]
+    test_owner: Option<Arc<super::command::DbOwner>>,
 }
 
 impl SqliteStorageBackend {
@@ -25,11 +27,27 @@ impl SqliteStorageBackend {
         Self::with_db_handle(DbHandle::for_test(conn))
     }
 
+    /// Opens the production writer actor for file-backed integration tests.
+    #[cfg(debug_assertions)]
+    pub async fn open_for_test(
+        db_path: impl Into<String>,
+        legacy_task_device_id: impl Into<String>,
+    ) -> Result<Self, String> {
+        let (db, owner) = DbHandle::open(db_path.into(), legacy_task_device_id.into())
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut backend = Self::with_db_handle(db);
+        backend.test_owner = Some(Arc::new(owner));
+        Ok(backend)
+    }
+
     pub(crate) fn with_db_handle(db: DbHandle) -> Self {
         Self {
             db,
             device_id: Arc::new(Mutex::new(String::new())),
             selective_profile: Arc::new(Mutex::new(None)),
+            #[cfg(debug_assertions)]
+            test_owner: None,
         }
     }
 

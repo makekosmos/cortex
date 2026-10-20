@@ -70,8 +70,8 @@ fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_destructive() {
-    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
-    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a").await;
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b").await;
     pair_storages(
         &storage_a,
         "device-a",
@@ -180,10 +180,10 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_b.set_selective_sync_profile(Some(profile));
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     let port_a = pick_port().await;
     let port_b = pick_port().await;
@@ -218,7 +218,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         app_version: None,
     };
     let client = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer.clone(),
         "device-b".into(),
         "Beta".into(),
@@ -274,7 +274,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         .await
         .unwrap();
     let reconnect = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".into(),
         "Beta".into(),

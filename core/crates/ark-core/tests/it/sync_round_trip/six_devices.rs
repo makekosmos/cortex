@@ -23,13 +23,12 @@ use backfill_barrier::BackfillBarrier;
 async fn six_devices_converge_during_initial_import_and_local_edit() {
     const DEVICE_COUNT: usize = 6;
     const INITIAL_ROWS: usize = 256;
-    let fixtures = (0..DEVICE_COUNT)
-        .map(|index| {
-            let device_id = format!("device-{}", char::from(b'a' + index as u8));
-            let (storage, endpoint) = make_storage_with_identity(&device_id);
-            (device_id, storage, endpoint)
-        })
-        .collect::<Vec<_>>();
+    let mut fixtures = Vec::with_capacity(DEVICE_COUNT);
+    for index in 0..DEVICE_COUNT {
+        let device_id = format!("device-{}", char::from(b'a' + index as u8));
+        let (storage, endpoint) = make_storage_with_identity(&device_id).await;
+        fixtures.push((device_id, storage, endpoint));
+    }
     for local_index in 0..DEVICE_COUNT {
         for (peer_index, (peer_id, _, peer_endpoint)) in fixtures.iter().enumerate() {
             if peer_index == local_index {
@@ -89,7 +88,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     let (release_tx, release_rx) = watch::channel(false);
     let page_requested = Arc::new(Notify::new());
     let server_storage = Arc::new(BackfillBarrier {
-        inner: source.clone(),
+        inner: source.arc(),
         requested: page_requested.clone(),
         release: release_rx,
     });
@@ -126,7 +125,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         let storage = storage.clone();
         storage.set_selective_sync_profile(Some(profile()));
         let client = Arc::new(new_direct_client(
-            storage.clone() as Arc<dyn SyncRuntimeStorage>,
+            storage.arc() as Arc<dyn SyncRuntimeStorage>,
             peer.clone(),
             device_id.clone(),
             format!("Device {}", char::from(b'A' + index as u8)),

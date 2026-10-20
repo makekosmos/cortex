@@ -10,7 +10,8 @@
 // The test uses in-memory SQLite backends so it needs no filesystem access.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::ops::Deref;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ark_core::db::SqliteStorageBackend;
@@ -20,17 +21,35 @@ use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
 use ark_core::types::{
     PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector,
 };
-use rusqlite::Connection;
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
-fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
-    make_storage_with_identity(device_id).0
+pub(super) struct TestStorage {
+    backend: Arc<SqliteStorageBackend>,
+    _database: ark_store::test_support::TestDatabase,
 }
 
-pub(super) fn make_storage_with_identity(device_id: &str) -> (Arc<SqliteStorageBackend>, String) {
-    let mut conn = Connection::open_in_memory().expect("in-memory db");
-    ark_store::open::init_schema(&conn).expect("schema");
+impl TestStorage {
+    pub(super) fn arc(&self) -> Arc<SqliteStorageBackend> {
+        Arc::clone(&self.backend)
+    }
+}
+
+impl Deref for TestStorage {
+    type Target = SqliteStorageBackend;
+
+    fn deref(&self) -> &Self::Target {
+        &self.backend
+    }
+}
+
+pub(super) async fn make_storage(device_id: &str) -> Arc<TestStorage> {
+    make_storage_with_identity(device_id).await.0
+}
+
+pub(super) async fn make_storage_with_identity(device_id: &str) -> (Arc<TestStorage>, String) {
+    let database = ark_store::test_support::TestDatabase::create().expect("database");
+    let mut conn = database.open_connection().expect("database connection");
     let candidate = ark_core::iroh_transport::generate_secret_key_candidate();
     let persisted =
         ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate_on_connection(
@@ -41,10 +60,27 @@ pub(super) fn make_storage_with_identity(device_id: &str) -> (Arc<SqliteStorageB
         .expect("device signing key")
         .public()
         .to_string();
-    let shared = Arc::new(StdMutex::new(conn));
-    let backend = Arc::new(SqliteStorageBackend::for_test(shared));
+    drop(conn);
+    let backend = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            database
+                .path()
+                .to_str()
+                .expect("temporary database path is UTF-8")
+                .to_owned(),
+            device_id,
+        )
+        .await
+        .expect("production database actor starts"),
+    );
     backend.set_device_id(device_id).unwrap();
-    (backend, endpoint)
+    (
+        Arc::new(TestStorage {
+            backend,
+            _database: database,
+        }),
+        endpoint,
+    )
 }
 
 pub(super) async fn pair_storages(

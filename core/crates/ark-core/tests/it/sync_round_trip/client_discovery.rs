@@ -8,8 +8,8 @@ async fn free_loopback_port() -> u16 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn seed_client_adopts_authenticated_peer_identity() {
     let port = free_loopback_port().await;
-    let (server_storage, server_endpoint) = make_storage_with_identity("device-server");
-    let (client_storage, client_endpoint) = make_storage_with_identity("device-client");
+    let (server_storage, server_endpoint) = make_storage_with_identity("device-server").await;
+    let (client_storage, client_endpoint) = make_storage_with_identity("device-client").await;
     pair_storages(
         &server_storage,
         "device-server",
@@ -19,7 +19,7 @@ async fn seed_client_adopts_authenticated_peer_identity() {
         &client_endpoint,
     )
     .await;
-    let server = SyncServer::new(server_storage as Arc<dyn SyncRuntimeStorage>);
+    let server = SyncServer::new(server_storage.arc() as Arc<dyn SyncRuntimeStorage>);
     server
         .start_with_addr(
             "space-x",
@@ -32,7 +32,7 @@ async fn seed_client_adopts_authenticated_peer_identity() {
         .unwrap();
 
     let client = new_direct_client(
-        client_storage as Arc<dyn SyncRuntimeStorage>,
+        client_storage.arc() as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "seed-bootstrap".into(),
             device_name: "Bootstrap".into(),
@@ -75,7 +75,8 @@ async fn self_address_is_pruned_but_other_addresses_keep_retrying() {
     // own — simulates a peer record whose address now resolves to our own
     // listener (peer's old DHCP lease).
     let self_port = free_loopback_port().await;
-    let self_server = SyncServer::new(make_storage("device-me") as Arc<dyn SyncRuntimeStorage>);
+    let self_storage = make_storage("device-me").await;
+    let self_server = SyncServer::new(self_storage.arc() as Arc<dyn SyncRuntimeStorage>);
     self_server
         .start_with_addr(
             "space-x",
@@ -90,7 +91,7 @@ async fn self_address_is_pruned_but_other_addresses_keep_retrying() {
     let self_addr = format!("127.0.0.1:{self_port}");
     let dead_addr = "127.0.0.1:1".to_string(); // closed port — connect refused
     let client = new_direct_client(
-        make_storage("device-me") as Arc<dyn SyncRuntimeStorage>,
+        self_storage.arc() as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "peer-1".into(),
             device_name: "Peer".into(),
@@ -137,7 +138,8 @@ async fn self_only_record_still_stops_the_client() {
     // A record whose every address is ours is a true self-reference: the
     // client should still give up entirely in that case.
     let self_port = free_loopback_port().await;
-    let self_server = SyncServer::new(make_storage("device-me") as Arc<dyn SyncRuntimeStorage>);
+    let self_storage = make_storage("device-me").await;
+    let self_server = SyncServer::new(self_storage.arc() as Arc<dyn SyncRuntimeStorage>);
     self_server
         .start_with_addr(
             "space-x",
@@ -151,7 +153,7 @@ async fn self_only_record_still_stops_the_client() {
 
     let self_addr = format!("127.0.0.1:{self_port}");
     let client = new_direct_client(
-        make_storage("device-me") as Arc<dyn SyncRuntimeStorage>,
+        self_storage.arc() as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "peer-self".into(),
             device_name: "Phantom".into(),

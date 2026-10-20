@@ -1,8 +1,8 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
-    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
-    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a").await;
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b").await;
     pair_storages(
         &storage_a,
         "device-a",
@@ -18,7 +18,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         .unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     server_a
         .set_auth_secret(Some("mesh-secret".to_string()))
@@ -46,7 +46,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         app_version: None,
     };
     let client = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -88,15 +88,15 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn hmac_authenticated_sync_rejects_wrong_secret() {
-    let storage_a = make_storage("device-a");
-    let storage_b = make_storage("device-b");
+    let storage_a = make_storage("device-a").await;
+    let storage_b = make_storage("device-b").await;
     storage_a
         .apply_entity(&todo_entity("hmac-denied-a", "Denied", "device-a", 1))
         .await
         .unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     server_a
         .set_auth_secret(Some("correct-secret".to_string()))
@@ -124,7 +124,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         app_version: None,
     };
     let client = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -153,8 +153,8 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn usage_entities_sync_between_two_servers() {
-    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
-    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a").await;
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b").await;
     pair_storages(
         &storage_a,
         "device-a",
@@ -186,10 +186,10 @@ async fn usage_entities_sync_between_two_servers() {
     storage_a.replace_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>
     ));
 
     let port_a = pick_port().await;
@@ -227,7 +227,7 @@ async fn usage_entities_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),

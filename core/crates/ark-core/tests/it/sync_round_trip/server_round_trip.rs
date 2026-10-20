@@ -6,8 +6,8 @@ async fn round_trip_sync_between_two_servers() {
     // Server A — holds one todo already; Server B — empty.
     // After sync, B should contain the todo.
     // ---------------------------------------------------------------------
-    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
-    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a").await;
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b").await;
     pair_storages(
         &storage_a,
         "device-a",
@@ -30,10 +30,10 @@ async fn round_trip_sync_between_two_servers() {
     storage_a.replace_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>
     ));
 
     // Use two separate loopback ports.
@@ -113,7 +113,7 @@ async fn round_trip_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(new_direct_client(
-        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage_b.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -165,10 +165,8 @@ async fn round_trip_sync_between_two_servers() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_connect_is_rejected() {
-    let storage = make_storage("device-self");
-    let server = Arc::new(SyncServer::new(
-        storage.clone() as Arc<dyn SyncRuntimeStorage>
-    ));
+    let storage = make_storage("device-self").await;
+    let server = Arc::new(SyncServer::new(storage.arc() as Arc<dyn SyncRuntimeStorage>));
 
     let port = pick_port().await;
     server
@@ -195,7 +193,7 @@ async fn self_connect_is_rejected() {
     // — same as the server. The server must reject the connection and NOT
     // emit a peer_connected event.
     let client = Arc::new(new_direct_client(
-        storage.clone() as Arc<dyn SyncRuntimeStorage>,
+        storage.arc() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-self".to_string(),
         "Self".to_string(),
