@@ -5,6 +5,8 @@ use serde_json::Value;
 
 mod apply;
 mod canonical_apply;
+#[cfg(test)]
+mod contract_tests;
 mod inbound;
 mod policy_bound;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
