@@ -11,6 +11,7 @@ mod actor_log;
 mod book_cover_rollback;
 mod canonical_task_idempotency;
 mod core_task_cutover;
+mod data_volume;
 mod device_registry;
 mod external_ref;
 mod inbox;
@@ -33,6 +34,7 @@ pub use canonical_task_idempotency::{
     CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,
 };
 pub use core_task_cutover::LegacyTaskCutoverFixture;
+pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
 pub use inbox::has_inbox_receipt;
