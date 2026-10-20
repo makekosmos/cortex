@@ -6,6 +6,10 @@ mod adapter;
 #[cfg(test)]
 mod apply;
 mod core_task;
+#[cfg(test)]
+mod data_platform_peer_policy_tests;
+#[cfg(test)]
+mod data_platform_tombstones_tests;
 
 pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,

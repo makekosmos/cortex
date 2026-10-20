@@ -7,7 +7,6 @@
 
 mod ark_api_wire_baseline;
 mod data_platform_phase7;
-mod data_platform_tombstones;
 mod fatsecret_type_registration;
 mod integration_schema_upgrade;
 mod iroh_bidirectional_burst;
@@ -43,5 +42,3 @@ mod type_registry_slice1;
 #[allow(clippy::unwrap_used)]
 #[path = "support/phase3_legacy_fixtures.rs"]
 mod phase3_legacy_fixtures;
-
-mod data_platform_peer_policy;

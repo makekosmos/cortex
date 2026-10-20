@@ -4,9 +4,10 @@ use ark_store::test_support::TestDatabase;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::SqliteStorageBackend;
+
 #[tokio::test]
 async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
-    use ark_core::db::SqliteStorageBackend;
     let database = TestDatabase::create().unwrap();
     let conn = database.open_connection().unwrap();
     ark_store::open::init_schema(&conn).unwrap();

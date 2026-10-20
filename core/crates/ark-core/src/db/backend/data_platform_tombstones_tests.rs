@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 
-use ark_core::db::SqliteStorageBackend;
+use super::SqliteStorageBackend;
 use ark_store::test_support::TestDatabase;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
