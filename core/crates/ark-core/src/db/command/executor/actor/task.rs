@@ -336,15 +336,12 @@ impl WriterTask for CanonicalGameUpsertTask {
             fallback_device_id,
             reply,
         } = *self;
-        let result = writer
-            .apply_canonical_game_upsert(command, &fallback_device_id)
-            .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-                TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-            });
+        let result = writer.write_with_capabilities(|capabilities| {
+            capabilities
+                .canonical_game()
+                .apply_upsert(command, &fallback_device_id)
+        });
+        let result = result.map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)
     }
 

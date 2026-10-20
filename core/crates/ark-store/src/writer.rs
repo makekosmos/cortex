@@ -67,6 +67,10 @@ pub struct BookCoverWrites<'scope, 'connection> {
     transaction: &'scope Transaction<'connection>,
 }
 
+pub struct CanonicalGameWrites<'scope, 'connection> {
+    transaction: &'scope Transaction<'connection>,
+}
+
 impl WriteCapabilities<'_, '_> {
     pub fn usage(&mut self) -> UsageWrites<'_, '_> {
         UsageWrites {
@@ -82,6 +86,12 @@ impl WriteCapabilities<'_, '_> {
 
     pub fn book_cover(&mut self) -> BookCoverWrites<'_, '_> {
         BookCoverWrites {
+            transaction: self.transaction,
+        }
+    }
+
+    pub fn canonical_game(&mut self) -> CanonicalGameWrites<'_, '_> {
+        CanonicalGameWrites {
             transaction: self.transaction,
         }
     }
@@ -140,6 +150,19 @@ impl BookCoverWrites<'_, '_> {
         write: ark_application::book_cover::LocalBookCoverWrite,
     ) -> Result<bool, crate::book_cover::BookCoverOperationError> {
         crate::book_cover::apply_local_book_cover_in(self.transaction, write)
+    }
+}
+
+impl CanonicalGameWrites<'_, '_> {
+    pub fn apply_upsert(
+        &mut self,
+        command: ark_application::canonical_game::GameUpsertCommand,
+        fallback_device_id: &str,
+    ) -> Result<
+        ark_application::canonical_game::GameMutationResult,
+        crate::canonical_game::CanonicalGameOperationError,
+    > {
+        crate::canonical_game::upsert_game_in(self.transaction, command, fallback_device_id)
     }
 }
 
@@ -211,19 +234,6 @@ impl SqliteWriter {
 
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {
         operation(&mut self.connection)
-    }
-
-    pub fn apply_canonical_game_upsert(
-        &mut self,
-        command: ark_application::canonical_game::GameUpsertCommand,
-        fallback_device_id: &str,
-    ) -> Result<
-        ark_application::canonical_game::GameMutationResult,
-        TransactionFailure<crate::canonical_game::CanonicalGameOperationError>,
-    > {
-        self.with_connection_mut(|connection| {
-            crate::canonical_game::apply_upsert(connection, command, fallback_device_id)
-        })
     }
 
     pub fn apply_local_usage_write_on_connection(

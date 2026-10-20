@@ -156,7 +156,7 @@ pub fn apply_upsert(
     Ok(result)
 }
 
-fn upsert_game_in(
+pub(crate) fn upsert_game_in(
     conn: &Transaction<'_>,
     command: GameUpsertCommand,
     fallback_device_id: &str,
