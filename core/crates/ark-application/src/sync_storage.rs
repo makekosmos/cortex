@@ -6,7 +6,8 @@ use sha2::{Digest, Sha256};
 #[path = "sync_storage_progress.rs"]
 mod sync_progress_write;
 pub use sync_progress_write::{
-    apply_sync_progress_write, SyncProgressWrite, SyncProgressWriteError, SyncProgressWriteSession,
+    apply_sync_progress_write, merge_version_vector_entries, SyncProgressWrite,
+    SyncProgressWriteError, SyncProgressWriteSession,
 };
 
 pub use crate::sync_policy::PolicyIdentity;
@@ -357,8 +358,15 @@ pub fn apply_inbound_sync_entity(
 #[async_trait::async_trait]
 pub trait PeerProgressPort: Send + Sync {
     async fn load_version_vector(&self) -> Result<VersionVector, String>;
-    async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
-    async fn store_version_vector_with_policy(
+    async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
+    async fn replace_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &PolicyIdentity,
+        vector: &VersionVector,
+    ) -> Result<(), String>;
+    async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
+    async fn merge_version_vector_with_policy(
         &self,
         local_device_id: &str,
         policy_identity: &PolicyIdentity,

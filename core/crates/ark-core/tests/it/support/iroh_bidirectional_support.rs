@@ -90,17 +90,30 @@ impl PeerProgressPort for TestStorage {
     async fn load_version_vector(&self) -> Result<ark_core::VersionVector, String> {
         self.inner.load_version_vector().await
     }
-    async fn store_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
-        self.inner.store_version_vector(value).await
+    async fn replace_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
+        self.inner.replace_version_vector(value).await
     }
-    async fn store_version_vector_with_policy(
+    async fn replace_version_vector_with_policy(
         &self,
         local_device_id: &str,
         policy_identity: &ark_application::sync_storage::PolicyIdentity,
         vector: &ark_core::VersionVector,
     ) -> Result<(), String> {
         self.inner
-            .store_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .replace_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .await
+    }
+    async fn merge_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
+        self.inner.merge_version_vector(value).await
+    }
+    async fn merge_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &ark_core::VersionVector,
+    ) -> Result<(), String> {
+        self.inner
+            .merge_version_vector_with_policy(local_device_id, policy_identity, vector)
             .await
     }
     async fn load_known_peers(&self) -> Result<Option<Vec<ark_core::PeerRecord>>, String> {

@@ -199,7 +199,7 @@
             "entity-1".to_string(),
             "2026-01-01T00:00:00.000Z".to_string(),
         );
-        backend.store_version_vector(&vector).await.unwrap();
+        backend.replace_version_vector(&vector).await.unwrap();
         assert_eq!(backend.load_version_vector().await.unwrap(), vector);
     }
 

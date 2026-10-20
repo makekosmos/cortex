@@ -109,19 +109,37 @@ impl PeerProgressPort for FakeStorage {
         Ok(self.vector.lock().unwrap().clone())
     }
 
-    async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+    async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
         self.trace.lock().unwrap().push("store_vector");
         *self.vector.lock().unwrap() = vector.clone();
         Ok(())
     }
 
-    async fn store_version_vector_with_policy(
+    async fn replace_version_vector_with_policy(
         &self,
         _local_device_id: &str,
         _policy_identity: &PolicyIdentity,
         vector: &VersionVector,
     ) -> Result<(), String> {
-        self.store_version_vector(vector).await
+        self.replace_version_vector(vector).await
+    }
+
+    async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+        self.trace.lock().unwrap().push("merge_vector");
+        ark_application::sync_storage::merge_version_vector_entries(
+            &mut self.vector.lock().unwrap(),
+            vector,
+        );
+        Ok(())
+    }
+
+    async fn merge_version_vector_with_policy(
+        &self,
+        _local_device_id: &str,
+        _policy_identity: &PolicyIdentity,
+        vector: &VersionVector,
+    ) -> Result<(), String> {
+        self.merge_version_vector(vector).await
     }
 
     async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String> {

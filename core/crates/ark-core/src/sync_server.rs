@@ -263,9 +263,7 @@ async fn save_version_vector(
     storage: &Arc<dyn SyncRuntimeStorage>,
     vector: &VersionVector,
 ) -> Result<(), String> {
-    let mut merged = load_version_vector(storage).await?;
-    merge_vector_entries(&mut merged, vector);
-    storage.store_version_vector(&merged).await
+    storage.merge_version_vector(vector).await
 }
 
 pub(crate) async fn save_known_peers(

@@ -48,25 +48,7 @@ pub fn merge_usage_cursors(target: &mut VersionVector, source: &VersionVector) {
 /// persisting it wholesale would clobber concurrent keys — merging first
 /// keeps the stored vector a floor, never a regression.
 pub fn merge_vector_entries(target: &mut VersionVector, source: &VersionVector) {
-    for (key, value) in source {
-        if key.starts_with("@usage:") {
-            let regresses = value
-                .parse::<u64>()
-                .ok()
-                .zip(target.get(key).and_then(|v| v.parse::<u64>().ok()))
-                .is_some_and(|(new, current)| new < current);
-            if !regresses {
-                target.insert(key.clone(), value.clone());
-            }
-            continue;
-        }
-        let outdated = target
-            .get(key)
-            .is_some_and(|current| !HLC::is_newer(value, current));
-        if !outdated {
-            target.insert(key.clone(), value.clone());
-        }
-    }
+    ark_application::sync_storage::merge_version_vector_entries(target, source);
 }
 
 /// Apply the sender's `usage_complete_through` claims after its final sync

@@ -5,9 +5,7 @@ use ark_domain::types::SyncEntity;
 
 use crate::protocol::NegotiatedProtocol;
 use crate::protocol::ProtocolCapability;
-use crate::protocol::{
-    is_usage_entity, merge_usage_cursors, merge_vector_entries, observe_non_usage_entity,
-};
+use crate::protocol::{is_usage_entity, merge_usage_cursors, observe_non_usage_entity};
 
 /// An inbound change that has passed policy validation and, when supported,
 /// has had its durable receipt recorded. The caller must send a receipt ACK
@@ -143,27 +141,33 @@ where
                 let stored_vector = storage.load_version_vector().await?;
                 merge_usage_cursors(&mut local_vector, &stored_vector);
 
-                let vector_to_store = match vector_write_mode {
-                    VersionVectorWriteMode::MergeConcurrent => {
-                        // Preserve the server path's second read/union so
-                        // concurrent local writes are not overwritten.
-                        let mut latest_vector = storage.load_version_vector().await?;
-                        merge_vector_entries(&mut latest_vector, &local_vector);
-                        latest_vector
-                    }
-                    VersionVectorWriteMode::Replace => local_vector,
-                };
+                let vector_to_store = local_vector;
                 match prepared.expected_policy_identity.as_ref() {
                     Some(identity) => {
-                        storage
-                            .store_version_vector_with_policy(
-                                &prepared.local_device_id,
-                                identity,
-                                &vector_to_store,
-                            )
-                            .await?;
+                        let persist = match vector_write_mode {
+                            VersionVectorWriteMode::MergeConcurrent => storage
+                                .merge_version_vector_with_policy(
+                                    &prepared.local_device_id,
+                                    identity,
+                                    &vector_to_store,
+                                ),
+                            VersionVectorWriteMode::Replace => storage
+                                .replace_version_vector_with_policy(
+                                    &prepared.local_device_id,
+                                    identity,
+                                    &vector_to_store,
+                                ),
+                        };
+                        persist.await?;
                     }
-                    None => storage.store_version_vector(&vector_to_store).await?,
+                    None => match vector_write_mode {
+                        VersionVectorWriteMode::MergeConcurrent => {
+                            storage.merge_version_vector(&vector_to_store).await?
+                        }
+                        VersionVectorWriteMode::Replace => {
+                            storage.replace_version_vector(&vector_to_store).await?
+                        }
+                    },
                 }
             }
             LiveChangeDisposition::Applied {

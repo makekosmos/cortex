@@ -140,7 +140,7 @@ async fn stale_policy_after_receipt_rejects_apply_without_advancing_inbox_or_obj
     }
     let stale_vector = crate::types::VersionVector::from([(entity.id.clone(), entity.hlc.clone())]);
     let vector_error = backend
-        .store_version_vector_with_policy("device-local", &old_policy, &stale_vector)
+        .merge_version_vector_with_policy("device-local", &old_policy, &stale_vector)
         .await
         .unwrap_err();
     assert!(vector_error.contains("stale_or_unnegotiated_sync_policy"));

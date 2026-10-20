@@ -27,7 +27,7 @@ async fn round_trip_sync_between_two_servers() {
     // normally do this.
     let mut vector_a: VersionVector = HashMap::new();
     vector_a.insert(seed.id.clone(), seed.hlc.clone());
-    storage_a.store_version_vector(&vector_a).await.unwrap();
+    storage_a.replace_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
         storage_a.clone() as Arc<dyn SyncRuntimeStorage>

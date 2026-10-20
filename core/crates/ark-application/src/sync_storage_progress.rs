@@ -1,10 +1,17 @@
 use crate::sync_policy::{sync_profile_identity, SyncProfile};
 use crate::sync_storage::PolicyIdentity;
+use ark_domain::hlc::HLC;
+use ark_domain::types::VersionVector;
+
+#[derive(Clone, Debug, serde::Serialize)]
+enum SyncProgressMutation {
+    Replace { key: String, value: String },
+    MergeVersionVector(VersionVector),
+}
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct SyncProgressWrite {
-    key: String,
-    value: String,
+    mutation: SyncProgressMutation,
     local_device_id: Option<String>,
     policy_identity: Option<PolicyIdentity>,
 }
@@ -12,8 +19,15 @@ pub struct SyncProgressWrite {
 impl SyncProgressWrite {
     pub fn new(key: String, value: String) -> Self {
         Self {
-            key,
-            value,
+            mutation: SyncProgressMutation::Replace { key, value },
+            local_device_id: None,
+            policy_identity: None,
+        }
+    }
+
+    pub fn merge_version_vector(vector: VersionVector) -> Self {
+        Self {
+            mutation: SyncProgressMutation::MergeVersionVector(vector),
             local_device_id: None,
             policy_identity: None,
         }
@@ -40,6 +54,7 @@ pub trait SyncProgressWriteSession {
         local_device_id: &str,
     ) -> Result<Option<SyncProfile>, String>;
     fn set_sync_value(&self, key: &str, value: &str) -> Result<(), String>;
+    fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,7 +81,39 @@ pub fn apply_sync_progress_write(
             return Err(SyncProgressWriteError::StalePolicy);
         }
     }
-    session
-        .set_sync_value(&write.key, &write.value)
-        .map_err(SyncProgressWriteError::SyncValueStorage)
+    match write.mutation {
+        SyncProgressMutation::Replace { key, value } => session
+            .set_sync_value(&key, &value)
+            .map_err(SyncProgressWriteError::SyncValueStorage),
+        SyncProgressMutation::MergeVersionVector(vector) => session
+            .merge_version_vector(&vector)
+            .map_err(SyncProgressWriteError::SyncValueStorage),
+    }
+}
+
+pub fn merge_version_vector_entries(target: &mut VersionVector, source: &VersionVector) {
+    for (key, value) in source {
+        if key.starts_with("@usage:") {
+            let regresses = value
+                .parse::<u64>()
+                .ok()
+                .zip(
+                    target
+                        .get(key)
+                        .and_then(|current| current.parse::<u64>().ok()),
+                )
+                .is_some_and(|(incoming, current)| incoming < current);
+            if !regresses {
+                target.insert(key.clone(), value.clone());
+            }
+            continue;
+        }
+
+        let outdated = target
+            .get(key)
+            .is_some_and(|current| !HLC::is_newer(value, current));
+        if !outdated {
+            target.insert(key.clone(), value.clone());
+        }
+    }
 }

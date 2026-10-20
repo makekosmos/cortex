@@ -111,14 +111,25 @@ impl PeerProgressPort for RevocableBackend {
     async fn load_version_vector(&self) -> Result<VersionVector, String> {
         Ok(VersionVector::new())
     }
-    async fn store_version_vector(&self, _: &VersionVector) -> Result<(), String> {
+    async fn replace_version_vector(&self, _: &VersionVector) -> Result<(), String> {
         Ok(())
     }
-    async fn store_version_vector_with_policy(
+    async fn replace_version_vector_with_policy(
         &self,
         _local_device_id: &str,
         _policy_identity: &ark_application::sync_storage::PolicyIdentity,
         _vector: &VersionVector,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    async fn merge_version_vector(&self, _: &VersionVector) -> Result<(), String> {
+        Ok(())
+    }
+    async fn merge_version_vector_with_policy(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
+        _: &VersionVector,
     ) -> Result<(), String> {
         Ok(())
     }

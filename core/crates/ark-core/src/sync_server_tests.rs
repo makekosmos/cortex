@@ -13,6 +13,7 @@ pub(crate) mod tests {
         kv: StdMutex<HashMap<String, String>>,
         entities: StdMutex<HashMap<String, SyncEntity>>,
         peer_transport_keys_error: StdMutex<Option<String>>,
+        newer_version_vector_before_next_merge: StdMutex<Option<VersionVector>>,
     }
 
     impl MemBackend {
@@ -21,6 +22,7 @@ pub(crate) mod tests {
                 kv: StdMutex::new(HashMap::new()),
                 entities: StdMutex::new(HashMap::new()),
                 peer_transport_keys_error: StdMutex::new(None),
+                newer_version_vector_before_next_merge: StdMutex::new(None),
             }
         }
 
@@ -33,6 +35,10 @@ pub(crate) mod tests {
                 .lock()
                 .unwrap()
                 .insert(key.to_string(), value.to_string());
+        }
+
+        fn race_next_vector_merge_with(&self, vector: VersionVector) {
+            *self.newer_version_vector_before_next_merge.lock().unwrap() = Some(vector);
         }
     }
 
@@ -184,26 +190,52 @@ pub(crate) mod tests {
                 .lock()
                 .unwrap()
                 .get(crate::db::VERSION_VECTOR_KEY)
-                .and_then(|raw| serde_json::from_str(raw).ok())
-                .map_or_else(
-                    || Ok(VersionVector::new()),
-                    |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
-                )
+                .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
+                .transpose()
+                .map(|vector| vector.unwrap_or_default())
         }
-        async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+        async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
                 crate::db::VERSION_VECTOR_KEY.into(),
                 serde_json::to_string(vector).unwrap(),
             );
             Ok(())
         }
-        async fn store_version_vector_with_policy(
+        async fn replace_version_vector_with_policy(
             &self,
             _local_device_id: &str,
             _policy_identity: &ark_application::sync_storage::PolicyIdentity,
             vector: &VersionVector,
         ) -> Result<(), String> {
-            self.store_version_vector(vector).await
+            self.replace_version_vector(vector).await
+        }
+        async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+            if let Some(newer) = self
+                .newer_version_vector_before_next_merge
+                .lock()
+                .unwrap()
+                .take()
+            {
+                self.kv.lock().unwrap().insert(
+                    crate::db::VERSION_VECTOR_KEY.into(),
+                    serde_json::to_string(&newer).unwrap(),
+                );
+            }
+            let mut current = self.load_version_vector().await?;
+            ark_application::sync_storage::merge_version_vector_entries(&mut current, vector);
+            self.kv.lock().unwrap().insert(
+                crate::db::VERSION_VECTOR_KEY.into(),
+                serde_json::to_string(&current).unwrap(),
+            );
+            Ok(())
+        }
+        async fn merge_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.merge_version_vector(vector).await
         }
         async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String> {
             self.kv
@@ -387,6 +419,8 @@ pub(crate) mod tests {
     }
 
     include!("sync_server_tests/peer_identity_backend.rs");
+
+    include!("sync_server_tests/version_vector_merge.rs");
 
     #[async_trait::async_trait]
     impl AuthenticatedEntityBackend for MemBackend {

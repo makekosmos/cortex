@@ -183,7 +183,7 @@ async fn usage_entities_sync_between_two_servers() {
     vector_a.insert(tracked_app.id.clone(), tracked_app.hlc.clone());
     vector_a.insert(session.id.clone(), session.hlc.clone());
     vector_a.insert(event.id.clone(), event.hlc.clone());
-    storage_a.store_version_vector(&vector_a).await.unwrap();
+    storage_a.replace_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
         storage_a.clone() as Arc<dyn SyncRuntimeStorage>

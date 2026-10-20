@@ -8,8 +8,8 @@ use ark_application::sync_storage::{
 use ark_domain::types::{SyncEntity, VersionVector};
 
 use crate::protocol::{
-    generate_id, is_usage_entity, merge_usage_cursors, merge_vector_entries, should_send_entity,
-    split_into_batches, LanSyncMessage,
+    generate_id, is_usage_entity, merge_usage_cursors, should_send_entity, split_into_batches,
+    LanSyncMessage,
 };
 
 const SNAPSHOT_PAGE_SIZE: usize = 100;
@@ -317,9 +317,7 @@ impl OutboundSnapshot {
         if !self.vector_updated {
             return Ok(());
         }
-        let mut merged = storage.load_version_vector().await?;
-        merge_vector_entries(&mut merged, &self.local_vector);
-        storage.store_version_vector(&merged).await
+        storage.merge_version_vector(&self.local_vector).await
     }
 }
 

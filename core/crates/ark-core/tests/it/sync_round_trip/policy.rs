@@ -295,7 +295,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     source.apply_entity(&excluded_update).await.unwrap();
     let mut source_vector = source.load_version_vector().await.unwrap();
     source_vector.insert(excluded_update.id.clone(), excluded_update.hlc.clone());
-    source.store_version_vector(&source_vector).await.unwrap();
+    source.replace_version_vector(&source_vector).await.unwrap();
     server.broadcast_live_change(None).await;
     let receiver_c_after = tokio::time::timeout(Duration::from_secs(10), async {
         loop {

@@ -263,23 +263,52 @@ impl PeerProgressPort for SqliteStorageBackend {
             .unwrap_or_default())
     }
 
-    async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+    async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
         store_progress_value(self, ark_store::VERSION_VECTOR_KEY, vector).await
     }
 
-    async fn store_version_vector_with_policy(
+    async fn replace_version_vector_with_policy(
         &self,
         local_device_id: &str,
         policy_identity: &ark_application::sync_storage::PolicyIdentity,
         vector: &VersionVector,
     ) -> Result<(), String> {
-        let raw = serde_json::to_string(vector).map_err(|error| error.to_string())?;
         self.db
             .set_sync_progress(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 ark_application::sync_storage::SyncProgressWrite::new(
                     ark_store::VERSION_VECTOR_KEY.to_owned(),
-                    raw,
+                    serde_json::to_string(vector).map_err(|error| error.to_string())?,
+                )
+                .with_policy_identity(local_device_id.to_owned(), policy_identity.clone()),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+        self.db
+            .set_sync_progress(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                ark_application::sync_storage::SyncProgressWrite::merge_version_vector(
+                    vector.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn merge_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &VersionVector,
+    ) -> Result<(), String> {
+        self.db
+            .set_sync_progress(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                ark_application::sync_storage::SyncProgressWrite::merge_version_vector(
+                    vector.clone(),
                 )
                 .with_policy_identity(local_device_id.to_owned(), policy_identity.clone()),
             )

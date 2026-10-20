@@ -6,8 +6,8 @@ use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort, Polic
 use ark_domain::types::{SyncEntity, VersionVector};
 
 use crate::protocol::{
-    is_usage_entity, merge_usage_cursors, merge_vector_entries, observe_non_usage_entity,
-    sync_policy_identity, NegotiatedProtocol, ProtocolCapability,
+    is_usage_entity, observe_non_usage_entity, sync_policy_identity, NegotiatedProtocol,
+    ProtocolCapability,
 };
 
 pub struct InboundSnapshotBatch {
@@ -148,15 +148,12 @@ where
     if !(vector_updated || (is_last && usage_complete_through.is_some())) {
         return Ok(());
     }
-    merge_usage_cursors(vector, &storage.load_version_vector().await?);
     if is_last {
         if let Some(complete_through) = usage_complete_through {
             crate::protocol::apply_usage_complete_through(vector, complete_through);
         }
     }
-    let mut latest_vector = storage.load_version_vector().await?;
-    merge_vector_entries(&mut latest_vector, vector);
-    storage.store_version_vector(&latest_vector).await
+    storage.merge_version_vector(vector).await
 }
 
 pub async fn persist_pull_vector_with_policy<S>(
@@ -174,13 +171,12 @@ where
     if !(vector_updated || (is_last && usage_complete_through.is_some())) {
         return Ok(());
     }
-    merge_usage_cursors(vector, &storage.load_version_vector().await?);
     if is_last {
         if let Some(complete_through) = usage_complete_through {
             crate::protocol::apply_usage_complete_through(vector, complete_through);
         }
     }
     storage
-        .store_version_vector_with_policy(local_device_id, policy_identity, vector)
+        .merge_version_vector_with_policy(local_device_id, policy_identity, vector)
         .await
 }
