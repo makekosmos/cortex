@@ -18,6 +18,7 @@ mod object_revision;
 mod object_write_rollback;
 mod production_actor;
 mod registry_enrollment;
+mod replace_object_link;
 mod task_merge_inbound;
 mod task_merge_legacy;
 mod type_mutation;
@@ -40,6 +41,7 @@ pub use object_revision::{
 pub use object_write_rollback::{ObjectWriteRollbackFixture, ObjectWriteRollbackState};
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
+pub use replace_object_link::{ReplaceObjectLinkFixture, ReplacedObjectLinkSyncState};
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
