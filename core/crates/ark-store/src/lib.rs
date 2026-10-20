@@ -51,6 +51,8 @@ pub use read_capabilities::{
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 
 #[cfg(test)]
+mod canonical_facades_tests;
+#[cfg(test)]
 mod canonical_game_tests;
 #[cfg(test)]
 mod canonical_type_bootstrap_tests;

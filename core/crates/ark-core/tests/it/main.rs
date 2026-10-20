@@ -16,7 +16,6 @@ mod iroh_ticket_pairing;
 mod phase2_slice2_object_versions;
 mod phase3_agenda_contract;
 mod phase3_blocked_writes;
-mod phase3_canonical_facades;
 mod phase3_canonical_types;
 mod phase3_compatibility;
 mod phase3_delphi_projection;
