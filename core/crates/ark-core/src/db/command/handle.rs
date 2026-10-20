@@ -14,6 +14,7 @@ mod system_mutation;
 #[cfg(debug_assertions)]
 mod test_writer;
 mod usage;
+mod usage_sequence_migration;
 
 #[derive(Clone)]
 pub(crate) struct DbHandle {

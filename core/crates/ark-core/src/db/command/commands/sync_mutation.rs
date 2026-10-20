@@ -215,39 +215,6 @@ impl ark_application::sync_storage::SyncEntityMutationSession
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct EnsureUsageSequenceMigratedCommand {
-    device_id: String,
-}
-
-impl EnsureUsageSequenceMigratedCommand {
-    pub(crate) fn new(device_id: String) -> Self {
-        Self { device_id }
-    }
-}
-
-impl sealed::Sealed for EnsureUsageSequenceMigratedCommand {}
-
-impl DbCommand for EnsureUsageSequenceMigratedCommand {
-    type Output = ();
-
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()?;
-        ark_store::usage_sync_log::ensure_usage_sequence_migrated(transaction, &self.device_id)
-            .map_err(DbError::Storage)
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub(crate) struct ApplySyncEntityCommand {
     entity: SyncEntity,
 }

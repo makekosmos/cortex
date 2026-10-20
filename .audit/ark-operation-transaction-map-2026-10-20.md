@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 55 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus four extracted Store writer paths, by responsibility. The current inventory has **30 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, local sync key-value writes, and sync-progress writes use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the 54 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus five extracted Store writer paths, by responsibility. The current inventory has **29 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, local sync key-value writes, sync-progress writes, and usage-sequence migration use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -68,7 +68,6 @@ These operations return results to their Core callers; no direct network or othe
 | Kind | Operation | Implementation |
 |---|---|---|
 | DbCommand | `CommittedFeedProgressCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70` |
-| DbCommand | `EnsureUsageSequenceMigratedCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:230` |
 | DbCommand | `ApplySyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263` |
 | DbCommand | `ApplyAuthenticatedSyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324` |
 | DbCommand | `SaveLocalSyncProfileCommand` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:36` |

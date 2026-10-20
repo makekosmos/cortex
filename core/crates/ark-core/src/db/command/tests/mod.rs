@@ -228,16 +228,13 @@ async fn iroh_secret_key_command_keeps_the_persisted_identity() {
 }
 
 #[tokio::test]
-async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
+async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
     handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
     handle
-        .submit(
-            CommandContext::engine(),
-            EnsureUsageSequenceMigratedCommand::new("device-under-test".into()),
-        )
+        .ensure_usage_sequence_migrated(CommandContext::engine(), "device-under-test".into())
         .await
         .unwrap();
 
