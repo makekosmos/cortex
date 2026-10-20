@@ -21,6 +21,5 @@ mod phase3_delphi_projection;
 mod phase3_game_rpc;
 mod phase3_registry_definition_authority;
 mod phase3_validation;
-mod proptest_invariants;
 mod relay_round_trip;
 mod support;

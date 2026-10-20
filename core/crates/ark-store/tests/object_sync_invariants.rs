@@ -18,7 +18,7 @@
 // Test config: 64 iterations (CI-friendly), max sequence length 30.
 // Если будет flaky или slow — можно увеличить до 256 при ручном запуске.
 
-use ark_core::types::{ArkObject, ObjectType, VersionVector};
+use ark_domain::types::{ArkObject, ObjectType, VersionVector};
 use ark_store::objects;
 use ark_store::objects::upsert_object_compat as upsert_object;
 use proptest::collection::vec;

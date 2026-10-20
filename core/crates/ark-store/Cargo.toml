@@ -9,6 +9,10 @@ autotests = false
 name = "phase3_migration_tests"
 path = "tests/phase3_migration_tests.rs"
 
+[[test]]
+name = "object_sync_invariants"
+path = "tests/object_sync_invariants.rs"
+
 [features]
 default = []
 test-support = ["dep:tempfile"]
@@ -31,6 +35,7 @@ windows = { version = "0.62", features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+proptest = "1.5"
 
 [lints]
 workspace = true
