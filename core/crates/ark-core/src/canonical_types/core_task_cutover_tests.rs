@@ -1,10 +1,8 @@
 //! KOS-397 cutover: legacy task props map to core.task, a legacy task write is
 //! refused, and a start moves the stored rows over once.
-use crate::types::ArkObjectWrite;
 use ark_application::canonical_compatibility::{
     map_legacy_with_context, LegacyRecord, LegacySource, MappingContext,
 };
-use rusqlite::Connection;
 use serde_json::{json, Value};
 
 fn map_flat(props: Value) -> Result<serde_json::Value, String> {
@@ -109,94 +107,11 @@ fn completion_keeps_its_stamp_and_a_stray_stamp_is_refused() {
     assert!(stray.is_err());
 }
 
-#[test]
-fn engine_refuses_a_new_write_of_the_legacy_task_type() {
-    let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
-    let write = ArkObjectWrite {
-        id: "new-legacy-task".into(),
-        type_id: "com.kosmos.task".into(),
-        type_version: Some("1.1.0".into()),
-        title: "Old writer".into(),
-        content_json: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-        props_json: json!({"status":"todo"}),
-        created_at: "2026-10-13T00:00:00.000Z".into(),
-        updated_at: "2026-10-13T00:00:00.000Z".into(),
-        deleted_at: None,
-    };
-    let error = ark_store::object_write::prepare_object(&conn, write)
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("legacy_task_type_retired"), "{error}");
-}
-
 #[tokio::test]
 async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     let dir = crate::test_support::temp_dir();
     let path = dir.path().join("ark.db");
-    {
-        let conn = Connection::open(&path).unwrap();
-        ark_store::open::init_schema(&conn).unwrap();
-        let content = json!({
-            "content": [{
-                "content": [{"text": "", "type": "text"}],
-                "type": "paragraph"
-            }],
-            "type": "doc"
-        });
-        let props = json!({
-            "canceledAt": null,
-            "checklist": [],
-            "completedAt": null,
-            "dueAt": null,
-            "priority": "none",
-            "recurrence": null,
-            "reminderAt": null,
-            "scheduledAt": null,
-            "status": "todo",
-            "extensions": {
-                "area_id": null,
-                "billable": false,
-                "cancelled_at": null,
-                "checklist_items": [],
-                "completed_at": null,
-                "created_at": "2026-10-04T22:01:08.744412+00:00",
-                "deadline": null,
-                "description": null,
-                "fuel_cost": null,
-                "heading_id": null,
-                "is_cancelled": false,
-                "is_completed": false,
-                "is_today": true,
-                "is_evening": false,
-                "is_someday": false,
-                "is_trashed": false,
-                "price": null,
-                "priority": 0,
-                "project_id": null,
-                "recurrence_rule": null,
-                "reminder_date": null,
-                "scheduled_date": null,
-                "significance": null,
-                "sort_order": 0,
-                "status": "todo",
-                "system_kind": null,
-                "tag_ids": []
-            }
-        });
-        conn.execute(
-            "INSERT INTO objects (
-                id, type_id, type_version, title, content_json, props_json, created_at, updated_at
-             ) VALUES (?1, 'com.kosmos.task', '1.1.0', ?1, ?2, ?3, ?4, ?4)",
-            rusqlite::params![
-                "legacy-task",
-                content.to_string(),
-                props.to_string(),
-                "2026-10-04T22:01:08.744412+00:00"
-            ],
-        )
-        .unwrap();
-    }
+    ark_store::test_support::LegacyTaskCutoverFixture::seed(&path).unwrap();
     let service = crate::service::ArkService::open(path.to_str().unwrap())
         .await
         .unwrap();

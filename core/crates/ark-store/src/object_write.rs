@@ -314,4 +314,24 @@ mod tests {
         assert_eq!(object.type_id, "note.canonical");
         assert_eq!(object.type_version, "1.2.0");
     }
+
+    #[test]
+    fn prepare_object_rejects_a_new_write_of_the_legacy_task_type() {
+        let connection = Connection::open_in_memory().expect("database opens");
+        crate::open::init_schema(&connection).expect("database schema initializes");
+        let write = ArkObjectWrite {
+            id: "new-legacy-task".into(),
+            type_id: "com.kosmos.task".into(),
+            type_version: Some("1.1.0".into()),
+            title: "Old writer".into(),
+            content_json: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+            props_json: json!({"status":"todo"}),
+            created_at: "2026-10-13T00:00:00.000Z".into(),
+            updated_at: "2026-10-13T00:00:00.000Z".into(),
+            deleted_at: None,
+        };
+
+        let error = prepare_object(&connection, write).expect_err("legacy writes are retired");
+        assert!(error.to_string().contains("legacy_task_type_retired"));
+    }
 }
