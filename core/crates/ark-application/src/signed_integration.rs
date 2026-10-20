@@ -1,10 +1,11 @@
 mod admission;
 mod hlc;
+mod persistence;
 
 use ark_domain::integration_replication::{
-    AuthorizedNode, IntegrationConfiguration, IntegrationNodeGrant, IntegrationReplicationChange,
-    IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, SignedSyncError,
-    VerifiedSyncEnvelope,
+    AuthorizedNode, IntegrationConfiguration, IntegrationNodeGrant, IntegrationRefreshLease,
+    IntegrationReplicationChange, IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
+    SignedSyncError, VerifiedSyncEnvelope,
 };
 use ark_domain::types::VersionVector;
 use std::collections::HashSet;
@@ -28,6 +29,11 @@ pub trait SignedIntegrationFrameStore {
         &self,
         integration_id: &str,
     ) -> Result<Option<IntegrationConfiguration>, String>;
+    fn load_max_credential_generation(&self, integration_id: &str) -> Result<Option<u64>, String>;
+    fn load_refresh_lease(
+        &self,
+        integration_id: &str,
+    ) -> Result<Option<IntegrationRefreshLease>, String>;
     fn load_current_entity(
         &self,
         entity: &IntegrationReplicationEntity,
@@ -43,7 +49,7 @@ pub trait SignedIntegrationFrameStore {
 }
 
 pub type ReplayApply<'a> =
-    Box<dyn FnOnce(&mut dyn SignedIntegrationFrameStore) -> Result<(), String> + 'a>;
+    Box<dyn FnOnce(&mut dyn SignedIntegrationFrameStore) -> Result<(), SignedSyncError> + 'a>;
 
 /// A transaction-scoped capability for applying one authenticated integration frame.
 /// The callback may read and write typed records, but cannot recursively reserve replay.
@@ -91,7 +97,8 @@ pub fn apply_signed_integration_frame(
         &verified,
         request.reserved_at_ms,
         Box::new(|store| {
-            admission::require_verified_integration_access(store, &verified, &origin, &recipient)?;
+            admission::require_verified_integration_access(store, &verified, &origin, &recipient)
+                .map_err(SignedSyncError::Apply)?;
             apply_verified_batch(store, &verified, request.reserved_at_ms)
         }),
     )
@@ -101,21 +108,30 @@ fn apply_verified_batch(
     store: &dyn SignedIntegrationFrameStore,
     verified: &VerifiedSyncEnvelope,
     now_ms: u64,
-) -> Result<(), String> {
+) -> Result<(), SignedSyncError> {
     let mut changes = verified.payload.clone();
     changes.sort_by_key(|change| (change.dependency_rank(), change.vector_key()));
     let mut keys = HashSet::with_capacity(changes.len());
-    let mut vector = store.load_version_vector()?;
+    let mut vector = store
+        .load_version_vector()
+        .map_err(SignedSyncError::Storage)?;
     let mut vector_changed = false;
 
     for change in changes {
-        change.validate().map_err(|error| error.to_string())?;
-        hlc::require_authenticated_change_hlcs(&change, &verified.origin_node_id)?;
+        change
+            .validate()
+            .map_err(|error| SignedSyncError::Apply(error.to_string()))?;
+        hlc::require_authenticated_change_hlcs(&change, &verified.origin_node_id)
+            .map_err(SignedSyncError::Apply)?;
         let key = change.vector_key();
         if !keys.insert(key.clone()) {
-            return Err(format!("duplicate integration vector key: {key}"));
+            return Err(SignedSyncError::Apply(format!(
+                "duplicate integration vector key: {key}"
+            )));
         }
-        let current = store.load_current_entity(&change.entity)?;
+        let current = store
+            .load_current_entity(&change.entity)
+            .map_err(SignedSyncError::Storage)?;
         if !change_requires_apply(&change, &current, &key, &vector) {
             continue;
         }
@@ -139,7 +155,9 @@ fn apply_verified_batch(
     }
 
     if vector_changed {
-        store.persist_version_vector(&vector)?;
+        store
+            .persist_version_vector(&vector)
+            .map_err(SignedSyncError::Storage)?;
     }
     Ok(())
 }
@@ -151,39 +169,37 @@ fn apply_change(
     origin_node_id: &str,
     recipient_node_id: &str,
     now_ms: u64,
-) -> Result<(), String> {
+) -> Result<(), SignedSyncError> {
     if current == Some(&change.entity) {
         return Ok(());
     }
     if let Some(integration_id) = change_integration_id(change) {
-        if store.load_configuration(integration_id)?.is_none()
+        if store
+            .load_configuration(integration_id)
+            .map_err(SignedSyncError::Storage)?
+            .is_none()
             && !matches!(
                 &change.entity,
                 IntegrationReplicationEntity::IntegrationConfiguration(_)
             )
         {
-            return Err("integration configuration dependency is missing".into());
+            return Err(SignedSyncError::Apply(
+                "integration configuration dependency is missing".into(),
+            ));
         }
     }
-    match &change.entity {
-        IntegrationReplicationEntity::IntegrationConfiguration(_)
-        | IntegrationReplicationEntity::AuthorizedNode(_)
-        | IntegrationReplicationEntity::IntegrationNodeGrant(_) => {}
-        IntegrationReplicationEntity::IntegrationRefreshLease(value) => {
-            if value.holder_node_id != origin_node_id {
-                return Err("refresh lease holder does not match signed origin".into());
-            }
-        }
-        IntegrationReplicationEntity::IntegrationCredentialEnvelope(value) => {
-            if value.recipient_node_id != recipient_node_id {
-                return Err("credential envelope recipient does not match signed frame".into());
-            }
-            if value.issuer_node_id != origin_node_id {
-                return Err("credential envelope issuer does not match signed origin".into());
-            }
-        }
-    }
-    store.persist_entity(change, origin_node_id, now_ms)
+    persistence::validate_persisted_change(
+        store,
+        &change.entity,
+        current,
+        origin_node_id,
+        recipient_node_id,
+        now_ms,
+    )
+    .map_err(SignedSyncError::Apply)?;
+    store
+        .persist_entity(change, origin_node_id, now_ms)
+        .map_err(SignedSyncError::Storage)
 }
 
 fn change_requires_apply(

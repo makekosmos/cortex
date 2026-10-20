@@ -62,9 +62,12 @@ The plan's `signed_hpke_replication_reaches_offline_provider_and_rejects_stale_i
 - [x] Frame one shared ownership rubric and inspect the current integration command, Store, and signed-frame paths.
 - [x] Compare two structurally distinct transaction-boundary designs and get an independent judgment.
 - [x] Select a typed Store write capability executed only after the existing weighted Core actor task is admitted; do not queue closures.
+- [x] Move signed-frame transition validation to Application. Keep the replay callback result typed as `SignedSyncError`.
 - [ ] Move integration use-case decisions into Application and SQLite row codecs, vector updates, replay reservation, savepoint, and transactions into Store.
 - [ ] Keep Core's typed actor requests, `require_engine`, authenticated-peer extraction, registry admission, wire mapping, and service orchestration.
 - [ ] Remove migrated Core SQLite operation helpers and callers in the same cutover.
 - [ ] Run the integrated integration-replication behavior suite, crate checks, lint and local gates once for this family, then commit.
 
 Synthesis evidence: `/tmp/ark-integration-candidate-actor.md`, `/tmp/ark-integration-candidate-contract.md`, and `/tmp/ark-integration-design-judge.md`. The typed contract candidate was selected because it fits the existing Store `WriteCapabilities` model and avoids callbacks in queued actor messages. The independent judge found both candidates omitted a typed scope for applying the entity batch under replay savepoint; this batch must preserve it as one scoped Store operation with typed failure. The use-case module currently lives at `ark-core/src/application/signed_integration.rs`, so moving it into `ark-application` is part of the work, not a presumed existing boundary.
+
+The signed-frame Application policy move covers identity verification, pre-existing trust, node and grant epoch transitions, lease and credential fences, HLC checks, entity ordering, duplicate keys, and version-vector decisions. The SQLite session still lives in Core and currently supplies those reads and writes. `cargo test -p ark-application -p ark-core --lib` passed 19 Application tests and 431 Core tests after the move; formatting and diff checks passed. The source-size gate passed with the new policy validators split into `signed_integration/persistence.rs`.

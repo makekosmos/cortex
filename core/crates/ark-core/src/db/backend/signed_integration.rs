@@ -43,6 +43,23 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
         )
     }
 
+    fn load_max_credential_generation(&self, integration_id: &str) -> Result<Option<u64>, String> {
+        ark_store::integration_replication::load_max_integration_credential_generation(
+            self.transaction,
+            integration_id,
+        )
+    }
+
+    fn load_refresh_lease(
+        &self,
+        integration_id: &str,
+    ) -> Result<Option<crate::integration_replication::IntegrationRefreshLease>, String> {
+        ark_store::integration_replication::load_integration_refresh_lease(
+            self.transaction,
+            integration_id,
+        )
+    }
+
     fn load_current_entity(
         &self,
         entity: &IntegrationReplicationEntity,
@@ -181,7 +198,7 @@ impl SignedIntegrationFrameSession for SqliteSignedIntegrationFrameSession<'_, '
                     Ok(()) => Ok(()),
                     Err(error) => Err(self.rollback_replay(error.to_string())),
                 },
-                Err(error) => Err(self.rollback_replay_with(SignedSyncError::Apply(error))),
+                Err(error) => Err(self.rollback_replay_with(error)),
             },
             Ok(_) => Err(self.rollback_replay_with(SignedSyncError::Replay)),
             Err(error) => {
