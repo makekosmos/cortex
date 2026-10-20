@@ -127,29 +127,20 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
             return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
         }
         if is_full_core_task(entity) {
-            let command = match policy_identity.clone() {
-                Some(identity) => AuthenticatedCoreTaskWrite::with_policy_identity(
-                    entity.id.clone(),
-                    entity.hlc.clone(),
-                    entity.origin_device_id.clone(),
-                    entity.data.clone(),
-                    inbox_message_id.to_owned(),
-                    inbox_payload_json,
-                    local_device_id.to_owned(),
-                    identity,
-                ),
-                None => AuthenticatedCoreTaskWrite::new(
-                    entity.id.clone(),
-                    entity.hlc.clone(),
-                    entity.origin_device_id.clone(),
-                    entity.data.clone(),
-                    inbox_message_id.to_owned(),
-                    inbox_payload_json,
-                ),
-            };
+            let mut command = AuthenticatedCoreTaskWrite::new(
+                entity.id.clone(),
+                entity.hlc.clone(),
+                entity.origin_device_id.clone(),
+                entity.data.clone(),
+                inbox_message_id.to_owned(),
+                inbox_payload_json,
+            );
+            if let Some(identity) = policy_identity {
+                command = command.with_policy_identity(local_device_id.to_owned(), identity);
+            }
             return self
                 .db
-                .submit(
+                .submit_authenticated_core_task_write(
                     CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
                     command,
                 )

@@ -1,10 +1,14 @@
+use super::super::super::{
+    AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome, TaskWriteOperationResult,
+};
 use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceCommand};
-use super::super::super::{LocalCoreTaskWrite, TaskWriteOperationResult};
 use ark_store::writer::{SqliteWriter, TransactionFailure};
 use tokio::sync::oneshot;
 
 mod core_task_write;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
+mod authenticated_core_task_write;
+pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
 
 /// Delivers a reply. The writer calls it only after the slot is released, so a
 /// caller that receives the reply can submit again without hitting the barrier.

@@ -1,4 +1,3 @@
-mod core_task;
 mod device_registry;
 mod device_registry_admission;
 mod device_registry_command;
@@ -21,8 +20,10 @@ mod type_mutation;
 mod type_read;
 mod usage_read;
 
-pub(crate) use ark_application::task_object_write::{LocalCoreTaskWrite, TaskWriteOperationResult};
-pub(crate) use core_task::{AuthenticatedCoreTaskWrite, RemoteCoreTaskOutcome};
+pub(crate) use ark_application::task_object_write::{
+    AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError, LocalCoreTaskWrite,
+    RemoteCoreTaskOutcome, TaskWriteOperationResult,
+};
 #[cfg(test)]
 pub(crate) use device_registry::DeviceEnrollmentOutcome;
 pub(crate) use device_registry::EnrollPairedDeviceCommand;
@@ -36,7 +37,7 @@ pub(crate) use device_registry_handshake::{
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
 };
-pub(crate) use inbound_policy::{require_sync_policy_identity, ReceiveInboxReceiptCommand};
+pub(crate) use inbound_policy::ReceiveInboxReceiptCommand;
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,

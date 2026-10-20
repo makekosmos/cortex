@@ -11,10 +11,10 @@ mod task;
 use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 pub(in crate::db::command) use task::{
-    CanonicalGameUpsertTask, ClearAllTask, DeleteObjectLinkTask, DeleteTrashedTask,
-    ExternalRefUpsertTask, LocalBookCoverTask, LocalCoreTaskWriteTask, LocalObjectDeleteTask,
-    LocalObjectUpsertTask, LocalUsageWriteTask, Publish, ReplaceObjectLinkTask, TypedCommand,
-    TypedMaintenance, UpsertObjectLinkTask, WriterTask,
+    AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask, DeleteObjectLinkTask,
+    DeleteTrashedTask, ExternalRefUpsertTask, LocalBookCoverTask, LocalCoreTaskWriteTask,
+    LocalObjectDeleteTask, LocalObjectUpsertTask, LocalUsageWriteTask, Publish,
+    ReplaceObjectLinkTask, TypedCommand, TypedMaintenance, UpsertObjectLinkTask, WriterTask,
 };
 
 struct Slot {

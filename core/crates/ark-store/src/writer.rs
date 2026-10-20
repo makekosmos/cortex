@@ -1,5 +1,6 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
+mod authenticated_task;
 mod task_objects;
 use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
@@ -246,6 +247,21 @@ impl SqliteWriter {
         })
     }
 
+    pub fn apply_authenticated_core_task_write(
+        &mut self,
+        peer_id: &str,
+        write: ark_application::task_object_write::AuthenticatedCoreTaskWrite,
+    ) -> Result<
+        ark_application::task_object_write::RemoteCoreTaskOutcome,
+        StoreTransactionFailure<
+            ark_application::task_object_write::AuthenticatedCoreTaskWriteError,
+        >,
+    > {
+        self.write_with_capabilities(|capabilities| {
+            authenticated_task::apply_in(capabilities.transaction, peer_id, write)
+        })
+    }
+
     fn immediate_on_connection<T, E>(
         connection: &mut Connection,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
@@ -284,6 +300,19 @@ impl SqliteWriter {
     > {
         Self::immediate_on_connection(connection, |transaction| {
             apply_local_core_task_write_in(transaction, write, principal, operation_id)
+        })
+    }
+
+    pub fn apply_authenticated_core_task_write_on_connection(
+        connection: &mut Connection,
+        peer_id: &str,
+        write: ark_application::task_object_write::AuthenticatedCoreTaskWrite,
+    ) -> Result<
+        ark_application::task_object_write::RemoteCoreTaskOutcome,
+        TransactionFailure<ark_application::task_object_write::AuthenticatedCoreTaskWriteError>,
+    > {
+        Self::immediate_on_connection(connection, |transaction| {
+            authenticated_task::apply_in(transaction, peer_id, write)
         })
     }
 

@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 58 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus the extracted task writer path, by responsibility. The current inventory has **33 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; the task upsert is now a dedicated Store writer task. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the 57 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus two extracted task writer paths, by responsibility. The current inventory has **32 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -12,12 +12,12 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Task writes and inbox policy — 3 operations
 
-**Core:** owns engine/peer authorization, sync-policy checks, inbox deduplication, removed-peer/stale-write decisions, and actor scheduling. Application owns the task write use case and now decodes the full `core.task` remote representation into a typed `RemoteObjectWrite`. Store owns task/object sessions, object readback, operation receipts, and transaction execution; inbox receipt state in the authenticated path still uses Core `crate::db` helpers. Each write remains atomic in its enclosing immediate transaction.
+**Core:** owns authenticated transport context checks and actor scheduling. Application owns the authenticated task use case, sync-policy identity verification, inbox/stale outcomes, and task representation decoding. Store owns the SQLite-backed policy/admission/inbox/object/task sessions and the immediate transaction. The local task path also uses Store-owned sessions, readback, and operation receipts.
 
 | Kind | Operation | Implementation |
 |---|---|---|
 | StoreWriterTask | `LocalCoreTaskWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/core_task_write.rs` → `ark_store::writer::SqliteWriter::apply_local_core_task_write` |
-| DbCommand | `AuthenticatedCoreTaskWrite` | `core/crates/ark-core/src/db/command/commands/core_task.rs:131` |
+| StoreWriterTask | `AuthenticatedCoreTaskWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/authenticated_core_task_write.rs` → `ark_store::writer::SqliteWriter::apply_authenticated_core_task_write` |
 | DbCommand | `ReceiveInboxReceiptCommand` | `core/crates/ark-core/src/db/command/commands/inbound_policy.rs:67` |
 
 ### Device registry — 9 operations
@@ -136,7 +136,7 @@ These operations return results to their Core callers; no direct network or othe
 
 | Responsibility group | StoreWriterTask | DbCommand | DbQuery | Maintenance | Total |
 |---|---:|---:|---:|---:|---:|
-| Task writes and inbox policy | 1 | 2 | 0 | 0 | 3 |
+| Task writes and inbox policy | 2 | 1 | 0 | 0 | 3 |
 | Device registry | 0 | 4 | 5 | 0 | 9 |
 | Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
 | Legacy mutations | 0 | 4 | 0 | 0 | 4 |
@@ -145,6 +145,6 @@ These operations return results to their Core callers; no direct network or othe
 | Type registry | 0 | 3 | 1 | 0 | 4 |
 | System, object, and usage reads | 0 | 2 | 3 | 1 | 6 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **1** | **33** | **24** | **1** | **59** |
+| **Total** | **2** | **32** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

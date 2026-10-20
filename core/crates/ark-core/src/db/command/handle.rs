@@ -3,6 +3,7 @@ use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, W
 use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
+pub(in crate::db::command) mod authenticated_core_task_write;
 mod core_task_write;
 mod external_ref;
 mod object_link_mutation;

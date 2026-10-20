@@ -131,6 +131,14 @@ pub fn default_sync_policy_identity() -> PolicyIdentity {
     }
 }
 
+pub fn sync_profile_identity(profile: Option<&SyncProfile>) -> PolicyIdentity {
+    profile.map_or_else(default_sync_policy_identity, |profile| PolicyIdentity {
+        revision: profile.revision,
+        digest: profile.digest(),
+        active: profile.active,
+    })
+}
+
 fn sync_mode_name(mode: SyncMode) -> &'static str {
     match mode {
         SyncMode::Full => "full",

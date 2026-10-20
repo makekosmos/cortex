@@ -56,14 +56,7 @@ pub fn default_sync_policy_message() -> LanSyncMessage {
 pub fn sync_policy_identity(
     profile: Option<&ark_application::sync_policy::SyncProfile>,
 ) -> ark_application::sync_storage::PolicyIdentity {
-    profile.map_or_else(
-        ark_application::sync_policy::default_sync_policy_identity,
-        |profile| ark_application::sync_storage::PolicyIdentity {
-            revision: profile.revision,
-            digest: profile.digest(),
-            active: profile.active,
-        },
-    )
+    ark_application::sync_policy::sync_profile_identity(profile)
 }
 
 pub(super) fn default_sync_policy_active() -> bool {
