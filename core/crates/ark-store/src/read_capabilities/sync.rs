@@ -1,5 +1,9 @@
 use super::SyncReadCapabilities;
-use ark_application::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
+use ark_application::sync_storage::{
+    CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, PolicyBoundFeedPage,
+    PolicyBoundFeedReadError, PolicyBoundSnapshotPage, PolicyBoundSnapshotReadError,
+    PolicyIdentity,
+};
 use ark_domain::types::{SyncEntity, VersionVector};
 use std::collections::HashMap;
 
@@ -81,6 +85,46 @@ impl SyncReadCapabilities<'_> {
         Ok(
             crate::integration_replication::load_authorized_node(self.connection, device_id)?
                 .and_then(|node| node.transport_public_key),
+        )
+    }
+
+    pub fn policy_bound_entities_page(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        vector: &VersionVector,
+        device_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<PolicyBoundSnapshotPage, PolicyBoundSnapshotReadError> {
+        crate::sync_entities::read_policy_bound_page(
+            self.connection,
+            peer_device_id,
+            expected_identity,
+            vector,
+            device_id,
+            offset,
+            limit,
+        )
+    }
+
+    pub fn policy_bound_feed_page(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+        max_bytes: usize,
+    ) -> Result<PolicyBoundFeedPage, PolicyBoundFeedReadError> {
+        crate::committed_feed::read_committed_feed_delivery_page_for_peer(
+            self.connection,
+            peer_device_id,
+            expected_identity,
+            after_position,
+            high_watermark,
+            limit,
+            max_bytes,
         )
     }
 }

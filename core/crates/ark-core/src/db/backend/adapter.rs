@@ -157,7 +157,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         ark_application::sync_storage::PolicyBoundSnapshotReadError,
     > {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
                 LoadPolicyBoundEntitiesPageQuery::new(
                     vector.clone(),

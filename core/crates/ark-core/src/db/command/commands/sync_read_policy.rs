@@ -1,7 +1,6 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use crate::types::VersionVector;
 use ark_application::sync_storage::SyncReadClass;
-use rusqlite::Connection;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -39,7 +38,7 @@ impl LoadPolicyBoundEntitiesPageQuery {
 
 impl sealed::Sealed for LoadPolicyBoundEntitiesPageQuery {}
 
-impl DbQuery for LoadPolicyBoundEntitiesPageQuery {
+impl StoreReadQuery for LoadPolicyBoundEntitiesPageQuery {
     type Output = ark_application::sync_storage::PolicyBoundSnapshotPage;
 
     fn class(&self) -> CommandClass {
@@ -58,26 +57,20 @@ impl DbQuery for LoadPolicyBoundEntitiesPageQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        ark_store::sync_entities::read_policy_bound_page(
-            connection,
-            &self.peer_device_id,
-            &self.expected_identity,
-            &self.vector,
-            &self.device_id,
-            self.offset,
-            self.limit,
-        )
-        .map_err(|error| match error {
-            ark_application::sync_storage::PolicyBoundReadError::StalePolicy => {
-                DbError::StaleSyncPolicy
-            }
-            ark_application::sync_storage::PolicyBoundReadError::Storage(error) => {
-                DbError::Storage(error)
-            }
-        })
+        capabilities
+            .sync()
+            .policy_bound_entities_page(
+                &self.peer_device_id,
+                &self.expected_identity,
+                &self.vector,
+                &self.device_id,
+                self.offset,
+                self.limit,
+            )
+            .map_err(map_policy_bound_read_error)
     }
 }
 
@@ -110,7 +103,7 @@ impl PolicyBoundFeedDeliveryPageQuery {
 
 impl sealed::Sealed for PolicyBoundFeedDeliveryPageQuery {}
 
-impl DbQuery for PolicyBoundFeedDeliveryPageQuery {
+impl StoreReadQuery for PolicyBoundFeedDeliveryPageQuery {
     type Output = ark_application::sync_storage::PolicyBoundFeedPage;
 
     fn class(&self) -> CommandClass {
@@ -126,25 +119,32 @@ impl DbQuery for PolicyBoundFeedDeliveryPageQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        ark_store::committed_feed::read_committed_feed_delivery_page_for_peer(
-            connection,
-            &self.peer_device_id,
-            &self.expected_identity,
-            self.after_position,
-            self.high_watermark,
-            self.limit,
-            crate::db::MAX_FEED_DELIVERY_BYTES,
-        )
-        .map_err(|error| match error {
-            ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy => {
-                DbError::StaleSyncPolicy
-            }
-            ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error) => {
-                DbError::Storage(error)
-            }
-        })
+        capabilities
+            .sync()
+            .policy_bound_feed_page(
+                &self.peer_device_id,
+                &self.expected_identity,
+                self.after_position,
+                self.high_watermark,
+                self.limit,
+                crate::db::MAX_FEED_DELIVERY_BYTES,
+            )
+            .map_err(map_policy_bound_read_error)
+    }
+}
+
+fn map_policy_bound_read_error(
+    error: ark_application::sync_storage::PolicyBoundReadError,
+) -> DbError {
+    match error {
+        ark_application::sync_storage::PolicyBoundReadError::StalePolicy => {
+            DbError::StaleSyncPolicy
+        }
+        ark_application::sync_storage::PolicyBoundReadError::Storage(error) => {
+            DbError::Storage(error)
+        }
     }
 }

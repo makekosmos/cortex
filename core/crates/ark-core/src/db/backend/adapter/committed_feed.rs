@@ -92,7 +92,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         ark_application::sync_storage::PolicyBoundFeedReadError,
     > {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::PolicyBoundFeedDeliveryPageQuery::new(
                     peer_device_id.to_owned(),
