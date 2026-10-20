@@ -168,7 +168,7 @@ pub(super) async fn device_registry_disable(
 
 pub(super) async fn get_sync_kv(state: &Arc<ServiceState>, key: String) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::SystemReadQuery::SyncKeyValue(key),
         )
@@ -270,7 +270,7 @@ pub(super) async fn db_backup_validate(
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
     get_db_handle(state)?
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::SystemReadQuery::ValidateSnapshot { db_path, backup_id },
         )
@@ -291,7 +291,7 @@ pub(super) async fn db_backup_restore(
     let _gate = state.backup_gate.lock().await;
     let db_handle = get_db_handle(state)?;
     let validation = db_handle
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::SystemReadQuery::ValidateSnapshot {
                 db_path: db_path.clone(),

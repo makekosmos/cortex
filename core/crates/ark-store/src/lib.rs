@@ -39,7 +39,7 @@ pub mod usage_sync_log;
 pub mod writer;
 
 pub use read_capabilities::{
-    CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities,
+    CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities, SystemReadCapabilities,
     TypeRegistryReadCapabilities, UsageReadCapabilities,
 };
 
