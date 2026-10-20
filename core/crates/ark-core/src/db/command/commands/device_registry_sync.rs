@@ -1,6 +1,5 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use ark_domain::device_registry::RegistryEvent;
-use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -131,8 +130,8 @@ impl StoreReadQuery for LoadRegistryEventsQuery {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ApplyRegistryEventsCommand {
-    sender_device_id: String,
-    events: Vec<RegistryEvent>,
+    pub(crate) sender_device_id: String,
+    pub(crate) events: Vec<RegistryEvent>,
 }
 
 impl ApplyRegistryEventsCommand {
@@ -141,73 +140,6 @@ impl ApplyRegistryEventsCommand {
             sender_device_id,
             events,
         }
-    }
-}
-
-impl sealed::Sealed for ApplyRegistryEventsCommand {}
-
-impl DbCommand for ApplyRegistryEventsCommand {
-    type Output = crate::replication_storage::RegistryPageApply;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.sender_device_id)?;
-        if self.events.len() > 32 {
-            return Err(DbError::Invalid("device_registry_page_bounds".into()));
-        }
-        // A disabled device may reconnect to learn the signed revocation and
-        // remaining registry history. Registry control is safe here because
-        // ordinary data still requires the separate admitted-session gate.
-        super::device_registry_admission::require_registry_peer_known(
-            transaction,
-            &self.sender_device_id,
-        )?;
-        let applied_events = apply_events(transaction, &self.events)?;
-        let disabled_device_ids = applied_events
-            .iter()
-            .filter(|event| {
-                matches!(
-                    event.operation(),
-                    ark_domain::device_registry::RegistryOperation::Disable
-                )
-            })
-            .map(|event| event.target_device_id().as_str().to_owned())
-            .collect();
-        let sender_is_admitted =
-            ark_store::device_registry::is_device_admitted(transaction, &self.sender_device_id)
-                .map_err(DbError::Storage)?
-                .unwrap_or(false);
-        let local_device_id =
-            ark_store::sync_kv::get_sync_kv(transaction, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
-                .map_err(DbError::Storage)?;
-        let local_device_is_admitted = local_device_id
-            .as_deref()
-            .map(|device_id| {
-                super::device_registry_admission::registry_device_is_admitted(
-                    transaction,
-                    device_id,
-                )
-            })
-            .transpose()?
-            .flatten()
-            .unwrap_or(true);
-        Ok(crate::replication_storage::RegistryPageApply {
-            digest: ark_store::device_registry::registry_digest(transaction)
-                .map_err(DbError::Storage)?,
-            sender_is_admitted,
-            local_device_is_admitted,
-            disabled_device_ids,
-            applied_events,
-        })
     }
 }
 
@@ -249,7 +181,6 @@ pub(super) fn apply_events(
                 "device_registry_sequence_conflict".into(),
             ));
         }
-
         let outcome = registry
             .apply(event.clone())
             .map_err(|error| DbError::Permission(error.to_string()))?;
@@ -270,4 +201,10 @@ pub(super) fn apply_events(
         applied_events.push(event.clone());
     }
     Ok(applied_events)
+}
+
+impl ApplyRegistryEventsCommand {
+    pub(crate) fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
 }

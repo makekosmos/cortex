@@ -6,9 +6,14 @@ use std::time::Instant;
 use tokio::sync::oneshot;
 
 mod maintenance;
+#[path = "actor/task/registry_events.rs"]
+mod registry_events_task;
 mod runtime;
 mod task;
 use maintenance::has_maintenance_barrier;
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;
+pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::map_inbox_receipt_error;

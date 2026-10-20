@@ -2,8 +2,10 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
 mod committed_feed;
+mod device_registry;
 mod error;
 mod integration_admin;
+pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
 #[cfg(debug_assertions)]
 pub use integration_admin::apply_integration_admin_on_connection;
 pub use integration_admin::IntegrationAdminWrites;

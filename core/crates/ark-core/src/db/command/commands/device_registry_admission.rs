@@ -1,5 +1,4 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
-use rusqlite::{Connection, Transaction};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,24 +73,4 @@ impl StoreReadQuery for RegistryDeviceEnabledQuery {
             .device_is_admitted(&self.peer_device_id)
             .map_err(DbError::Storage)
     }
-}
-
-pub(super) fn require_registry_peer_known(
-    transaction: &Transaction<'_>,
-    device_id: &str,
-) -> Result<(), DbError> {
-    let known = ark_store::device_registry::is_device_known(transaction, device_id)
-        .map_err(DbError::Storage)?;
-    if known {
-        Ok(())
-    } else {
-        Err(DbError::Permission("sync_peer_not_registered".into()))
-    }
-}
-
-pub(super) fn registry_device_is_admitted(
-    connection: &Connection,
-    device_id: &str,
-) -> Result<Option<bool>, DbError> {
-    ark_store::device_registry::is_device_admitted(connection, device_id).map_err(DbError::Storage)
 }

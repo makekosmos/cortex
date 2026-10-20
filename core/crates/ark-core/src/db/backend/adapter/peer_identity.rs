@@ -156,7 +156,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         events: &[ark_domain::device_registry::RegistryEvent],
     ) -> Result<RegistryPageApply, String> {
         self.db
-            .submit(
+            .apply_registry_events(
                 CommandContext::sync_peer(sender_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::ApplyRegistryEventsCommand::new(
                     sender_device_id.to_owned(),

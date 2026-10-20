@@ -1,6 +1,8 @@
 use super::*;
 use rusqlite::OptionalExtension;
 
+#[path = "device_registry/atomicity.rs"]
+mod atomicity;
 #[path = "device_registry/commands.rs"]
 mod commands;
 #[path = "device_registry/handshake.rs"]
@@ -230,14 +232,14 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
     .unwrap();
     let apply = || ApplyRegistryEventsCommand::new("paired-device".into(), vec![rename.clone()]);
     let first_digest = handle
-        .submit(
+        .apply_registry_events(
             CommandContext::sync_peer("paired-device".into(), CommandClass::SyncLive),
             apply(),
         )
         .await
         .unwrap();
     let retry_digest = handle
-        .submit(
+        .apply_registry_events(
             CommandContext::sync_peer("paired-device".into(), CommandClass::SyncLive),
             apply(),
         )
@@ -328,7 +330,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
     )
     .unwrap();
     let applied = handle
-        .submit(
+        .apply_registry_events(
             CommandContext::sync_peer("paired-device".into(), CommandClass::SyncLive),
             ApplyRegistryEventsCommand::new("paired-device".into(), vec![disable]),
         )
