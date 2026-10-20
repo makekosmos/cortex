@@ -17,6 +17,7 @@ pub use signed_integration_frame::{
 };
 mod sync_policy;
 mod task_merge;
+pub use task_merge::TaskMergeWrites;
 mod task_objects;
 mod tracked_app_mutation;
 mod type_mutation;

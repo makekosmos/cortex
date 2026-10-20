@@ -16,7 +16,7 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
         limit: usize,
     ) -> Result<Option<TaskMergeBatch>, ark_application::task_merge::TaskMergePrepareError> {
         self.db
-            .submit(
+            .prepare_task_merge_batch(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 PrepareTaskMergeBatchCommand::new(
                     peer_device_id.to_owned(),
@@ -43,7 +43,7 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
         through_position: i64,
     ) -> Result<i64, String> {
         self.db
-            .submit(
+            .acknowledge_task_merge_batch(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 AcknowledgeTaskMergeBatchCommand::new(
                     peer_device_id.to_owned(),

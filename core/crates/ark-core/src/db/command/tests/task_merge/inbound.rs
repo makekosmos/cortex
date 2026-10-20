@@ -128,7 +128,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
     }
     let identity = ark_application::sync_policy::default_sync_policy_identity();
     let batch = left
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer("right-device".into()),
             PrepareTaskMergeBatchCommand::new("right-device".into(), identity.clone(), 100),
         )

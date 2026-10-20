@@ -3,7 +3,6 @@ mod command;
 mod committed_feed;
 pub(crate) mod constants;
 mod open;
-mod task_merge;
 
 pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,

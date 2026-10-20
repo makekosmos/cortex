@@ -10,6 +10,8 @@ mod maintenance;
 mod registry_events_task;
 mod runtime;
 mod task;
+#[path = "actor/task/task_merge_progress.rs"]
+mod task_merge_progress;
 use maintenance::has_maintenance_barrier;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;
@@ -17,6 +19,11 @@ pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::map_inbox_receipt_error;
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use task_merge_progress::map_task_merge_progress_failure;
+pub(in crate::db::command) use task_merge_progress::{
+    AcknowledgeTaskMergeBatchTask, PrepareTaskMergeBatchTask,
+};
 #[path = "actor/task/signed_integration_frame.rs"]
 mod signed_integration_frame_task;
 pub(in crate::db::command) use signed_integration_frame_task::SignedIntegrationFrameTask;

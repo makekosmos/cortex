@@ -30,7 +30,7 @@ async fn prepare_batch(
     limit: usize,
 ) -> Result<Option<ark_application::sync_storage::TaskMergeBatch>, DbError> {
     handle
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer(peer_id.into()),
             PrepareTaskMergeBatchCommand::new(peer_id.into(), identity, limit),
         )
@@ -45,7 +45,7 @@ async fn acknowledge_batch(
     through: i64,
 ) -> Result<i64, DbError> {
     handle
-        .submit(
+        .acknowledge_task_merge_batch(
             CommandContext::authenticated_peer(peer_id.into()),
             AcknowledgeTaskMergeBatchCommand::new(
                 peer_id.into(),
@@ -88,7 +88,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
         active: true,
     };
     let denied = handle
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new("peer-a".into(), identity.clone(), 1),
         )
@@ -96,7 +96,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     assert!(matches!(denied, Err(DbError::Permission(_))));
 
     let stale = handle
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
@@ -130,7 +130,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
         .unwrap();
     });
     let filtered = handle
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
@@ -150,15 +150,21 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
 #[tokio::test]
 async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    for limit in [0, ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE + 1] {
+        assert!(matches!(
+            prepare_batch(&handle, "peer-a", identity.clone(), limit).await,
+            Err(DbError::Invalid(message)) if message == "task_merge_page_limit_exceeded"
+        ));
+    }
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
     append(&handle, operation('2', &['1'], "second"), None)
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let peer_mismatch = handle
-        .submit(
+        .prepare_task_merge_batch(
             CommandContext::authenticated_peer("peer-b".into()),
             PrepareTaskMergeBatchCommand::new("peer-a".into(), identity.clone(), 1),
         )

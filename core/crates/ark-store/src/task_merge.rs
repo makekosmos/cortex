@@ -16,6 +16,7 @@ mod inbound;
 mod local_apply;
 mod local_commit;
 mod local_mutation;
+mod outbound;
 mod progress;
 mod projection;
 
@@ -45,6 +46,10 @@ pub(crate) use local_commit::{commit_local_task_delete, commit_local_task_upsert
 pub use local_mutation::{
     load_local_mutation_state, task_snapshot_token, TaskMergeLocalMutationState,
 };
+pub use outbound::TaskMergeOutboundError;
+pub(crate) use outbound::{
+    acknowledge_task_merge_outbound_batch, prepare_task_merge_outbound_batch,
+};
 pub use progress::{
     acknowledge_outbound_batch, claim_outbound_batch, create_outbound_progress,
     load_outbound_progress, task_merge_watermark, update_outbound_policy_identity,
@@ -52,7 +57,7 @@ pub use progress::{
 };
 pub use projection::{materialize_task_if_ready, TaskMergeProjectionOutcome};
 
-const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
+const MAX_TASK_MERGE_PAGE_SIZE: usize = ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE;
 
 pub fn ensure_legacy_task_write_allowed(
     connection: &Connection,

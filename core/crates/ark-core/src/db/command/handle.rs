@@ -23,6 +23,7 @@ mod sync_progress_write;
 mod system_mutation;
 mod task_merge_append;
 mod task_merge_batch;
+mod task_merge_progress;
 #[cfg(debug_assertions)]
 mod test_writer;
 mod tracked_app_mutation;

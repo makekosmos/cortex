@@ -1,3 +1,4 @@
+use super::WriteCapabilities;
 #[cfg(debug_assertions)]
 use super::{Connection, TransactionFailure};
 use super::{SqliteWriter, StoreTransactionFailure};
@@ -7,7 +8,119 @@ use ark_application::sync_storage::{TaskMergeBatch, TaskMergeBatchAck};
 use ark_application::task_merge::TaskMergeAppendResult;
 use ark_domain::task_merge::TaskMergeOperation;
 
+pub struct TaskMergeWrites<'scope, 'connection> {
+    transaction: &'scope rusqlite::Transaction<'connection>,
+}
+
+impl WriteCapabilities<'_, '_> {
+    pub fn task_merge(&mut self) -> TaskMergeWrites<'_, '_> {
+        TaskMergeWrites {
+            transaction: self.transaction,
+        }
+    }
+}
+
+impl TaskMergeWrites<'_, '_> {
+    pub fn prepare_outbound_batch(
+        &mut self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+        limit: usize,
+    ) -> Result<Option<TaskMergeBatch>, crate::task_merge::TaskMergeOutboundError> {
+        crate::task_merge::prepare_task_merge_outbound_batch(
+            self.transaction,
+            peer_device_id,
+            identity,
+            limit,
+        )
+    }
+
+    pub fn acknowledge_outbound_batch(
+        &mut self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, crate::task_merge::TaskMergeOutboundError> {
+        crate::task_merge::acknowledge_task_merge_outbound_batch(
+            self.transaction,
+            peer_device_id,
+            identity,
+            batch_id,
+            through_position,
+        )
+    }
+}
+
 impl SqliteWriter {
+    pub fn prepare_outbound_task_merge_batch(
+        &mut self,
+        peer_device_id: &str,
+        identity: PolicyIdentity,
+        limit: usize,
+    ) -> Result<
+        Option<TaskMergeBatch>,
+        StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>,
+    > {
+        self.write_with_capabilities(|capabilities| {
+            capabilities
+                .task_merge()
+                .prepare_outbound_batch(peer_device_id, &identity, limit)
+        })
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn prepare_outbound_task_merge_batch_on_connection(
+        connection: &mut super::Connection,
+        peer_device_id: &str,
+        identity: PolicyIdentity,
+        limit: usize,
+    ) -> Result<
+        Option<TaskMergeBatch>,
+        StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>,
+    > {
+        Self::write_with_capabilities_on_connection(connection, |capabilities| {
+            capabilities
+                .task_merge()
+                .prepare_outbound_batch(peer_device_id, &identity, limit)
+        })
+    }
+
+    pub fn acknowledge_outbound_task_merge_batch(
+        &mut self,
+        peer_device_id: &str,
+        identity: PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>> {
+        self.write_with_capabilities(|capabilities| {
+            capabilities.task_merge().acknowledge_outbound_batch(
+                peer_device_id,
+                &identity,
+                batch_id,
+                through_position,
+            )
+        })
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn acknowledge_outbound_task_merge_batch_on_connection(
+        connection: &mut super::Connection,
+        peer_device_id: &str,
+        identity: PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>> {
+        Self::write_with_capabilities_on_connection(connection, |capabilities| {
+            capabilities.task_merge().acknowledge_outbound_batch(
+                peer_device_id,
+                &identity,
+                batch_id,
+                through_position,
+            )
+        })
+    }
+
     pub fn apply_inbound_task_merge_batch(
         &mut self,
         peer_device_id: &str,

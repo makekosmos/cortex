@@ -1,8 +1,6 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
-use crate::db::task_merge::TaskMergeError;
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch};
 use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
-use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -29,9 +27,9 @@ impl AppendTaskMergeOperationRequest {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct PrepareTaskMergeBatchCommand {
-    peer_id: String,
-    expected_identity: PolicyIdentity,
-    limit: usize,
+    pub(crate) peer_id: String,
+    pub(crate) expected_identity: PolicyIdentity,
+    pub(crate) limit: usize,
 }
 
 impl PrepareTaskMergeBatchCommand {
@@ -44,39 +42,18 @@ impl PrepareTaskMergeBatchCommand {
     }
 }
 
-impl sealed::Sealed for PrepareTaskMergeBatchCommand {}
-
-impl DbCommand for PrepareTaskMergeBatchCommand {
-    type Output = Option<TaskMergeBatch>;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
+impl PrepareTaskMergeBatchCommand {
+    pub(crate) fn weight(&self) -> usize {
         super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.peer_id)?;
-        crate::db::task_merge::prepare_outbound_batch(
-            transaction,
-            &self.peer_id,
-            &self.expected_identity,
-            self.limit,
-        )
-        .map_err(map_task_merge_error)
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct AcknowledgeTaskMergeBatchCommand {
-    peer_id: String,
-    expected_identity: PolicyIdentity,
-    batch_id: String,
-    through_position: i64,
+    pub(crate) peer_id: String,
+    pub(crate) expected_identity: PolicyIdentity,
+    pub(crate) batch_id: String,
+    pub(crate) through_position: i64,
 }
 
 impl AcknowledgeTaskMergeBatchCommand {
@@ -95,31 +72,9 @@ impl AcknowledgeTaskMergeBatchCommand {
     }
 }
 
-impl sealed::Sealed for AcknowledgeTaskMergeBatchCommand {}
-
-impl DbCommand for AcknowledgeTaskMergeBatchCommand {
-    type Output = i64;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
+impl AcknowledgeTaskMergeBatchCommand {
+    pub(crate) fn weight(&self) -> usize {
         super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.peer_id)?;
-        crate::db::task_merge::acknowledge_outbound_batch(
-            transaction,
-            &self.peer_id,
-            &self.expected_identity,
-            &self.batch_id,
-            self.through_position,
-        )
-        .map_err(map_task_merge_error)
     }
 }
 
@@ -185,15 +140,16 @@ impl StoreReadQuery for TaskConflictSetQuery {
         capabilities
             .task_merge()
             .conflict_set(&self.object_id, self.unit)
-            .map_err(|error| map_task_merge_error(error.into()))
+            .map_err(map_task_merge_error)
     }
 }
 
-fn map_task_merge_error(error: TaskMergeError) -> DbError {
+fn map_task_merge_error(error: ark_store::task_merge::TaskMergeStoreError) -> DbError {
     match error {
-        TaskMergeError::OperationIdCollision => DbError::Conflict(error.to_string()),
-        TaskMergeError::Invalid(error) => DbError::Invalid(error),
-        TaskMergeError::Permission(error) => DbError::Permission(error),
-        TaskMergeError::Storage(error) => DbError::Storage(error),
+        ark_store::task_merge::TaskMergeStoreError::OperationIdCollision => {
+            DbError::Conflict(error.to_string())
+        }
+        ark_store::task_merge::TaskMergeStoreError::Invalid(error) => DbError::Invalid(error),
+        ark_store::task_merge::TaskMergeStoreError::Storage(error) => DbError::Storage(error),
     }
 }
