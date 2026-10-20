@@ -53,6 +53,8 @@ pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 #[cfg(test)]
 mod canonical_game_tests;
 #[cfg(test)]
+mod data_platform_tests;
+#[cfg(test)]
 mod load_and_clear_tests;
 #[cfg(test)]
 mod pending_objects_and_integrity_tests;
