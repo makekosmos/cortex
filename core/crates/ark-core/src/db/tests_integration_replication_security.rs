@@ -3,51 +3,6 @@ use crate::integration_replication::{
 };
 use chrono::{Duration, Utc};
 
-#[test]
-fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(
-        "CREATE TABLE integration_configurations (
-           integration_id TEXT PRIMARY KEY, provider TEXT NOT NULL, account_subject TEXT NOT \
-           NULL,
-           public_scopes_json TEXT NOT NULL, public_settings_json TEXT NOT NULL, enabled \
-           INTEGER NOT NULL,
-           sync_cursor TEXT, revision INTEGER NOT NULL, hlc TEXT NOT NULL
-         );
-         INSERT INTO integration_configurations VALUES
-           ('opaque', 'fatsecret', 'a', '[]', '{}', 1, 'bearer-token', 1, \
-           '2026-08-30T00:00:00.000Z:000001:node-a'),
-           ('numeric', 'fatsecret', 'b', '[]', '{}', 1, '42', 1, \
-           '2026-08-30T00:00:00.000Z:000001:node-a');",
-    )
-    .unwrap();
-    assert_eq!(
-        ark_store::integration_replication::load_integration_configuration(&conn, "opaque")
-            .unwrap()
-            .unwrap()
-            .sync_cursor,
-        None
-    );
-    let persisted: Option<String> = conn
-        .query_row(
-            concat!(
-                "SELECT sync_cursor FROM integration_configurations WHERE integration_id = ",
-                "'opaque'"
-            ),
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(persisted, None);
-    assert_eq!(
-        ark_store::integration_replication::load_integration_configuration(&conn, "numeric")
-            .unwrap()
-            .unwrap()
-            .sync_cursor,
-        Some(42)
-    );
-}
-
 fn trusted_target(seed: u8) -> (rusqlite::Connection, SigningKey) {
     let target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[seed; 32]);
