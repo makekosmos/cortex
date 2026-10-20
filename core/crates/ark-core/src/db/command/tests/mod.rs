@@ -50,26 +50,14 @@ async fn open_publishes_only_a_database_ready_for_commands() {
 #[tokio::test]
 async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() {
     let directory = tempfile::tempdir().unwrap();
-    let db_path = directory
-        .path()
-        .join("object-write.db")
-        .to_string_lossy()
-        .into_owned();
-    let (handle, mut owner) = DbHandle::open(db_path, "transaction-port-device".into())
-        .await
-        .unwrap();
-
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER reject_object_write_receipt
-                 BEFORE INSERT ON entity_write_receipts
-                 BEGIN
-                     SELECT RAISE(ABORT, 'injected application port failure');
-                 END;",
-            )
-            .unwrap();
-    });
+    let db_path = directory.path().join("object-write.db");
+    let (handle, mut owner) = DbHandle::open(
+        db_path.to_string_lossy().into_owned(),
+        "transaction-port-device".into(),
+    )
+    .await
+    .unwrap();
+    ark_store::test_support::ObjectWriteRollbackFixture::reject_receipt_insert(&db_path).unwrap();
 
     let object = crate::types::ArkObjectWrite {
         id: "transaction-port-rollback".into(),
@@ -108,37 +96,18 @@ async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() 
         "expected the injected SQLite port failure, got {failed:?}"
     );
 
-    let persisted_counts = handle.with_connection(|connection| {
-        let objects: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let revisions: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_sync_versions WHERE object_id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let receipts: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        (objects, revisions, receipts)
-    });
-    assert_eq!(persisted_counts, (0, 0, 0));
+    let persisted_counts =
+        ark_store::test_support::ObjectWriteRollbackFixture::inspect(&db_path, &object.id).unwrap();
+    assert_eq!(
+        persisted_counts,
+        ark_store::test_support::ObjectWriteRollbackState {
+            objects: 0,
+            revisions: 0,
+            receipts: 0,
+        }
+    );
 
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch("DROP TRIGGER reject_object_write_receipt;")
-            .unwrap();
-    });
+    ark_store::test_support::ObjectWriteRollbackFixture::allow_receipt_insert(&db_path).unwrap();
     handle
         .submit_local_core_task_write(
             CommandContext::engine(),
@@ -147,16 +116,9 @@ async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() 
         )
         .await
         .unwrap();
-    let persisted = handle.with_connection(|connection| {
-        connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = ?1",
-                [&object.id],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap()
-    });
-    assert_eq!(persisted, 1);
+    let persisted =
+        ark_store::test_support::ObjectWriteRollbackFixture::inspect(&db_path, &object.id).unwrap();
+    assert_eq!(persisted.objects, 1);
 
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
