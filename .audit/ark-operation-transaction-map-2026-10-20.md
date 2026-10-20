@@ -12,7 +12,7 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Task writes and inbox policy — 3 operations
 
-**Core:** owns engine/peer authorization, supported-type and sync-policy checks, inbox deduplication, removed-peer/stale-write decisions, and actor scheduling. Application owns the task write use case. Store owns task/object sessions, object readback, operation receipts, and transaction execution; inbox receipt state in the authenticated path still uses Core `crate::db` helpers. Each write remains atomic in its enclosing immediate transaction.
+**Core:** owns engine/peer authorization, sync-policy checks, inbox deduplication, removed-peer/stale-write decisions, and actor scheduling. Application owns the task write use case and now decodes the full `core.task` remote representation into a typed `RemoteObjectWrite`. Store owns task/object sessions, object readback, operation receipts, and transaction execution; inbox receipt state in the authenticated path still uses Core `crate::db` helpers. Each write remains atomic in its enclosing immediate transaction.
 
 | Kind | Operation | Implementation |
 |---|---|---|

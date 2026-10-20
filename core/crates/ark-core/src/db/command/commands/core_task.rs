@@ -1,7 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::types::ObjectLink;
 use ark_application::object_write::ObjectWriteSession;
-use ark_domain::object_write::RemoteObjectWrite;
+use ark_application::task_object_write::RemoteCoreTaskWriteDecodeError as DecodeError;
 use rusqlite::Transaction;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -136,7 +135,21 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         }
 
         let inbox_message_id = self.inbox_message_id.clone();
-        let remote = decode_remote(self)?;
+        let remote = ark_application::task_object_write::decode_remote_core_task_write(
+            self.id,
+            self.source_hlc,
+            self.source_origin_device_id,
+            self.data,
+        )
+        .map_err(|error| match error {
+            DecodeError::IncompleteRepresentation => {
+                DbError::Unsupported("object_write_slice_requires_full_representation".into())
+            }
+            DecodeError::UnsupportedType => {
+                DbError::Unsupported("object_write_slice_unsupported_type".into())
+            }
+            DecodeError::InvalidObject(error) => DbError::Invalid(error),
+        })?;
         let result = ark_application::task_object_write::apply_remote_core_task_write(
             &object_session,
             &task_session,
@@ -170,46 +183,4 @@ fn serialized_weight(value: &impl Serialize) -> usize {
     serde_json::to_vec(value)
         .map(|bytes| bytes.len())
         .unwrap_or(usize::MAX)
-}
-
-fn decode_remote(input: AuthenticatedCoreTaskWrite) -> Result<RemoteObjectWrite, DbError> {
-    for key in [
-        "typeId",
-        "typeVersion",
-        "title",
-        "createdAt",
-        "updatedAt",
-        "deletedAt",
-        "contentJson",
-        "propsJson",
-    ] {
-        if !input.data.contains_key(key) {
-            return Err(DbError::Unsupported(
-                "object_write_slice_requires_full_representation".into(),
-            ));
-        }
-    }
-    if input.data.get("typeId").and_then(Value::as_str) != Some("core.task")
-        || input.data.get("typeVersion").and_then(Value::as_str) != Some("0.1.0")
-    {
-        return Err(DbError::Unsupported(
-            "object_write_slice_unsupported_type".into(),
-        ));
-    }
-    let mut data = input.data;
-    data.insert("id".into(), Value::String(input.id));
-    let links: Vec<ObjectLink> = data
-        .remove("links")
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(|error| DbError::Invalid(error.to_string()))?
-        .unwrap_or_default();
-    let object = serde_json::from_value(Value::Object(data))
-        .map_err(|error| DbError::Invalid(error.to_string()))?;
-    Ok(RemoteObjectWrite {
-        object,
-        links,
-        source_hlc: input.source_hlc,
-        source_origin_device_id: input.source_origin_device_id,
-    })
 }
