@@ -9,7 +9,7 @@ pub enum DirectServerSessionEnd {
     Failed(String),
 }
 
-pub async fn run_connected_server_session_controlled(
+pub(super) async fn run_connected_server_session_controlled(
     session_io: &mut SessionIo,
     actor: &mut super::ServerSessionActor,
 ) -> DirectServerSessionEnd {

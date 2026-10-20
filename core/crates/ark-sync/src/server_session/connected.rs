@@ -67,7 +67,7 @@ pub trait ConnectedServerSessionHost: Send + Sync {
     async fn task_merge_batch_applied(&self);
 }
 
-pub struct ConnectedServerSession {
+pub(super) struct ConnectedServerSession {
     pub(crate) request: ResponderHelloRequest,
     pub(crate) storage: Arc<dyn SyncRuntimeStorage>,
     pub(crate) host: Arc<dyn ConnectedServerSessionHost>,
@@ -80,7 +80,7 @@ pub struct ConnectedServerSession {
 }
 
 impl ConnectedServerSession {
-    pub fn new(
+    pub(super) fn new(
         request: ResponderHelloRequest,
         storage: Arc<dyn SyncRuntimeStorage>,
         host: Arc<dyn ConnectedServerSessionHost>,

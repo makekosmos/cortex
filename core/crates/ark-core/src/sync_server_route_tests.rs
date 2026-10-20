@@ -8,7 +8,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     *server.space_id.write().await = "space".to_string();
     *server.device_id.write().await = "me".to_string();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
-    let (session, _actor) = test_server_session_with_actor("peer");
+    let (session, _keepalive) = test_server_session_with_keepalive("peer");
     server.peers.lock().await.insert(
         1,
         PeerState {

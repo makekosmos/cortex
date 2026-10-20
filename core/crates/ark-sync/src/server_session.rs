@@ -17,9 +17,10 @@ use crate::{
 
 mod connected;
 mod direct;
+mod driver;
 mod handle;
 mod runner;
-pub use connected::{ConnectedServerSession, ConnectedServerSessionHost};
+pub use connected::ConnectedServerSessionHost;
 #[cfg(test)]
 use direct::DirectServerSessionCloseReason;
 pub use direct::{DirectServerMessage, DirectServerSyncChanges};
@@ -27,12 +28,39 @@ use direct::{
     DirectServerSession, DirectServerSessionEffect, DirectServerSessionInput,
     DirectServerSyncStartPolicy,
 };
+pub use driver::ConnectedServerSessionDriver;
+pub(super) use handle::ServerSessionActor;
 pub use handle::{
     ServerConnectionLease, ServerPeerProjection, ServerPeerReadiness, ServerSessionActivation,
-    ServerSessionActivationError, ServerSessionActor, ServerSessionControl,
-    ServerSessionCreateError, ServerSessionHandle, ServerSessionIntent, ServerSessionIntentError,
+    ServerSessionActivationError, ServerSessionControl, ServerSessionCreateError,
+    ServerSessionHandle, ServerSessionIntent, ServerSessionIntentError,
 };
-pub use runner::{run_connected_server_session_controlled, DirectServerSessionEnd};
+pub use runner::DirectServerSessionEnd;
+
+#[cfg(feature = "test-support")]
+pub struct TestServerSessionKeepalive {
+    _actor: handle::ServerSessionActor,
+}
+
+#[cfg(feature = "test-support")]
+pub fn test_ready_server_session(
+    device_id: &str,
+) -> Result<(ServerSessionHandle, TestServerSessionKeepalive), ServerSessionCreateError> {
+    let (handle, actor, _lease, mut activation) = handle::ServerSessionHandle::channel(
+        std::num::NonZeroUsize::new(1).expect("session intent capacity is nonzero"),
+    )?;
+    activation
+        .activate()
+        .expect("test session activates once before it is published");
+    actor.publish_projection(ServerPeerProjection {
+        device_id: Some(device_id.to_owned()),
+        device_name: Some(device_id.to_owned()),
+        registry_session_id: Some("test-session".to_owned()),
+        readiness: ServerPeerReadiness::Ready,
+        ..Default::default()
+    });
+    Ok((handle, TestServerSessionKeepalive { _actor: actor }))
+}
 
 #[derive(Clone)]
 pub struct ResponderHelloRequest {

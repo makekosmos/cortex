@@ -58,30 +58,15 @@ struct PeerState {
 pub(crate) fn test_server_session_handle(
     device_id: &str,
 ) -> ark_sync::server_session::ServerSessionHandle {
-    test_server_session_with_actor(device_id).0
+    test_server_session_with_keepalive(device_id).0
 }
 
 #[cfg(test)]
-pub(crate) fn test_server_session_with_actor(
+pub(crate) fn test_server_session_with_keepalive(
     device_id: &str,
-) -> (
-    ark_sync::server_session::ServerSessionHandle,
-    ark_sync::server_session::ServerSessionActor,
-) {
-    let (handle, actor, _lease, mut activation) =
-        ark_sync::server_session::ServerSessionHandle::channel(
-            std::num::NonZeroUsize::new(1).expect("one is nonzero"),
-        )
-        .expect("session identity is available");
-    activation.activate().expect("test session activates once");
-    actor.publish_projection(ark_sync::server_session::ServerPeerProjection {
-        device_id: Some(device_id.to_owned()),
-        device_name: Some(device_id.to_owned()),
-        registry_session_id: Some("test-session".to_owned()),
-        readiness: ark_sync::server_session::ServerPeerReadiness::Ready,
-        ..Default::default()
-    });
-    (handle, actor)
+) -> (ark_sync::server_session::ServerSessionHandle, impl Send) {
+    ark_sync::server_session::test_ready_server_session(device_id)
+        .expect("session identity is available")
 }
 
 #[derive(Clone)]

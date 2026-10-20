@@ -2,8 +2,7 @@ use super::super::current_ready_peer;
 use super::server_session_cleanup::finish_rejected_session;
 use super::server_session_host::ServerSessionHostAdapter;
 use super::{signed_integration_write_is_authorized, *};
-use ark_sync::server_session::run_connected_server_session_controlled;
-use ark_sync::server_session::{ConnectedServerSession, ConnectedServerSessionHost};
+use ark_sync::server_session::{ConnectedServerSessionDriver, ConnectedServerSessionHost};
 use tokio::sync::oneshot;
 
 struct ServerPeerOutboundGuard {
@@ -208,10 +207,24 @@ impl SyncServer {
                                 }
                                 let session_sender = session_io.sender();
                                 let tx = PeerMessageSender::session(session_sender.clone());
-                                let (session, mut session_actor, _lease, mut activation) =
-                                    match ark_sync::server_session::ServerSessionHandle::channel(
+                                let hello_request =
+                                    ark_sync::server_session::ResponderHelloRequest {
+                                        device_id: device_id.read().await.clone(),
+                                        device_name: device_name.read().await.clone(),
+                                        space_id: space_id.read().await.clone(),
+                                        addresses: own_addresses.read().await.clone(),
+                                        auth_secret: auth_secret.read().await.clone(),
+                                        task_merge_bootstrap_v2,
+                                        platform: Some(ark_net::host::local_platform()),
+                                        app_version: ark_net::host::app_version(),
+                                    };
+                                let (session, mut session_driver, mut activation) =
+                                    match ConnectedServerSessionDriver::channel(
                                         std::num::NonZeroUsize::new(64)
                                             .expect("session intent capacity is nonzero"),
+                                        hello_request,
+                                        storage.clone(),
+                                        session_host.clone(),
                                     ) {
                                         Ok(session) => session,
                                         Err(error) => {
@@ -230,23 +243,6 @@ impl SyncServer {
                                             continue;
                                         }
                                     };
-                                let hello_request =
-                                    ark_sync::server_session::ResponderHelloRequest {
-                                        device_id: device_id.read().await.clone(),
-                                        device_name: device_name.read().await.clone(),
-                                        space_id: space_id.read().await.clone(),
-                                        addresses: own_addresses.read().await.clone(),
-                                        auth_secret: auth_secret.read().await.clone(),
-                                        task_merge_bootstrap_v2,
-                                        platform: Some(ark_net::host::local_platform()),
-                                        app_version: ark_net::host::app_version(),
-                                    };
-                                session_actor.configure_connected(ConnectedServerSession::new(
-                                    hello_request,
-                                    storage.clone(),
-                                    session_host.clone(),
-                                ));
-
                                 let peer_state = PeerState {
                                     session: session.clone(),
                                     tx: tx.clone(),
@@ -281,11 +277,9 @@ impl SyncServer {
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
                                 track_task(&conn_tasks, tokio::spawn(async move {
-                                    let result = run_connected_server_session_controlled(
-                                        &mut session_io,
-                                        &mut session_actor,
-                                    )
-                                    .await;
+                                    let result = session_driver
+                                        .run_controlled(&mut session_io)
+                                        .await;
                                     if let ark_sync::server_session::DirectServerSessionEnd::Failed(
                                         error,
                                     ) = result

@@ -83,7 +83,7 @@ pub struct ServerSessionActor {
     pub(super) control: watch::Receiver<ServerSessionControl>,
     projection: watch::Sender<ServerPeerProjection>,
     lifecycle: Arc<AtomicU8>,
-    pub(super) connected: Option<super::ConnectedServerSession>,
+    pub(super) connected: Option<super::connected::ConnectedServerSession>,
     pub(super) host: Option<Arc<dyn super::ConnectedServerSessionHost>>,
     pending_peer_list: Option<super::connected::PendingPeerList>,
 }
@@ -96,7 +96,7 @@ pub struct ServerSessionActivation {
 }
 
 impl ServerSessionHandle {
-    pub fn channel(
+    pub(super) fn channel(
         intent_capacity: NonZeroUsize,
     ) -> Result<
         (
@@ -252,7 +252,10 @@ pub enum ServerSessionActivationError {
 }
 
 impl ServerSessionActor {
-    pub fn configure_connected(&mut self, session: super::ConnectedServerSession) {
+    pub(super) fn configure_connected(
+        &mut self,
+        session: super::connected::ConnectedServerSession,
+    ) {
         self.configure_host(session.host.clone());
         self.connected = Some(session);
     }

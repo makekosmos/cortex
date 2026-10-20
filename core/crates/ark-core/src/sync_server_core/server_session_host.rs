@@ -299,7 +299,8 @@ mod tests {
     #[tokio::test]
     async fn full_wake_mailbox_defers_task_merge_without_closing_session() {
         let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
-        let (session, actor) = crate::sync_server::test_server_session_with_actor("ready-device");
+        let (session, keepalive) =
+            crate::sync_server::test_server_session_with_keepalive("ready-device");
         let (tx, mut rx) = mpsc::unbounded_channel();
         let peer = PeerState {
             session: session.clone(),
@@ -327,7 +328,7 @@ mod tests {
             ark_sync::server_session::ServerSessionControl::Active
         );
         assert!(rx.try_recv().is_err());
-        drop(actor);
+        drop(keepalive);
         session.revoke();
     }
 }
