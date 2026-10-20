@@ -177,6 +177,11 @@
       "count": 2
     },
     {
+      "path": "core/crates/ark-core/src/db/command/handle/object_link_mutation.rs",
+      "category": "sync blocking adapter",
+      "count": 1
+    },
+    {
       "path": "core/crates/ark-core/src/db/command/operation_receipt.rs",
       "category": "SQLite mutation API",
       "count": 1

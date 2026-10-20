@@ -114,6 +114,84 @@ pub(in crate::db::command) struct DeleteTrashedTask {
     pub reply: oneshot::Sender<Result<usize, DbError>>,
 }
 
+pub(in crate::db::command) struct UpsertObjectLinkTask {
+    pub object_link: ark_domain::types::ObjectLink,
+    pub device_id: Option<String>,
+    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+}
+
+pub(in crate::db::command) struct DeleteObjectLinkTask {
+    pub id: String,
+    pub device_id: Option<String>,
+    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+}
+
+pub(in crate::db::command) struct ReplaceObjectLinkTask {
+    pub object_link: ark_domain::types::ObjectLink,
+    pub device_id: Option<String>,
+    pub reply:
+        oneshot::Sender<Result<ark_application::type_mutation::ReplaceObjectLinkCommit, DbError>>,
+}
+
+macro_rules! impl_object_link_task {
+    ($task:ty, $operation:ident) => {
+        impl WriterTask for $task {
+            fn run(
+                self: Box<Self>,
+                writer: &mut SqliteWriter,
+                on_error: &mut dyn FnMut(&DbError),
+            ) -> (Result<(), DbError>, Publish) {
+                let Self {
+                    object_link,
+                    device_id,
+                    reply,
+                } = *self;
+                let result = writer
+                    .$operation(object_link, device_id)
+                    .map_err(map_application_transaction_failure);
+                settle(result, reply, on_error)
+            }
+
+            fn cancel_before_start(self: Box<Self>) {
+                let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+            }
+
+            fn receiver_closed(&self) -> bool {
+                self.reply.is_closed()
+            }
+        }
+    };
+}
+
+impl_object_link_task!(UpsertObjectLinkTask, upsert_object_link);
+impl_object_link_task!(ReplaceObjectLinkTask, replace_object_link);
+
+impl WriterTask for DeleteObjectLinkTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self {
+            id,
+            device_id,
+            reply,
+        } = *self;
+        let result = writer
+            .delete_object_link(id, device_id)
+            .map_err(map_application_transaction_failure);
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
 impl WriterTask for ClearAllTask {
     fn run(
         self: Box<Self>,
@@ -160,6 +238,14 @@ fn map_storage_transaction_failure<E: ToString>(failure: TransactionFailure<E>) 
     match failure {
         TransactionFailure::Begin(error) => DbError::from_sqlite(error),
         TransactionFailure::Operation(error) => DbError::Storage(error.to_string()),
+        TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+    }
+}
+
+fn map_application_transaction_failure<E: ToString>(failure: TransactionFailure<E>) -> DbError {
+    match failure {
+        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Operation(error) => DbError::from_application_error(error.to_string()),
         TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }
 }

@@ -75,8 +75,7 @@ pub(crate) use task_merge::{
     PrepareTaskMergeBatchCommand, TaskConflictSetQuery,
 };
 pub(crate) use type_mutation::{
-    DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    DeleteObjectTypeCommand, RegisterPackageTypesCommand, UpsertObjectTypeCommand,
 };
 pub(crate) use type_read::TypeReadQuery;
 pub(crate) use usage_read::UsageReadQuery;

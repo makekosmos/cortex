@@ -154,6 +154,100 @@ impl SqliteWriter {
             crate::load_all::delete_trashed(transaction, device_id)
         })
     }
+
+    pub fn upsert_object_link(
+        &mut self,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
+    {
+        self.immediate(|transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::upsert_object_link(
+                &session,
+                object_link,
+                device_id.as_deref(),
+            )
+        })
+    }
+
+    pub fn delete_object_link(
+        &mut self,
+        id: String,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
+    {
+        self.immediate(|transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::delete_object_link(&session, id, device_id.as_deref())
+        })
+    }
+
+    pub fn replace_object_link(
+        &mut self,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::ReplaceObjectLinkCommit, TransactionFailure<String>>
+    {
+        self.immediate(|transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::replace_object_link(
+                &session,
+                object_link,
+                device_id.as_deref(),
+            )
+        })
+    }
+
+    pub fn upsert_object_link_on_connection(
+        connection: &mut Connection,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
+    {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::upsert_object_link(
+                &session,
+                object_link,
+                device_id.as_deref(),
+            )
+        })
+    }
+
+    pub fn delete_object_link_on_connection(
+        connection: &mut Connection,
+        id: String,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
+    {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::delete_object_link(&session, id, device_id.as_deref())
+        })
+    }
+
+    pub fn replace_object_link_on_connection(
+        connection: &mut Connection,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<ark_application::type_mutation::ReplaceObjectLinkCommit, TransactionFailure<String>>
+    {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            ark_application::type_mutation::replace_object_link(
+                &session,
+                object_link,
+                device_id.as_deref(),
+            )
+        })
+    }
 }
 
 #[cfg(test)]
