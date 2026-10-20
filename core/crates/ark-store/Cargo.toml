@@ -6,7 +6,7 @@ description = "SQLite adapters for ARK persistence contracts"
 
 [features]
 default = []
-test-support = []
+test-support = ["dep:tempfile"]
 
 [dependencies]
 ark-application = { path = "../ark-application" }
@@ -19,6 +19,7 @@ serde_json.workspace = true
 semver.workspace = true
 sha2.workspace = true
 rand.workspace = true
+tempfile = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Storage_FileSystem"] }

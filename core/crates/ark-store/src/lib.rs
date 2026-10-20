@@ -39,6 +39,9 @@ pub mod usage_queries;
 pub mod usage_sync_log;
 pub mod writer;
 
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
 pub use read_capabilities::{
     CanonicalReadCapabilities, IntegrationReplicationReadCapabilities, ObjectReadCapabilities,
     ReadCapabilities, SystemReadCapabilities, TypeRegistryReadCapabilities, UsageReadCapabilities,
