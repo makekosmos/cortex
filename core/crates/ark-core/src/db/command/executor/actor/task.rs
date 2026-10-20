@@ -469,7 +469,7 @@ impl<C: DbMaintenanceCommand> WriterTask for TypedMaintenance<C> {
         on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish) {
         let Self { command, reply } = *self;
-        let result = writer.with_connection_mut(|connection| command.execute(connection));
+        let result = command.execute(writer);
         settle(result, reply, on_error)
     }
 

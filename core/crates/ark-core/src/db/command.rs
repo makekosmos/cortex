@@ -1,3 +1,4 @@
+#[cfg(debug_assertions)]
 use rusqlite::Connection;
 #[cfg(test)]
 use rusqlite::Transaction;
@@ -199,7 +200,11 @@ pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
 
     fn weight(&self) -> usize;
 
-    fn execute(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
+    fn execute(self, writer: &mut ark_store::writer::SqliteWriter)
+        -> Result<Self::Output, DbError>;
+
+    #[cfg(debug_assertions)]
+    fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
 }
 
 /// Sealed read-only application surface. Query implementations receive a

@@ -391,7 +391,7 @@ fn spawn_test_maintenance<C: DbMaintenanceCommand>(
     tokio::task::spawn_blocking(move || {
         let _admission = _admission;
         let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        command.execute(&mut connection)
+        command.execute_on_connection(&mut connection)
     })
 }
 

@@ -9,6 +9,7 @@ mod inbound_entity;
 mod integration_admin;
 mod legacy_mutation;
 mod registry_local_mutation;
+mod snapshot_restore;
 pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
 #[cfg(debug_assertions)]
 pub use integration_admin::apply_integration_admin_on_connection;

@@ -49,60 +49,6 @@ impl DbCommand for CommitFailure {
     }
 }
 
-struct RestoreRecoveryRequired;
-
-impl sealed::Sealed for RestoreRecoveryRequired {}
-
-impl DbMaintenanceCommand for RestoreRecoveryRequired {
-    type Output = ();
-
-    fn weight(&self) -> usize {
-        1
-    }
-
-    fn execute(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
-        Err(DbError::RecoveryRequired)
-    }
-}
-
-struct RestorePostVerifyFailure {
-    db_path: String,
-    backup_id: String,
-}
-
-impl sealed::Sealed for RestorePostVerifyFailure {}
-
-impl DbMaintenanceCommand for RestorePostVerifyFailure {
-    type Output = ();
-
-    fn weight(&self) -> usize {
-        1
-    }
-
-    fn execute(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
-        let fail_verification = |_connection: &Connection, _fingerprint: &[String]| {
-            Err("injected restore verification failure".to_string())
-        };
-        let rollback_succeeds = |live: &mut Connection, path: &std::path::Path| {
-            live.restore(
-                rusqlite::DatabaseName::Main,
-                path,
-                None::<fn(rusqlite::backup::Progress)>,
-            )
-            .map_err(|error| error.to_string())
-        };
-        ark_store::snapshot::restore_snapshot_with_hooks(
-            connection,
-            &self.db_path,
-            &self.backup_id,
-            fail_verification,
-            rollback_succeeds,
-        )
-        .map(|_| ())
-        .map_err(DbError::RestoreFailed)
-    }
-}
-
 async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
     let directory = tempfile::tempdir().unwrap();
     let (handle, owner) = DbHandle::open(actor_path(&directory), "actor-test-device".into())
@@ -221,7 +167,7 @@ fn failure_probe_state(handle: &DbHandle, operation_id: &str) -> (i64, i64) {
     })
 }
 
-async fn apply_failure_mutation(
+pub(in crate::db::command::tests::production_actor) async fn apply_failure_mutation(
     handle: &DbHandle,
     operation_id: &str,
     payload_bytes: i64,
@@ -404,91 +350,6 @@ async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
 
     let later = apply_failure_mutation(&handle, "after-commit-failure", 0).await;
     assert!(later.is_err(), "actor accepted a write after COMMIT failed");
-
-    owner
-        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
-        .await
-        .unwrap();
-}
-
-#[tokio::test]
-async fn production_actor_restore_recovery_required_fails_closed() {
-    let (_directory, handle, mut owner) = open_failure_actor().await;
-
-    let failed = handle
-        .submit_maintenance(
-            CommandContext::engine_maintenance(),
-            RestoreRecoveryRequired,
-        )
-        .await;
-    assert!(matches!(failed, Err(DbError::RecoveryRequired)));
-    assert!(
-        !handle.actor_ready_for_test(),
-        "actor stayed Ready after restore rollback required recovery"
-    );
-
-    let later = apply_failure_mutation(&handle, "after-restore-recovery-required", 0).await;
-    assert!(
-        later.is_err(),
-        "actor accepted a write after unresolved restore"
-    );
-
-    owner
-        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
-        .await
-        .unwrap();
-}
-
-#[tokio::test]
-async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
-    let (directory, handle, mut owner) = open_failure_actor().await;
-    let db_path = actor_path(&directory);
-    let backup_id = "ark.db.backup-restore-failure";
-    let backup_path = crate::db::backups_dir(&db_path);
-    std::fs::create_dir_all(&backup_path).unwrap();
-    let snapshot_path = backup_path.join(backup_id);
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE restore_failure_probe(value TEXT NOT NULL);
-                 INSERT INTO restore_failure_probe(value) VALUES ('pre-restore');",
-            )
-            .unwrap();
-        ark_store::snapshot::backup_connection_to_file(
-            connection,
-            snapshot_path.to_str().expect("snapshot path must be UTF-8"),
-        )
-        .unwrap();
-    });
-
-    let failed = handle
-        .submit_maintenance(
-            CommandContext::engine_maintenance(),
-            RestorePostVerifyFailure {
-                db_path,
-                backup_id: backup_id.to_string(),
-            },
-        )
-        .await;
-    assert!(matches!(failed, Err(DbError::RestoreFailed(_))));
-    assert!(
-        !handle.actor_ready_for_test(),
-        "actor stayed Ready after a failed restore with a successful SQLite rollback"
-    );
-    assert!(
-        apply_failure_mutation(&handle, "after-rolled-back-restore", 0)
-            .await
-            .is_err(),
-        "actor accepted a write after a failed restore"
-    );
-    let preserved = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT value FROM restore_failure_probe", [], |row| {
-                row.get::<_, String>(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(preserved, "pre-restore");
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))

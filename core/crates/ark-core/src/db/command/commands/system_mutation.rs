@@ -101,7 +101,20 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
         super::serialized_weight(self)
     }
 
-    fn execute(self, connection: &mut rusqlite::Connection) -> Result<Self::Output, DbError> {
+    fn execute(
+        self,
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<Self::Output, DbError> {
+        writer
+            .restore_snapshot(&self.db_path, &self.backup_id)
+            .map_err(map_restore_error)
+    }
+
+    #[cfg(debug_assertions)]
+    fn execute_on_connection(
+        self,
+        connection: &mut rusqlite::Connection,
+    ) -> Result<Self::Output, DbError> {
         crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id)
             .map_err(map_restore_error)
     }

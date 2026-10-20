@@ -75,7 +75,21 @@ impl DbMaintenanceCommand for SetMaxPageCount {
         1
     }
 
-    fn execute(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
+    fn execute(
+        self,
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<Self::Output, DbError> {
+        writer.with_connection_mut(|connection| {
+            connection
+                .pragma_update(None, "max_page_count", self.page_count)
+                .map_err(|error| DbError::Storage(error.to_string()))?;
+            connection
+                .query_row("PRAGMA max_page_count", [], |row| row.get(0))
+                .map_err(|error| DbError::Storage(error.to_string()))
+        })
+    }
+
+    fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
         connection
             .pragma_update(None, "max_page_count", self.page_count)
             .map_err(|error| DbError::Storage(error.to_string()))?;
@@ -230,7 +244,17 @@ impl DbMaintenanceCommand for GateMaintenance {
         1
     }
 
-    fn execute(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
+    fn execute(
+        self,
+        _writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<Self::Output, DbError> {
+        let _ = self.entered.send(());
+        self.release
+            .recv()
+            .map_err(|error| DbError::Storage(error.to_string()))
+    }
+
+    fn execute_on_connection(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
         let _ = self.entered.send(());
         self.release
             .recv()
