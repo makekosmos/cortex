@@ -189,14 +189,11 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
             .get("remote-device"),
         Some(&remote_endpoint)
     );
-    let committed_events: i64 = shared_connection
-        .lock()
-        .unwrap()
-        .query_row("SELECT COUNT(*) FROM device_registry_events", [], |row| {
-            row.get(0)
-        })
+    let (_, _, committed_events) = storage
+        .load_device_registry_events_page(0, None, 32)
+        .await
         .unwrap();
-    assert_eq!(committed_events, 1);
+    assert_eq!(committed_events.len(), 1);
 
     relay
         .handle_event(TransportEvent::MessageReceivedFromTransport {
@@ -208,14 +205,11 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
 
     assert!(!transport.data_ready.load(Ordering::SeqCst));
     assert_eq!(transport.acceptance_attempts.load(Ordering::SeqCst), 2);
-    let committed_events: i64 = shared_connection
-        .lock()
-        .unwrap()
-        .query_row("SELECT COUNT(*) FROM device_registry_events", [], |row| {
-            row.get(0)
-        })
+    let (_, _, committed_events) = storage
+        .load_device_registry_events_page(0, None, 32)
+        .await
         .unwrap();
-    assert_eq!(committed_events, 1);
+    assert_eq!(committed_events.len(), 1);
 
     relay
         .handle_registry_sync_start(
