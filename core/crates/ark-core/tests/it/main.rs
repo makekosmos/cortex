@@ -13,7 +13,6 @@ mod iroh_data_admission;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_ticket_pairing;
-mod phase2_slice2_object_versions;
 mod phase3_agenda_contract;
 mod phase3_blocked_writes;
 mod phase3_canonical_types;

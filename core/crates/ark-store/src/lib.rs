@@ -61,6 +61,8 @@ mod data_platform_tests;
 #[cfg(test)]
 mod integration_schema_upgrade_tests;
 #[cfg(test)]
+mod load_all_json_tests;
+#[cfg(test)]
 mod load_and_clear_tests;
 #[cfg(test)]
 mod pending_objects_and_integrity_tests;
