@@ -8,7 +8,6 @@
 mod ark_api_wire_baseline;
 mod data_platform_phase7;
 mod fatsecret_type_registration;
-mod integration_schema_upgrade;
 mod iroh_bidirectional_burst;
 mod iroh_data_admission;
 mod iroh_loopback_smoke;
