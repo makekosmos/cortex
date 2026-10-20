@@ -9,6 +9,8 @@ mod core_task_write;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
+mod iroh_identity;
+pub(in crate::db::command) use iroh_identity::IrohIdentityKeyTask;
 mod local_sync_key_value_write;
 pub(in crate::db::command) use local_sync_key_value_write::LocalSyncKeyValueWriteTask;
 mod sync_progress_write;

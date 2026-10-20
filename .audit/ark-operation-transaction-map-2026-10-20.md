@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 49 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus ten extracted Store writer paths, by responsibility. The current inventory has **24 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, tracked-app mutations, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the 48 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus eleven extracted Store writer paths, by responsibility. The current inventory has **23 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, Iroh identity persistence, tracked-app mutations, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -112,12 +112,12 @@ These operations return results to their Core callers; no direct network or othe
 
 ### System, object, and usage reads — 7 operations
 
-**Core:** checks engine access and dispatches system/restore behavior. **Persistence:** object and usage reads call Store APIs, while system key-value reads call Store `sync_kv`; snapshot validation and restore remain Core DB orchestration. `SystemReadQuery`, `ObjectReadQuery`, and `UsageReadQuery` use deferred read snapshots. `LoadOrGenerateIrohSecretKeyCommand` and `CompactUsageSyncLogCommand` use immediate transactions. `RestoreSnapshotCommand` is the sole maintenance operation and uses an exclusive maintenance connection. The command-level trace does not establish additional post-commit key or restore effects.
+**Core:** checks Engine access, schedules identity persistence, and dispatches system/restore behavior. **Store:** atomically persists an ArkNet-generated Iroh-key candidate and returns the winning persisted value; ArkNet validates it after the transaction. Object and usage reads call Store APIs, while system key-value reads call Store `sync_kv`; snapshot validation and restore remain Core DB orchestration. `SystemReadQuery`, `ObjectReadQuery`, and `UsageReadQuery` use deferred read snapshots. `CompactUsageSyncLogCommand` uses an immediate transaction. `RestoreSnapshotCommand` is the sole maintenance operation and uses an exclusive maintenance connection. Device-registry commands still use the Core Iroh SQLite adapter inside their larger signed transactions.
 
 | Kind | Operation | Implementation |
 |---|---|---|
 | StoreWriterTask | `UsageSequenceMigration` | `core/crates/ark-core/src/db/command/executor/actor/task/usage_sequence_migration.rs` → `ark_store::writer::SqliteWriter::ensure_usage_sequence_migrated` |
-| DbCommand | `LoadOrGenerateIrohSecretKeyCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:10` |
+| StoreWriterTask | `IrohIdentityKeyCandidate` | `core/crates/ark-core/src/db/command/executor/actor/task/iroh_identity.rs` → `ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate` |
 | DbCommand | `CompactUsageSyncLogCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:52` |
 | DbMaintenanceCommand | `RestoreSnapshotCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:91` |
 | DbQuery | `SystemReadQuery` | `core/crates/ark-core/src/db/command/commands/system_read.rs:11` |
@@ -143,8 +143,8 @@ These operations return results to their Core callers; no direct network or othe
 | Sync policy, transfer, KV, usage log | 2 | 5 | 12 | 0 | 19 |
 | Task merge | 0 | 4 | 1 | 0 | 5 |
 | Type registry | 3 | 0 | 1 | 0 | 4 |
-| System, object, and usage reads | 1 | 2 | 3 | 1 | 7 |
+| System, object, and usage reads | 2 | 1 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **10** | **24** | **24** | **1** | **59** |
+| **Total** | **11** | **23** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

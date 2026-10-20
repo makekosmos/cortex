@@ -62,9 +62,7 @@ pub(crate) use sync_read::{
 pub(crate) use sync_read_policy::{
     LoadPolicyBoundEntitiesPageQuery, PolicyBoundFeedDeliveryPageQuery,
 };
-pub(crate) use system_mutation::{
-    CompactUsageSyncLogCommand, LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
-};
+pub(crate) use system_mutation::{CompactUsageSyncLogCommand, RestoreSnapshotCommand};
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
     AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand,

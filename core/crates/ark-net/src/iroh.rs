@@ -5,12 +5,21 @@ pub trait IrohIdentityStore {
     fn insert_secret_key_if_absent(&self, candidate_hex: &str) -> Result<String, String>;
 }
 
+pub fn generate_secret_key_candidate() -> String {
+    hex_encode(&SecretKey::generate().to_bytes())
+}
+
+pub fn parse_secret_key_hex(persisted: &str) -> Result<SecretKey, String> {
+    secret_key_from_hex(persisted)
+}
+
 pub fn load_or_create_secret_key(store: &dyn IrohIdentityStore) -> Result<SecretKey, String> {
     let Some(persisted) = store.load_secret_key()? else {
-        let candidate = SecretKey::generate().to_bytes();
-        return secret_key_from_hex(&store.insert_secret_key_if_absent(&hex_encode(&candidate))?);
+        return parse_secret_key_hex(
+            &store.insert_secret_key_if_absent(&generate_secret_key_candidate())?,
+        );
     };
-    secret_key_from_hex(&persisted)
+    parse_secret_key_hex(&persisted)
 }
 
 fn secret_key_from_hex(persisted: &str) -> Result<SecretKey, String> {

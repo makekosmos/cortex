@@ -1,7 +1,7 @@
 use super::super::*;
 use crate::db::{
-    CommandContext, DbHandle, DbOwner, LoadOrGenerateIrohSecretKeyCommand, LocalCoreTaskWrite,
-    ObjectReadQuery, SaveLocalSyncProfileCommand, SqliteStorageBackend,
+    CommandContext, DbHandle, DbOwner, LocalCoreTaskWrite, ObjectReadQuery,
+    SaveLocalSyncProfileCommand, SqliteStorageBackend,
 };
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_bind::SyncBind;
@@ -26,8 +26,7 @@ pub(super) async fn open_peer(db_path: &std::path::Path, device_id: &str) -> Act
     let (db, owner) = DbHandle::open(db_path.to_string_lossy().into_owned(), device_id.to_owned())
         .await
         .expect("open production SQLite actor");
-    let secret = db
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)
         .await
         .expect("load persistent Iroh identity");
     let storage = Arc::new(SqliteStorageBackend::with_db_handle(db.clone()));

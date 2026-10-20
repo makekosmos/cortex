@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 49 typed operations and 860 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 48 typed operations and 859 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 24 | immediate write transaction |
+| `DbCommand` | 23 | immediate write transaction |
 | `DbQuery` | 24 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -31,14 +31,13 @@ Generated from the current Core source. The scanner found 49 typed operations an
 | `DbCommand` | `ApplyAuthenticatedSyncEntityCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:291](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:291) |
 | `DbCommand` | `SaveLocalSyncProfileCommand` | [core/crates/ark-core/src/db/command/commands/sync_policy.rs:36](../core/crates/ark-core/src/db/command/commands/sync_policy.rs:36) |
 | `DbCommand` | `AcceptPeerSyncPolicyCommand` | [core/crates/ark-core/src/db/command/commands/sync_policy.rs:149](../core/crates/ark-core/src/db/command/commands/sync_policy.rs:149) |
-| `DbCommand` | `LoadOrGenerateIrohSecretKeyCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:10](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:10) |
-| `DbCommand` | `CompactUsageSyncLogCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:52](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:52) |
+| `DbCommand` | `CompactUsageSyncLogCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:29](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:29) |
 | `DbCommand` | `AppendTaskMergeOperationCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:31](../core/crates/ark-core/src/db/command/commands/task_merge.rs:31) |
 | `DbCommand` | `PrepareTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:74](../core/crates/ark-core/src/db/command/commands/task_merge.rs:74) |
 | `DbCommand` | `AcknowledgeTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:125](../core/crates/ark-core/src/db/command/commands/task_merge.rs:125) |
 | `DbCommand` | `ApplyTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:177](../core/crates/ark-core/src/db/command/commands/task_merge.rs:177) |
 | `DbCommand` | `OperationReceiptCommand` | [core/crates/ark-core/src/db/command/operation_receipt.rs:47](../core/crates/ark-core/src/db/command/operation_receipt.rs:47) |
-| `DbMaintenanceCommand` | `RestoreSnapshotCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:91](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:91) |
+| `DbMaintenanceCommand` | `RestoreSnapshotCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:68](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:68) |
 | `DbQuery` | `RegistryPeerAdmissionQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18](../core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18) |
 | `DbQuery` | `RegistryDeviceEnabledQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:65](../core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:65) |
 | `DbQuery` | `VerifyRegistryHandshakeQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:84](../core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:84) |
@@ -77,7 +76,7 @@ Generated from the current Core source. The scanner found 49 typed operations an
 | production | SQL literal | 20 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 23 |
-| production | SQLite type or import | 123 |
+| production | SQLite type or import | 122 |
 | test_file | SQL literal | 289 |
 | test_file | SQLite lifecycle | 80 |
 | test_file | SQLite operation | 247 |

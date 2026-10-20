@@ -12,8 +12,8 @@ use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask, DeleteObjectLinkTask,
-    DeleteObjectTypeTask, DeleteTrashedTask, ExternalRefUpsertTask, LocalBookCoverTask,
-    LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
+    DeleteObjectTypeTask, DeleteTrashedTask, ExternalRefUpsertTask, IrohIdentityKeyTask,
+    LocalBookCoverTask, LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
     LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
     ReplaceObjectLinkTask, SyncProgressWriteTask, TrackedAppMutationTask, TypedCommand,
     TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageSequenceMigrationTask,

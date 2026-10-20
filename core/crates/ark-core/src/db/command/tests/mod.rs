@@ -33,12 +33,10 @@ async fn open_publishes_only_a_database_ready_for_commands() {
         .await
         .unwrap();
 
-    let first = handle
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let first = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
         .unwrap();
-    let second = handle
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let second = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
         .unwrap();
 
@@ -210,17 +208,15 @@ async fn read_queries_share_bounded_source_admission() {
 }
 
 #[tokio::test]
-async fn iroh_secret_key_command_keeps_the_persisted_identity() {
+async fn actor_store_keeps_the_persisted_iroh_identity() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
     handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
-    let first = handle
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let first = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
         .unwrap();
-    let second = handle
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let second = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
         .unwrap();
 

@@ -1,8 +1,7 @@
 use super::*;
 use crate::db::{
     AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
-    EnrollPairedDeviceCommand, LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend,
-    TaskConflictSetQuery,
+    EnrollPairedDeviceCommand, SqliteStorageBackend, TaskConflictSetQuery,
 };
 use crate::sync_server::SyncServer;
 use ark_application::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
@@ -22,8 +21,7 @@ async fn open_peer(path: &std::path::Path, device_id: &str) -> PeerFixture {
     let (db, owner) = DbHandle::open(path.to_string_lossy().into_owned(), device_id.into())
         .await
         .unwrap();
-    let secret = db
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+    let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)
         .await
         .unwrap();
     let storage = Arc::new(SqliteStorageBackend::with_db_handle(db.clone()));
