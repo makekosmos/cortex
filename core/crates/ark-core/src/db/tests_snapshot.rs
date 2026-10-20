@@ -18,7 +18,8 @@ fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
 }
 
 fn seed_object(conn: &Connection, id: &str, title: &str) {
-    upsert_object_type(conn, &make_object_type("snapshot_type", "Note")).unwrap();
+    ark_store::type_registry::upsert_object_type(conn, &make_object_type("snapshot_type", "Note"))
+        .unwrap();
     ark_store::objects::upsert_object_compat(conn, &make_object(id, "snapshot_type", title))
         .unwrap();
 }

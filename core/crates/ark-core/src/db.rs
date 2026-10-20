@@ -2,7 +2,6 @@ mod backend;
 mod command;
 mod committed_feed;
 pub(crate) mod constants;
-mod objects;
 mod open;
 mod task_merge;
 
@@ -57,7 +56,6 @@ pub(in crate::db) use integration_replication_publication::{
     publish_integration_credential_envelope_in_transaction,
     try_acquire_integration_refresh_lease_in_transaction,
 };
-pub use objects::{delete_object_type, upsert_object_type};
 pub use open::backup_to_file_chunked;
 
 mod integration_replication_admission;

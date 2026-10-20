@@ -116,8 +116,8 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
 fn test_object_model_crud() {
     let conn = setup_db();
     let object_type = make_object_type("crud_fixture_book_type", "РљРЅРёРіР°");
-    upsert_object_type(&conn, &object_type).unwrap();
-    upsert_object_type(
+    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+    ark_store::type_registry::upsert_object_type(
         &conn,
         &make_object_type("crud_fixture_type", "Р—Р°РјРµС‚РєР°"),
     )
@@ -150,7 +150,7 @@ fn test_object_model_crud() {
 
     delete_object_link(&conn, "link-1").unwrap();
     ark_store::objects::delete_object(&conn, "obj-2").unwrap();
-    delete_object_type(&conn, "crud_fixture_book_type").unwrap();
+    ark_store::type_registry::delete_object_type(&conn, "crud_fixture_book_type").unwrap();
     let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(data.object_links.len(), 0);
     assert_eq!(data.objects.len(), 1);
@@ -205,14 +205,14 @@ fn upsert_object_type_preserves_existing_objects_and_links() {
     // Regression: 2026-06-04. SQLite REPLACE cascades through object_types -> objects -> links.
     let conn = setup_db();
     let object_type = make_object_type("custom_note", "Custom Note");
-    upsert_object_type(&conn, &object_type).unwrap();
+    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
     upsert_object(&conn, &make_object("obj-a", "custom_note", "A")).unwrap();
     upsert_object(&conn, &make_object("obj-b", "custom_note", "B")).unwrap();
     upsert_object_link(&conn, &make_object_link("link-custom", "obj-a", "obj-b")).unwrap();
 
     let mut updated_type = make_object_type("custom_note", "Custom Note Updated");
     updated_type.updated_at = "2026-01-02T00:00:00.000Z".to_string();
-    upsert_object_type(&conn, &updated_type).unwrap();
+    ark_store::type_registry::upsert_object_type(&conn, &updated_type).unwrap();
 
     assert_eq!(list_objects_by_type(&conn, "custom_note").unwrap().len(), 2);
     let links = list_object_links(&conn).unwrap();
@@ -266,8 +266,12 @@ fn upsert_object_link_updates_existing_row_in_place() {
 fn object_query_helpers_filter_by_type_and_ids() {
     let conn = setup_db();
     let object_type = make_object_type("query_fixture_book_type", "Book");
-    upsert_object_type(&conn, &object_type).unwrap();
-    upsert_object_type(&conn, &make_object_type("query_fixture_type", "Journal")).unwrap();
+    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+    ark_store::type_registry::upsert_object_type(
+        &conn,
+        &make_object_type("query_fixture_type", "Journal"),
+    )
+    .unwrap();
     upsert_object(
         &conn,
         &make_object("obj-1", "query_fixture_type", "Journal"),

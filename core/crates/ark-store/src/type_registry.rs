@@ -1,5 +1,6 @@
 mod builtins;
 mod catalog;
+mod legacy_mutations;
 mod migrations;
 mod query_ids;
 mod registration;
@@ -13,6 +14,7 @@ pub use catalog::{
     list_type_summaries, list_type_versions, register_alias, resolve_object_type_identity,
     resolve_object_type_version, type_name,
 };
+pub use legacy_mutations::{delete_object_type, upsert_object_type};
 pub use migrations::migrate_schema;
 pub use query_ids::stored_type_ids_for_query;
 pub use registration::register_type;

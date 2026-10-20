@@ -64,7 +64,7 @@ fn setup_test_db() -> Connection {
         updated_at: "2026-05-18T00:00:00.000Z".to_string(),
         system_locked: false,
     };
-    db::upsert_object_type(&conn, &object_type).expect("upsert_object_type");
+    ark_store::type_registry::upsert_object_type(&conn, &object_type).expect("upsert_object_type");
     conn
 }
 
@@ -232,4 +232,3 @@ proptest! {
         }
     }
 }
-use ark_core::db;

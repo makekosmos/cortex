@@ -4,7 +4,11 @@
         let conn = backend.db.shared_connection_for_test();
         {
             let guard = conn.lock().unwrap();
-            upsert_object_type(&guard, &make_object_type("remote-type", "Remote")).unwrap();
+            ark_store::type_registry::upsert_object_type(
+                &guard,
+                &make_object_type("remote-type", "Remote"),
+            )
+            .unwrap();
         }
         let mut old = sync_object("remote-old", "remote-type", "old-wire");
         old.data.remove("typeVersion");

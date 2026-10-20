@@ -3,8 +3,12 @@
     fn object_summary_queries_skip_body_and_filter_by_type() {
         let conn = setup_db();
         let object_type = make_object_type("summary_fixture_book_type", "Book");
-        upsert_object_type(&conn, &object_type).unwrap();
-        upsert_object_type(&conn, &make_object_type("summary_fixture_type", "Journal")).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(
+            &conn,
+            &make_object_type("summary_fixture_type", "Journal"),
+        )
+        .unwrap();
 
         let mut older = make_object("obj-1", "summary_fixture_type", "Journal");
         older.content_json = json!({ "text": "large body that must not be selected by summaries" });
@@ -150,7 +154,7 @@
         conn.execute_batch(CREATE_TABLES).unwrap();
 
         let object_type = make_object_type("search_obj", "Searchable");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
         let mut object = make_object("obj-existing-search", "search_obj", "Existing Object");
         object.props_json = json!({
             "description": "preexisting nebula archive"
@@ -173,7 +177,7 @@
     fn test_object_search_fts_updates_and_removes_index_entries() {
         let conn = setup_db();
         let object_type = make_object_type("search_obj", "Searchable");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
 
         let mut object = make_object("obj-search-update", "search_obj", "Search Target");
         object.props_json = json!({ "description": "alpha marker" });
@@ -206,7 +210,7 @@
     fn test_object_search_is_punctuation_safe_and_falls_back_without_fts() {
         let conn = setup_db();
         let object_type = make_object_type("search_obj", "Searchable");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
         let mut object = make_object("obj-punctuation-search", "search_obj", "C++ Primer");
         object.props_json = json!({
             "description": "boss-fight co-op notes"

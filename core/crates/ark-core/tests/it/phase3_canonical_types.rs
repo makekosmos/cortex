@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::db::{delete_object_type, upsert_object_type};
 use ark_core::type_registry::{canonical_schema_hash, resolve_alias};
 use ark_core::types::ObjectType;
+use ark_store::type_registry::{delete_object_type, upsert_object_type};
 use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashSet;

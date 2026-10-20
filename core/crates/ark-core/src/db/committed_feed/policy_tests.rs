@@ -47,8 +47,8 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         updated_at: "2026-10-16T00:00:00.000Z".into(),
         system_locked: false,
     };
-    crate::db::upsert_object_type(&source, &book_type).unwrap();
-    crate::db::upsert_object_type(&receiver, &book_type).unwrap();
+    ark_store::type_registry::upsert_object_type(&source, &book_type).unwrap();
+    ark_store::type_registry::upsert_object_type(&receiver, &book_type).unwrap();
 
     let original = crate::types::ArkObject {
         id: "book-1".into(),

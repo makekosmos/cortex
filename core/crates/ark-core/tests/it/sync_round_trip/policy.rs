@@ -6,7 +6,7 @@ use ark_application::sync_storage::{
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
-use ark_core::{db, SqliteStorageBackend};
+use ark_core::SqliteStorageBackend;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
 use rusqlite::Connection;
 use serde_json::json;
@@ -28,7 +28,7 @@ fn make_policy_storage(
 ) -> (Arc<SqliteStorageBackend>, String, Arc<Mutex<Connection>>) {
     let conn = Connection::open_in_memory().expect("in-memory SQLite");
     ark_store::open::init_schema(&conn).expect("initialize test schema");
-    db::upsert_object_type(
+    ark_store::type_registry::upsert_object_type(
         &conn,
         &ObjectType {
             id: "book".into(),

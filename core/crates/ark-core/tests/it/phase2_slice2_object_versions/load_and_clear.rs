@@ -178,7 +178,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
             .count(),
         1
     );
-    ark_core::db::delete_object_type(&conn, &object_type.id).unwrap();
+    ark_store::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
     assert!(!ark_store::object_types::list(&conn)
         .unwrap()
         .iter()
@@ -231,7 +231,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
             .unwrap(),
         serde_json::to_value(Some(object_type.clone())).unwrap()
     );
-    ark_core::db::delete_object_type(&conn, &object_type.id).unwrap();
+    ark_store::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
     assert!(ark_store::object_types::get(&conn, &object_type.id)
         .unwrap()
         .is_none());

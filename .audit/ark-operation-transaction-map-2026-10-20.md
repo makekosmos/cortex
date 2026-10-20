@@ -99,9 +99,9 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Type registry — 4 operations
 
-**Core:** mutations use Core `SqliteTypeMutationSession`, so full Store ownership is not established. **Persistence:** type reads call Store `object_types` and `objects` APIs. Writes use the immediate transaction; reads use the deferred snapshot.
+**Core:** owns command validation, actor scheduling, and local revision policy through `SqliteTypeMutationSession`. **Persistence:** type reads and all three type mutation operations call Store APIs. Writes use the immediate transaction; reads use the deferred snapshot. Core's generic command contract still passes the raw transaction, so the storage boundary is not complete.
 
-`RegisterPackageTypesCommand` delegates registration to `ark_store::type_registry::register_type`; the Store operation owns type/version writes and pending replay inside the existing registration savepoint. `UpsertObjectTypeCommand` uses Store's pending replay API as well. Store preserves the previous replay ordering around the type/version and alias/status updates, both nested savepoint scopes, and replay notices. Core still owns `SqliteTypeMutationSession`, generic command execution, and object-type upsert/delete orchestration, so this cut does not complete the opaque transaction boundary or remove Core's SQLite dependency.
+`RegisterPackageTypesCommand`, `UpsertObjectTypeCommand`, and `DeleteObjectTypeCommand` delegate persistence to `ark_store::type_registry`. Store owns compatibility-version writes, alias-collision checks, pending replay, canonical-type no-op behavior, and deprecation. Core still owns `SqliteTypeMutationSession`, generic command execution, authorization, and local revision recording, so this cut does not complete the opaque transaction boundary or remove Core's SQLite dependency.
 
 | Kind | Operation | Implementation |
 |---|---|---|

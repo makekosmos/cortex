@@ -50,7 +50,7 @@
     fn phase2_is_object_type_known_true_after_upsert() {
         let conn = setup_db();
         let object_type = phase2_make_object_type("type_x", "Type X");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
         assert!(ark_store::object_types::is_type_known(&conn, "type_x").unwrap());
     }
 
@@ -89,7 +89,7 @@
 
         // 2. РЎРѕР·РґР°С‘Рј С‚РёРї вЂ” РґРѕР»Р¶РµРЅ СЃСЂР°Р±РѕС‚Р°С‚СЊ auto-replay.
         let object_type = phase2_make_object_type("type_late", "Late Type");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
 
         // 3. Pending РѕС‡РёС‰РµРЅ, object РјР°С‚РµСЂРёР°Р»РёР·РѕРІР°РЅ.
         assert_eq!(count_pending_for_type(&conn, "type_late").unwrap(), 0);
@@ -113,7 +113,11 @@
         }
         assert_eq!(count_pending_for_type(&conn, "batch_type").unwrap(), 5);
 
-        upsert_object_type(&conn, &phase2_make_object_type("batch_type", "Batch")).unwrap();
+        ark_store::type_registry::upsert_object_type(
+            &conn,
+            &phase2_make_object_type("batch_type", "Batch"),
+        )
+        .unwrap();
 
         assert_eq!(count_pending_for_type(&conn, "batch_type").unwrap(), 0);
         assert_eq!(list_objects(&conn).unwrap().len(), 5);
@@ -135,7 +139,11 @@
         )
         .unwrap();
 
-        upsert_object_type(&conn, &phase2_make_object_type("type_a", "Type A")).unwrap();
+        ark_store::type_registry::upsert_object_type(
+            &conn,
+            &phase2_make_object_type("type_a", "Type A"),
+        )
+        .unwrap();
 
         // РўРѕР»СЊРєРѕ obj-a replayed; obj-b РІСЃС‘ РµС‰С‘ РІ pending.
         assert_eq!(count_pending_for_type(&conn, "type_a").unwrap(), 0);
@@ -172,7 +180,7 @@
             let conn = open_db(path.to_str().unwrap()).unwrap();
             ark_store::open::init_schema(&conn).unwrap();
             let object_type = make_object_type("corruption_fixture_type", "Note");
-            upsert_object_type(&conn, &object_type).unwrap();
+            ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
             for i in 0..100 {
                 let mut obj = make_object(
                     &format!("obj-{i}"),
@@ -221,7 +229,7 @@
         let conn = setup_db();
         // РџРѕР»РѕР¶РёРј test РґР°РЅРЅС‹Рµ.
         let object_type = make_object_type("backup_fixture_type", "Note");
-        upsert_object_type(&conn, &object_type).unwrap();
+        ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
         let mut object = make_object("obj-backup", "backup_fixture_type", "Backup test");
         object.props_json = json!({"tag": "test"});
         ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
@@ -258,7 +266,7 @@
             // РєРѕРЅРЅРµРєС€РЅРѕРј (Р° РЅРµ РёР· РїРµСЂРµРґР°РЅРЅРѕРіРѕ &Connection).
             let conn = open_db(src_str).unwrap();
             ark_store::open::init_schema(&conn).unwrap();
-            upsert_object_type(
+            ark_store::type_registry::upsert_object_type(
                 &conn,
                 &make_object_type("backup_chunk_fixture_type", "Note"),
             )

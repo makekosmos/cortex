@@ -4,11 +4,11 @@ use rusqlite::{Connection, Transaction};
 use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
-use crate::db::{delete_object_type, upsert_object_type};
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };
 use ark_store::objects::{delete_object_link, upsert_object_link};
+use ark_store::type_registry::{delete_object_type, upsert_object_type};
 
 // ---------------------------------------------------------------------------
 // Delete helpers (for StorageBackend)

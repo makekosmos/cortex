@@ -202,7 +202,7 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
         updated_at: "now".into(),
         system_locked: false,
     };
-    ark_core::db::upsert_object_type(&conn, &typ).unwrap();
+    ark_store::type_registry::upsert_object_type(&conn, &typ).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_type_versions (type_id,version,schema_json,",
@@ -258,7 +258,7 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
         updated_at: "now".into(),
         system_locked: false,
     };
-    ark_core::db::upsert_object_type(&conn, &typ).unwrap();
+    ark_store::type_registry::upsert_object_type(&conn, &typ).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_type_versions (type_id,version,schema_json,",

@@ -1,5 +1,4 @@
 use crate::application::type_mutation::{TypeEntityKind, TypeMutationSession};
-use crate::db;
 use crate::type_registry::TypeRegistration;
 use crate::types::ObjectType;
 use ark_application::sync_storage::ReplayNotice;
@@ -21,11 +20,11 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
     }
 
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String> {
-        db::upsert_object_type(self.transaction, object_type)
+        ark_store::type_registry::upsert_object_type(self.transaction, object_type)
     }
 
     fn delete_object_type(&self, id: &str) -> Result<(), String> {
-        db::delete_object_type(self.transaction, id)
+        ark_store::type_registry::delete_object_type(self.transaction, id)
     }
 
     fn record_local_revision(

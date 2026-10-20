@@ -35,7 +35,7 @@
         // Р”Рѕ Р¤Р°Р·С‹ B РїР°РґР°РµС‚ С‡РµСЂРµР· replay_pending_for_type в†’ BEGIN IMMEDIATE:
         // "cannot start a transaction within a transaction".
         // РџРѕСЃР»Рµ Р¤Р°Р·С‹ B (SAVEPOINT) РґРѕР»Р¶РЅРѕ РїСЂРѕР№С‚Рё Р±РµР· РѕС€РёР±РєРё.
-        upsert_object_type(&conn, &ot).expect(concat!(
+        ark_store::type_registry::upsert_object_type(&conn, &ot).expect(concat!(
             "upsert_object_type РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё ",
             "РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё"
         ));
