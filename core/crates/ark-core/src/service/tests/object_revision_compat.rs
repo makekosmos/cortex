@@ -76,44 +76,33 @@ fn remote_entity(object: &ArkObject, title: &str) -> SyncEntity {
 async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
+            db_path: fixture.db_path().to_string_lossy().into_owned(),
         },
     )
     .await
     .unwrap();
 
-    let (vector_object, tombstone_object) = with_write_tx(&state, |conn| {
-        let vector_object = ark_store::object_write::prepare_object(
-            conn,
+    let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
+    let vector_object = storage
+        .seed_legacy_object(
             task("legacy-vector-task", "vector wins"),
+            ark_store::test_support::LegacyRevisionSeed::VersionVector {
+                hlc: "2999-01-01T00:00:00.000Z:000001:legacy".into(),
+            },
         )
-        .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(conn, &vector_object)?;
-        ark_store::sync_kv::set_sync_kv(
-            conn,
-            "lan_sync.version_vector",
-            r#"{"legacy-vector-task":"2999-01-01T00:00:00.000Z:000001:legacy"}"#,
-        )?;
-
-        let tombstone_object =
-            ark_store::object_write::prepare_object(conn, task("legacy-tombstone-task", "deleted"))
-                .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(conn, &tombstone_object)?;
-        ark_store::objects::delete_object(conn, &tombstone_object.id)?;
-        ark_store::sync_tombstones::record(
-            conn,
-            "object",
-            &tombstone_object.id,
-            None,
-            "2999-01-01T00:00:00.000Z:000002:legacy",
-        )?;
-        Ok((vector_object, tombstone_object))
-    })
-    .unwrap();
+        .unwrap();
+    let tombstone_object = storage
+        .seed_legacy_object(
+            task("legacy-tombstone-task", "deleted"),
+            ark_store::test_support::LegacyRevisionSeed::Tombstone {
+                hlc: "2999-01-01T00:00:00.000Z:000002:legacy".into(),
+                type_id: None,
+            },
+        )
+        .unwrap();
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     backend
@@ -126,21 +115,30 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         .unwrap();
 
     assert_eq!(
-        with_conn(&state, |conn| ark_store::objects::get_object(
-            conn,
-            &vector_object.id
-        ))
-        .unwrap()
-        .unwrap()
-        .title,
+        handle_request(
+            &state,
+            Request::GetObject {
+                id: vector_object.id.clone(),
+            },
+        )
+        .await
+        .unwrap()["title"],
         "vector wins"
     );
-    assert!(with_conn(&state, |conn| ark_store::objects::get_object(
-        conn,
-        &tombstone_object.id
-    ))
-    .unwrap()
-    .is_none());
+    assert!(
+        !serde_json::from_value::<ObjectWriteSnapshot>(
+            handle_request(
+                &state,
+                Request::GetObjectWriteSnapshot {
+                    id: tombstone_object.id,
+                },
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+        .exists
+    );
 }
 
 #[tokio::test]
@@ -167,18 +165,13 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
     )
     .await
     .unwrap();
-    with_write_tx(&state, |conn| {
-        conn.execute(
-            "UPDATE object_sync_versions SET hlc = ?2 WHERE object_id = ?1",
-            rusqlite::params![
-                "max-counter-task",
-                "2999-01-01T00:00:00.000Z:18446744073709551615:remote"
-            ],
+    ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path())
+        .unwrap()
+        .set_revision_hlc(
+            "max-counter-task",
+            "2999-01-01T00:00:00.000Z:18446744073709551615:remote",
         )
-        .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
+        .unwrap();
     let snapshot: ObjectWriteSnapshot = serde_json::from_value(
         handle_request(
             &state,
@@ -206,13 +199,14 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
         "hlc_counter_overflow"
     );
     assert_eq!(
-        with_conn(&state, |conn| ark_store::objects::get_object(
-            conn,
-            "max-counter-task"
-        ))
-        .unwrap()
-        .unwrap()
-        .title,
+        handle_request(
+            &state,
+            Request::GetObject {
+                id: "max-counter-task".into(),
+            },
+        )
+        .await
+        .unwrap()["title"],
         "original"
     );
 }
@@ -231,11 +225,10 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
     .unwrap();
     admit_inbound_peer(&state).await;
 
-    let object = with_conn(&state, |conn| {
-        ark_store::object_write::prepare_object(conn, task("inbound-full-task", "remote"))
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
+    let object = storage
+        .prepare_object(task("inbound-full-task", "remote"))
+        .unwrap();
     let entity = full_task_entity(&object, "2990-01-01T00:00:00.000Z:000001:inbound-peer");
     assert_eq!(
         apply_authenticated(&state, &entity, "full-task-message").await,
@@ -254,31 +247,23 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
         ark_application::sync_storage::InboundApplyOutcome::Stale
     );
 
-    let (stored_title, receipt_count, operation_count) = with_conn(&state, |conn| {
-        let title = ark_store::objects::get_object(conn, &object.id)?
-            .unwrap()
-            .title;
-        let receipts = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&object.id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let operations = conn
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .map_err(|error| error.to_string())?;
-        Ok((title, receipts, operations))
-    })
-    .unwrap();
-    assert_eq!(stored_title, "remote");
+    let stored = storage.inspect(&object.id).unwrap();
     assert_eq!(
-        receipt_count, 1,
+        handle_request(
+            &state,
+            Request::GetObject {
+                id: object.id.clone()
+            }
+        )
+        .await
+        .unwrap()["title"],
+        "remote"
+    );
+    assert_eq!(
+        stored.receipt_count, 1,
         "replay must not duplicate the full receipt"
     );
-    assert_eq!(operation_count, 0);
+    assert_eq!(stored.task_operation_count, 0);
 }
 
 #[tokio::test]
@@ -295,8 +280,9 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
     .unwrap();
     admit_inbound_peer(&state).await;
 
-    with_write_tx(&state, |conn| {
-        let project = crate::types::ArkObjectWrite {
+    let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
+    storage
+        .seed_object(crate::types::ArkObjectWrite {
             id: "legacy-project".into(),
             type_id: "com.kosmos.project".into(),
             type_version: Some("1.0.0".into()),
@@ -315,12 +301,8 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
             created_at: "2026-01-01T00:00:00.000Z".into(),
             updated_at: "2026-01-01T00:00:00.000Z".into(),
             deleted_at: None,
-        };
-        let project = ark_store::object_write::prepare_object(conn, project)
-            .map_err(|error| error.to_string())?;
-        ark_store::objects::upsert_object_compat(conn, &project)
-    })
-    .unwrap();
+        })
+        .unwrap();
 
     let legacy = SyncEntity {
         entity_type: "todo".into(),
@@ -344,32 +326,25 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
         apply_authenticated(&state, &legacy, "legacy-task-message").await,
         ark_application::sync_storage::InboundApplyOutcome::Applied
     );
-    let (legacy_object, link_count, receipt_count) = with_conn(&state, |conn| {
-        let object = ark_store::objects::get_object(conn, &legacy.id)?.unwrap();
-        let links = conn
-            .query_row(
-                "SELECT COUNT(*) FROM object_links
-                 WHERE source_object_id = ?1 AND target_object_id = 'legacy-project'
-                   AND link_type = 'project'",
-                [&legacy.id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let receipts = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&legacy.id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((object, links, receipts))
-    })
-    .unwrap();
-    assert_eq!(legacy_object.type_id, "core.task");
-    assert_eq!(legacy_object.title, "legacy title");
-    assert_eq!(link_count, 1, "legacy project relation must map to a link");
+    let legacy_state = storage.inspect(&legacy.id).unwrap();
+    assert_eq!(legacy_state.object.as_ref().unwrap().type_id, "core.task");
     assert_eq!(
-        receipt_count, 0,
+        handle_request(
+            &state,
+            Request::GetObject {
+                id: legacy.id.clone()
+            }
+        )
+        .await
+        .unwrap()["title"],
+        "legacy title"
+    );
+    assert_eq!(
+        legacy_state.link_count, 1,
+        "legacy project relation must map to a link"
+    );
+    assert_eq!(
+        legacy_state.receipt_count, 0,
         "legacy snapshots keep their no-receipt contract"
     );
 
@@ -403,54 +378,17 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
         apply_authenticated(&state, &tombstone, "absent-task-delete").await,
         ark_application::sync_storage::InboundApplyOutcome::Applied
     );
-    let tombstone_state = with_conn(&state, |conn| {
-        let object_count = conn
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = ?1",
-                [&tombstone.id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let hlc = conn
-            .query_row(
-                "SELECT hlc FROM sync_tombstones WHERE id = ?1 AND entity_type = 'object'",
-                [&tombstone.id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let operations = conn
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .map_err(|error| error.to_string())?;
-        let legacy_hlc = conn
-            .query_row(
-                "SELECT hlc FROM sync_tombstones WHERE id = ?1 AND entity_type = 'object'",
-                [&legacy_tombstone.id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let legacy_type = conn
-            .query_row(
-                "SELECT type_id IS NULL FROM sync_tombstones WHERE id = ?1",
-                [&legacy_tombstone.id],
-                |row| row.get::<_, bool>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((object_count, hlc, legacy_hlc, legacy_type, operations))
-    })
-    .unwrap();
-    let object_count = tombstone_state.0;
-    let tombstone_hlc = tombstone_state.1;
-    let legacy_tombstone_hlc = tombstone_state.2;
-    let legacy_tombstone_type = tombstone_state.3;
-    let operation_count = tombstone_state.4;
-    assert_eq!(object_count, 0);
-    assert_eq!(tombstone_hlc, tombstone.hlc);
-    assert_eq!(legacy_tombstone_hlc, legacy_tombstone.hlc);
+    let tombstone_state = storage.inspect(&tombstone.id).unwrap();
+    let legacy_tombstone_state = storage.inspect(&legacy_tombstone.id).unwrap();
+    assert!(tombstone_state.object.is_none());
+    assert!(legacy_tombstone_state.object.is_none());
+    assert_eq!(tombstone_state.tombstone.unwrap().hlc, tombstone.hlc);
+    assert_eq!(tombstone_state.task_operation_count, 0);
+    assert_eq!(legacy_tombstone_state.task_operation_count, 0);
+    let persisted_tombstone = legacy_tombstone_state.tombstone.unwrap();
+    assert_eq!(persisted_tombstone.hlc, legacy_tombstone.hlc);
     assert!(
-        legacy_tombstone_type,
+        persisted_tombstone.type_id.is_none(),
         "legacy Todo tombstones keep no type hint"
     );
-    assert_eq!(operation_count, 0);
 }

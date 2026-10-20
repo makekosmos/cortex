@@ -11,9 +11,12 @@ pub struct LegacyTaskMergeState {
     pub object: Option<ArkObject>,
     pub bootstrap: Option<TaskMergeBootstrap>,
     pub title_conflicts: Option<TaskConflictSet>,
+    pub operations: Vec<TaskMergeOperation>,
     pub existence_operations: Vec<TaskMergeOperation>,
     pub operation_count: i64,
     pub journal_count: i64,
+    pub operation_journal_count: i64,
+    pub receipt_count: i64,
     pub link_count: i64,
     pub tombstone_count: i64,
     pub revision_count: i64,
@@ -92,6 +95,23 @@ impl LegacyTaskMergeFixture {
             })
             .collect::<Result<Vec<_>, String>>()?;
         drop(statement);
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT operation_json FROM task_merge_operations
+                 WHERE object_id = ?1 ORDER BY operation_id",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([object_id], |row| row.get::<_, String>(0))
+            .map_err(|error| error.to_string())?;
+        let operations = rows
+            .map(|row| {
+                let json = row.map_err(|error| error.to_string())?;
+                serde_json::from_str(&json).map_err(|error| error.to_string())
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        drop(statement);
         let operation_count = count(
             &self.connection,
             "SELECT COUNT(*) FROM task_merge_operations WHERE object_id = ?1",
@@ -103,6 +123,19 @@ impl LegacyTaskMergeFixture {
              WHERE record_id IN (
                  SELECT bootstrap_id FROM task_merge_bootstraps WHERE object_id = ?1
              )",
+            object_id,
+        )?;
+        let operation_journal_count = count(
+            &self.connection,
+            "SELECT COUNT(*) FROM task_merge_journal
+             WHERE record_kind = 'operation' AND record_id IN (
+                 SELECT operation_id FROM task_merge_operations WHERE object_id = ?1
+             )",
+            object_id,
+        )?;
+        let receipt_count = count(
+            &self.connection,
+            "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
             object_id,
         )?;
         let link_count = count(
@@ -137,9 +170,12 @@ impl LegacyTaskMergeFixture {
             object,
             bootstrap,
             title_conflicts,
+            operations,
             existence_operations,
             operation_count,
             journal_count,
+            operation_journal_count,
+            receipt_count,
             link_count,
             tombstone_count,
             revision_count,

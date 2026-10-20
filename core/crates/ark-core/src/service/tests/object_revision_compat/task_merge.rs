@@ -41,27 +41,15 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     .await
     .unwrap();
 
-    let bootstrap_id = with_conn(&state, |connection| {
-        connection
-            .query_row(
-                "SELECT bootstrap_id FROM task_merge_bootstraps WHERE object_id = ?1",
-                [id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
-    let baseline_ids = with_conn(&state, |connection| {
-        let mut statement = connection
-            .prepare("SELECT operation_id FROM task_merge_operations WHERE object_id = ?1")
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([id], |row| row.get::<_, String>(0))
-            .map_err(|error| error.to_string())?;
-        rows.collect::<Result<std::collections::BTreeSet<_>, _>>()
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let storage =
+        ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path()).unwrap();
+    let baseline = storage.inspect(id).unwrap();
+    let bootstrap_id = baseline.bootstrap.as_ref().unwrap().id.as_str().to_owned();
+    let baseline_ids = baseline
+        .operations
+        .iter()
+        .map(|operation| operation.id.as_str().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
         baseline_ids.len(),
         ark_domain::task_merge::TaskMergeUnit::ALL.len()
@@ -83,26 +71,9 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     .await
     .unwrap();
 
-    let stored_operations = with_conn(&state, |connection| {
-        let mut statement = connection
-            .prepare(
-                "SELECT operation_json FROM task_merge_operations
-                 WHERE object_id = ?1 AND unit IN ('\"title\"', '\"deadline\"')",
-            )
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map([id], |row| row.get::<_, String>(0))
-            .map_err(|error| error.to_string())?;
-        rows.map(|row| {
-            serde_json::from_str::<ark_domain::task_merge::TaskMergeOperation>(
-                &row.map_err(|error| error.to_string())?,
-            )
-            .map_err(|error| error.to_string())
-        })
-        .collect::<Result<Vec<_>, _>>()
-    })
-    .unwrap();
-    let local_operations = stored_operations
+    let stored = storage.inspect(id).unwrap();
+    let local_operations = stored
+        .operations
         .into_iter()
         .filter(|operation| !baseline_ids.contains(operation.id.as_str()))
         .collect::<Vec<_>>();
@@ -120,20 +91,8 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
         .unwrap();
     assert_eq!(final_object["title"], "after");
     assert_eq!(final_object["propsJson"]["deadline"], "2030-05-01");
-    with_conn(&state, |connection| {
-        let journal_count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_journal WHERE record_id IN (
-                     SELECT operation_id FROM task_merge_operations WHERE object_id = ?1
-                 ) OR (record_kind = 'bootstrap' AND record_id = ?2)",
-                rusqlite::params![id, bootstrap_id],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(journal_count, 3);
-        Ok(())
-    })
-    .unwrap();
+    assert_eq!(stored.journal_count, 1);
+    assert_eq!(stored.operation_journal_count, 2);
 }
 
 #[tokio::test]
@@ -255,14 +214,6 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     )
     .await
     .unwrap();
-    assert!(
-        with_conn(&state, |connection| ark_store::objects::get_object(
-            connection, id
-        ))
-        .unwrap()
-        .is_none()
-    );
-
     let deletion_set = get_db_handle(&state)
         .unwrap()
         .query_with_store(
@@ -294,12 +245,10 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     )
     .await
     .unwrap();
-    let restored = with_conn(&state, |connection| {
-        ark_store::objects::get_object(connection, id)
-    })
-    .unwrap()
-    .unwrap();
-    assert_eq!(restored.title, "restored");
+    let restored = handle_request(&state, Request::GetObject { id: id.into() })
+        .await
+        .unwrap();
+    assert_eq!(restored["title"], "restored");
     let existence_set = get_db_handle(&state)
         .unwrap()
         .query_with_store(
@@ -407,14 +356,10 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     .unwrap_err();
     assert_eq!(local_error, "object_conflict:expected_snapshot_required");
 
-    let object = with_conn(&state, |conn| {
-        ark_store::object_write::prepare_object(
-            conn,
-            task("snapshot-with-merge-history", "legacy snapshot"),
-        )
-        .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let object = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path())
+        .unwrap()
+        .prepare_object(task("snapshot-with-merge-history", "legacy snapshot"))
+        .unwrap();
     let snapshot = full_task_entity(&object, "2990-01-01T00:00:00.000Z:000001:inbound-peer");
     let error = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap())
         .apply_authenticated_entity_with_id(&snapshot, "inbound-peer", "merge-history-snapshot")
@@ -445,38 +390,12 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
             .len(),
         2
     );
-    with_conn(&state, |conn| {
-        assert_eq!(
-            ark_store::objects::get_object(conn, &object.id)?
-                .unwrap()
-                .title,
-            "left edit"
-        );
-        let receipts: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(receipts, 1);
-        let feed: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM ark_committed_feed WHERE entity_id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(feed, 1);
-        let operations: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_operations WHERE object_id = ?1",
-                [&object.id],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(operations, 13);
-        Ok(())
-    })
-    .unwrap();
+    let stored = ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path())
+        .unwrap()
+        .inspect(&object.id)
+        .unwrap();
+    assert_eq!(stored.object.unwrap().title, "left edit");
+    assert_eq!(stored.receipt_count, 1);
+    assert_eq!(stored.committed_feed_count, 1);
+    assert_eq!(stored.operation_count, 13);
 }

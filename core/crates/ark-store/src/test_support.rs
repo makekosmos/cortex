@@ -10,6 +10,7 @@ use tempfile::TempDir;
 mod actor_log;
 mod inbox;
 mod legacy_writes;
+mod object_revision;
 mod production_actor;
 mod registry_enrollment;
 mod task_merge_legacy;
@@ -19,6 +20,9 @@ pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
+};
+pub use object_revision::{
+    LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,
 };
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
