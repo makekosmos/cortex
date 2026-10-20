@@ -19,7 +19,9 @@ sha2.workspace = true
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+ark-store = { path = "../ark-store" }
 ed25519-dalek.workspace = true
+rusqlite.workspace = true
 tokio = { version = "1", features = ["macros", "rt"] }
 
 [lints]

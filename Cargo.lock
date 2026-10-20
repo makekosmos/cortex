@@ -241,10 +241,12 @@ version = "0.1.0"
 dependencies = [
  "ark-application",
  "ark-domain",
+ "ark-store",
  "async-trait",
  "chrono",
  "ed25519-dalek",
  "rand 0.8.7",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.10.9",
