@@ -10,8 +10,10 @@ pub const GENERIC_SOURCE_TYPE_IDS: [&str; 9] = [
     "book_obj",
 ];
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SourceSnapshot {
+    pub object_identities: Vec<ObjectIdentityRow>,
+    pub object_links: Vec<ark_domain::types::ObjectLink>,
     pub objects: Vec<GenericObjectRow>,
     pub todos: Vec<TodoRow>,
     pub projects: Vec<ProjectRow>,
@@ -20,6 +22,13 @@ pub struct SourceSnapshot {
     pub areas: Option<Vec<AreaRow>>,
     /// `None` means the legacy table is absent; `Some(vec![])` means it exists and is empty.
     pub headings: Option<Vec<HeadingRow>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectIdentityRow {
+    pub id: String,
+    pub type_id: String,
+    pub type_version: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 use ark_application::source_snapshot::{
-    AreaRow, GenericObjectRow, HeadingRow, ProjectRow, SourceSnapshot, TagRow, TodoRow,
-    GENERIC_SOURCE_TYPE_IDS,
+    AreaRow, GenericObjectRow, HeadingRow, ObjectIdentityRow, ProjectRow, SourceSnapshot, TagRow,
+    TodoRow, GENERIC_SOURCE_TYPE_IDS,
 };
 use rusqlite::{params_from_iter, Connection, Params, Row};
 
@@ -23,9 +23,40 @@ const TAGS_SQL: &str = "SELECT id,title,color,created_at FROM tags ORDER BY id";
 const AREAS_SQL: &str = "SELECT id,title,sort_order,created_at FROM areas ORDER BY sort_order,id";
 const HEADINGS_SQL: &str =
     "SELECT id,title,sort_order,project_id FROM headings ORDER BY sort_order,id";
+const SNAPSHOT_SAVEPOINT: &str = "ark_phase3_source_snapshot";
 
 pub fn read_source_snapshot(connection: &Connection) -> Result<SourceSnapshot, String> {
+    connection
+        .execute_batch(&format!("SAVEPOINT {SNAPSHOT_SAVEPOINT}"))
+        .map_err(|error| error.to_string())?;
+    match read_source_snapshot_in_savepoint(connection) {
+        Ok(snapshot) => {
+            connection
+                .execute_batch(&format!("RELEASE SAVEPOINT {SNAPSHOT_SAVEPOINT}"))
+                .map_err(|error| error.to_string())?;
+            Ok(snapshot)
+        }
+        Err(error) => {
+            let _ = connection.execute_batch(&format!(
+                "ROLLBACK TO SAVEPOINT {SNAPSHOT_SAVEPOINT}; RELEASE SAVEPOINT {SNAPSHOT_SAVEPOINT}"
+            ));
+            Err(error)
+        }
+    }
+}
+
+fn read_source_snapshot_in_savepoint(connection: &Connection) -> Result<SourceSnapshot, String> {
+    let object_identities = crate::objects::list_object_type_identities(connection)?
+        .into_iter()
+        .map(|(id, identity)| ObjectIdentityRow {
+            id,
+            type_id: identity.type_id,
+            type_version: identity.type_version,
+        })
+        .collect();
     Ok(SourceSnapshot {
+        object_identities,
+        object_links: crate::objects::list_object_links(connection)?,
         objects: read_rows(
             connection,
             GENERIC_OBJECTS_SQL,
@@ -170,6 +201,10 @@ mod tests {
                     content_json TEXT, props_json TEXT, created_at TEXT,
                     updated_at TEXT, deleted_at TEXT
                 );
+                CREATE TABLE object_links(
+                    id TEXT, source_object_id TEXT, target_object_id TEXT,
+                    link_type TEXT, created_at TEXT
+                );
                 CREATE TABLE todos(
                     id TEXT, title TEXT, notes TEXT, priority INTEGER,
                     scheduled_date TEXT, deadline TEXT, reminder_date TEXT,
@@ -240,5 +275,74 @@ mod tests {
 
         assert_eq!(snapshot.objects.len(), 1);
         assert_eq!(snapshot.objects[0].id, "legacy");
+    }
+
+    #[test]
+    fn snapshot_includes_all_object_identities_and_links_in_store_order() {
+        let connection = empty_source_schema();
+        connection
+            .execute_batch(
+                "INSERT INTO objects VALUES
+                    ('legacy','note_obj','0.0.0-legacy','legacy','{}','{}','c','u',NULL),
+                    ('canonical','com.kosmos.note','1.0.0','canonical','{}','{}','c','u',NULL);
+                 INSERT INTO object_links VALUES
+                    ('link-z','source','target-z','related','2026-01-02'),
+                    ('link-a','source','target-a','related','2026-01-01');",
+            )
+            .expect("objects and links insert");
+
+        let snapshot = read_source_snapshot(&connection).expect("source snapshot reads");
+
+        assert_eq!(
+            snapshot
+                .object_identities
+                .iter()
+                .map(|row| (
+                    row.id.as_str(),
+                    row.type_id.as_str(),
+                    row.type_version.as_str()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("canonical", "com.kosmos.note", "1.0.0"),
+                ("legacy", "note_obj", "0.0.0-legacy"),
+            ]
+        );
+        assert_eq!(
+            snapshot
+                .object_links
+                .iter()
+                .map(|link| link.id.as_str())
+                .collect::<Vec<_>>(),
+            ["link-a", "link-z"]
+        );
+    }
+
+    #[test]
+    fn snapshot_read_preserves_a_callers_outer_savepoint() {
+        let connection = empty_source_schema();
+        connection
+            .execute_batch("SAVEPOINT caller_transaction")
+            .expect("caller savepoint begins");
+
+        read_source_snapshot(&connection).expect("source snapshot reads");
+        connection
+            .execute(
+                "INSERT INTO objects VALUES (
+                    'pending','note_obj','legacy','title','{}','{}','c','u',NULL
+                )",
+                [],
+            )
+            .expect("caller writes after snapshot");
+        connection
+            .execute_batch(
+                "ROLLBACK TO SAVEPOINT caller_transaction; RELEASE SAVEPOINT caller_transaction",
+            )
+            .expect("caller transaction rolls back");
+
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))
+            .expect("object count reads");
+        assert_eq!(count, 0);
     }
 }
