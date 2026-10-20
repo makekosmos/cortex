@@ -54,13 +54,14 @@ async fn production_actor_shutdown_respects_deadline_and_finishes_started_work()
         .unwrap();
 
     let committed = handle.with_connection(|connection| {
-        connection
-            .query_row(
-                "SELECT COUNT(*) FROM actor_test_log WHERE sequence = 26",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .iter()
+        .filter(|entry| entry.sequence == 26)
+        .count()
     });
     assert_eq!(committed, 1, "started work must finish before actor closes");
 }

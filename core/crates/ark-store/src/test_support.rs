@@ -7,8 +7,10 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use tempfile::TempDir;
 
+mod actor_log;
 mod production_actor;
 
+pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 
 /// Owns a temporary ARK database for the full lifetime of a test.

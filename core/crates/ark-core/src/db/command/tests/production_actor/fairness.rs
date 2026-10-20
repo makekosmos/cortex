@@ -154,14 +154,14 @@ async fn production_actor_rotates_between_sources_within_a_class() {
     }
 
     let sources = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT source FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, String>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.source)
+        .collect::<Vec<_>>()
     });
     assert_eq!(sources.len(), 6);
     assert!(sources[1].contains("device-a"));

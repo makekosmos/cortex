@@ -56,14 +56,14 @@ async fn production_actor_skips_a_queued_command_after_caller_cancellation() {
         "canceled queued work must release its admission slot"
     );
     let rows = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY sequence")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Sequence,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     assert_eq!(rows, vec![20, 22]);
     owner
@@ -76,11 +76,7 @@ async fn production_actor_skips_a_queued_command_after_caller_cancellation() {
 async fn production_actor_finishes_started_work_after_caller_cancellation() {
     let (_directory, handle, mut owner) = open_actor_fixture().await;
     handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE actor_test_log (sequence INTEGER NOT NULL, source TEXT NOT NULL)",
-            )
-            .unwrap();
+        ark_store::test_support::ActorTestLog::create(connection).unwrap();
     });
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -107,13 +103,7 @@ async fn production_actor_finishes_started_work_after_caller_cancellation() {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
             let wrote = handle.with_connection(|connection| {
-                connection
-                    .query_row(
-                        "SELECT EXISTS(SELECT 1 FROM actor_test_log WHERE sequence = 23)",
-                        [],
-                        |row| row.get::<_, bool>(0),
-                    )
-                    .unwrap()
+                ark_store::test_support::ActorTestLog::contains(connection, 23).unwrap()
             });
             if wrote {
                 break;
@@ -146,16 +136,7 @@ async fn production_actor_panic_rolls_back_and_fails_closed_until_reopen() {
     .await
     .expect("actor did not fail closed after a command panic");
     let table_exists = handle.with_connection(|connection| {
-        connection
-            .query_row(
-                concat!(
-                    "SELECT EXISTS(SELECT 1 FROM sqlite_master ",
-                    "WHERE type = 'table' AND name = 'panic_probe')"
-                ),
-                [],
-                |row| row.get::<_, bool>(0),
-            )
-            .unwrap()
+        ark_store::test_support::ActorTestLog::panic_probe_exists(connection).unwrap()
     });
     assert!(!table_exists, "uncommitted panic write must be rolled back");
     let rejected = handle
@@ -280,14 +261,14 @@ async fn production_actor_maintenance_rejects_later_writes_and_reads() {
     maintenance_release_tx.send(()).unwrap();
     maintenance.await.unwrap().unwrap();
     let rows = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     assert_eq!(rows, vec![30]);
     owner
@@ -453,14 +434,14 @@ async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
         .await
         .unwrap();
     let rows = reopened.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     assert_eq!(rows, vec![40, 41]);
     reopened_owner

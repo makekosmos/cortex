@@ -140,11 +140,7 @@ async fn production_reads_and_writes_share_global_admission_capacity() {
         task.await.unwrap().unwrap();
     }
     let row_count = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM actor_test_log", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .unwrap()
+        ark_store::test_support::ActorTestLog::count(connection).unwrap()
     });
     assert_eq!(row_count, 4);
     owner
@@ -236,14 +232,14 @@ async fn production_actor_bounds_count_and_keeps_interactive_and_live_reserves()
     live.await.unwrap().unwrap();
 
     let order = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     assert_eq!(order.len(), 4);
     assert!(
@@ -346,14 +342,14 @@ async fn production_actor_bounds_payload_bytes_and_preserves_source_fifo_across_
     interactive.await.unwrap().unwrap();
 
     let sequence = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     let backfill_positions =
         [10, 12].map(|value| sequence.iter().position(|item| *item == value).unwrap());
@@ -454,14 +450,14 @@ async fn production_actor_services_live_and_backfill_in_the_documented_weighted_
         task.await.unwrap().unwrap();
     }
     let sequence = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
-            .unwrap();
-        statement
-            .query_map([], |row| row.get::<_, i64>(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+        ark_store::test_support::ActorTestLog::entries(
+            connection,
+            ark_store::test_support::ActorLogOrder::Insertion,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.sequence)
+        .collect::<Vec<_>>()
     });
     let classes: Vec<_> = sequence
         .iter()

@@ -134,15 +134,13 @@ impl DbQuery for SnapshotReadProbe {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        let before = connection
-            .query_row("SELECT COUNT(*) FROM actor_test_log", [], |row| row.get(0))
+        let before = ark_store::test_support::ActorTestLog::count(connection)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         let _ = self.started.send(());
         self.resume
             .recv()
             .map_err(|error| DbError::Storage(error.to_string()))?;
-        let after = connection
-            .query_row("SELECT COUNT(*) FROM actor_test_log", [], |row| row.get(0))
+        let after = ark_store::test_support::ActorTestLog::count(connection)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok((before, after))
     }
@@ -182,18 +180,8 @@ impl<const CLASS_ID: u8> DbCommand for QueueProbe<CLASS_ID> {
                 .recv()
                 .map_err(|error| DbError::Storage(error.to_string()))?;
         }
-        transaction
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS actor_test_log (sequence INTEGER NOT NULL, \
-                 source TEXT NOT NULL)",
-            )
-            .map_err(|error| DbError::Storage(error.to_string()))?;
         let source = format!("{:?}", context.source);
-        transaction
-            .execute(
-                "INSERT INTO actor_test_log(sequence, source) VALUES (?1, ?2)",
-                rusqlite::params![self.sequence, source],
-            )
+        ark_store::test_support::ActorTestLog::append(transaction, self.sequence, &source)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(())
     }
@@ -217,11 +205,7 @@ impl DbCommand for PanicAfterWriteProbe {
         _context: &CommandContext,
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
-        transaction
-            .execute_batch(concat!(
-                "CREATE TABLE IF NOT EXISTS panic_probe (value INTEGER NOT NULL); ",
-                "INSERT INTO panic_probe VALUES (1);"
-            ))
+        ark_store::test_support::ActorTestLog::insert_panic_probe(transaction)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         panic!("actor panic probe after an uncommitted write");
     }
