@@ -60,28 +60,26 @@ async fn registry_event_batch_rolls_back_prior_events_after_sequence_conflict() 
         result,
         Err(DbError::Conflict(reason)) if reason == "device_registry_sequence_conflict"
     ));
-    handle.with_connection(|connection| {
-        let (_, _, events) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-batch-rollback.db"),
+    ))
+    .unwrap()
+    .inspect()
+    .unwrap();
+    assert_eq!(
+        state
+            .events
+            .iter()
+            .filter(|event| event.actor_device_id().as_str() == "paired-device")
+            .count(),
+        0
+    );
+    let paired_device = state
+        .entries
+        .iter()
+        .find(|device| device.device_id == "paired-device")
         .unwrap();
-        assert_eq!(
-            events
-                .iter()
-                .filter(|event| event.actor_device_id().as_str() == "paired-device")
-                .count(),
-            0
-        );
-        let paired_device = ark_store::device_registry::load_entries(connection)
-            .unwrap()
-            .into_iter()
-            .find(|device| device.device_id == "paired-device")
-            .unwrap();
-        assert_eq!(paired_device.display_name, None);
-    });
+    assert_eq!(paired_device.display_name, None);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await

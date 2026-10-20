@@ -17,6 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CORE = path.join(ROOT, "core", "crates", "ark-core");
 const CODE_PATTERNS = [
   ["SQLite type or import", /\b(?:rusqlite|Transaction|Statement|Row)\b/],
+  ["SQLite connection escape hatch", /\.\s*with_connection\s*\(/],
   [
     "SQLite operation",
     /\b(?:conn|connection|transaction|tx)\s*\.\s*(?:execute|execute_batch|execute_cached|query_row|query_map|prepare|prepare_cached|unchecked_transaction|transaction_with_behavior)\s*\(/,

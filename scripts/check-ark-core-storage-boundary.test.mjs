@@ -45,6 +45,26 @@ test("the boundary checker ignores comments but finds SQLite code and SQL litera
   );
 });
 
+test("the boundary checker rejects connection callbacks that leak SQLite into Core", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: [
+      "#[cfg(test)] fn inspect(handle: &DbHandle) {",
+      '  handle.with_connection(|connection| connection.query_row("SELECT 1", [], |row| row.get::<_, i64>(0)));',
+      "}",
+    ].join("\n"),
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.deepEqual(
+    violations.map(({ line, category, scope }) => ({ line, category, scope })),
+    [
+      { line: 2, category: "SQL literal", scope: "inline_test" },
+      { line: 2, category: "SQLite connection escape hatch", scope: "inline_test" },
+      { line: 2, category: "SQLite operation", scope: "inline_test" },
+    ],
+  );
+});
+
 test("the boundary checker rejects rusqlite in dev dependencies", async (t) => {
   const paths = await fixture(t, {
     manifest: "[dev-dependencies]\nrusqlite.workspace = true\n",

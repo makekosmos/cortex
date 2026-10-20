@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tempfile::TempDir;
 
 mod actor_log;
+mod device_registry;
 mod inbox;
 mod legacy_writes;
 mod object_mutation_replay;
@@ -20,6 +21,7 @@ mod type_mutation;
 mod usage_rollback;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
+pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,

@@ -10,7 +10,7 @@ async fn local_registry_event_and_projection_roll_back_together() {
         .to_string_lossy()
         .into_owned();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
+    let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
     handle
@@ -20,9 +20,10 @@ async fn local_registry_event_and_projection_roll_back_together() {
         )
         .await
         .unwrap();
-    handle.with_connection(|connection| {
-        ark_store::test_support::reject_remote_device_rename(connection).unwrap();
-    });
+    ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
+        .unwrap()
+        .reject_remote_device_rename()
+        .unwrap();
 
     let result = handle
         .append_local_registry_event(
@@ -37,22 +38,22 @@ async fn local_registry_event_and_projection_roll_back_together() {
         )
         .await;
     assert!(matches!(result, Err(DbError::Storage(_))));
-    handle.with_connection(|connection| {
-        let (_, event_count, _) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
-        .unwrap();
-        let remote_device = ark_store::device_registry::load_entries(connection)
-            .unwrap()
-            .into_iter()
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-local-rollback.db"),
+    ))
+    .unwrap()
+    .inspect()
+    .unwrap();
+    assert_eq!(state.events.len(), 1);
+    assert_eq!(
+        state
+            .entries
+            .iter()
             .find(|device| device.device_id == "remote-device")
-            .unwrap();
-        assert_eq!(event_count, 1);
-        assert_eq!(remote_device.display_name, None);
-    });
+            .unwrap()
+            .display_name,
+        None
+    );
 
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -132,47 +133,50 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .unwrap()
         .is_none());
 
-    handle.with_connection(|connection| {
-        let remote = ark_store::device_registry::load_identity(connection, "remote-device")
+    let state =
+        ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
             .unwrap()
+            .inspect()
             .unwrap();
-        let entry = ark_store::device_registry::load_entries(connection)
-            .unwrap()
-            .into_iter()
-            .find(|device| device.device_id == "remote-device")
-            .unwrap();
-        let (_, event_count, _) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
+    let entry = state
+        .entries
+        .iter()
+        .find(|device| device.device_id == "remote-device")
         .unwrap();
-        assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
-        assert_eq!(remote.disabled_event_id.as_deref(), Some("local-device:3"));
-        assert_eq!(event_count, 3);
-    });
+    assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
+    assert_eq!(
+        state.identities["remote-device"]
+            .disabled_event_id
+            .as_deref(),
+        Some("local-device:3")
+    );
+    assert_eq!(state.events.len(), 3);
 
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
         .unwrap();
     drop(handle);
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
+    let (_handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
-    handle.with_connection(|connection| {
-        let remote = ark_store::device_registry::load_identity(connection, "remote-device")
+    let state =
+        ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
             .unwrap()
+            .inspect()
             .unwrap();
-        let entry = ark_store::device_registry::load_entries(connection)
-            .unwrap()
-            .into_iter()
-            .find(|device| device.device_id == "remote-device")
-            .unwrap();
-        assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
-        assert_eq!(remote.disabled_event_id.as_deref(), Some("local-device:3"));
-    });
+    let entry = state
+        .entries
+        .iter()
+        .find(|device| device.device_id == "remote-device")
+        .unwrap();
+    assert_eq!(entry.display_name.as_deref(), Some("Office laptop"));
+    assert_eq!(
+        state.identities["remote-device"]
+            .disabled_event_id
+            .as_deref(),
+        Some("local-device:3")
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await

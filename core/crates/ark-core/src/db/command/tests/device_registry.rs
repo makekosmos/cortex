@@ -46,7 +46,7 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         .unwrap();
     drop(handle);
 
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
+    let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
     let retry = handle
@@ -67,36 +67,21 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         }
     );
 
-    let (event_count, target_key, pinned) = handle.with_connection(|connection| {
-        let (_, event_count, _) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
-        .unwrap();
-        let identity =
-            ark_store::device_registry::load_identity(connection, "paired-device").unwrap();
-        let pinned = ark_store::sync_kv::get_sync_kv(
-            connection,
-            ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY,
-        )
-        .unwrap()
-        .unwrap();
-        (event_count, identity, pinned)
-    });
-    assert_eq!(event_count, 1);
+    let state =
+        ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
+            .unwrap()
+            .inspect()
+            .unwrap();
+    assert_eq!(state.events.len(), 1);
     assert_eq!(
-        target_key.unwrap().signing_public_key,
+        state.identities["paired-device"].signing_public_key,
         endpoint
             .parse::<ark_net::iroh::EndpointId>()
             .unwrap()
             .as_bytes()
     );
     assert_eq!(
-        serde_json::from_str::<std::collections::HashMap<String, String>>(&pinned)
-            .unwrap()
-            .get("paired-device"),
+        state.transport_key_pins.get("paired-device"),
         Some(&endpoint)
     );
     owner
@@ -114,12 +99,13 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         .to_string_lossy()
         .into_owned();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
+    let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
-    handle.with_connection(|connection| {
-        ark_store::test_support::reject_paired_device_projection(connection).unwrap();
-    });
+    ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
+        .unwrap()
+        .reject_paired_device_projection()
+        .unwrap();
 
     let result = handle
         .enroll_paired_device(
@@ -128,26 +114,21 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         )
         .await;
     assert!(matches!(result, Err(DbError::Storage(_))));
-    let (event_count, target, pin) = handle.with_connection(|connection| {
-        let (_, event_count, _) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
-        .unwrap();
-        let target =
-            ark_store::device_registry::load_identity(connection, "paired-device").unwrap();
-        let pin = ark_store::sync_kv::get_sync_kv(
-            connection,
-            ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY,
-        )
-        .unwrap();
-        (event_count, target, pin)
-    });
-    assert_eq!(event_count, 0, "partial registry event remained");
-    assert_eq!(target, None, "partial device projection remained");
-    assert_eq!(pin, None, "partial transport-key pin remained");
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-rollback.db"),
+    ))
+    .unwrap()
+    .inspect()
+    .unwrap();
+    assert!(state.events.is_empty(), "partial registry event remained");
+    assert!(
+        !state.identities.contains_key("paired-device"),
+        "partial device projection remained"
+    );
+    assert!(
+        !state.transport_key_pins.contains_key("paired-device"),
+        "partial transport-key pin remained"
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
@@ -239,28 +220,30 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
         std::slice::from_ref(&rename)
     );
     assert!(retry_digest.applied_events.is_empty());
-    handle.with_connection(|connection| {
-        let paired_device = ark_store::device_registry::load_entries(connection)
-            .unwrap()
-            .into_iter()
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-exchange.db"),
+    ))
+    .unwrap()
+    .inspect()
+    .unwrap();
+    assert_eq!(
+        state
+            .entries
+            .iter()
             .find(|device| device.device_id == "paired-device")
-            .unwrap();
-        assert_eq!(paired_device.display_name.as_deref(), Some("Pocket device"));
-        let (_, _, events) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
-        .unwrap();
-        assert_eq!(
-            events
-                .iter()
-                .filter(|event| event.actor_device_id().as_str() == "paired-device")
-                .count(),
-            1
-        );
-    });
+            .unwrap()
+            .display_name
+            .as_deref(),
+        Some("Pocket device")
+    );
+    assert_eq!(
+        state
+            .events
+            .iter()
+            .filter(|event| event.actor_device_id().as_str() == "paired-device")
+            .count(),
+        1
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
@@ -269,10 +252,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
 
 #[tokio::test]
 async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission() {
-    use ark_domain::device_registry::{
-        DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
-    };
-    use ed25519_dalek::SigningKey;
+    use ark_domain::device_registry::DeviceId;
 
     let directory = tempfile::tempdir().unwrap();
     let db_path = directory
@@ -292,45 +272,28 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         .await
         .unwrap();
 
-    let (secret, previous_hash) = handle.with_connection(|connection| {
-        let secret = crate::iroh_transport::load_or_generate_secret_key(connection).unwrap();
-        let (_, previous_hash) =
-            ark_store::device_registry::load_actor_head(connection, "local-device")
-                .unwrap()
-                .unwrap();
-        (secret, previous_hash)
-    });
-    let local_key = SigningKey::from_bytes(&secret.to_bytes());
-    let disable = RegistryEvent::sign(
-        RegistryEventDraft {
-            actor_device_id: DeviceId::parse("local-device").unwrap(),
-            actor_sequence: 2,
-            previous_event_hash: Some(previous_hash),
-            target_device_id: DeviceId::parse("paired-device").unwrap(),
-            actor_key_epoch: 1,
-            actor_admission_epoch: 1,
-            hlc: crate::hlc::HLC::now("local-device").to_string(),
-            operation: RegistryOperation::Disable,
-        },
-        &local_key,
-    )
-    .unwrap();
-    let applied = handle
-        .apply_registry_events(
-            CommandContext::sync_peer("paired-device".into(), CommandClass::SyncLive),
-            ApplyRegistryEventsCommand::new("paired-device".into(), vec![disable]),
+    let admitted_context = CommandContext::authenticated_peer("paired-device".into());
+    let disabled = handle
+        .append_local_registry_event(
+            CommandContext::engine(),
+            AppendLocalRegistryEventCommand::new(
+                "local-device".into(),
+                ark_domain::device_registry::RegistryCommand::Disable {
+                    target_device_id: DeviceId::parse("paired-device").unwrap(),
+                },
+            ),
         )
         .await
-        .unwrap();
-    assert_eq!(applied.disabled_device_ids, ["paired-device"]);
+        .unwrap()
+        .expect("local disable must append a signed registry event");
+    assert_eq!(disabled.event_id(), "local-device:2");
 
-    let context = CommandContext::authenticated_peer("paired-device".into());
     let write = ark_application::sync_storage::InboxReceiptWrite::new(
         "paired-device".into(),
         "revoked-receipt".into(),
         "{}".into(),
     );
-    let receipt = handle.receive_inbox_receipt(context, write).await;
+    let receipt = handle.receive_inbox_receipt(admitted_context, write).await;
     assert!(matches!(
         receipt,
         Err(DbError::Permission(reason)) if reason == "sync_peer_not_admitted"
@@ -360,14 +323,12 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         apply,
         Err(DbError::Permission(reason)) if reason == "sync_peer_not_admitted"
     ));
-    handle.with_connection(|connection| {
-        let object = ark_store::objects::get_object(connection, "remote-note").unwrap();
-        let receipt =
-            ark_store::test_support::has_inbox_receipt(connection, "revoked-session-write")
-                .unwrap();
-        assert_eq!(object, None);
-        assert!(!receipt);
-    });
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-revocation.db"),
+    ))
+    .unwrap();
+    assert!(!state.object_exists("remote-note").unwrap());
+    assert!(!state.has_inbox_receipt("revoked-session-write").unwrap());
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
@@ -398,22 +359,17 @@ async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
         .submit_clear_all(CommandContext::engine_maintenance())
         .await
         .unwrap();
-    handle.with_connection(|connection| {
-        let (_, event_count, _) = ark_store::device_registry::load_events_page(
-            connection,
-            0,
-            None,
-            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
-        )
-        .unwrap();
-        assert_eq!(event_count, 0, "clear_all left registry events");
-        assert!(
-            ark_store::device_registry::load_entries(connection)
-                .unwrap()
-                .is_empty(),
-            "clear_all left registry projections"
-        );
-    });
+    let state = ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(
+        &directory.path().join("device-registry-clear.db"),
+    ))
+    .unwrap()
+    .inspect()
+    .unwrap();
+    assert!(state.events.is_empty(), "clear_all left registry events");
+    assert!(
+        state.entries.is_empty(),
+        "clear_all left registry projections"
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
