@@ -398,14 +398,14 @@ impl WriterTask for LocalObjectDeleteTask {
             reply,
         } = *self;
         let result = writer
-            .apply_local_object_delete(write, &principal, operation_id.as_deref())
-            .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-                TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-            });
+            .write_with_capabilities(|capabilities| {
+                capabilities.objects().apply_local_object_delete(
+                    write,
+                    &principal,
+                    operation_id.as_deref(),
+                )
+            })
+            .map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)
     }
 
@@ -431,14 +431,14 @@ impl WriterTask for LocalObjectUpsertTask {
             reply,
         } = *self;
         let result = writer
-            .apply_local_object_upsert(write, &principal, operation_id.as_deref())
-            .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-                TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-            });
+            .write_with_capabilities(|capabilities| {
+                capabilities.objects().apply_local_object_upsert(
+                    write,
+                    &principal,
+                    operation_id.as_deref(),
+                )
+            })
+            .map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)
     }
 

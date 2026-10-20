@@ -30,7 +30,7 @@ struct DeleteCommand<'a> {
     write: &'a LocalObjectDelete,
 }
 
-fn apply_local_object_delete_in(
+pub(crate) fn apply_local_object_delete_in(
     transaction: &Transaction<'_>,
     write: LocalObjectDelete,
     principal: &str,

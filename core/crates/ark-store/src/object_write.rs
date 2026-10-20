@@ -54,7 +54,7 @@ pub fn apply_local_object_upsert(
     Ok(outcome)
 }
 
-fn apply_local_object_upsert_in(
+pub(crate) fn apply_local_object_upsert_in(
     transaction: &Transaction<'_>,
     write: ark_application::object_mutation::LocalObjectUpsert,
     principal: &str,

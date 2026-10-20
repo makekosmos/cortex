@@ -59,9 +59,19 @@ pub struct UsageWrites<'scope, 'connection> {
     transaction: &'scope Transaction<'connection>,
 }
 
+pub struct ObjectWrites<'scope, 'connection> {
+    transaction: &'scope Transaction<'connection>,
+}
+
 impl WriteCapabilities<'_, '_> {
     pub fn usage(&mut self) -> UsageWrites<'_, '_> {
         UsageWrites {
+            transaction: self.transaction,
+        }
+    }
+
+    pub fn objects(&mut self) -> ObjectWrites<'_, '_> {
+        ObjectWrites {
             transaction: self.transaction,
         }
     }
@@ -75,6 +85,42 @@ impl UsageWrites<'_, '_> {
     ) -> Result<Vec<ark_application::usage::UsageMutation>, String> {
         let session = crate::usage_mutation::SqliteUsageWriteSession::new(self.transaction);
         ark_application::usage::apply_local_usage_write(&session, device_id, write)
+    }
+}
+
+impl ObjectWrites<'_, '_> {
+    pub fn apply_local_object_upsert(
+        &mut self,
+        write: ark_application::object_mutation::LocalObjectUpsert,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        ark_application::object_mutation::ObjectUpsertOutcome,
+        ark_application::object_mutation::ObjectUpsertError,
+    > {
+        crate::object_write::apply_local_object_upsert_in(
+            self.transaction,
+            write,
+            principal,
+            operation_id,
+        )
+    }
+
+    pub fn apply_local_object_delete(
+        &mut self,
+        write: ark_application::object_mutation::LocalObjectDelete,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        (ark_application::object_mutation::ObjectDeleteCommit, bool),
+        ark_application::object_mutation::ObjectDeleteError,
+    > {
+        crate::object_mutation::apply_local_object_delete_in(
+            self.transaction,
+            write,
+            principal,
+            operation_id,
+        )
     }
 }
 
@@ -146,44 +192,6 @@ impl SqliteWriter {
 
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {
         operation(&mut self.connection)
-    }
-
-    pub fn apply_local_object_delete(
-        &mut self,
-        write: ark_application::object_mutation::LocalObjectDelete,
-        principal: &str,
-        operation_id: Option<&str>,
-    ) -> Result<
-        (ark_application::object_mutation::ObjectDeleteCommit, bool),
-        TransactionFailure<ark_application::object_mutation::ObjectDeleteError>,
-    > {
-        self.with_connection_mut(|connection| {
-            crate::object_mutation::apply_local_object_delete(
-                connection,
-                write,
-                principal,
-                operation_id,
-            )
-        })
-    }
-
-    pub fn apply_local_object_upsert(
-        &mut self,
-        write: ark_application::object_mutation::LocalObjectUpsert,
-        principal: &str,
-        operation_id: Option<&str>,
-    ) -> Result<
-        ark_application::object_mutation::ObjectUpsertOutcome,
-        TransactionFailure<ark_application::object_mutation::ObjectUpsertError>,
-    > {
-        self.with_connection_mut(|connection| {
-            crate::object_write::apply_local_object_upsert(
-                connection,
-                write,
-                principal,
-                operation_id,
-            )
-        })
     }
 
     pub fn apply_local_book_cover(
