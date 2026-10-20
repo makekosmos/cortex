@@ -3,6 +3,11 @@ use super::inventory::{SourceKind, SourceRecord};
 use crate::source_snapshot::SourceSnapshot;
 use serde_json::{json, Value};
 
+fn parse_json_field(raw: &str, row_id: &str, field: &str) -> Result<Value, String> {
+    serde_json::from_str(raw)
+        .map_err(|error| format!("invalid legacy todos.{field} for {}: {error}", row_id))
+}
+
 pub(crate) fn native_inventory(
     snapshot: &SourceSnapshot,
     out: &mut Vec<SourceRecord>,
@@ -35,17 +40,18 @@ pub(crate) fn native_inventory(
         props.insert("area_id".into(), json!(row.area_id));
         props.insert(
             "tag_ids".into(),
-            serde_json::from_str::<Value>(&row.tag_ids).unwrap_or(Value::Array(Vec::new())),
+            parse_json_field(&row.tag_ids, &row.id, "tag_ids")?,
         );
         props.insert(
             "checklist_items".into(),
-            serde_json::from_str::<Value>(&row.checklist_items).unwrap_or(Value::Array(Vec::new())),
+            parse_json_field(&row.checklist_items, &row.id, "checklist_items")?,
         );
         props.insert(
             "recurrence_rule".into(),
             row.recurrence_rule
                 .as_deref()
-                .and_then(|value| serde_json::from_str::<Value>(value).ok())
+                .map(|value| parse_json_field(value, &row.id, "recurrence_rule"))
+                .transpose()?
                 .unwrap_or(Value::Null),
         );
         let value = envelope(SourceEnvelope {
@@ -155,4 +161,64 @@ pub fn inventory_snapshot(snapshot: &SourceSnapshot) -> Result<Vec<SourceRecord>
         (a.source_kind.name(), &a.source_id).cmp(&(b.source_kind.name(), &b.source_id))
     });
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_snapshot::TodoRow;
+
+    type InvalidField = (&'static str, fn(&mut TodoRow));
+
+    fn todo() -> TodoRow {
+        TodoRow {
+            id: "todo-1".into(),
+            title: "task".into(),
+            notes: None,
+            priority: 0,
+            scheduled_date: None,
+            deadline: None,
+            reminder_date: None,
+            is_today: 0,
+            is_evening: 0,
+            is_someday: 0,
+            is_completed: 0,
+            completed_at: None,
+            is_cancelled: 0,
+            cancelled_at: None,
+            is_trashed: 0,
+            sort_order: 0,
+            heading_id: None,
+            project_id: None,
+            area_id: None,
+            tag_ids: "[]".into(),
+            checklist_items: "[]".into(),
+            recurrence_rule: None,
+            created_at: "2026-01-01T00:00:00.000Z".into(),
+        }
+    }
+
+    #[test]
+    fn malformed_native_task_json_blocks_projection_without_substitution() {
+        let invalid_fields: [InvalidField; 3] = [
+            ("tag_ids", |row| row.tag_ids = "not-json".into()),
+            ("checklist_items", |row| {
+                row.checklist_items = "not-json".into()
+            }),
+            ("recurrence_rule", |row| {
+                row.recurrence_rule = Some("not-json".into())
+            }),
+        ];
+        for (error_field, invalidate) in invalid_fields {
+            let mut row = todo();
+            invalidate(&mut row);
+            let error = inventory_snapshot(&SourceSnapshot {
+                todos: vec![row],
+                ..SourceSnapshot::default()
+            })
+            .expect_err("invalid persisted JSON must block migration projection");
+            assert!(error.contains("todo-1"));
+            assert!(error.contains(error_field));
+        }
+    }
 }

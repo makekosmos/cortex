@@ -23,7 +23,7 @@ const CODE_PATTERNS = [
   ],
   [
     "SQLite lifecycle",
-    /\b(?:Connection::open|open_db|open_with_flags|init_schema|recover_interrupted_restore|restore_snapshot|backup_to_file|backup_to_file_chunked)\s*\(/,
+    /\b(?:Connection::open|open_db|open_with_flags|init_schema|recover_interrupted_restore|backup_to_file|backup_to_file_chunked)\s*\(/,
   ],
 ];
 const SQL_LITERAL =

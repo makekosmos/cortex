@@ -3,6 +3,16 @@ use ark_application::migration_source_projection::SourceRecord;
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
+fn parse_run_status(status: &str) -> Result<MigrationRunStatus, LedgerError> {
+    match status {
+        "running" => Ok(MigrationRunStatus::Running),
+        "completed" => Ok(MigrationRunStatus::Completed),
+        unknown => Err(LedgerError::InvariantViolation(format!(
+            "unknown_migration_run_status:{unknown}"
+        ))),
+    }
+}
+
 fn load_items(conn: &Connection, contract: &str) -> Result<Vec<LedgerItem>, LedgerError> {
     let mut s = conn
         .prepare(concat!(
@@ -76,14 +86,11 @@ pub fn begin_or_resume(
                 source_id: contract.into(),
             });
         }
+        let status = parse_run_status(&status)?;
         return Ok(MigrationRun {
             contract_version: contract.into(),
             source_inventory_hash: inv,
-            status: if status == "completed" {
-                MigrationRunStatus::Completed
-            } else {
-                MigrationRunStatus::Running
-            },
+            status,
             items: load_items(conn, contract)?,
             started_at: started,
             completed_at: completed,
@@ -361,4 +368,18 @@ pub fn complete_run(
 
 pub fn canonical_hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_unknown_persisted_run_status() {
+        assert!(matches!(
+            parse_run_status("paused"),
+            Err(LedgerError::InvariantViolation(message))
+                if message == "unknown_migration_run_status:paused"
+        ));
+    }
 }

@@ -129,6 +129,28 @@ test("the boundary checker scopes cfg(test) imports and functions as tests", asy
   );
 });
 
+test("the boundary checker scopes debug-only imports and async functions", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: [
+      "#[cfg(debug_assertions)] use rusqlite::Connection;",
+      "#[cfg(debug_assertions)] pub(crate) async fn fixture(connection: &Connection) {",
+      '  connection.execute("SELECT 1", []).unwrap();',
+      "}",
+      "pub fn production(writer: &mut StoreWriter) { writer.restore_snapshot(); }",
+    ].join("\n"),
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.deepEqual(
+    violations.map(({ line, category, scope }) => ({ line, category, scope })),
+    [
+      { line: 1, category: "SQLite type or import", scope: "debug_only" },
+      { line: 3, category: "SQL literal", scope: "debug_only" },
+      { line: 3, category: "SQLite operation", scope: "debug_only" },
+    ],
+  );
+});
+
 test("the boundary checker scopes cfg(test) traits and impl blocks as tests", async (t) => {
   const paths = await fixture(t, {
     manifest: '[dependencies]\nserde = "1"\n',

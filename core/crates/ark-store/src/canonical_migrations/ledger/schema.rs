@@ -184,15 +184,17 @@ fn validate_existing(conn: &Connection, table: &str, expected: &str) -> Result<(
             ("updated_at".into(), 0, "TEXT".into(), 1),
         ]
     };
-    if actual != exp
-        || !sql.to_ascii_lowercase().contains("check")
-        || !sql.to_ascii_lowercase().contains("primary key")
-    {
+    let normalize_sql = |sql: &str| {
+        sql.chars()
+            .filter(|character| !character.is_whitespace())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    if actual != exp || normalize_sql(&sql) != normalize_sql(expected) {
         return Err(LedgerError::InvariantViolation(format!(
             "schema_parity:{table}"
         )));
     }
-    let _ = expected;
     Ok(())
 }
 
@@ -264,5 +266,32 @@ pub(crate) fn parse_checkpoint(v: &str) -> Result<ItemCheckpoint, LedgerError> {
         "applied" => Ok(ItemCheckpoint::Applied),
         "committed" => Ok(ItemCheckpoint::Committed),
         _ => Err(LedgerError::InvariantViolation("item_checkpoint".into())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_existing_ledger_with_weakened_constraints() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        conn.execute_batch(
+            "CREATE TABLE canonical_migration_runs (
+                contract_version TEXT PRIMARY KEY,
+                source_inventory_hash TEXT NOT NULL,
+                status TEXT NOT NULL,
+                report_json TEXT NOT NULL DEFAULT '{}',
+                started_at TEXT NOT NULL,
+                completed_at TEXT
+            )",
+        )
+        .expect("create incompatible table");
+
+        assert!(matches!(
+            ensure_ledger_schema(&conn),
+            Err(LedgerError::InvariantViolation(message))
+                if message == "schema_parity:canonical_migration_runs"
+        ));
     }
 }
