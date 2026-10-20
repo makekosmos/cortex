@@ -121,27 +121,16 @@ async fn upsert_usage_event(state: &Arc<ServiceState>, id: &str, occurred_at: &s
     .expect("commit usage event through Engine");
 }
 
-fn usage_event_sequence(dir: &crate::test_support::TestTempDir, id: &str) -> i64 {
-    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
-    connection
-        .query_row(
-            "SELECT seq FROM usage_sync_log
-             WHERE device_id = 'device-a' AND entity_type = 'usage_event' AND entity_id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .unwrap()
-}
-
-fn has_usage_event(dir: &crate::test_support::TestTempDir, id: &str) -> bool {
-    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
-    connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM usage_events WHERE id = ?1)",
-            [id],
-            |row| row.get(0),
-        )
-        .unwrap()
+fn usage_event_state(
+    dir: &crate::test_support::TestTempDir,
+    id: &str,
+) -> ark_store::test_support::UsageEventRecoveryState {
+    ark_store::test_support::UsageEventRecoveryFixture::inspect(
+        &dir.path().join("ark.db"),
+        "device-a",
+        id,
+    )
+    .expect("read the persisted usage event and origin sequence through Store")
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

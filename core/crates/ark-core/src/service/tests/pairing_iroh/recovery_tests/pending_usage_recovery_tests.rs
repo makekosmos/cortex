@@ -39,9 +39,10 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
         "Pending before restore",
     )
     .await;
-    let first_sequence = usage_event_sequence(&fixture_a.dir, "recovery-pending-usage-1");
+    let first = usage_event_state(&fixture_a.dir, "recovery-pending-usage-1");
+    let first_sequence = first.sequence.expect("local usage has an origin sequence");
     assert!(first_sequence > 0);
-    assert!(has_usage_event(&fixture_a.dir, "recovery-pending-usage-1"));
+    assert!(first.exists);
 
     let error = handle_request(
         &state_a,
@@ -55,10 +56,10 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
         error.contains("stale snapshot predates committed sync history"),
         "restore refusal should identify the stale committed-feed snapshot; got: {error}"
     );
-    assert!(has_usage_event(&fixture_a.dir, "recovery-pending-usage-1"));
+    assert!(usage_event_state(&fixture_a.dir, "recovery-pending-usage-1").exists);
     assert_eq!(
-        usage_event_sequence(&fixture_a.dir, "recovery-pending-usage-1"),
-        first_sequence
+        usage_event_state(&fixture_a.dir, "recovery-pending-usage-1").sequence,
+        Some(first_sequence)
     );
 
     upsert_usage_event(
@@ -73,7 +74,9 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
         "Pending after restore refusal",
     )
     .await;
-    let second_sequence = usage_event_sequence(&fixture_a.dir, "recovery-pending-usage-2");
+    let second_sequence = usage_event_state(&fixture_a.dir, "recovery-pending-usage-2")
+        .sequence
+        .expect("second local usage has an origin sequence");
     assert!(
         second_sequence > first_sequence,
         "a post-refusal local commit must not reuse an origin sequence"

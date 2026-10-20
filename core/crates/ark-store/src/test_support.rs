@@ -26,6 +26,7 @@ mod task_merge_inbound;
 mod task_merge_legacy;
 mod trashed_todo;
 mod type_mutation;
+mod usage_event_recovery;
 mod usage_rollback;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
@@ -53,6 +54,7 @@ pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
 pub use trashed_todo::TrashedTodoFixture;
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
+pub use usage_event_recovery::{UsageEventRecoveryFixture, UsageEventRecoveryState};
 pub use usage_rollback::{UsageRollbackFixture, UsageRollbackState};
 
 /// Owns a temporary ARK database for the full lifetime of a test.
