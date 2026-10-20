@@ -23,7 +23,7 @@ async fn publish_registry_event(
 
 pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {
     let snapshot = get_db_handle(state)?
-        .query(db::CommandContext::engine(), db::LoadDeviceRegistryQuery)
+        .query_with_store(db::CommandContext::engine(), db::LoadDeviceRegistryQuery)
         .await
         .map_err(|error| error.to_string())?;
     serde_json::to_value(snapshot).map_err(|error| error.to_string())

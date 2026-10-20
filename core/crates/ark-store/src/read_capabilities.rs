@@ -1,4 +1,5 @@
 mod canonical;
+mod device_registry;
 mod objects;
 mod sync;
 mod system;
@@ -25,6 +26,10 @@ pub struct UsageReadCapabilities<'snapshot> {
 }
 
 pub struct TypeRegistryReadCapabilities<'snapshot> {
+    connection: &'snapshot Connection,
+}
+
+pub struct DeviceRegistryReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -65,6 +70,12 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn type_registry(&self) -> TypeRegistryReadCapabilities<'_> {
         TypeRegistryReadCapabilities {
+            connection: self.connection,
+        }
+    }
+
+    pub fn device_registry(&self) -> DeviceRegistryReadCapabilities<'_> {
+        DeviceRegistryReadCapabilities {
             connection: self.connection,
         }
     }

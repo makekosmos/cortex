@@ -191,7 +191,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
         .unwrap();
 
     let (high_watermark, total_events, first_page) = handle
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::SyncLive),
             LoadRegistryEventsQuery::new(0, None, 1),
         )
@@ -201,7 +201,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
     assert_eq!(total_events, 1);
     assert_eq!(first_page.len(), 1);
     let (same_watermark, same_total, second_page) = handle
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::SyncLive),
             LoadRegistryEventsQuery::new(1, Some(high_watermark), 64),
         )

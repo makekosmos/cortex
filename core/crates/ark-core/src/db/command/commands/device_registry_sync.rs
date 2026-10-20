@@ -1,7 +1,7 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
 use ark_domain::device_registry::RegistryEvent;
 use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
-use rusqlite::{Connection, Transaction};
+use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -24,7 +24,7 @@ pub(crate) struct LoadDeviceRegistryQuery;
 
 impl sealed::Sealed for LoadDeviceRegistryQuery {}
 
-impl DbQuery for LoadDeviceRegistryQuery {
+impl StoreReadQuery for LoadDeviceRegistryQuery {
     type Output = DeviceRegistrySnapshot;
 
     fn class(&self) -> CommandClass {
@@ -38,14 +38,16 @@ impl DbQuery for LoadDeviceRegistryQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        let local_device_id =
-            ark_store::sync_kv::get_sync_kv(connection, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
-                .map_err(DbError::Storage)?
-                .ok_or_else(|| DbError::Invalid("device_registry_local_identity_missing".into()))?;
-        let mut devices = ark_store::device_registry::load_entries(connection)
+        let registry = capabilities.device_registry();
+        let local_device_id = registry
+            .local_device_id()
+            .map_err(DbError::Storage)?
+            .ok_or_else(|| DbError::Invalid("device_registry_local_identity_missing".into()))?;
+        let mut devices = registry
+            .entries()
             .map_err(DbError::Storage)?
             .into_iter()
             .map(|entry| DeviceRegistryEntryView {
@@ -91,7 +93,7 @@ impl LoadRegistryEventsQuery {
 
 impl sealed::Sealed for LoadRegistryEventsQuery {}
 
-impl DbQuery for LoadRegistryEventsQuery {
+impl StoreReadQuery for LoadRegistryEventsQuery {
     type Output = (i64, usize, Vec<RegistryEvent>);
 
     fn class(&self) -> CommandClass {
@@ -105,7 +107,7 @@ impl DbQuery for LoadRegistryEventsQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
         if self.after_position < 0
@@ -120,13 +122,10 @@ impl DbQuery for LoadRegistryEventsQuery {
         {
             return Err(DbError::Invalid("device_registry_page_cursor".into()));
         }
-        ark_store::device_registry::load_events_page(
-            connection,
-            self.after_position,
-            self.high_watermark,
-            self.limit,
-        )
-        .map_err(DbError::Storage)
+        capabilities
+            .device_registry()
+            .events_page(self.after_position, self.high_watermark, self.limit)
+            .map_err(DbError::Storage)
     }
 }
 

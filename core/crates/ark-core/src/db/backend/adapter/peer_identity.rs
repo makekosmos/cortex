@@ -142,7 +142,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         limit: usize,
     ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::LoadRegistryEventsQuery::new(after_position, high_watermark, limit),
             )
