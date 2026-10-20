@@ -25,15 +25,17 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     )
     .await
     .unwrap();
-    let first_task_revision = with_conn(&state, |conn| {
-        conn.query_row(
-            "SELECT hlc FROM object_sync_versions WHERE object_id = 'canonical-task-ingress'",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let first_task_revision = handle_request(
+        &state,
+        Request::GetObjectWriteSnapshot {
+            id: "canonical-task-ingress".to_string(),
+        },
+    )
+    .await
+    .unwrap()["revision"]
+        .as_str()
+        .unwrap()
+        .to_string();
     handle_request(
         &state,
         Request::UpsertObject {
@@ -59,44 +61,34 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     .await
     .expect_err("operation id reuse with another payload is rejected");
     assert!(conflict.to_string().contains("different command payload"));
-    let object = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "canonical-task-ingress")
-    })
-    .unwrap()
+    let object = handle_request(
+        &state,
+        Request::GetObject {
+            id: "canonical-task-ingress".to_string(),
+        },
+    )
+    .await
     .unwrap();
-    assert_eq!(object.type_id, "core.task");
-    assert_eq!(object.type_version, "0.1.0");
-    assert_eq!(object.props_json["planning"]["kind"], "anytime");
-    with_conn(&state, |conn| {
-        let receipt_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts
-                 WHERE entity_kind = 'object' AND entity_id = 'canonical-task-ingress'
-                   AND representation_kind = 'full' AND outcome = 'applied'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(receipt_count, 1);
-        let operation_receipt_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM ark_operation_receipts
-                 WHERE principal = 'engine' AND operation_id = 'canonical-task-ingress-replay'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(operation_receipt_count, 1);
-        let task_revision: String = conn
-            .query_row(
-                "SELECT hlc FROM object_sync_versions WHERE object_id = 'canonical-task-ingress'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(task_revision, first_task_revision);
-        Ok(())
-    })
+    assert_eq!(object["typeId"], "core.task");
+    assert_eq!(object["typeVersion"], "0.1.0");
+    assert_eq!(object["propsJson"]["planning"]["kind"], "anytime");
+    let receipts = ark_store::test_support::CanonicalTaskIdempotencyFixture::inspect(
+        &fixture.db_path(),
+        "canonical-task-ingress",
+        "canonical-task-ingress-replay",
+    )
     .unwrap();
+    assert_eq!(receipts.entity_write_receipts, 1);
+    assert_eq!(receipts.operation_receipts, 1);
+    let snapshot = handle_request(
+        &state,
+        Request::GetObjectWriteSnapshot {
+            id: "canonical-task-ingress".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let task_revision = snapshot["revision"].as_str().unwrap();
+    assert_eq!(task_revision, first_task_revision);
     fixture.shutdown().await;
 }

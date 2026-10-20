@@ -58,3 +58,5 @@ mod schema_migration_contract_tests;
 mod schema_tests;
 #[cfg(test)]
 mod sync_transaction_contract_tests;
+#[cfg(test)]
+mod transactions_and_usage_tests;
