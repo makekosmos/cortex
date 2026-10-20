@@ -191,7 +191,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         proof: &ark_domain::device_registry::RegistryHandshakeProof,
     ) -> Result<(), String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::VerifyRegistryHandshakeQuery::new(
                     peer_device_id.to_owned(),

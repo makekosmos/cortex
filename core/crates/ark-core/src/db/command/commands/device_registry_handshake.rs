@@ -1,8 +1,8 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript,
 };
-use rusqlite::{Connection, Transaction};
+use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,7 +81,7 @@ impl VerifyRegistryHandshakeQuery {
 
 impl sealed::Sealed for VerifyRegistryHandshakeQuery {}
 
-impl DbQuery for VerifyRegistryHandshakeQuery {
+impl StoreReadQuery for VerifyRegistryHandshakeQuery {
     type Output = ();
 
     fn class(&self) -> CommandClass {
@@ -95,13 +95,15 @@ impl DbQuery for VerifyRegistryHandshakeQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
         let signer = DeviceId::parse(self.expected_signer)
             .map_err(|error| DbError::Invalid(error.to_string()))?;
-        let registry =
-            ark_store::device_registry::load_registry(connection).map_err(DbError::Storage)?;
+        let registry = capabilities
+            .device_registry()
+            .registry()
+            .map_err(DbError::Storage)?;
         let device = known_registry_device(&registry, &signer)?;
         let verifying_key = device
             .signing_public_key

@@ -2,6 +2,10 @@ use super::DeviceRegistryReadCapabilities;
 use ark_domain::device_registry::RegistryEvent;
 
 impl DeviceRegistryReadCapabilities<'_> {
+    pub fn registry(&self) -> Result<ark_domain::device_registry::state::DeviceRegistry, String> {
+        crate::device_registry::load_registry(self.connection)
+    }
+
     pub fn local_device_id(&self) -> Result<Option<String>, String> {
         crate::sync_kv::get_sync_kv(
             self.connection,

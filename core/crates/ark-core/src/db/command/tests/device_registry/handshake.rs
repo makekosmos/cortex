@@ -43,7 +43,7 @@ async fn production_storage_signs_and_verifies_only_active_registry_identities()
         .unwrap();
     assert_eq!(proof.signer_device_id().as_str(), "local-device");
     handle
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::SyncLive),
             VerifyRegistryHandshakeQuery::new("local-device".into(), transcript, proof),
         )
