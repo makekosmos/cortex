@@ -164,7 +164,7 @@ impl DbCommand for ApplyTaskMergeBatchCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_id)?;
-        super::inbound_policy::require_sync_policy_identity(
+        super::sync_policy_identity::require_sync_policy_identity(
             transaction,
             Some(&self.local_device_id),
             Some(&self.expected_identity),

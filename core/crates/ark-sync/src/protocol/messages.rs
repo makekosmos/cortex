@@ -5,7 +5,7 @@
 pub const LAN_SYNC_PORT: u16 = 21531;
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_BATCH_SIZE: usize = 100;
-pub const MAX_BATCH_BYTES: usize = 1_048_576; // 1 MB
+pub use ark_application::sync_storage::MAX_SYNC_BATCH_BYTES as MAX_BATCH_BYTES;
 pub const BATCH_ACK_TIMEOUT_MS: u64 = 10_000;
 pub const LIVE_ACK_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_RETRIES: u32 = 3;

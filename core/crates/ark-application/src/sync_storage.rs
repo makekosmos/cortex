@@ -16,6 +16,66 @@ pub use crate::task_merge::{
     TaskMergeJournalPage, TaskMergeJournalRecord, TaskMergePrepareError,
 };
 
+pub const MAX_SYNC_BATCH_BYTES: usize = 1_048_576;
+
+#[derive(Clone, Debug)]
+pub struct InboxReceiptPolicy {
+    pub local_device_id: String,
+    pub expected_identity: PolicyIdentity,
+}
+
+#[derive(Clone, Debug)]
+pub struct InboxReceiptWrite {
+    pub peer_device_id: String,
+    pub message_id: String,
+    pub payload_json: String,
+    pub policy: Option<InboxReceiptPolicy>,
+}
+
+impl InboxReceiptWrite {
+    pub fn new(peer_device_id: String, message_id: String, payload_json: String) -> Self {
+        Self {
+            peer_device_id,
+            message_id,
+            payload_json,
+            policy: None,
+        }
+    }
+
+    pub fn with_policy(
+        peer_device_id: String,
+        message_id: String,
+        payload_json: String,
+        local_device_id: String,
+        expected_identity: PolicyIdentity,
+    ) -> Self {
+        Self {
+            peer_device_id,
+            message_id,
+            payload_json,
+            policy: Some(InboxReceiptPolicy {
+                local_device_id,
+                expected_identity,
+            }),
+        }
+    }
+
+    pub fn weight(&self) -> usize {
+        self.peer_device_id.len() + self.message_id.len() + self.payload_json.len() + 128
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InboxReceiptWriteError {
+    PolicyStorage(String),
+    PolicyChanged,
+    RegistryStorage(String),
+    PeerNotAdmitted,
+    RemovedPeersStorage(String),
+    PeerRemoved,
+    Inbox(String),
+}
+
 /// Stable identity for the durable receipt of one authenticated entity revision.
 /// Length-prefixing keeps component boundaries unambiguous without changing
 /// the persisted inbox key format.

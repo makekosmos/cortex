@@ -4,11 +4,14 @@ use super::super::super::{
 use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceCommand};
 use ark_store::writer::{SqliteWriter, TransactionFailure};
 use tokio::sync::oneshot;
-
 mod committed_feed_progress;
 mod core_task_write;
+mod inbox_receipt;
 pub(in crate::db::command) use committed_feed_progress::CommittedFeedProgressTask;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use inbox_receipt::map_inbox_receipt_error;
+pub(in crate::db::command) use inbox_receipt::InboxReceiptTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
 mod iroh_identity;
@@ -30,9 +33,7 @@ pub(in crate::db::command) use type_mutation::{
 pub(in crate::db::command) mod task_merge_append;
 mod tracked_app_mutation;
 pub(in crate::db::command) use tracked_app_mutation::TrackedAppMutationTask;
-
-/// Delivers a reply. The writer calls it only after the slot is released, so a
-/// caller that receives the reply can submit again without hitting the barrier.
+/// Delivers replies only after the writer releases its slot.
 pub(in crate::db::command) type Publish = Box<dyn FnOnce()>;
 
 pub(in crate::db::command) trait WriterTask: Send {

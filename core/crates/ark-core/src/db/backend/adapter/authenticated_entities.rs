@@ -1,4 +1,5 @@
 use super::*;
+use ark_application::sync_storage::InboxReceiptWrite;
 
 #[async_trait::async_trait]
 impl AuthenticatedEntityBackend for SqliteStorageBackend {
@@ -9,15 +10,14 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         message_id: &str,
     ) -> Result<bool, String> {
         let payload_json = serde_json::to_string(entity).map_err(|error| error.to_string())?;
+        let context = CommandContext::authenticated_peer(authenticated_peer_id.to_owned());
+        let write = InboxReceiptWrite::new(
+            authenticated_peer_id.to_owned(),
+            message_id.to_owned(),
+            payload_json,
+        );
         self.db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                crate::db::ReceiveInboxReceiptCommand::new(
-                    authenticated_peer_id.to_owned(),
-                    message_id.to_owned(),
-                    payload_json,
-                ),
-            )
+            .receive_inbox_receipt(context, write)
             .await
             .map(|state| state != crate::db::InboxState::Rejected)
             .map_err(|error| error.to_string())
@@ -32,25 +32,23 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     ) -> Result<bool, String> {
         let payload_json = serde_json::to_string(entity).map_err(|error| error.to_string())?;
-        let command = match policy_identity {
-            Some(identity) => crate::db::ReceiveInboxReceiptCommand::with_policy_identity(
+        let write = match policy_identity {
+            Some(identity) => InboxReceiptWrite::with_policy(
                 authenticated_peer_id.to_owned(),
                 message_id.to_owned(),
                 payload_json,
                 local_device_id.to_owned(),
                 identity,
             ),
-            None => crate::db::ReceiveInboxReceiptCommand::new(
+            None => InboxReceiptWrite::new(
                 authenticated_peer_id.to_owned(),
                 message_id.to_owned(),
                 payload_json,
             ),
         };
+        let context = CommandContext::authenticated_peer(authenticated_peer_id.to_owned());
         self.db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                command,
-            )
+            .receive_inbox_receipt(context, write)
             .await
             .map(|state| state != crate::db::InboxState::Rejected)
             .map_err(|error| error.to_string())
@@ -99,25 +97,23 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         let inbox_payload_json =
             serde_json::to_string(entity).map_err(|error| error.to_string())?;
         let receipt_command = match policy_identity.as_ref() {
-            Some(identity) => crate::db::ReceiveInboxReceiptCommand::with_policy_identity(
+            Some(identity) => InboxReceiptWrite::with_policy(
                 authenticated_peer_id.to_owned(),
                 inbox_message_id.to_owned(),
                 inbox_payload_json.clone(),
                 local_device_id.to_owned(),
                 identity.clone(),
             ),
-            None => crate::db::ReceiveInboxReceiptCommand::new(
+            None => InboxReceiptWrite::new(
                 authenticated_peer_id.to_owned(),
                 inbox_message_id.to_owned(),
                 inbox_payload_json.clone(),
             ),
         };
+        let context = CommandContext::authenticated_peer(authenticated_peer_id.to_owned());
         let inbox_state = self
             .db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                receipt_command,
-            )
+            .receive_inbox_receipt(context, receipt_command)
             .await
             .map_err(|error| error.to_string())?;
         if inbox_state == crate::db::InboxState::Applied {

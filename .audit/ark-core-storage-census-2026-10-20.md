@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 21 typed operations and 846 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 20 typed operations and 845 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 18 | immediate write transaction |
+| `DbCommand` | 17 | immediate write transaction |
 | `DbQuery` | 2 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -18,7 +18,6 @@ Generated from the current Core source. The scanner found 21 typed operations an
 | `DbCommand` | `SignRegistryHandshakeCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25](../core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25) |
 | `DbCommand` | `ApplyRegistryEventsCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:149](../core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:149) |
 | `DbCommand` | `EnrollPairedDeviceCommand` | [core/crates/ark-core/src/db/command/commands/device_registry.rs:43](../core/crates/ark-core/src/db/command/commands/device_registry.rs:43) |
-| `DbCommand` | `ReceiveInboxReceiptCommand` | [core/crates/ark-core/src/db/command/commands/inbound_policy.rs:67](../core/crates/ark-core/src/db/command/commands/inbound_policy.rs:67) |
 | `DbCommand` | `PersistNodeAuthorizationCommand` | [core/crates/ark-core/src/db/command/commands/integration_admin.rs:36](../core/crates/ark-core/src/db/command/commands/integration_admin.rs:36) |
 | `DbCommand` | `PersistIntegrationGrantCommand` | [core/crates/ark-core/src/db/command/commands/integration_admin.rs:76](../core/crates/ark-core/src/db/command/commands/integration_admin.rs:76) |
 | `DbCommand` | `AcquireIntegrationRefreshLeaseCommand` | [core/crates/ark-core/src/db/command/commands/integration_admin.rs:109](../core/crates/ark-core/src/db/command/commands/integration_admin.rs:109) |
@@ -36,6 +35,8 @@ Generated from the current Core source. The scanner found 21 typed operations an
 | `DbQuery` | `IntegrationReadQuery` | [core/crates/ark-core/src/db/command/commands/integration_read.rs:59](../core/crates/ark-core/src/db/command/commands/integration_read.rs:59) |
 | `DbQuery` | `ValidateOutboundSignedFrameQuery` | [core/crates/ark-core/src/db/command/commands/integration_replication.rs:23](../core/crates/ark-core/src/db/command/commands/integration_replication.rs:23) |
 
+`ReceiveInboxReceiptCommand` now uses a Store writer task and is no longer a `DbCommand`.
+
 ## SQLite references by scope
 
 | Scope | Category | Matches |
@@ -49,7 +50,7 @@ Generated from the current Core source. The scanner found 21 typed operations an
 | production | SQL literal | 19 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 20 |
-| production | SQLite type or import | 106 |
+| production | SQLite type or import | 105 |
 | test_file | SQL literal | 290 |
 | test_file | SQLite lifecycle | 81 |
 | test_file | SQLite operation | 248 |

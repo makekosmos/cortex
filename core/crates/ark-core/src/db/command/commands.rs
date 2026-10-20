@@ -3,7 +3,6 @@ mod device_registry_admission;
 mod device_registry_command;
 mod device_registry_handshake;
 mod device_registry_sync;
-mod inbound_policy;
 mod integration_admin;
 mod integration_read;
 mod integration_replication;
@@ -11,6 +10,7 @@ mod legacy_mutation;
 mod object_read;
 mod sync_mutation;
 mod sync_policy;
+mod sync_policy_identity;
 mod sync_read;
 mod sync_read_policy;
 mod system_mutation;
@@ -36,7 +36,6 @@ pub(crate) use device_registry_handshake::{
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
 };
-pub(crate) use inbound_policy::ReceiveInboxReceiptCommand;
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,

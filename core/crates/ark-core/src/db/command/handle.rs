@@ -7,6 +7,7 @@ pub(in crate::db::command) mod authenticated_core_task_write;
 mod committed_feed_progress;
 mod core_task_write;
 mod external_ref;
+mod inbox_receipt;
 mod iroh_identity;
 mod local_sync_key_value_write;
 mod object_link_mutation;

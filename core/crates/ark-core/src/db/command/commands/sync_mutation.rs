@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use super::inbound_policy::require_sync_policy_identity;
+use super::sync_policy_identity::require_sync_policy_identity;
 use crate::db::SqliteStorageBackend;
 use crate::types::SyncEntity;
 use ark_application::sync_storage::ReplayNotice;

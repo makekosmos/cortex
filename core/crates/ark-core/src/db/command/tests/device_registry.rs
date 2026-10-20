@@ -336,16 +336,13 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         .unwrap();
     assert_eq!(applied.disabled_device_ids, ["paired-device"]);
 
-    let receipt = handle
-        .submit(
-            CommandContext::authenticated_peer("paired-device".into()),
-            ReceiveInboxReceiptCommand::new(
-                "paired-device".into(),
-                "revoked-receipt".into(),
-                "{}".into(),
-            ),
-        )
-        .await;
+    let context = CommandContext::authenticated_peer("paired-device".into());
+    let write = ark_application::sync_storage::InboxReceiptWrite::new(
+        "paired-device".into(),
+        "revoked-receipt".into(),
+        "{}".into(),
+    );
+    let receipt = handle.receive_inbox_receipt(context, write).await;
     assert!(matches!(
         receipt,
         Err(DbError::Permission(reason)) if reason == "sync_peer_not_admitted"

@@ -11,8 +11,11 @@ mod task;
 use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]
+pub(in crate::db::command) use task::map_inbox_receipt_error;
+#[cfg(debug_assertions)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
+pub(in crate::db::command) use task::InboxReceiptTask;
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, CanonicalGameUpsertTask, ClearAllTask,
     CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask, DeleteTrashedTask,
