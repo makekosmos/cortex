@@ -98,8 +98,9 @@ async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() 
     };
 
     let failed = handle
-        .submit(
+        .submit_local_core_task_write(
             CommandContext::engine(),
+            None,
             LocalCoreTaskWrite::new(object.clone(), None, Some("transaction-port-device".into())),
         )
         .await
@@ -141,8 +142,9 @@ async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() 
             .unwrap();
     });
     handle
-        .submit(
+        .submit_local_core_task_write(
             CommandContext::engine(),
+            None,
             LocalCoreTaskWrite::new(object.clone(), None, Some("transaction-port-device".into())),
         )
         .await

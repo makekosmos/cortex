@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 59 typed operations and 897 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 58 typed operations and 902 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 34 | immediate write transaction |
+| `DbCommand` | 33 | immediate write transaction |
 | `DbQuery` | 24 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -14,8 +14,7 @@ Generated from the current Core source. The scanner found 59 typed operations an
 
 | Kind | Operation | Source |
 | --- | --- | --- |
-| `DbCommand` | `LocalCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:32](../core/crates/ark-core/src/db/command/commands/core_task.rs:32) |
-| `DbCommand` | `AuthenticatedCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:131](../core/crates/ark-core/src/db/command/commands/core_task.rs:131) |
+| `DbCommand` | `AuthenticatedCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:69](../core/crates/ark-core/src/db/command/commands/core_task.rs:69) |
 | `DbCommand` | `AppendLocalRegistryEventCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_command.rs:26](../core/crates/ark-core/src/db/command/commands/device_registry_command.rs:26) |
 | `DbCommand` | `SignRegistryHandshakeCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25](../core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25) |
 | `DbCommand` | `ApplyRegistryEventsCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:150](../core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:150) |
@@ -47,7 +46,7 @@ Generated from the current Core source. The scanner found 59 typed operations an
 | `DbCommand` | `RegisterPackageTypesCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:25](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:25) |
 | `DbCommand` | `UpsertObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:63](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:63) |
 | `DbCommand` | `DeleteObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:98](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:98) |
-| `DbCommand` | `OperationReceiptCommand` | [core/crates/ark-core/src/db/command/operation_receipt.rs:39](../core/crates/ark-core/src/db/command/operation_receipt.rs:39) |
+| `DbCommand` | `OperationReceiptCommand` | [core/crates/ark-core/src/db/command/operation_receipt.rs:47](../core/crates/ark-core/src/db/command/operation_receipt.rs:47) |
 | `DbMaintenanceCommand` | `RestoreSnapshotCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:91](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:91) |
 | `DbQuery` | `RegistryPeerAdmissionQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18](../core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18) |
 | `DbQuery` | `RegistryDeviceEnabledQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:65](../core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:65) |
@@ -87,8 +86,8 @@ Generated from the current Core source. The scanner found 59 typed operations an
 | production | SQL literal | 34 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 36 |
-| production | SQLite type or import | 141 |
-| test_file | SQL literal | 285 |
+| production | SQLite type or import | 140 |
+| test_file | SQL literal | 288 |
 | test_file | SQLite lifecycle | 80 |
-| test_file | SQLite operation | 244 |
+| test_file | SQLite operation | 247 |
 | test_file | SQLite type or import | 55 |

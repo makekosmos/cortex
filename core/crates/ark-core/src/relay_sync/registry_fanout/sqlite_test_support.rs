@@ -149,8 +149,9 @@ pub(super) async fn write_task(peer: &ActorPeer, id: &str, title: &str) {
         None
     };
     peer.db
-        .submit(
+        .submit_local_core_task_write(
             CommandContext::engine(),
+            None,
             LocalCoreTaskWrite::new(
                 ArkObjectWrite {
                     id: id.into(),

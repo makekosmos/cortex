@@ -3,6 +3,8 @@ use std::path::Path;
 
 #[path = "canonical_rpc/object_hlc.rs"]
 mod object_hlc;
+#[path = "canonical_rpc/task_idempotency.rs"]
+mod task_idempotency;
 
 fn remove_test_database(path: &Path) {
     for suffix in ["", "-wal", "-shm"] {
@@ -287,56 +289,6 @@ fn dotted_type_operations_are_exact_and_underscore_aliases_rejected() {
             "{operation}"
         );
     }
-}
-
-#[tokio::test]
-async fn canonical_upsert_object_rpc_persists_registered_identity() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-    handle_request(
-        &state,
-        Request::UpsertObject {
-            object: canonical_task_object(Some("0.1.0"), canonical_task_props()),
-            expected_snapshot: None,
-            operation_id: None,
-            device_id: Some("device-canonical".to_string()),
-        },
-    )
-    .await
-    .unwrap();
-    let object = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "canonical-task-ingress")
-    })
-    .unwrap()
-    .unwrap();
-    assert_eq!(object.type_id, "core.task");
-    assert_eq!(object.type_version, "0.1.0");
-    assert_eq!(object.props_json["planning"]["kind"], "anytime");
-    with_conn(&state, |conn| {
-        let receipt_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts
-                 WHERE entity_kind = 'object' AND entity_id = 'canonical-task-ingress'
-                   AND representation_kind = 'full' AND outcome = 'applied'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(receipt_count, 1);
-        Ok(())
-    })
-    .unwrap();
-    fixture.shutdown().await;
 }
 
 #[tokio::test]

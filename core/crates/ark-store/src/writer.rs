@@ -1,5 +1,9 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
+mod task_objects;
+use task_objects::apply_local_core_task_write_in;
+pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
+
 /// SQLite failure detail that can cross the Store boundary without exposing
 /// rusqlite types to callers.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -92,6 +96,12 @@ impl WriteCapabilities<'_, '_> {
 
     pub fn canonical_game(&mut self) -> CanonicalGameWrites<'_, '_> {
         CanonicalGameWrites {
+            transaction: self.transaction,
+        }
+    }
+
+    pub fn task_objects(&mut self) -> TaskObjectWrites<'_, '_> {
+        TaskObjectWrites {
             transaction: self.transaction,
         }
     }
@@ -220,6 +230,22 @@ impl SqliteWriter {
         Ok(output)
     }
 
+    pub fn apply_local_core_task_write(
+        &mut self,
+        write: ark_application::task_object_write::LocalCoreTaskWrite,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        ark_application::task_object_write::TaskWriteOperationResult,
+        StoreTransactionFailure<TaskObjectWriteError>,
+    > {
+        self.write_with_capabilities(|capabilities| {
+            capabilities
+                .task_objects()
+                .apply_local_core_task_write(write, principal, operation_id)
+        })
+    }
+
     fn immediate_on_connection<T, E>(
         connection: &mut Connection,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
@@ -244,6 +270,20 @@ impl SqliteWriter {
         Self::immediate_on_connection(connection, |transaction| {
             let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
             ark_application::usage::apply_local_usage_write(&session, device_id, write)
+        })
+    }
+
+    pub fn apply_local_core_task_write_on_connection(
+        connection: &mut Connection,
+        write: ark_application::task_object_write::LocalCoreTaskWrite,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        ark_application::task_object_write::TaskWriteOperationResult,
+        TransactionFailure<TaskObjectWriteError>,
+    > {
+        Self::immediate_on_connection(connection, |transaction| {
+            apply_local_core_task_write_in(transaction, write, principal, operation_id)
         })
     }
 

@@ -49,52 +49,22 @@ The judge found that the actual current branch is `codex/ark-stage2-boundaries`,
 
 ## Current baseline
 
-At commit `b209e767`, `cargo tree -p ark-core -e normal --depth 1` shows a direct production edge from Core to `rusqlite`. The production actor still calls `ark_store::writer::SqliteWriter::immediate` with a callback that gives Core commands a raw `Transaction`. Core startup also opens the database, initializes schema, and runs the legacy task rewrite. `cargo test -p ark-core --no-run` succeeds, which confirms the current command tree builds but does not prove the boundary.
+The active branch is `codex/ark-stage2-boundaries`. Core still has a production dependency on `rusqlite`; remaining `DbCommand`, `DbQuery`, and maintenance handlers can still receive SQLite types. The actor now routes local `core.task` writes through a dedicated task, and `SqliteWriter::apply_local_core_task_write` owns its transaction and operation receipt. Core still owns startup and the other unmigrated command paths.
 
-The cross-judge requires a complete operation and transaction census before the API contract is frozen. The current checkout has 119 `rusqlite::` source matches across 92 files when paths named as tests are excluded; this search still includes inline test modules and is only a navigation count, not a production count. A source-aware inventory is the next implementation unit.
+The generated storage census reports 58 typed operations and 902 SQLite ownership references. It finds 33 `DbCommand` implementations, 24 `DbQuery` implementations, and one maintenance implementation. `OperationReceiptCommand` is test-only but remains in the census. The census is a source index, not a count of distinct SQL operations, and does not infer policy ownership or indirect helper calls.
 
-The fixture-tested gate in `scripts/check-ark-core-storage-boundary.mjs` currently finds 1,278 SQLite references. Its source scanner separates 630 production findings, 635 standalone test-file findings, 11 inline-test findings, and 2 debug-only findings. It scans tests along with production files so the final Core source tree can contain no SQLite fixtures or SQL. These are source matches, not distinct database operations.
-
-The typed command layer has 45 `DbCommand` writes, 24 `DbQuery` reads, and one `DbMaintenanceCommand`. `TypedCommand` runs inside `SqliteWriter::immediate` and maps begin, operation, and commit failures separately. `DbHandle::query` takes read admission, acquires the reader barrier, opens a read-only connection, runs a deferred transaction, and commits it before returning. Maintenance waits for an exclusive reader barrier and calls `with_connection_mut`. The actor runs restore recovery, opens the database, initializes schema, rewrites legacy tasks, then publishes readiness. These source contracts define the transaction and startup behavior that the Store cutover must preserve.
-
-Production findings cluster in `canonical_types` (324), `db` (283), `integration_replication` (8), `type_registry` (8), and `service` (4), with isolated Core transport and relay references. A separate source scan finds 64 savepoint mentions across non-test-named paths; this count can still include inline tests. The generated inventory at `.audit/ark-core-storage-census-2026-10-19.md` lists all 70 typed operations and their execution boundaries. Map each operation to its policy, persistence capabilities, nested savepoints, and post-commit effects before finalizing the Store API. The generated inventory does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+`.audit/ark-operation-transaction-map-2026-10-20.md` maps the current typed operations and the extracted task writer path to policy, persistence, transaction scope, and observed side effects. The next API work must use this map and update it when an operation leaves the generic Core command contract.
 
 ## Applied pstack decisions
 
 The **Model the Domain** principle keeps transaction-scoped operations grouped by persisted behavior instead of introducing one repository for every table. The **Sequence Work into Verifiable Units** principle requires each caller migration to finish with its behavior check and deletion of the old SQL path. **Migrate Callers Then Delete Legacy APIs** means no Core SQL facade stays as a compatibility fallback after its consumers move. **Prove It Works** makes the final source and Cargo graph gates necessary but insufficient without the Engine, wire, transaction, and recovery behavior checks.
 
-## Capability API sketch selected on 2026-10-20
+## Selected execution boundary
 
-Two independent designs and a cross-judge selected the callback-based capability API. `ark-store` owns immediate writes, deferred reads, and exclusive maintenance scopes. Each callback receives short-lived, synchronous types with behavior-named methods. Core keeps actor scheduling, admission, fairness, cancellation, and reader-barrier ordering. No callback exposes a connection, transaction, statement, SQL, row type, or generic query closure.
+Two independent designs and a cross-judge selected Application-owned use cases with Store-implemented persistence sessions. Core keeps actor admission, queue fairness, cancellation, reader barriers, maintenance ordering, and Engine error mapping. A writer task calls a named Store operation. Store starts one immediate transaction, constructs short-lived adapters for the Application ports, calls the use case, and commits only after success. Queries follow the same shape with a read snapshot. Store does not expose a connection, transaction, statement, SQL, row type, or generic query callback to Core.
 
-```rust
-pub struct WriteCaps<'tx> { /* private transaction-scoped capabilities */ }
-pub struct ReadCaps<'tx> { /* private read-transaction capabilities */ }
-pub struct MaintenanceCaps<'scope> { /* private lifecycle operations */ }
-
-impl Store {
-    pub fn write<T, E>(
-        &mut self,
-        operation: impl for<'tx> FnOnce(&mut WriteCaps<'tx>) -> Result<T, E>,
-    ) -> Result<T, StoreTransactionFailure<E>>;
-
-    pub fn read<T, E>(
-        &self,
-        operation: impl for<'tx> FnOnce(&ReadCaps<'tx>) -> Result<T, E>,
-    ) -> Result<T, StoreReadFailure<E>>;
-}
-
-impl WriteCaps<'_> {
-    pub fn usage(&mut self) -> UsageWrites<'_>;
-    pub fn objects(&mut self) -> ObjectWrites<'_>;
-    pub fn sync(&mut self) -> SyncWrites<'_>;
-}
-```
-
-The signatures are a target shape, not a frozen inventory. Group methods by persisted behavior, then add only groups supported by the operation and transaction census. Store error types preserve begin, operation, and commit stages without carrying `rusqlite::Error` into Core. Core continues to decide whether a returned error fails the actor closed.
+Store may use transaction-scoped capability types internally to group SQL by persisted behavior. Core calls behavior-level writer and reader methods. The public Store surface must not become one method per table or a dispatcher that mirrors every Core command. Store error types preserve begin, operation, and commit failures without carrying `rusqlite::Error` into Core. Core decides whether an error stops the actor.
 
 Nested savepoints stay private to Store behavior methods. On success Store releases the savepoint. On operation failure it rolls back to and releases the savepoint, preserving the operation error. If rollback or release fails, the returned typed failure records both the operation and cleanup errors. Store generates unique savepoint names for nested scopes. Signed replication returns a typed replay outcome so Core does not inspect SQLite constraint codes.
 
-The capability cutover now covers local usage writes, local object upsert and delete, local book-cover writes, and canonical game upserts. Their actor tasks call `SqliteWriter::write_with_capabilities`, which starts one immediate transaction and exposes behavior-specific capabilities. Object, book-cover, and game operations call transaction-scoped Store implementations, so object rows, local state, quarantine data, links, receipts, revisions, tombstones, and sync metadata keep their existing atomic boundary. Core still has the older raw transaction path for commands that have not moved, and debug-only test backends still call Store's connection adapters. Usage rollback, local object/sync-state, delete broadcast, receipt rollback, book-cover revision-failure rollback, and canonical game actor RPC tests passed after these changes. The dated census has 59 typed operations on this checkout. It is a navigation index only; the operation-by-operation transaction and side-effect map is still required before the full API is frozen.
-
-The generated census at `.audit/ark-core-storage-census-2026-10-19.md` was refreshed on 2026-10-20. It now finds 897 SQLite references and 59 typed operations, down from 1,279 references and 69 operations in the earlier snapshot. The count change reflects committed extractions since that snapshot, not completion of the ownership boundary. In this checkout the counts are 34 writes, 24 reads, and one maintenance command. `commands/usage.rs` and `LocalUsageWriteCommand` from the old inventory do not exist; use `handle/usage.rs` and `LocalUsageWriteTask` as the source of truth.
+The verified Store-owned writer paths cover local usage writes, local object upsert and delete, local book-cover writes, canonical game upserts, and local `core.task` writes. The task path keeps its `object.upsert.v1` receipt, task mutation, object readback, and returned commit in one Store transaction. Actor tests prove rollback after a persistence failure. An Engine test proves retry returns the stored result, rejects operation-ID reuse with a different payload, and leaves one operation receipt and the original task revision. Core still has the generic raw transaction path for the other commands and retains raw SQLite dependencies. The current census and operation map identify the next cutovers.

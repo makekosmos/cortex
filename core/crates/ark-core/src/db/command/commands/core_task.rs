@@ -1,72 +1,10 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::types::{ArkObject, ArkObjectWrite, ObjectLink};
-use ark_application::object_write::{ObjectWriteResult, ObjectWriteSession, StoredObjectReceipt};
-use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
+use crate::types::ObjectLink;
+use ark_application::object_write::ObjectWriteSession;
+use ark_domain::object_write::RemoteObjectWrite;
 use rusqlite::Transaction;
 use serde::Serialize;
 use serde_json::{Map, Value};
-
-#[derive(Clone, Debug, Serialize)]
-pub(crate) struct LocalCoreTaskWrite {
-    object: ArkObjectWrite,
-    expected_snapshot: Option<ObjectWriteSnapshot>,
-    device_id: Option<String>,
-}
-
-impl LocalCoreTaskWrite {
-    pub(crate) fn new(
-        object: ArkObjectWrite,
-        expected_snapshot: Option<ObjectWriteSnapshot>,
-        device_id: Option<String>,
-    ) -> Self {
-        Self {
-            object,
-            expected_snapshot,
-            device_id,
-        }
-    }
-}
-
-impl sealed::Sealed for LocalCoreTaskWrite {}
-
-impl DbCommand for LocalCoreTaskWrite {
-    type Output = CoreTaskWriteCommit;
-
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
-        serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()?;
-        if self.object.type_id != "core.task" {
-            return Err(DbError::Unsupported(
-                "object_write_slice_unsupported_type".into(),
-            ));
-        }
-        let id = self.object.id.clone();
-        let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
-        let task_session = ark_store::task_merge::SqliteTaskMutationSession::new(transaction);
-        let result = ark_application::task_object_write::apply_local_core_task_write(
-            &object_session,
-            &task_session,
-            self.object,
-            self.expected_snapshot,
-            self.device_id,
-        )
-        .map_err(DbError::from_application_error)?;
-        let receipt = required_receipt(result)?;
-        let object = ark_store::objects::get_object(transaction, &id)
-            .map_err(|error| DbError::Storage(error.to_string()))?
-            .ok_or_else(|| DbError::Storage("object_write_missing_after_commit".into()))?;
-        Ok(CoreTaskWriteCommit { object, receipt })
-    }
-}
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct AuthenticatedCoreTaskWrite {
@@ -226,18 +164,6 @@ pub(crate) enum RemoteCoreTaskOutcome {
     Applied,
     Duplicate,
     Stale,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub(crate) struct CoreTaskWriteCommit {
-    pub(crate) object: ArkObject,
-    pub(crate) receipt: StoredObjectReceipt,
-}
-
-fn required_receipt(result: ObjectWriteResult) -> Result<StoredObjectReceipt, DbError> {
-    result
-        .receipt
-        .ok_or_else(|| DbError::Storage("object_write_receipt_missing".into()))
 }
 
 fn serialized_weight(value: &impl Serialize) -> usize {

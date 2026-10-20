@@ -3,6 +3,7 @@ use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, W
 use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
+mod core_task_write;
 mod external_ref;
 mod object_link_mutation;
 mod object_mutation;

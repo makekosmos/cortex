@@ -1,22 +1,22 @@
 # ARK typed-operation transaction map
 
-This map groups the 59 operations in the generated [Core storage census](ark-core-storage-census-2026-10-19.md) by responsibility. Counts and operation names below were checked against that inventory: **34 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**. Locations point to the current Core implementations.
+This map groups the 58 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus the extracted task writer path, by responsibility. The current inventory has **33 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; the task upsert is now a dedicated Store writer task. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
-`DbCommand` executes inside the writer's immediate transaction (`core/crates/ark-core/src/db/command/executor/actor/task.rs:48-61`). `DbQuery` runs against a reader snapshot in a deferred read transaction (`core/crates/ark-core/src/db/command/handle.rs:177-195`). The maintenance command is admitted through the exclusive maintenance path and operates on a mutable connection (`core/crates/ark-core/src/db/command/handle.rs:130-161`). No command-specific savepoint was found in the typed implementations covered here.
+Remaining `DbCommand` operations execute inside the writer's immediate transaction (`core/crates/ark-core/src/db/command/executor/actor/task.rs:48-61`). `DbQuery` runs against a reader snapshot in a deferred read transaction (`core/crates/ark-core/src/db/command/handle.rs:177-195`). The maintenance command is admitted through the exclusive maintenance path and operates on a mutable connection (`core/crates/ark-core/src/db/command/handle.rs:130-161`). `LocalCoreTaskWrite` now uses a dedicated actor task and Store-owned writer method. No command-specific savepoint was found in the typed implementations covered here.
 
-These operations return results to their Core callers; no direct network or other post-commit effect was found in their `execute`/`read` bodies. A caller may use a returned result to initiate later work, but caller-side follow-up was not traced here. `OperationReceiptCommand` is one of the 59 census operations: when used as a wrapper, its inner command and receipt insert share the same immediate transaction (`core/crates/ark-core/src/db/command/operation_receipt.rs:39-95`).
+These operations return results to their Core callers; no direct network or other post-commit effect was found in their `execute`/`read` bodies. A caller may use a returned result to initiate later work, but caller-side follow-up was not traced here. The generic `OperationReceiptCommand` is test-only; the migrated task writer now persists its operation receipt and task state atomically in Store.
 
 ## Responsibility groups
 
 ### Task writes and inbox policy — 3 operations
 
-**Core:** owns engine/peer authorization, supported-type and sync-policy checks, inbox deduplication, removed-peer/stale-write decisions, and application orchestration. **Persistence:** task writes use Store object/task sessions and Store object readback; inbox receipt state uses Core `crate::db` helpers. Changes are atomic in the enclosing immediate transaction.
+**Core:** owns engine/peer authorization, supported-type and sync-policy checks, inbox deduplication, removed-peer/stale-write decisions, and actor scheduling. Application owns the task write use case. Store owns task/object sessions, object readback, operation receipts, and transaction execution; inbox receipt state in the authenticated path still uses Core `crate::db` helpers. Each write remains atomic in its enclosing immediate transaction.
 
 | Kind | Operation | Implementation |
 |---|---|---|
-| DbCommand | `LocalCoreTaskWrite` | `core/crates/ark-core/src/db/command/commands/core_task.rs:32` |
+| StoreWriterTask | `LocalCoreTaskWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/core_task_write.rs` → `ark_store::writer::SqliteWriter::apply_local_core_task_write` |
 | DbCommand | `AuthenticatedCoreTaskWrite` | `core/crates/ark-core/src/db/command/commands/core_task.rs:131` |
 | DbCommand | `ReceiveInboxReceiptCommand` | `core/crates/ark-core/src/db/command/commands/inbound_policy.rs:67` |
 
@@ -134,17 +134,17 @@ These operations return results to their Core callers; no direct network or othe
 
 ## Count reconciliation
 
-| Responsibility group | DbCommand | DbQuery | Maintenance | Total |
-|---|---:|---:|---:|---:|
-| Task writes and inbox policy | 3 | 0 | 0 | 3 |
-| Device registry | 4 | 5 | 0 | 9 |
-| Integration replication and administration | 5 | 2 | 0 | 7 |
-| Legacy mutations | 4 | 0 | 0 | 4 |
-| Sync policy, transfer, KV, usage log | 8 | 12 | 0 | 20 |
-| Task merge | 4 | 1 | 0 | 5 |
-| Type registry | 3 | 1 | 0 | 4 |
-| System, object, and usage reads | 2 | 3 | 1 | 6 |
-| Operation receipts | 1 | 0 | 0 | 1 |
-| **Total** | **34** | **24** | **1** | **59** |
+| Responsibility group | StoreWriterTask | DbCommand | DbQuery | Maintenance | Total |
+|---|---:|---:|---:|---:|---:|
+| Task writes and inbox policy | 1 | 2 | 0 | 0 | 3 |
+| Device registry | 0 | 4 | 5 | 0 | 9 |
+| Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
+| Legacy mutations | 0 | 4 | 0 | 0 | 4 |
+| Sync policy, transfer, KV, usage log | 0 | 8 | 12 | 0 | 20 |
+| Task merge | 0 | 4 | 1 | 0 | 5 |
+| Type registry | 0 | 3 | 1 | 0 | 4 |
+| System, object, and usage reads | 0 | 2 | 3 | 1 | 6 |
+| Operation receipts | 0 | 1 | 0 | 0 | 1 |
+| **Total** | **1** | **33** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

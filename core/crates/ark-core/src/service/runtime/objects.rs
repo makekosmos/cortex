@@ -197,12 +197,7 @@ pub(super) async fn upsert_object(
     let (entity, replayed) = if object.type_id == "core.task" {
         let command = db::LocalCoreTaskWrite::new(object, expected_snapshot, device_id);
         let result = get_db_handle(state)?
-            .submit_with_optional_operation_id(
-                db::CommandContext::engine(),
-                operation_id,
-                "object.upsert.v1",
-                command,
-            )
+            .submit_local_core_task_write(db::CommandContext::engine(), operation_id, command)
             .await
             .map_err(|error| error.to_string())?;
         let replayed = result.replayed;

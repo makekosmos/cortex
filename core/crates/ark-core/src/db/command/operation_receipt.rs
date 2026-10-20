@@ -1,6 +1,10 @@
+#[cfg(test)]
 use super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbHandle};
+#[cfg(test)]
 use rusqlite::Transaction;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+#[cfg(test)]
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct OperationResult<T> {
@@ -9,12 +13,14 @@ pub(crate) struct OperationResult<T> {
 }
 
 #[derive(Serialize)]
+#[cfg(test)]
 pub(super) struct OperationReceiptCommand<C> {
     operation_id: String,
     command_type: &'static str,
     command: C,
 }
 
+#[cfg(test)]
 impl<C> OperationReceiptCommand<C> {
     pub(super) fn new(
         operation_id: String,
@@ -34,8 +40,10 @@ impl<C> OperationReceiptCommand<C> {
     }
 }
 
+#[cfg(test)]
 impl<C> sealed::Sealed for OperationReceiptCommand<C> where C: DbCommand + Serialize {}
 
+#[cfg(test)]
 impl<C> DbCommand for OperationReceiptCommand<C>
 where
     C: DbCommand + Serialize,
@@ -98,7 +106,9 @@ where
     }
 }
 
+#[cfg(test)]
 impl DbHandle {
+    #[cfg(test)]
     pub(crate) async fn submit_with_operation_id<C>(
         &self,
         context: CommandContext,
@@ -112,31 +122,5 @@ impl DbHandle {
     {
         let command = OperationReceiptCommand::new(operation_id, command_type, command)?;
         self.submit(context, command).await
-    }
-
-    pub(crate) async fn submit_with_optional_operation_id<C>(
-        &self,
-        context: CommandContext,
-        operation_id: Option<String>,
-        command_type: &'static str,
-        command: C,
-    ) -> Result<OperationResult<C::Output>, DbError>
-    where
-        C: DbCommand + Serialize,
-        C::Output: Serialize + DeserializeOwned,
-    {
-        match operation_id {
-            Some(operation_id) => {
-                self.submit_with_operation_id(context, operation_id, command_type, command)
-                    .await
-            }
-            None => self
-                .submit(context, command)
-                .await
-                .map(|value| OperationResult {
-                    value,
-                    replayed: false,
-                }),
-        }
     }
 }

@@ -1,14 +1,60 @@
 use crate::object_write::{
     NewObjectReceipt, ObjectWriteOrigin, ObjectWriteResult, ObjectWriteSession, ReceiptOutcome,
+    StoredObjectReceipt,
 };
 use crate::task_mutation::{self, TaskMutationSession};
 use ark_domain::hlc::HLC;
 use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
-use ark_domain::types::{ArkObjectWrite, ObjectLink};
+use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
 use std::cmp::Ordering;
 
 const CORE_TASK_ID: &str = "core.task";
 const CORE_TASK_VERSION: &str = "0.1.0";
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct LocalCoreTaskWrite {
+    object: ArkObjectWrite,
+    expected_snapshot: Option<ObjectWriteSnapshot>,
+    device_id: Option<String>,
+}
+
+impl LocalCoreTaskWrite {
+    pub fn new(
+        object: ArkObjectWrite,
+        expected_snapshot: Option<ObjectWriteSnapshot>,
+        device_id: Option<String>,
+    ) -> Self {
+        Self {
+            object,
+            expected_snapshot,
+            device_id,
+        }
+    }
+
+    pub fn weight(&self) -> usize {
+        serde_json::to_vec(self).map_or(usize::MAX, |bytes| bytes.len())
+    }
+
+    pub fn object_type_id(&self) -> &str {
+        &self.object.type_id
+    }
+
+    pub fn into_parts(self) -> (ArkObjectWrite, Option<ObjectWriteSnapshot>, Option<String>) {
+        (self.object, self.expected_snapshot, self.device_id)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct LocalCoreTaskWriteCommit {
+    pub object: ArkObject,
+    pub receipt: StoredObjectReceipt,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct TaskWriteOperationResult {
+    pub value: LocalCoreTaskWriteCommit,
+    pub replayed: bool,
+}
 
 enum Input {
     Local {
@@ -211,10 +257,9 @@ fn apply_core_task_write(
 pub fn apply_local_core_task_write(
     object_session: &dyn ObjectWriteSession,
     task_session: &dyn TaskMutationSession,
-    object: ArkObjectWrite,
-    expected_snapshot: Option<ObjectWriteSnapshot>,
-    device_id: Option<String>,
+    write: LocalCoreTaskWrite,
 ) -> Result<ObjectWriteResult, String> {
+    let (object, expected_snapshot, device_id) = write.into_parts();
     apply_core_task_write(
         object_session,
         Some(task_session),

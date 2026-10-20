@@ -21,7 +21,8 @@ mod type_mutation;
 mod type_read;
 mod usage_read;
 
-pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome};
+pub(crate) use ark_application::task_object_write::{LocalCoreTaskWrite, TaskWriteOperationResult};
+pub(crate) use core_task::{AuthenticatedCoreTaskWrite, RemoteCoreTaskOutcome};
 #[cfg(test)]
 pub(crate) use device_registry::DeviceEnrollmentOutcome;
 pub(crate) use device_registry::EnrollPairedDeviceCommand;
