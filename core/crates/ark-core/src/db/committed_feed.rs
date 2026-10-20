@@ -1,8 +1,10 @@
 #[cfg(test)]
 use ark_application::sync_storage::{OutboundAck, OutboundProgress};
+#[cfg(test)]
 use rusqlite::Connection;
 
 pub const MAX_FEED_DELIVERY_BYTES: usize = ark_sync::protocol::MAX_BATCH_BYTES - 512;
+#[cfg(test)]
 pub const MAX_INBOX_PAYLOAD_BYTES: usize = ark_application::sync_storage::MAX_SYNC_BATCH_BYTES;
 pub use ark_store::committed_feed::InboxState;
 

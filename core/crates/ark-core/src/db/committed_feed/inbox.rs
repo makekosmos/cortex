@@ -1,4 +1,5 @@
 /// Enforce the sync wire limit before storing a durable inbox receipt.
+#[cfg(test)]
 pub fn receive_inbox_payload(
     conn: &Connection,
     peer_device_id: &str,
@@ -11,6 +12,7 @@ pub fn receive_inbox_payload(
     ark_store::committed_feed::receive_inbox_payload(conn, peer_device_id, message_id, payload_json)
 }
 
+#[cfg(test)]
 pub fn set_inbox_state(
     conn: &Connection,
     peer_device_id: &str,

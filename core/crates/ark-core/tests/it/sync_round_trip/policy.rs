@@ -26,7 +26,7 @@ fn make_policy_storage(
     device_id: &str,
     profile_rules: Option<Vec<SyncProfileRule>>,
 ) -> (Arc<SqliteStorageBackend>, String, Arc<Mutex<Connection>>) {
-    let conn = Connection::open_in_memory().expect("in-memory SQLite");
+    let mut conn = Connection::open_in_memory().expect("in-memory SQLite");
     ark_store::open::init_schema(&conn).expect("initialize test schema");
     ark_store::type_registry::upsert_object_type(
         &conn,
@@ -53,7 +53,13 @@ fn make_policy_storage(
         )
         .expect("persist device sync policy");
     }
-    let endpoint = ark_core::iroh_transport::load_or_generate_secret_key(&conn)
+    let candidate = ark_core::iroh_transport::generate_secret_key_candidate();
+    let persisted =
+        ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate_on_connection(
+            &mut conn, candidate,
+        )
+        .expect("device signing key persisted");
+    let endpoint = ark_core::iroh_transport::parse_secret_key_hex(&persisted)
         .expect("device signing key")
         .public()
         .to_string();
