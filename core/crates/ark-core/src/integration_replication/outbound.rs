@@ -1,34 +1,6 @@
-#[cfg(test)]
-use super::NodeStatus;
 pub use ark_application::integration_sync::{
     validate_outbound_signed_sync, validate_outbound_signed_sync_with_transport,
 };
-#[cfg(test)]
-use ark_store::integration_replication::{upsert_authorized_node, upsert_integration_node_grant};
-#[cfg(test)]
-use rusqlite::Connection;
-
-/// A node-level transport block may be removed only when every persisted
-/// integration grant for that node is active and bound to its current key.
-#[cfg(test)]
-pub fn node_may_receive_integration_frames(
-    conn: &Connection,
-    node_id: &str,
-) -> Result<bool, String> {
-    let Some(node) = ark_store::integration_replication::load_authorized_node(conn, node_id)?
-    else {
-        return Ok(false);
-    };
-    if node.status != NodeStatus::Active {
-        return Ok(false);
-    }
-    ark_store::integration_replication::node_grants_match_current_authorization(
-        conn,
-        node_id,
-        node.grant_epoch,
-        &node.encryption_public_key,
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -36,34 +8,35 @@ mod tests {
 
     use super::*;
     use crate::integration_replication::{
-        encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration,
-        IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationReplicationChange,
-        IntegrationReplicationEntity, SignedSyncEnvelope,
+        AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
+        IntegrationNodeGrant, IntegrationReplicationChange, IntegrationReplicationEntity,
+        NodeStatus, SignedSyncEnvelope, encode_hex,
     };
+    use ark_store::{read_snapshot::SqliteReader, test_support::TestDatabase};
 
     fn validate_with_store_snapshot(
-        connection: &mut rusqlite::Connection,
+        reader: &mut SqliteReader,
         frame: &SignedSyncEnvelope,
     ) -> Result<(), String> {
-        ark_store::read_snapshot::test_support::with_read_snapshot(connection, |capabilities| {
-            validate_outbound_signed_sync(
-                &capabilities.integration_replication(),
-                "space",
-                "origin",
-                frame,
-            )
-        })
-        .map_err(|error| match error {
-            ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
-            error => error.to_string(),
-        })
+        reader
+            .with_read_snapshot(|capabilities| {
+                validate_outbound_signed_sync(
+                    &capabilities.integration_replication(),
+                    "space",
+                    "origin",
+                    frame,
+                )
+            })
+            .map_err(|error| match error {
+                ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
+                error => error.to_string(),
+            })
     }
 
     #[test]
     fn revoked_grant_invalidates_an_already_signed_frame() {
-        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
+        let database = TestDatabase::create().unwrap();
+        let path = database.path();
         let key = SigningKey::from_bytes(&[7; 32]);
         let origin = node(
             "origin",
@@ -73,12 +46,15 @@ mod tests {
         let recipient = node("recipient", "recipient-key", "recipient-signing".into());
         let origin_grant = grant("origin", "origin-key");
         let recipient_grant = grant("recipient", "recipient-key");
-        for node in [&origin, &recipient] {
-            upsert_authorized_node(&conn, node, "writer").unwrap();
-        }
-        for grant in [&origin_grant, &recipient_grant] {
-            upsert_integration_node_grant(&conn, grant, "writer").unwrap();
-        }
+        ark_store::test_support::IntegrationReplicationTestFixture::seed_authorization(
+            path,
+            &[origin, recipient],
+            &[origin_grant, recipient_grant.clone()],
+            "writer",
+        )
+        .unwrap();
+        let path_text = path.to_str().unwrap();
+        let mut reader = SqliteReader::open_read_only(path_text).unwrap();
 
         let mut frame = SignedSyncEnvelope::new(
             "space",
@@ -108,8 +84,7 @@ mod tests {
             &key.sign(&frame.canonical_signing_bytes().unwrap())
                 .to_bytes(),
         );
-        validate_with_store_snapshot(&mut conn, &frame).unwrap();
-        assert!(node_may_receive_integration_frames(&conn, "recipient").unwrap());
+        validate_with_store_snapshot(&mut reader, &frame).unwrap();
 
         let mut forged = frame.clone();
         forged.payload.push(IntegrationReplicationChange {
@@ -137,15 +112,14 @@ mod tests {
             &key.sign(&forged.canonical_signing_bytes().unwrap())
                 .to_bytes(),
         );
-        assert!(validate_with_store_snapshot(&mut conn, &forged).is_err());
+        assert!(validate_with_store_snapshot(&mut reader, &forged).is_err());
 
         let revoked = recipient_grant.revoke(2, "2026-08-31T00:01:00Z").unwrap();
-        upsert_integration_node_grant(&conn, &revoked, "writer").unwrap();
-        assert!(validate_with_store_snapshot(&mut conn, &frame).is_err());
-        let mut other_active = grant("recipient", "recipient-key");
-        other_active.integration_id = "other-integration".into();
-        upsert_integration_node_grant(&conn, &other_active, "writer").unwrap();
-        assert!(!node_may_receive_integration_frames(&conn, "recipient").unwrap());
+        ark_store::test_support::IntegrationReplicationTestFixture::upsert_grant(
+            path, &revoked, "writer",
+        )
+        .unwrap();
+        assert!(validate_with_store_snapshot(&mut reader, &frame).is_err());
     }
 
     fn node(node_id: &str, encryption_key: &str, signing_key: String) -> AuthorizedNode {

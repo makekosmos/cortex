@@ -46,6 +46,65 @@ pub fn acquire_refresh_lease(
 pub struct IntegrationReplicationTestFixture;
 
 impl IntegrationReplicationTestFixture {
+    /// Seeds typed authorization records for Core's outbound validation tests.
+    pub fn seed_authorization(
+        path: &Path,
+        nodes: &[AuthorizedNode],
+        grants: &[IntegrationNodeGrant],
+        device_id: &str,
+    ) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        for node in nodes {
+            crate::integration_replication::upsert_authorized_node(&connection, node, device_id)?;
+        }
+        for grant in grants {
+            crate::integration_replication::upsert_integration_node_grant(
+                &connection,
+                grant,
+                device_id,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Replaces a typed grant record through Store's integration persistence API.
+    pub fn upsert_grant(
+        path: &Path,
+        grant: &IntegrationNodeGrant,
+        device_id: &str,
+    ) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        crate::integration_replication::upsert_integration_node_grant(&connection, grant, device_id)
+    }
+
+    /// Reports whether every persisted grant still authorizes the node's current key.
+    pub fn node_may_receive_frames(path: &Path, node_id: &str) -> Result<bool, String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        let Some(node) =
+            crate::integration_replication::load_authorized_node(&connection, node_id)?
+        else {
+            return Ok(false);
+        };
+        if node.status != NodeStatus::Active {
+            return Ok(false);
+        }
+        crate::integration_replication::node_grants_match_current_authorization(
+            &connection,
+            node_id,
+            node.grant_epoch,
+            &node.encryption_public_key,
+        )
+    }
+
     pub fn seed_authorized_pair(
         path: &Path,
         origin_signing_key: &str,
@@ -128,5 +187,75 @@ fn integration_grant(node_id: &str, encryption_key: &str) -> IntegrationNodeGran
         revoked_at: None,
         revision: 1,
         hlc: format!("2026-08-31T00:00:00.000Z:000002:{node_id}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IntegrationReplicationTestFixture;
+    use crate::test_support::TestDatabase;
+    use ark_domain::integration_replication::{
+        AuthorizedNode, GrantStatus, IntegrationNodeGrant, NodeStatus,
+    };
+
+    #[test]
+    fn outbound_frame_authorization_tracks_persisted_grants() {
+        let database = TestDatabase::create().expect("test database initializes");
+        let node = AuthorizedNode {
+            node_id: "recipient".into(),
+            key_fingerprint: "recipient-fingerprint".into(),
+            signing_public_key: "recipient-signing".into(),
+            encryption_public_key: "recipient-key".into(),
+            transport_public_key: None,
+            grant_epoch: 1,
+            status: NodeStatus::Active,
+            authorized_at: "2026-08-31T00:00:00Z".into(),
+            revoked_at: None,
+            revocation_epoch: None,
+            revision: 1,
+            hlc: "2026-08-31T00:00:00.000Z:000001:recipient".into(),
+        };
+        let current_grant = IntegrationNodeGrant {
+            integration_id: "integration".into(),
+            node_id: node.node_id.clone(),
+            node_encryption_key: node.encryption_public_key.clone(),
+            grant_epoch: node.grant_epoch,
+            status: GrantStatus::Active,
+            authorized_at: node.authorized_at.clone(),
+            revoked_at: None,
+            revision: 1,
+            hlc: "2026-08-31T00:00:00.000Z:000001:recipient".into(),
+        };
+        IntegrationReplicationTestFixture::seed_authorization(
+            database.path(),
+            std::slice::from_ref(&node),
+            std::slice::from_ref(&current_grant),
+            "writer",
+        )
+        .expect("typed authorization records seed");
+        assert!(
+            IntegrationReplicationTestFixture::node_may_receive_frames(
+                database.path(),
+                &node.node_id
+            )
+            .expect("current active grant is checked")
+        );
+
+        let revoked = current_grant
+            .revoke(2, "2026-08-31T00:01:00Z")
+            .expect("grant revokes");
+        IntegrationReplicationTestFixture::upsert_grant(database.path(), &revoked, "writer")
+            .expect("revoked grant persists");
+        let mut another_active = current_grant;
+        another_active.integration_id = "other-integration".into();
+        IntegrationReplicationTestFixture::upsert_grant(database.path(), &another_active, "writer")
+            .expect("other grant persists");
+        assert!(
+            !IntegrationReplicationTestFixture::node_may_receive_frames(
+                database.path(),
+                &node.node_id
+            )
+            .expect("revoked grant blocks frame authorization")
+        );
     }
 }
