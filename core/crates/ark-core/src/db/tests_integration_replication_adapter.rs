@@ -111,13 +111,17 @@ async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
         vector.get("integration_configuration:integration-a"),
         Some(&"2026-08-31T00:00:00.000Z:000004:node-a".to_string())
     );
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn signed_integration_command_binds_context_peer_inside_transaction() {
     let database =
         ark_store::test_support::TestDatabase::create().expect("test database initializes");
-    let (db, _owner) = DbHandle::open(
+    let (db, mut owner) = DbHandle::open(
         database.path().to_string_lossy().into_owned(),
         "device-local".into(),
     )
@@ -166,6 +170,10 @@ async fn signed_integration_command_binds_context_peer_inside_transaction() {
     assert!(
         ark_store::test_support::SyncTestState::connection_is_autocommit(database.path()).unwrap()
     );
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -249,6 +257,10 @@ async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
     );
     backend
         .apply_signed_integration_frame(&corrected_frame, "space-a", "node-a", "node-b")
+        .await
+        .unwrap();
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
         .await
         .unwrap();
 }

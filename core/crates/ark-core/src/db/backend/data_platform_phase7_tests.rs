@@ -32,4 +32,8 @@ async fn sync_policy_generation_changes_when_only_filter_changes() {
     );
     backend.set_selective_sync_profile(Some(profile));
     assert_ne!(unfiltered, backend.selective_sync_policy_generation());
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

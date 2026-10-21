@@ -137,6 +137,10 @@ async fn authenticated_core_task_commit_failure_is_reported_and_fails_closed() {
             .is_err(),
         "writer actor accepted a write after COMMIT failed"
     );
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -237,6 +241,10 @@ async fn authenticated_apply_rejects_removed_peer() {
         0,
         "a removed peer must not advance the committed feed"
     );
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 include!("canonical_object_transaction/object_feed.rs");
