@@ -329,7 +329,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         "narrowing a class stops transfer but preserves the received local row"
     );
 
-    let excluded_update = book_entity("Update while excluded", 2);
+    let excluded_update = book_entity("Edit during exclusion", 2);
     source.apply_entity(&excluded_update).await.unwrap();
     let mut source_vector = source.load_version_vector().await.unwrap();
     source_vector.insert(excluded_update.id.clone(), excluded_update.hlc.clone());
@@ -337,7 +337,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     server.broadcast_live_change(None).await;
     let receiver_c_after = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            if stored_book_title(&receiver_c_peer).await.as_deref() == Some("Update while excluded")
+            if stored_book_title(&receiver_c_peer).await.as_deref() == Some("Edit during exclusion")
             {
                 break;
             }
@@ -388,7 +388,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     );
     let backfill = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            if stored_book_title(&receiver_peer).await.as_deref() == Some("Update while excluded") {
+            if stored_book_title(&receiver_peer).await.as_deref() == Some("Edit during exclusion") {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
