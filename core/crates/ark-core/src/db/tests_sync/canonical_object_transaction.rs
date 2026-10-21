@@ -31,7 +31,7 @@ fn expect_feed_deliveries(
 
 #[tokio::test]
 async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_next_page() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let backend = make_backend().await;
     let entity = sync_object("snapshot-policy-page", "note_obj", "Pinned selection");
     backend.apply_entity(&entity).await.unwrap();
     let full_rule = ark_application::sync_policy::SyncProfileRule {
@@ -94,14 +94,18 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
 }
 
 #[tokio::test]
-async fn authenticated_core_task_commit_failure_is_reported_and_can_be_retried() {
-    let conn = setup_db();
-    let shared = Arc::new(Mutex::new(conn));
-    ark_store::test_support::ProductionActorFailureProbe::install_deferred_object_commit_failure(
-        &shared.lock().unwrap(),
+async fn authenticated_core_task_commit_failure_is_reported_and_fails_closed() {
+    use ark_store::test_support::ProductionActorFailureProbe as FailureProbe;
+
+    let database =
+        ark_store::test_support::TestDatabase::create().expect("test database initializes");
+    FailureProbe::install_deferred_object_commit_failure_path(database.path()).unwrap();
+    let backend = SqliteStorageBackend::open_for_test(
+        database.path().to_string_lossy().into_owned(),
+        "device-local",
     )
+    .await
     .unwrap();
-    let backend = SqliteStorageBackend::for_test(shared.clone());
     admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
         "failed-core-task-commit",
@@ -114,20 +118,20 @@ async fn authenticated_core_task_commit_failure_is_reported_and_can_be_retried()
         .await
         .unwrap_err();
     assert!(!error.is_empty());
-    ark_store::test_support::ProductionActorFailureProbe::remove_deferred_object_commit_failure(
-        &shared.lock().unwrap(),
-    )
-    .unwrap();
+    FailureProbe::remove_deferred_object_commit_failure_path(database.path()).unwrap();
 
     let next = full_core_task_entity(
         "after-core-task-commit-failure",
-        "Connection remains usable",
+        "Failed actor must reject later writes",
         "2026-10-15T00:00:00.000Z:000002:device-a",
     );
-    backend
-        .apply_authenticated_entity(&next, "device-a")
-        .await
-        .unwrap();
+    assert!(
+        backend
+            .apply_authenticated_entity(&next, "device-a")
+            .await
+            .is_err(),
+        "writer actor accepted a write after COMMIT failed"
+    );
 }
 
 #[tokio::test]
@@ -186,9 +190,16 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
 
 #[tokio::test]
 async fn authenticated_apply_rejects_removed_peer() {
-    let conn = setup_db();
-    ark_store::sync_kv::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
+    let database =
+        ark_store::test_support::TestDatabase::create().expect("test database initializes");
+    ark_store::test_support::SyncTestState::add_removed_peer(database.path(), "device-blocked")
+        .unwrap();
+    let backend = SqliteStorageBackend::open_for_test(
+        database.path().to_string_lossy().into_owned(),
+        "device-local",
+    )
+    .await
+    .unwrap();
     let mut entity = sync_object("blocked-core-task", "core.task", "Blocked task");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(

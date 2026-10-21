@@ -104,13 +104,13 @@ async fn transport_keys(state: &Arc<ServiceState>) -> Value {
     .unwrap()
 }
 
-fn registry_event_count(dir: &crate::test_support::TestTempDir) -> i64 {
-    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
-    connection
-        .query_row("SELECT COUNT(*) FROM device_registry_events", [], |row| {
-            row.get(0)
-        })
+fn registry_event_count(dir: &crate::test_support::TestTempDir) -> usize {
+    ark_store::test_support::DeviceRegistryFixture::open(&dir.path().join("ark.db"))
         .unwrap()
+        .inspect()
+        .unwrap()
+        .events
+        .len()
 }
 
 /// A + B running iroh, B has consumed A's ticket; A's snapshot must be

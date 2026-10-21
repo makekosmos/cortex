@@ -2,10 +2,24 @@
 async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
     use crate::replication_storage::IntegrationReplicationBackend;
 
-    let (target, origin_key) =
-        trusted_target_with_transport(71, Some("transport-a"), Some("transport-b"));
-    let connection = std::sync::Arc::new(std::sync::Mutex::new(target));
-    let backend = SqliteStorageBackend::for_test(connection.clone());
+    let database =
+        ark_store::test_support::TestDatabase::create().expect("test database initializes");
+    let origin_key = SigningKey::from_bytes(&[71; 32]);
+    let recipient_key = SigningKey::from_bytes(&[72; 32]);
+    ark_store::test_support::IntegrationReplicationTestFixture::seed_authorized_pair(
+        database.path(),
+        &crate::integration_replication::encode_hex(origin_key.verifying_key().as_bytes()),
+        &crate::integration_replication::encode_hex(recipient_key.verifying_key().as_bytes()),
+        Some("transport-a"),
+        Some("transport-b"),
+    )
+    .unwrap();
+    let backend = SqliteStorageBackend::open_for_test(
+        database.path().to_string_lossy().into_owned(),
+        "device-local",
+    )
+    .await
+    .unwrap();
     admit_test_registry_peer(&backend, "node-a").await;
     let change = Change {
         entity: Entity::IntegrationConfiguration(integration_config(serde_json::json!({
@@ -78,16 +92,21 @@ async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
         .await
         .unwrap();
 
-    let guard = connection.lock().unwrap();
-    assert!(guard.is_autocommit());
+    assert!(
+        ark_store::test_support::SyncTestState::connection_is_autocommit(database.path()).unwrap()
+    );
     assert_eq!(
-        ark_store::integration_replication::load_integration_configuration(&guard, "integration-a")
-            .unwrap()
-            .unwrap()
-            .public_settings,
+        ark_store::test_support::IntegrationReplicationTestFixture::load_configuration(
+            database.path(),
+            "integration-a",
+        )
+        .unwrap()
+        .unwrap()
+        .public_settings,
         serde_json::json!({"display": {"region": "us"}})
     );
-    let vector = load_version_vector(&guard).unwrap();
+    let vector =
+        ark_store::test_support::SyncTestState::load_version_vector(database.path()).unwrap();
     assert_eq!(
         vector.get("integration_configuration:integration-a"),
         Some(&"2026-08-31T00:00:00.000Z:000004:node-a".to_string())
@@ -96,10 +115,16 @@ async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
 
 #[tokio::test]
 async fn signed_integration_command_binds_context_peer_inside_transaction() {
-    let connection = std::sync::Arc::new(std::sync::Mutex::new(setup_db()));
-    let fixture_backend = SqliteStorageBackend::for_test(connection.clone());
+    let database =
+        ark_store::test_support::TestDatabase::create().expect("test database initializes");
+    let (db, _owner) = DbHandle::open(
+        database.path().to_string_lossy().into_owned(),
+        "device-local".into(),
+    )
+    .await
+    .unwrap();
+    let fixture_backend = SqliteStorageBackend::with_db_handle(db.clone());
     admit_test_registry_peer(&fixture_backend, "node-b").await;
-    let db = DbHandle::for_test(connection.clone());
     let signing_key = SigningKey::from_bytes(&[81; 32]);
     let frame = sign_replication_batch(&signing_key, 1, "message-wrong-peer", Vec::new());
 
@@ -138,16 +163,33 @@ async fn signed_integration_command_binds_context_peer_inside_transaction() {
         generic_error.to_string(),
         "signed integration frame identity mismatch"
     );
-    assert!(connection.lock().unwrap().is_autocommit());
+    assert!(
+        ark_store::test_support::SyncTestState::connection_is_autocommit(database.path()).unwrap()
+    );
 }
 
 #[tokio::test]
 async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
     use crate::replication_storage::IntegrationReplicationBackend;
 
-    let (target, origin_key) = trusted_target(91);
-    let connection = std::sync::Arc::new(std::sync::Mutex::new(target));
-    let backend = SqliteStorageBackend::for_test(connection.clone());
+    let database =
+        ark_store::test_support::TestDatabase::create().expect("test database initializes");
+    let origin_key = SigningKey::from_bytes(&[91; 32]);
+    let recipient_key = SigningKey::from_bytes(&[92; 32]);
+    ark_store::test_support::IntegrationReplicationTestFixture::seed_authorized_pair(
+        database.path(),
+        &crate::integration_replication::encode_hex(origin_key.verifying_key().as_bytes()),
+        &crate::integration_replication::encode_hex(recipient_key.verifying_key().as_bytes()),
+        None,
+        None,
+    )
+    .unwrap();
+    let backend = SqliteStorageBackend::open_for_test(
+        database.path().to_string_lossy().into_owned(),
+        "device-local",
+    )
+    .await
+    .unwrap();
     admit_test_registry_peer(&backend, "node-a").await;
     let integration_id = "integration-a";
     let mut configuration = integration_config(serde_json::json!({"atomic": true}));
@@ -182,20 +224,19 @@ async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
         .await
         .unwrap_err();
     assert!(error.contains("refresh lease holder does not match signed origin"));
-    {
-        let guard = connection.lock().unwrap();
-        assert!(
-            ark_store::integration_replication::load_integration_configuration(
-                &guard,
-                integration_id
-            )
+    assert!(
+        ark_store::test_support::IntegrationReplicationTestFixture::load_configuration(
+            database.path(),
+            integration_id,
+        )
+        .unwrap()
+        .is_none()
+    );
+    assert!(
+        !ark_store::test_support::SyncTestState::load_version_vector(database.path())
             .unwrap()
-            .is_none()
-        );
-        assert!(!load_version_vector(&guard)
-            .unwrap()
-            .contains_key(&format!("integration_configuration:{integration_id}")));
-    }
+            .contains_key(&format!("integration_configuration:{integration_id}"))
+    );
 
     let corrected_frame = sign_replication_batch(
         &origin_key,

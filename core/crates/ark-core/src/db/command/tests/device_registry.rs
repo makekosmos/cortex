@@ -104,7 +104,7 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         .unwrap();
     ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
         .unwrap()
-        .reject_paired_device_projection()
+        .reject_device_registry_projection()
         .unwrap();
 
     let result = handle

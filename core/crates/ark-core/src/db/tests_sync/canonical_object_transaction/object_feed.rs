@@ -20,7 +20,7 @@ fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
 
 #[tokio::test]
 async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "device-a").await;
     admit_test_registry_peer(&backend, "relay-peer").await;
     let mut entity = sync_object("receipt-replay-task", "core.task", "Original title");
@@ -120,7 +120,7 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
 
 #[tokio::test]
 async fn feed_delivery_coalesces_entity_and_keeps_payload_revision_consistent_with_watermark() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
         "feed-projection",
@@ -180,12 +180,12 @@ async fn feed_delivery_coalesces_entity_and_keeps_payload_revision_consistent_wi
 
 #[tokio::test]
 async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
-    let source = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        setup_db(),
-    ))));
-    let relay = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        setup_db(),
-    ))));
+    let source_test = make_backend().await;
+    let relay_test = make_backend().await;
+    let _source_database = source_test._database;
+    let _relay_database = relay_test._database;
+    let source = Arc::new(source_test.backend);
+    let relay = Arc::new(relay_test.backend);
     admit_test_registry_peer(&source, "origin-peer").await;
     admit_test_registry_peer(&source, "another-peer").await;
     admit_test_registry_peer(&relay, "source-peer").await;
@@ -300,7 +300,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
 
 #[tokio::test]
 async fn object_tombstone_feed_projection_preserves_type_id_for_selective_sync() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "origin-peer").await;
     let object = full_core_task_entity(
         "typed-feed-tombstone",

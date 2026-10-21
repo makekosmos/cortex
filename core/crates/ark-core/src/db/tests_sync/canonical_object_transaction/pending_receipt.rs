@@ -2,7 +2,7 @@ use ark_application::sync_storage::PeerProgressPort;
 
 #[tokio::test]
 async fn pending_authenticated_object_is_accepted() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "peer-a").await;
     let mut entity = sync_object("pending-receipt", "unknown-type", "Future object");
     entity.data.insert("typeVersion".into(), json!("9.9.9"));
@@ -14,19 +14,10 @@ async fn pending_authenticated_object_is_accepted() {
 }
 
 fn save_test_local_policy(
-    conn: &rusqlite::Connection,
+    path: &std::path::Path,
     expected_revision: Option<i64>,
 ) -> ark_application::sync_policy::SyncProfile {
-    ark_store::data_platform::upsert_sync_profile(
-        conn,
-        "device-local",
-        "local-policy",
-        "Local policy",
-        true,
-        expected_revision,
-        &[],
-    )
-    .unwrap()
+    ark_store::test_support::SyncTestState::save_local_profile(path, expected_revision).unwrap()
 }
 
 fn test_policy_identity(
@@ -37,17 +28,11 @@ fn test_policy_identity(
 
 #[tokio::test]
 async fn stale_policy_at_receipt_transaction_rejects_before_inbox_write() {
-    let shared = Arc::new(Mutex::new(setup_db()));
-    let backend = SqliteStorageBackend::for_test(shared.clone());
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "peer-a").await;
-    let old_policy = {
-        let conn = shared.lock().unwrap();
-        test_policy_identity(&save_test_local_policy(&conn, None))
-    };
-    let current_policy = {
-        let conn = shared.lock().unwrap();
-        test_policy_identity(&save_test_local_policy(&conn, Some(1)))
-    };
+    let old_policy = test_policy_identity(&save_test_local_policy(backend.database().path(), None));
+    let current_policy =
+        test_policy_identity(&save_test_local_policy(backend.database().path(), Some(1)));
     let entity = sync_object("stale-receipt", "note_obj", "Must not persist");
 
     let error = backend
@@ -82,17 +67,10 @@ async fn stale_policy_at_receipt_transaction_rejects_before_inbox_write() {
 
 #[tokio::test]
 async fn stale_policy_after_receipt_rejects_apply_without_advancing_inbox_or_objects() {
-    let shared = Arc::new(Mutex::new(setup_db()));
-    let backend = SqliteStorageBackend::for_test(shared.clone());
+    let backend = make_backend().await;
     admit_test_registry_peer(&backend, "peer-a").await;
-    let (old_policy, entity) = {
-        let conn = shared.lock().unwrap();
-        let policy = test_policy_identity(&save_test_local_policy(&conn, None));
-        (
-            policy,
-            sync_object("stale-apply", "note_obj", "Must remain unapplied"),
-        )
-    };
+    let old_policy = test_policy_identity(&save_test_local_policy(backend.database().path(), None));
+    let entity = sync_object("stale-apply", "note_obj", "Must remain unapplied");
     assert!(backend
         .receive_authenticated_entity_with_policy(
             &entity,
@@ -103,10 +81,8 @@ async fn stale_policy_after_receipt_rejects_apply_without_advancing_inbox_or_obj
         )
         .await
         .unwrap());
-    let current_policy = {
-        let conn = shared.lock().unwrap();
-        test_policy_identity(&save_test_local_policy(&conn, Some(1)))
-    };
+    let current_policy =
+        test_policy_identity(&save_test_local_policy(backend.database().path(), Some(1)));
 
     let error = backend
         .apply_authenticated_entity_with_policy(

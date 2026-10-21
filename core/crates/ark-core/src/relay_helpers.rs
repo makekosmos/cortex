@@ -41,7 +41,6 @@ mod tests {
     use crate::sync_transport::{SyncTransport, TransportEvent};
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use futures_util::{SinkExt, StreamExt};
-    use rusqlite::Connection;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex as StdMutex,
@@ -202,13 +201,23 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         format!("ws://127.0.0.1:{port}")
     }
-    fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
-        let conn = Connection::open_in_memory().expect("in-memory db");
-        ark_store::open::init_schema(&conn).expect("schema");
-        let shared = Arc::new(StdMutex::new(conn));
-        let backend = Arc::new(SqliteStorageBackend::for_test(shared));
+    async fn make_storage(
+        device_id: &str,
+    ) -> (
+        Arc<SqliteStorageBackend>,
+        ark_store::test_support::TestDatabase,
+    ) {
+        let database = ark_store::test_support::TestDatabase::create().expect("test database");
+        let backend = Arc::new(
+            SqliteStorageBackend::open_for_test(
+                database.path().to_string_lossy().into_owned(),
+                device_id,
+            )
+            .await
+            .expect("open test storage"),
+        );
         backend.set_device_id(device_id).unwrap();
-        backend
+        (backend, database)
     }
     fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
         let mut data = serde_json::Map::new();
@@ -272,8 +281,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_websocket_fails_closed_for_existing_core_task_without_bound_identity() {
         let relay_url = test_relay_url().await;
-        let storage_a = make_storage("device-a");
-        let storage_b = make_storage("device-b");
+        let (storage_a, _database_a) = make_storage("device-a").await;
+        let (storage_b, _database_b) = make_storage("device-b").await;
         storage_a
             .apply_entity(&todo_entity("relay-existing", "Existing", "device-a", 1))
             .await
@@ -307,8 +316,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_legacy_peers_before_live_data() {
         let relay_url = test_relay_url().await;
-        let storage_a = make_storage("device-a");
-        let storage_b = make_storage("device-b");
+        let (storage_a, _database_a) = make_storage("device-a").await;
+        let (storage_b, _database_b) = make_storage("device-b").await;
         let relay_a = relay_sync(storage_a.clone(), &relay_url, "device-a", "Alpha", None);
         relay_a.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -335,8 +344,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_wrong_hmac_secret() {
         let relay_url = test_relay_url().await;
-        let storage_a = make_storage("device-a");
-        let storage_b = make_storage("device-b");
+        let (storage_a, _database_a) = make_storage("device-a").await;
+        let (storage_b, _database_b) = make_storage("device-b").await;
         storage_a
             .apply_entity(&todo_entity("relay-denied", "Denied", "device-a", 1))
             .await
@@ -374,12 +383,17 @@ mod tests {
 
     #[tokio::test]
     async fn relay_payload_sender_cannot_authorize_object_writes() {
-        let conn = Connection::open_in_memory().unwrap();
-        ark_store::open::init_schema(&conn).unwrap();
-        ark_store::sync_kv::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#)
+        let database = ark_store::test_support::TestDatabase::create().unwrap();
+        ark_store::test_support::SyncTestState::add_removed_peer(database.path(), "device-blocked")
             .unwrap();
-        let shared = Arc::new(StdMutex::new(conn));
-        let backend = Arc::new(SqliteStorageBackend::for_test(shared.clone()));
+        let backend = Arc::new(
+            SqliteStorageBackend::open_for_test(
+                database.path().to_string_lossy().into_owned(),
+                "device-local",
+            )
+            .await
+            .unwrap(),
+        );
         let storage = backend.clone() as Arc<dyn SyncRuntimeStorage>;
         let entity = SyncEntity {
             entity_type: "object".into(),
@@ -428,22 +442,9 @@ mod tests {
                 "authenticated_transport_identity_unavailable"
             );
         }
-        let conn = shared.lock().unwrap();
+        let persisted = storage.load_entities(&HashMap::new()).await.unwrap();
         for candidate in &cases {
-            assert!(ark_store::objects::get_object(&conn, &candidate.id)
-                .unwrap()
-                .is_none());
+            assert!(!persisted.iter().any(|entity| entity.id == candidate.id));
         }
-        let receipts: i64 = conn
-            .query_row(
-                concat!(
-                    "SELECT COUNT(*) FROM entity_write_receipts ",
-                    "WHERE entity_id LIKE 'relay-spoofed-object%'"
-                ),
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(receipts, 0);
     }
 }

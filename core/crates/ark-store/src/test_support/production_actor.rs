@@ -60,11 +60,27 @@ impl ProductionActorFailureProbe {
         )
     }
 
+    pub fn install_deferred_object_commit_failure_path(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "actor probe database path is not UTF-8".to_string())?;
+        let connection = crate::open::open_db(path).map_err(|error| error.to_string())?;
+        Self::install_deferred_object_commit_failure(&connection).map_err(|error| error.to_string())
+    }
+
     pub fn remove_deferred_object_commit_failure(connection: &Connection) -> Result<()> {
         connection.execute_batch(
             "DROP TRIGGER fail_core_task_commit;
              DROP TABLE deferred_core_task_probe;",
         )
+    }
+
+    pub fn remove_deferred_object_commit_failure_path(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "actor probe database path is not UTF-8".to_string())?;
+        let connection = crate::open::open_db(path).map_err(|error| error.to_string())?;
+        Self::remove_deferred_object_commit_failure(&connection).map_err(|error| error.to_string())
     }
 
     pub fn install_deferred_feed_commit_failure(path: &Path) -> Result<(), String> {

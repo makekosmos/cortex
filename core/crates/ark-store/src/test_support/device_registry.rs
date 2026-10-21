@@ -26,8 +26,8 @@ impl DeviceRegistryFixture {
         Ok(Self { connection })
     }
 
-    pub fn reject_paired_device_projection(&self) -> Result<(), String> {
-        crate::test_support::reject_paired_device_projection(&self.connection)
+    pub fn reject_device_registry_projection(&self) -> Result<(), String> {
+        crate::test_support::reject_device_registry_projection(&self.connection)
             .map_err(|error| error.to_string())
     }
 

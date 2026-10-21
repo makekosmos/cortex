@@ -16,6 +16,7 @@ mod core_task_cutover;
 mod data_volume;
 mod device_registry;
 mod external_ref;
+mod foreign_schema;
 mod inbox;
 mod integration_replication;
 mod legacy_writes;
@@ -26,6 +27,7 @@ mod object_write_rollback;
 mod production_actor;
 mod registry_enrollment;
 mod replace_object_link;
+mod sync_test_state;
 mod task_merge_inbound;
 mod task_merge_legacy;
 mod trashed_todo;
@@ -44,8 +46,11 @@ pub use core_task_cutover::LegacyTaskCutoverFixture;
 pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
+pub use foreign_schema::ForeignSchemaFixture;
 pub use inbox::has_inbox_receipt;
-pub use integration_replication::{acquire_refresh_lease, RefreshLeaseAcquireFixture};
+pub use integration_replication::{
+    acquire_refresh_lease, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
+};
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
 };
@@ -56,8 +61,9 @@ pub use object_revision::{
 pub use object_validation::{ObjectValidationFixture, ObjectValidationState};
 pub use object_write_rollback::{ObjectWriteRollbackFixture, ObjectWriteRollbackState};
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
-pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
+pub use registry_enrollment::{reject_device_registry_projection, reject_remote_device_rename};
 pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
+pub use sync_test_state::SyncTestState;
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
 pub use trashed_todo::TrashedTodoFixture;

@@ -5,9 +5,8 @@
 /// `integration_credential_envelope:*`) must survive the save.
 #[tokio::test]
 async fn persist_pull_vector_preserves_concurrent_keys() {
-    let shared = Arc::new(Mutex::new(setup_db()));
-    let backend: Arc<dyn crate::sync_server::SyncRuntimeStorage> =
-        Arc::new(SqliteStorageBackend::for_test(shared.clone()));
+    let test_backend = make_backend().await;
+    let backend: &dyn crate::sync_server::SyncRuntimeStorage = &*test_backend;
 
     let mut pull_vector = VersionVector::new();
     for id in ["entity-a", "entity-b"] {
@@ -17,31 +16,27 @@ async fn persist_pull_vector_preserves_concurrent_keys() {
         );
     }
 
-    {
-        let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
-        let mut stored = stored_vector(&guard);
-        for (key, hlc) in [
-            (
-                "integration_credential_envelope:integration-a:node-b:1",
-                "2026-01-03T00:00:00.000Z:000000:local",
-            ),
-            ("entity-b", "2026-01-02T00:00:00.000Z:000000:local"),
-        ] {
-            stored.insert(key.to_string(), hlc.to_string());
-        }
-        save_stored_vector(&guard, &stored);
+    let mut stored_vector = pull_vector.clone();
+    for (key, hlc) in [
+        (
+            "integration_credential_envelope:integration-a:node-b:1",
+            "2026-01-03T00:00:00.000Z:000000:local",
+        ),
+        ("entity-b", "2026-01-02T00:00:00.000Z:000000:local"),
+    ] {
+        stored_vector.insert(key.to_string(), hlc.to_string());
     }
-    ark_sync::inbound_snapshot::persist_pull_vector(
-        backend.as_ref(),
-        &mut pull_vector,
-        true,
-        true,
-        None,
+    ark_store::test_support::SyncTestState::save_version_vector(
+        test_backend.database().path(),
+        &stored_vector,
     )
-    .await
     .unwrap();
-    let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
-    let stored = stored_vector(&guard);
+    ark_sync::inbound_snapshot::persist_pull_vector(backend, &mut pull_vector, true, true, None)
+        .await
+        .unwrap();
+    let stored =
+        ark_store::test_support::SyncTestState::load_version_vector(test_backend.database().path())
+            .unwrap();
     let get = |key: &str| stored.get(key).map(String::as_str);
     assert_eq!(
         get("integration_credential_envelope:integration-a:node-b:1"),
@@ -55,19 +50,4 @@ async fn persist_pull_vector_preserves_concurrent_keys() {
         get("entity-b"),
         Some("2026-01-02T00:00:00.000Z:000000:local"),
     );
-}
-fn stored_vector(conn: &Connection) -> VersionVector {
-    ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)
-        .unwrap_or(None)
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
-}
-
-fn save_stored_vector(conn: &Connection, vector: &VersionVector) {
-    ark_store::sync_kv::set_sync_kv(
-        conn,
-        VERSION_VECTOR_KEY,
-        &serde_json::to_string(vector).unwrap(),
-    )
-    .unwrap();
 }

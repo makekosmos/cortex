@@ -1,8 +1,8 @@
 #[tokio::test]
 async fn negotiated_receipt_ack_advances_delivery_without_claiming_application() {
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        setup_db(),
-    ))));
+    let test_backend = make_backend().await;
+    let _database = test_backend._database;
+    let backend = Arc::new(test_backend.backend);
     admit_test_registry_peer(&backend, "origin-peer").await;
     let generation = backend.selective_sync_policy_generation();
     backend

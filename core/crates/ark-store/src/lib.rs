@@ -57,6 +57,8 @@ mod canonical_game_tests;
 #[cfg(test)]
 mod canonical_type_bootstrap_tests;
 #[cfg(test)]
+mod core_storage_tests;
+#[cfg(test)]
 mod data_platform_tests;
 #[cfg(test)]
 mod integration_schema_upgrade_tests;
@@ -74,6 +76,8 @@ mod query_contract_tests;
 mod schema_migration_contract_tests;
 #[cfg(test)]
 mod schema_tests;
+#[cfg(test)]
+mod sync_storage_contract_tests;
 #[cfg(test)]
 mod sync_transaction_contract_tests;
 #[cfg(test)]

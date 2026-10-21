@@ -5,13 +5,10 @@ use super::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn failed_enrollment_does_not_start_sync_or_admit_peer() {
     let (fixture_a, fixture_b, _) = pending_pairing().await;
-    let db = rusqlite::Connection::open(fixture_a.dir.path().join("ark.db")).unwrap();
-    db.execute_batch(
-        "CREATE TRIGGER reject_device_registry_enrollment
-         BEFORE INSERT ON device_registry_projection
-         BEGIN SELECT RAISE(ABORT, 'injected enrollment failure'); END;",
-    )
-    .unwrap();
+    ark_store::test_support::DeviceRegistryFixture::open(&fixture_a.db_path())
+        .unwrap()
+        .reject_device_registry_projection()
+        .unwrap();
 
     let result = handle_request(
         &fixture_a.state,

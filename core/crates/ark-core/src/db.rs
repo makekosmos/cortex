@@ -42,9 +42,7 @@ mod integration_replication_publication;
 pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
 #[cfg(test)]
-pub(in crate::db) use integration_replication_apply::{
-    apply_signed_integration_changes, load_version_vector,
-};
+pub(in crate::db) use integration_replication_apply::apply_signed_integration_changes;
 #[cfg(test)]
 use integration_replication_credentials as integration_credentials;
 pub use integration_replication_credentials::{
@@ -63,7 +61,7 @@ pub use integration_replication_publication::{
 };
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use super::*;
     use crate::hlc::HLC;
@@ -75,19 +73,11 @@ mod tests {
         load_integration_node_grant, upsert_authorized_node, upsert_integration_configuration,
         upsert_integration_node_grant,
     };
-    use ark_store::legacy_entities::{
-        batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
-    };
-    use ark_store::objects::{
-        delete_object_link, get_object, get_objects_by_ids, list_object_links,
-        list_objects_by_type, upsert_object_link,
-    };
     use ark_store::open::open_db;
-    use ark_store::usage_queries::merge_top_apps;
-    use rusqlite::{params, Connection};
+    use rusqlite::Connection;
     use serde_json::{json, Value};
 
-    include!("db/tests_core.rs");
+    include!("db/test_fixtures.rs");
     include!("db/tests_sync.rs");
     include!("db/tests_integration_replication.rs");
     include!("db/tests_integration_replication_issuer_lookup.rs");

@@ -1,4 +1,6 @@
-use ark_store::objects::upsert_object_compat as upsert_object;
+use ark_domain::types::{UsageGameDailyTotal, UsageGamePlaytimeBinding};
+
+use crate::objects::upsert_object_compat as upsert_object;
 
 #[test]
 fn usage_game_playtime_summary_matches_bindings_and_range() {
@@ -7,25 +9,25 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
     main_app.exe_path = r"C:\Games\Chronicle\Chronicle.exe".to_string();
     main_app.normalized_exe_path = r"c:\games\chronicle\chronicle.exe".to_string();
     main_app.process_name = "chronicle.exe".to_string();
-    ark_store::usage::upsert_tracked_app(&conn, &main_app).unwrap();
+    crate::usage::upsert_tracked_app(&conn, &main_app).unwrap();
 
     let mut alt_app = make_tracked_app("tracked-alt");
     alt_app.exe_path = r"C:\Games\Chronicle\Chronicle_DX12.exe".to_string();
     alt_app.normalized_exe_path = r"c:\games\chronicle\chronicle_dx12.exe".to_string();
     alt_app.process_name = "chronicle_dx12.exe".to_string();
-    ark_store::usage::upsert_tracked_app(&conn, &alt_app).unwrap();
+    crate::usage::upsert_tracked_app(&conn, &alt_app).unwrap();
 
     let mut helper_app = make_tracked_app("tracked-helper");
     helper_app.exe_path = "".to_string();
     helper_app.normalized_exe_path = "".to_string();
     helper_app.process_name = "Chronicle Helper.exe".to_string();
-    ark_store::usage::upsert_tracked_app(&conn, &helper_app).unwrap();
+    crate::usage::upsert_tracked_app(&conn, &helper_app).unwrap();
 
     let mut other_app = make_tracked_app("tracked-other");
     other_app.exe_path = r"C:\Other\Other.exe".to_string();
     other_app.normalized_exe_path = r"c:\other\other.exe".to_string();
     other_app.process_name = "other.exe".to_string();
-    ark_store::usage::upsert_tracked_app(&conn, &other_app).unwrap();
+    crate::usage::upsert_tracked_app(&conn, &other_app).unwrap();
 
     let sessions = [
         (
@@ -59,7 +61,7 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
         session.ended_at = Some(started_at.replace(":00.000Z", ":30.000Z"));
         session.runtime_ms = foreground_ms;
         session.foreground_ms = foreground_ms;
-        ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
+        crate::usage::upsert_usage_session(&conn, &session).unwrap();
     }
 
     let bindings = vec![
@@ -83,7 +85,7 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
         },
     ];
 
-    let summary = ark_store::usage_queries::load_usage_game_playtime_summary(
+    let summary = crate::usage_queries::load_usage_game_playtime_summary(
         &conn,
         &bindings,
         Some("2026-04-20"),
@@ -116,8 +118,8 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
 fn test_object_model_crud() {
     let conn = setup_db();
     let object_type = make_object_type("crud_fixture_book_type", "РљРЅРёРіР°");
-    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
-    ark_store::type_registry::upsert_object_type(
+    crate::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+    crate::type_registry::upsert_object_type(
         &conn,
         &make_object_type("crud_fixture_type", "Р—Р°РјРµС‚РєР°"),
     )
@@ -131,7 +133,7 @@ fn test_object_model_crud() {
     let link = make_object_link("link-1", "obj-1", "obj-2");
     upsert_object_link(&conn, &link).unwrap();
 
-    let data = ark_store::load_all::load_all(&conn).unwrap();
+    let data = crate::load_all::load_all(&conn).unwrap();
     assert!(data
         .object_types
         .iter()
@@ -149,9 +151,9 @@ fn test_object_model_crud() {
     assert_eq!(data.object_links[0].source_object_id, "obj-1");
 
     delete_object_link(&conn, "link-1").unwrap();
-    ark_store::objects::delete_object(&conn, "obj-2").unwrap();
-    ark_store::type_registry::delete_object_type(&conn, "crud_fixture_book_type").unwrap();
-    let data = ark_store::load_all::load_all(&conn).unwrap();
+    crate::objects::delete_object(&conn, "obj-2").unwrap();
+    crate::type_registry::delete_object_type(&conn, "crud_fixture_book_type").unwrap();
+    let data = crate::load_all::load_all(&conn).unwrap();
     assert_eq!(data.object_links.len(), 0);
     assert_eq!(data.objects.len(), 1);
     assert!(!data
@@ -205,21 +207,21 @@ fn upsert_object_type_preserves_existing_objects_and_links() {
     // Regression: 2026-06-04. SQLite REPLACE cascades through object_types -> objects -> links.
     let conn = setup_db();
     let object_type = make_object_type("custom_note", "Custom Note");
-    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+    crate::type_registry::upsert_object_type(&conn, &object_type).unwrap();
     upsert_object(&conn, &make_object("obj-a", "custom_note", "A")).unwrap();
     upsert_object(&conn, &make_object("obj-b", "custom_note", "B")).unwrap();
     upsert_object_link(&conn, &make_object_link("link-custom", "obj-a", "obj-b")).unwrap();
 
     let mut updated_type = make_object_type("custom_note", "Custom Note Updated");
     updated_type.updated_at = "2026-01-02T00:00:00.000Z".to_string();
-    ark_store::type_registry::upsert_object_type(&conn, &updated_type).unwrap();
+    crate::type_registry::upsert_object_type(&conn, &updated_type).unwrap();
 
     assert_eq!(list_objects_by_type(&conn, "custom_note").unwrap().len(), 2);
     let links = list_object_links(&conn).unwrap();
     assert_eq!(links.len(), 1);
     assert_eq!(links[0].id, "link-custom");
     assert_eq!(
-        ark_store::object_types::get(&conn, "custom_note")
+        crate::object_types::get(&conn, "custom_note")
             .unwrap()
             .unwrap()
             .name,
@@ -266,8 +268,8 @@ fn upsert_object_link_updates_existing_row_in_place() {
 fn object_query_helpers_filter_by_type_and_ids() {
     let conn = setup_db();
     let object_type = make_object_type("query_fixture_book_type", "Book");
-    ark_store::type_registry::upsert_object_type(&conn, &object_type).unwrap();
-    ark_store::type_registry::upsert_object_type(
+    crate::type_registry::upsert_object_type(&conn, &object_type).unwrap();
+    crate::type_registry::upsert_object_type(
         &conn,
         &make_object_type("query_fixture_type", "Journal"),
     )
@@ -309,3 +311,4 @@ fn object_query_helpers_filter_by_type_and_ids() {
     assert!(returned_ids.contains(&"obj-1"));
     assert!(get_objects_by_ids(&conn, &[]).unwrap().is_empty());
 }
+use super::*;

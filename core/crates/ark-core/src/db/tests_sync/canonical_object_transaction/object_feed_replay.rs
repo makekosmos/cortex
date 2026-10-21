@@ -1,8 +1,8 @@
 #[tokio::test]
 async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse() {
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        setup_db(),
-    ))));
+    let test_backend = make_backend().await;
+    let _database = test_backend._database;
+    let backend = Arc::new(test_backend.backend);
     admit_test_registry_peer(&backend, "origin-peer").await;
     admit_test_registry_peer(&backend, "server-peer").await;
     let generation = backend.selective_sync_policy_generation();
@@ -72,9 +72,9 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
 
 #[tokio::test]
 async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress() {
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        setup_db(),
-    ))));
+    let test_backend = make_backend().await;
+    let _database = test_backend._database;
+    let backend = Arc::new(test_backend.backend);
     admit_test_registry_peer(&backend, "legacy-peer").await;
     let digest = ark_application::sync_policy::digest_sync_policy(&[]);
     backend

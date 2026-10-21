@@ -70,11 +70,23 @@ fn request_deserialization_accepts_signed_sync_send() {
     assert!(matches!(request, Request::IntegrationSendSignedSync { .. }));
 }
 
-#[test]
-fn pairing_restart_params_force_iroh_and_replace_ticket() {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(
-        StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
-    )));
+async fn test_storage(
+    database: &ark_store::test_support::TestDatabase,
+) -> Arc<crate::db::SqliteStorageBackend> {
+    Arc::new(
+        crate::db::SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+            "device-a",
+        )
+        .await
+        .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn pairing_restart_params_force_iroh_and_replace_ticket() {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
             storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
@@ -126,11 +138,10 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
 /// The sync runtime fixture shared by the bind-escalation tests below:
 /// loopback-bound, relay transport selected, no iroh ticket — the state a
 /// no-privileges boot leaves behind.
-fn loopback_runtime_fixture() -> SyncRuntime {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(
-        StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
-    )));
-    SyncRuntime {
+async fn loopback_runtime_fixture() -> (SyncRuntime, ark_store::test_support::TestDatabase) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
+    let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
             storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
@@ -162,18 +173,19 @@ fn loopback_runtime_fixture() -> SyncRuntime {
         device_name: "Device A".to_string(),
         auth_secret: None,
         own_addresses: Arc::new(TokioMutex::new(Vec::new())),
-    }
+    };
+    (runtime, database)
 }
 
-#[test]
-fn show_pairing_code_params_escalate_loopback_to_lan() {
+#[tokio::test]
+async fn show_pairing_code_params_escalate_loopback_to_lan() {
     // KOS-269 round 1: showing our own code is the *other* explicit opt-in.
     // A loopback iroh endpoint advertises only 127.0.0.1, which no remote
     // device can reach — so `show_pairing_code` must restart sync with the
     // same all-interfaces/iroh params as entering a code (minus the peer
     // ticket). The restart itself is covered by the param builder: a real
     // all-interfaces bind must not happen in tests.
-    let runtime = loopback_runtime_fixture();
+    let (runtime, _database) = loopback_runtime_fixture().await;
     let params = crate::service::sync::lan_opt_in_params(&runtime, None);
     assert_eq!(params.bind, SyncBind::AllInterfaces);
     assert!(params.use_iroh);
@@ -187,7 +199,7 @@ async fn show_pairing_code_returns_existing_ticket_without_restart() {
     // A LAN-ready runtime must not restart: the request answers with the
     // ticket it already has.
     let state = test_state();
-    let mut runtime = loopback_runtime_fixture();
+    let (mut runtime, _database) = loopback_runtime_fixture().await;
     runtime.start_params.bind = SyncBind::AllInterfaces;
     runtime.start_params.use_iroh = true;
     runtime.transport_choice = Some(TransportChoice::Iroh);

@@ -262,11 +262,7 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
     .unwrap();
     // Валидный SQLite с чужой schema.
     let foreign_path = ark_store::snapshot::backups_dir(&db_path).join("ark.db.backup-foreign");
-    let foreign = rusqlite::Connection::open(&foreign_path).unwrap();
-    foreign
-        .execute_batch("CREATE TABLE other(id TEXT PRIMARY KEY)")
-        .unwrap();
-    drop(foreign);
+    let _foreign = ark_store::test_support::ForeignSchemaFixture::create(&foreign_path).unwrap();
 
     for bad_id in [
         "../ark.db",
