@@ -32,6 +32,22 @@ impl CompetingWriter {
 }
 
 impl ProductionActorFailureProbe {
+    pub fn prepare_path(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "database path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        Self::prepare(&connection).map_err(|error| error.to_string())
+    }
+
+    pub fn page_count_path(path: &Path) -> Result<u32, String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "database path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        Self::page_count(&connection).map_err(|error| error.to_string())
+    }
+
     pub fn install_deferred_object_commit_failure(connection: &Connection) -> Result<()> {
         connection.execute_batch(
             "CREATE TABLE deferred_core_task_probe (

@@ -51,10 +51,10 @@ async fn production_actor_recovers_interrupted_restore_before_ready() {
     let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
     let path = fixture.database_path().to_string_lossy().into_owned();
 
-    let (handle, mut owner) = DbHandle::open(path, "actor-test-device".into())
+    let (_handle, mut owner) = DbHandle::open(path, "actor-test-device".into())
         .await
         .unwrap();
-    let value = handle.with_connection(|connection| fixture.marker_on(connection).unwrap());
+    let value = fixture.marker().unwrap();
     assert_eq!(value, "before");
     assert_eq!(
         fixture.inspect().unwrap(),
@@ -110,13 +110,10 @@ async fn production_actor_refuses_ready_when_restore_capsule_is_missing() {
 }
 
 fn failure_probe_state(
-    handle: &DbHandle,
+    path: &std::path::Path,
     operation_id: &str,
 ) -> ark_store::test_support::ActorFailureProbeState {
-    handle.with_connection(|connection| {
-        ark_store::test_support::ProductionActorFailureProbe::inspect(connection, operation_id)
-            .unwrap()
-    })
+    ark_store::test_support::ProductionActorFailureProbe::inspect_path(path, operation_id).unwrap()
 }
 
 pub(in crate::db::command::tests::production_actor) async fn apply_failure_mutation(
@@ -137,9 +134,7 @@ pub(in crate::db::command::tests::production_actor) async fn apply_failure_mutat
 #[tokio::test]
 async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
     let (_directory, path, handle, mut owner) = open_failure_actor().await;
-    handle.with_connection(|connection| {
-        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
-    });
+    ark_store::test_support::ProductionActorFailureProbe::prepare_path(&path).unwrap();
     let competing_writer = ark_store::test_support::CompetingWriter::open(&path).unwrap();
     competing_writer.begin_immediate().unwrap();
 
@@ -153,7 +148,7 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
         "competing writer should make the actor return SQLITE_BUSY, got {failed:?}"
     );
     assert_eq!(
-        failure_probe_state(&handle, "busy-operation"),
+        failure_probe_state(&path, "busy-operation"),
         ark_store::test_support::ActorFailureProbeState {
             mutations: 0,
             receipts: 0,
@@ -168,7 +163,7 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
     assert_eq!(retry.value, "inserted:0");
     assert!(!retry.replayed);
     assert_eq!(
-        failure_probe_state(&handle, "busy-operation"),
+        failure_probe_state(&path, "busy-operation"),
         ark_store::test_support::ActorFailureProbeState {
             mutations: 1,
             receipts: 1,
@@ -185,12 +180,9 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
 #[tokio::test]
 async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
     let (_directory, path, handle, mut owner) = open_failure_actor().await;
-    handle.with_connection(|connection| {
-        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
-    });
-    let page_count = handle.with_connection(|connection| {
-        ark_store::test_support::ProductionActorFailureProbe::page_count(connection).unwrap()
-    });
+    ark_store::test_support::ProductionActorFailureProbe::prepare_path(&path).unwrap();
+    let page_count =
+        ark_store::test_support::ProductionActorFailureProbe::page_count_path(&path).unwrap();
     let limited_page_count = page_count + 1;
     assert_eq!(
         handle
@@ -243,9 +235,7 @@ async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
 #[tokio::test]
 async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
     let (_directory, path, handle, mut owner) = open_failure_actor().await;
-    handle.with_connection(|connection| {
-        ark_store::test_support::ProductionActorFailureProbe::prepare(connection).unwrap();
-    });
+    ark_store::test_support::ProductionActorFailureProbe::prepare_path(&path).unwrap();
 
     let failed = handle
         .submit_with_operation_id(
