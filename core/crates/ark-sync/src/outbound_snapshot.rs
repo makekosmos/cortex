@@ -1,16 +1,17 @@
+use ark_domain::sync_policy::PolicyIdentity;
 use std::collections::HashMap;
 use std::future::Future;
 
 use ark_application::sync_storage::{
     CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort, PolicyBoundSnapshotReadError,
-    PolicyIdentity, SyncEntityReadPort, SyncReadClass,
+    SyncEntityReadPort, SyncReadClass,
 };
 use ark_domain::types::{SyncEntity, VersionVector};
 
 use crate::protocol::{
-    generate_id, is_usage_entity, merge_usage_cursors, should_send_entity, split_into_batches,
-    LanSyncMessage,
+    is_usage_entity, merge_usage_cursors, should_send_entity, split_into_batches,
 };
+use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
 
 const SNAPSHOT_PAGE_SIZE: usize = 100;
 

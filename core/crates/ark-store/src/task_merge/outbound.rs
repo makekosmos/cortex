@@ -2,8 +2,8 @@ use super::{
     claim_outbound_batch, create_outbound_progress, load_outbound_progress, read_journal_page,
     task_merge_watermark, update_outbound_policy_identity, TaskMergeStoreError,
 };
-use ark_application::sync_policy::PolicyIdentity;
-use ark_application::sync_storage::TaskMergeBatch;
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::task_merge_sync::TaskMergeBatch;
 use rusqlite::Transaction;
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ pub(crate) fn prepare_task_merge_outbound_batch(
     limit: usize,
 ) -> Result<Option<TaskMergeBatch>, TaskMergeOutboundError> {
     require_delivery_policy(transaction, peer_device_id, identity)?;
-    if limit == 0 || limit > ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE {
+    if limit == 0 || limit > ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE {
         return Err(TaskMergeOutboundError::Invalid(
             "task_merge_page_limit_exceeded".into(),
         ));
@@ -128,7 +128,7 @@ fn load_in_flight_batch(
         transaction,
         after,
         through,
-        ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE,
+        ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE,
     )?;
     if page.entries.last().map(|entry| entry.position) != Some(through) {
         return Err(TaskMergeOutboundError::Storage(

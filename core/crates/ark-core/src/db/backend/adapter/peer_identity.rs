@@ -7,7 +7,7 @@ impl PeerSyncPolicyPort for SqliteStorageBackend {
     async fn accepted_policy_identity_for_peer(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::PolicyIdentity>, String> {
         Ok(Some(
             self.load_accepted_peer_sync_policy(peer_device_id)
                 .await?

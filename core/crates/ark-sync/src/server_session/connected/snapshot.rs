@@ -1,9 +1,8 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use crate::{
-    outbound_snapshot::{acknowledge_snapshot, OutboundSnapshot, SnapshotEmission},
-    protocol::ProtocolCapability,
-    session_io::SessionIoSender,
-};
+use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_sync_contracts::session_io::SessionIoSender;
+
+use crate::outbound_snapshot::{acknowledge_snapshot, OutboundSnapshot, SnapshotEmission};
 use ark_domain::types::VersionVector;
 
 impl ConnectedServerSession {
@@ -78,7 +77,7 @@ impl ConnectedServerSession {
         &mut self,
         actor: &ServerSessionActor,
         batch_id: String,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         sender: &SessionIoSender,
     ) -> bool {
         let Some(device_id) = self.peer.device_id.clone() else {

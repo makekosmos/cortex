@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ark_application::sync_storage::TaskMergeJournalEntry;
+use ark_domain::task_merge_sync::TaskMergeJournalEntry;
 use ark_domain::types::{ArkObject, ObjectLink};
 use rusqlite::OptionalExtension;
 
@@ -69,7 +69,7 @@ impl TaskMergeInboundFixture {
             &self.connection,
             0,
             through_position,
-            ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE,
+            ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE,
         )
         .map_err(|error| error.to_string())?
         .entries;

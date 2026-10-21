@@ -1,7 +1,8 @@
-use crate::protocol::{
-    validate_protocol_selection, verify_hello_auth_hmac, LanSyncMessage, NegotiatedProtocol,
-    ProtocolCapability, ProtocolNegotiationError, ProtocolOffer,
+use ark_sync_contracts::protocol_negotiation::{
+    validate_protocol_selection, verify_hello_auth_hmac, NegotiatedProtocol, ProtocolCapability,
+    ProtocolNegotiationError, ProtocolOffer,
 };
+use ark_sync_contracts::wire::LanSyncMessage;
 
 #[derive(Clone, Copy)]
 pub struct ServerHelloValidationRequest<'a> {
@@ -127,8 +128,12 @@ mod tests {
     fn accepted_server_hello_keeps_identity_metadata_and_negotiated_protocol() {
         let local_offer = ProtocolOffer::current_with_registry_history(true);
         let remote_offer = ProtocolOffer::current_with_registry_history(true);
-        let protocol =
-            crate::protocol::negotiate_protocol(&local_offer, &remote_offer, false).unwrap();
+        let protocol = ark_sync_contracts::protocol_negotiation::negotiate_protocol(
+            &local_offer,
+            &remote_offer,
+            false,
+        )
+        .unwrap();
         let message = LanSyncMessage::Hello {
             protocol_version: protocol.version,
             device_id: "server-device".to_owned(),
@@ -168,8 +173,12 @@ mod tests {
     fn server_hello_requires_matching_space_authentication_and_registry_history() {
         let local_offer = ProtocolOffer::current_with_registry_history(true);
         let remote_offer = ProtocolOffer::current(true);
-        let protocol =
-            crate::protocol::negotiate_protocol(&local_offer, &remote_offer, false).unwrap();
+        let protocol = ark_sync_contracts::protocol_negotiation::negotiate_protocol(
+            &local_offer,
+            &remote_offer,
+            false,
+        )
+        .unwrap();
         let request = ServerHelloValidationRequest {
             local_device_id: "client-device",
             local_space_id: "space-a",
@@ -193,8 +202,12 @@ mod tests {
         );
 
         let registryless_offer = ProtocolOffer::current(false);
-        let registryless_protocol =
-            crate::protocol::negotiate_protocol(&local_offer, &registryless_offer, false).unwrap();
+        let registryless_protocol = ark_sync_contracts::protocol_negotiation::negotiate_protocol(
+            &local_offer,
+            &registryless_offer,
+            false,
+        )
+        .unwrap();
         let registryless = server_hello("space-a", &registryless_offer, &registryless_protocol);
         let request_without_auth = ServerHelloValidationRequest {
             auth_secret: None,

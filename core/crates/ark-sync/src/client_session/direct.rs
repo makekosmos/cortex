@@ -46,10 +46,10 @@ impl DirectClientSession {
 
     pub async fn receive(
         &self,
-        session_io: &mut crate::session_io::SessionIo,
+        session_io: &mut ark_sync_contracts::session_io::SessionIo,
     ) -> DirectClientSessionInput {
         match session_io.receive().await {
-            Some(crate::session_io::SessionIoEvent::Message(message)) => {
+            Some(ark_sync_contracts::session_io::SessionIoEvent::Message(message)) => {
                 match self.transition(*message) {
                     DirectClientSessionEffect::Dispatch(message) => {
                         DirectClientSessionInput::Message(message)
@@ -60,13 +60,13 @@ impl DirectClientSession {
                     }
                 }
             }
-            Some(crate::session_io::SessionIoEvent::MalformedMessage) => {
+            Some(ark_sync_contracts::session_io::SessionIoEvent::MalformedMessage) => {
                 DirectClientSessionInput::Malformed
             }
-            Some(crate::session_io::SessionIoEvent::Failed(error)) => {
+            Some(ark_sync_contracts::session_io::SessionIoEvent::Failed(error)) => {
                 DirectClientSessionInput::Failed(error)
             }
-            Some(crate::session_io::SessionIoEvent::Closed) | None => {
+            Some(ark_sync_contracts::session_io::SessionIoEvent::Closed) | None => {
                 DirectClientSessionInput::Closed
             }
         }
@@ -98,7 +98,7 @@ impl Default for DirectClientSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::LanSyncMessage;
+    use ark_sync_contracts::wire::LanSyncMessage;
 
     fn hello(device_id: &str) -> LanSyncMessage {
         LanSyncMessage::Hello {

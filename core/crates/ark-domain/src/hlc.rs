@@ -124,7 +124,7 @@ impl HLC {
                     wall_time: s.to_string(),
                     counter: 0,
                     device_id: String::new(),
-                }
+                };
             }
         };
         // first_colon + 1 is safe because ':' was found within the string.
@@ -136,7 +136,7 @@ impl HLC {
                     wall_time: s[..first_colon].to_string(),
                     counter: rest.parse::<u64>().unwrap_or(0),
                     device_id: String::new(),
-                }
+                };
             }
         };
 

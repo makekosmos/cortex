@@ -6,7 +6,7 @@ pub(super) async fn handle_task_merge_batch(
     local_device_id: &str,
     tx: &ClientMessageSender,
     authenticated_tx: &AuthenticatedTx,
-    batch: ark_application::sync_storage::TaskMergeBatch,
+    batch: ark_domain::task_merge_sync::TaskMergeBatch,
 ) -> Result<(), String> {
     let supported = authenticated_tx
         .lock()
@@ -18,7 +18,7 @@ pub(super) async fn handle_task_merge_batch(
                 && session
                     .protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    .contains(&ProtocolCapability::TaskMergeBootstrapV2)
         });
     if !supported {
         return Ok(());
@@ -51,7 +51,7 @@ pub(super) async fn handle_feed_ack_message(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     receipt_ack: bool,
 ) -> bool {
     if !super::snapshot_ack::was_sent(authenticated_tx).await {
@@ -157,7 +157,7 @@ pub(super) async fn handle_live_change(
     on_change: &Arc<Mutex<Option<ClientOnChangeCallback>>>,
     change_id: String,
     entity: SyncEntity,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let (protocol, local_profile) = {
         let session = authenticated_tx.lock().await;
@@ -234,7 +234,7 @@ pub(super) async fn handle_feed_ack(
     ack: ark_application::sync_storage::OutboundAck,
     receipt_ack: bool,
     policy_bound: bool,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     crate::sync_client::acknowledge_client_feed(
         storage,
@@ -257,7 +257,7 @@ pub(super) async fn handle_applied_ack(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let receipt_ack = authenticated_tx
         .lock()
@@ -267,7 +267,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                .contains(&ProtocolCapability::DurableReceiptAckV1)
         });
     let policy_bound = authenticated_tx
         .lock()
@@ -277,7 +277,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,
@@ -300,7 +300,7 @@ pub(super) async fn handle_receipt_ack(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let policy_bound = authenticated_tx
         .lock()
@@ -310,7 +310,7 @@ pub(super) async fn handle_receipt_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,

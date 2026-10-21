@@ -1,4 +1,5 @@
 use super::*;
+use crate::protocol::{is_usage_entity, observe_non_usage_entity};
 
 pub(super) struct Context<'a> {
     pub storage: &'a Arc<dyn SyncRuntimeStorage>,
@@ -15,7 +16,7 @@ pub(super) async fn apply(
     entities: Vec<SyncEntity>,
     is_last: bool,
     usage_complete_through: Option<std::collections::HashMap<String, u64>>,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let Context {
         storage,

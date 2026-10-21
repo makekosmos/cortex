@@ -314,11 +314,11 @@ impl ServerSessionActor {
 
     pub(super) fn try_send_due_peer_list(
         &mut self,
-        sender: &crate::session_io::SessionIoSender,
-    ) -> Result<(), crate::session_io::SessionIoError> {
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
+    ) -> Result<(), ark_sync_contracts::session_io::SessionIoError> {
         if self.is_revoked() {
             self.pending_peer_list = None;
-            return Err(crate::session_io::SessionIoError::OutboundClosed);
+            return Err(ark_sync_contracts::session_io::SessionIoError::OutboundClosed);
         }
         let Some(pending) = self.pending_peer_list.as_mut() else {
             return Ok(());

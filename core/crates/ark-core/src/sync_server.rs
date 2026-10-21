@@ -10,7 +10,9 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::types::*;
-use ark_sync::protocol::*;
+use ark_sync::protocol::merge_peer_records;
+use ark_sync_contracts::protocol_negotiation::normalize_auth_secret;
+use ark_sync_contracts::wire::*;
 
 pub use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
@@ -74,13 +76,13 @@ pub(crate) fn test_server_session_with_keepalive(
 
 #[derive(Clone)]
 enum PeerMessageSender {
-    Session(ark_sync::session_io::SessionIoSender),
+    Session(ark_sync_contracts::session_io::SessionIoSender),
     #[cfg(test)]
     Test(mpsc::UnboundedSender<Message>),
 }
 
 impl PeerMessageSender {
-    fn session(session: ark_sync::session_io::SessionIoSender) -> Self {
+    fn session(session: ark_sync_contracts::session_io::SessionIoSender) -> Self {
         Self::Session(session)
     }
 

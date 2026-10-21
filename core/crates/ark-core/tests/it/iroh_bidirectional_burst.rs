@@ -30,7 +30,7 @@ use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_sync::protocol::{generate_id, LanSyncMessage};
+use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
 /// Number of messages each side sends. Must be large enough to reliably

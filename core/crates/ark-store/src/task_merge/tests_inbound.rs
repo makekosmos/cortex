@@ -10,7 +10,7 @@ fn inbound_progress_store_reads_receipts_and_updates_policy_identity() {
     let transaction = connection
         .transaction()
         .expect("actor-style transaction begins");
-    let identity = ark_application::sync_policy::PolicyIdentity::new(3, "c".repeat(64), true)
+    let identity = ark_domain::sync_policy::PolicyIdentity::new(3, "c".repeat(64), true)
         .expect("policy identity is valid");
     let receipt = TaskMergeInboundBatchReceipt {
         batch_id: "batch-1".into(),
@@ -28,7 +28,7 @@ fn inbound_progress_store_reads_receipts_and_updates_policy_identity() {
         })
     );
 
-    let next_identity = ark_application::sync_policy::PolicyIdentity::new(4, "e".repeat(64), false)
+    let next_identity = ark_domain::sync_policy::PolicyIdentity::new(4, "e".repeat(64), false)
         .expect("next policy identity is valid");
     update_inbound_policy_identity(&transaction, "peer-1", &next_identity)
         .expect("policy identity updates");

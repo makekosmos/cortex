@@ -1,7 +1,8 @@
 use ark_application::sync_storage::{
     OutboundAck, OutboundProgress, OutboundProgressMutation as ProgressMutation,
-    OutboundProgressPolicy, OutboundProgressWrite, PolicyIdentity,
+    OutboundProgressPolicy, OutboundProgressWrite,
 };
+use ark_domain::sync_policy::PolicyIdentity;
 
 #[async_trait::async_trait]
 impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {

@@ -1,8 +1,8 @@
-use ark_sync::session_io::{SessionIo, SessionIoError};
+use ark_sync_contracts::session_io::{SessionIo, SessionIoError};
 
 pub(super) async fn finish_rejected_session(
     session_io: SessionIo,
-    sender: &ark_sync::session_io::SessionIoSender,
+    sender: &ark_sync_contracts::session_io::SessionIoSender,
 ) -> Result<(), SessionIoError> {
     sender.close();
     session_io.finish().await
@@ -33,7 +33,7 @@ mod tests {
             .await
             .expect("finish waits for transport worker completion");
         assert!(matches!(
-            sender.try_send(ark_sync::protocol::LanSyncMessage::Ping { ts: 1 }),
+            sender.try_send(ark_sync_contracts::wire::LanSyncMessage::Ping { ts: 1 }),
             Err(SessionIoError::OutboundClosed)
         ));
     }

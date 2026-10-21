@@ -1,4 +1,6 @@
-pub use ark_sync::transport::*;
+pub use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+pub use ark_sync_contracts::transport::*;
+pub use ark_sync_contracts::wire::LanSyncMessage;
 
 use std::sync::Arc;
 
@@ -12,14 +14,14 @@ pub enum SyncTransportHandle {
     Relay(Arc<dyn SyncTransport>),
     Iroh {
         transport: Arc<dyn IrohSessionTransport>,
-        peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl>,
+        peer_control: Arc<dyn PeerSessionControl>,
     },
 }
 
 impl SyncTransportHandle {
     pub fn iroh_with_peer_control(
         transport: Arc<dyn IrohSessionTransport>,
-        peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl>,
+        peer_control: Arc<dyn PeerSessionControl>,
     ) -> Self {
         Self::Iroh {
             transport,
@@ -31,7 +33,7 @@ impl SyncTransportHandle {
         Self::Relay(transport)
     }
 
-    pub fn peer_control(&self) -> Option<Arc<dyn ark_sync::relay_registry::PeerSessionControl>> {
+    pub fn peer_control(&self) -> Option<Arc<dyn PeerSessionControl>> {
         match self {
             Self::Relay(_) => None,
             Self::Iroh { peer_control, .. } => Some(peer_control.clone()),
@@ -55,7 +57,7 @@ impl SyncTransportHandle {
         }
     }
 
-    pub fn send(&self, message: ark_sync::protocol::LanSyncMessage) -> Result<(), String> {
+    pub fn send(&self, message: LanSyncMessage) -> Result<(), String> {
         match self {
             Self::Relay(transport) => transport.send(message),
             Self::Iroh { transport, .. } => transport.send(message),
@@ -84,3 +86,4 @@ impl From<Arc<dyn SyncTransport>> for SyncTransportHandle {
         Self::Relay(transport)
     }
 }
+pub use ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer;

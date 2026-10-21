@@ -4,16 +4,15 @@ use ark_application::{
     sync_storage::{CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort},
 };
 use ark_domain::types::VersionVector;
-
-use crate::{
-    protocol::{
-        compute_hello_auth_hmac, compute_negotiation_selection_hmac, generate_auth_nonce,
-        negotiate_protocol, verify_hello_auth_hmac, verify_negotiation_offer_hmac, LanSyncMessage,
-        NegotiatedProtocol, ProtocolCapability, ProtocolNegotiationError, ProtocolOffer,
-        ProtocolSelectionTranscript, MAX_PROTOCOL_OFFER_VERSIONS,
-    },
-    registry_admission::AdmissionUpdate,
+use ark_sync_contracts::protocol_negotiation::{
+    compute_hello_auth_hmac, compute_negotiation_selection_hmac, generate_auth_nonce,
+    negotiate_protocol, verify_hello_auth_hmac, verify_negotiation_offer_hmac, NegotiatedProtocol,
+    ProtocolCapability, ProtocolNegotiationError, ProtocolOffer, ProtocolSelectionTranscript,
+    MAX_PROTOCOL_OFFER_VERSIONS,
 };
+use ark_sync_contracts::wire::LanSyncMessage;
+
+use crate::registry_admission::AdmissionUpdate;
 
 mod connected;
 mod direct;

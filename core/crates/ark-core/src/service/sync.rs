@@ -289,7 +289,7 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
                     "peers": [],
                     "incoming_pairing_requests": [],
                     "outgoing_pairing": Value::Null,
-                }))
+                }));
             }
         }
     };

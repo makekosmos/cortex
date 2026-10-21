@@ -1,0 +1,17 @@
+[package]
+name = "ark-sync-contracts"
+version = "0.1.0"
+edition.workspace = true
+description = "Shared ARK sync wire and transport contracts"
+
+[dependencies]
+ark-domain = { path = "../ark-domain" }
+async-trait.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[lints]
+workspace = true

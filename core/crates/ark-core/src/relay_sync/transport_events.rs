@@ -34,7 +34,7 @@ impl RelaySync {
                         let mut pending = self.pending_responder_hellos.lock().await;
                         match pending.get(&transport_public_key) {
                             Some(hello)
-                                if ark_sync::protocol::message_origin_device_id(hello)
+                                if ark_sync_contracts::wire::message_origin_device_id(hello)
                                     == Some(device_id.clone()) =>
                             {
                                 pending.remove(&transport_public_key)
@@ -217,7 +217,7 @@ impl RelaySync {
                         let mut pending = self.pending_responder_hellos.lock().await;
                         let before = pending.len();
                         pending.retain(|_, hello| {
-                            ark_sync::protocol::message_origin_device_id(hello).as_deref()
+                            ark_sync_contracts::wire::message_origin_device_id(hello).as_deref()
                                 != Some(device_id.as_str())
                         });
                         pending.len() != before

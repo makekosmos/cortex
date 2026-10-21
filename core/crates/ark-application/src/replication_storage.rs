@@ -80,7 +80,7 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
         authenticated_peer_id: &str,
         message_id: &str,
         local_device_id: &str,
-        policy_identity: Option<crate::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<bool, String>;
 
     async fn apply_authenticated_entity(
@@ -102,7 +102,7 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
         authenticated_peer_id: &str,
         message_id: &str,
         local_device_id: &str,
-        policy_identity: Option<crate::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<crate::sync_storage::InboundApplyOutcome, String>;
 }
 

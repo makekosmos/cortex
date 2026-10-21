@@ -1,7 +1,7 @@
 use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::{RegistryEvent, RegistryOperation};
 
-use crate::protocol::{generate_id, LanSyncMessage};
+use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
 
 use super::{
     state::{exchanging, valid_digest, Admission},

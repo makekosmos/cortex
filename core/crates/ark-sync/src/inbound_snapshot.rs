@@ -1,14 +1,13 @@
+use ark_domain::sync_policy::PolicyIdentity;
 use std::collections::HashMap;
 
 use ark_application::replication_storage::AuthenticatedEntityBackend;
 use ark_application::sync_policy::SyncProfile;
-use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort, PolicyIdentity};
+use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort};
 use ark_domain::types::{SyncEntity, VersionVector};
 
-use crate::protocol::{
-    is_usage_entity, observe_non_usage_entity, sync_policy_identity, NegotiatedProtocol,
-    ProtocolCapability,
-};
+use crate::protocol::{is_usage_entity, observe_non_usage_entity, sync_policy_identity};
+use ark_sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
 
 pub struct InboundSnapshotBatch {
     local_device_id: String,

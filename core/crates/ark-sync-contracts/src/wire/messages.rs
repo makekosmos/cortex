@@ -1,3 +1,7 @@
+use super::{default_sync_policy_active, SyncPolicyRuleWire};
+use ark_domain::types::*;
+use serde::{Deserialize, Serialize};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -5,7 +9,7 @@
 pub const LAN_SYNC_PORT: u16 = 21531;
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_BATCH_SIZE: usize = 100;
-pub use ark_application::sync_storage::MAX_SYNC_BATCH_BYTES as MAX_BATCH_BYTES;
+pub const MAX_BATCH_BYTES: usize = ark_domain::types::MAX_SYNC_BATCH_BYTES;
 pub const BATCH_ACK_TIMEOUT_MS: u64 = 10_000;
 pub const LIVE_ACK_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_RETRIES: u32 = 3;
@@ -76,7 +80,7 @@ pub enum LanSyncMessage {
         entities: Vec<SyncEntity>,
         is_last: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
         // Per usage origin device, the highest seq the sender can serve
@@ -95,7 +99,7 @@ pub enum LanSyncMessage {
         batch_id: String,
         accepted: usize,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
 
     #[serde(rename = "live_change")]
@@ -103,7 +107,7 @@ pub enum LanSyncMessage {
         change_id: String,
         entity: SyncEntity,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
     },
@@ -112,7 +116,7 @@ pub enum LanSyncMessage {
     LiveAck {
         change_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
 
     /// The durable inbox has committed the message. This does not mean that
@@ -122,19 +126,19 @@ pub enum LanSyncMessage {
     LiveReceiptAck {
         change_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
 
     #[serde(rename = "task_merge_batch")]
     TaskMergeBatch {
-        batch: ark_application::sync_storage::TaskMergeBatch,
+        batch: ark_domain::task_merge_sync::TaskMergeBatch,
     },
 
     #[serde(rename = "task_merge_batch_ack")]
     TaskMergeBatchAck {
         batch_id: String,
         through_position: i64,
-        policy_identity: ark_application::sync_storage::PolicyIdentity,
+        policy_identity: ark_domain::sync_policy::PolicyIdentity,
     },
 
     /// Refuses an incompatible protocol offer before the peer is admitted.

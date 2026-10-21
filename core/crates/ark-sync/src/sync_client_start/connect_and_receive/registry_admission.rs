@@ -97,10 +97,9 @@ impl PendingRegistryAdmission {
         {
             send_msg(tx, policy_message).await?;
         }
-        let policy_bound_delivery = ready
-            .protocol()
-            .capabilities
-            .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+        let policy_bound_delivery = ready.protocol().capabilities.contains(
+            &ark_sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
+        );
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: ready.peer_device_id().to_owned(),
             registry_session_id: ready.registry_session_id().to_owned(),

@@ -2,10 +2,10 @@ use super::{
     canonical_operation, check_operation, persist_operation, read_conflict_set, read_journal_page,
     TaskMergeAppendError, TaskMergeOperationCheck, TaskMergeOperationOrigin, TaskMergeStoreError,
 };
-use ark_application::sync_storage::TaskMergeJournalRecord;
 use ark_domain::task_merge::{
     OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit, TaskMergeValue,
 };
+use ark_domain::task_merge_sync::TaskMergeJournalRecord;
 use ark_domain::types::{ArkObject, ObjectLink};
 use rusqlite::Connection;
 use serde_json::json;

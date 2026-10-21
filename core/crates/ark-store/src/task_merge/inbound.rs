@@ -1,7 +1,7 @@
 use super::{storage_error, TaskMergeStoreError};
-use ark_application::sync_policy::PolicyIdentity;
-use ark_application::sync_storage::{TaskMergeBatch, TaskMergeBatchAck, TaskMergeJournalRecord};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::task_merge::TaskMergeOperation;
+use ark_domain::task_merge_sync::{TaskMergeBatch, TaskMergeBatchAck, TaskMergeJournalRecord};
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
 

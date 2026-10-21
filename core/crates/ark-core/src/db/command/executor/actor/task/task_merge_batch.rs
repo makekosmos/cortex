@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 pub(in crate::db::command) struct ApplyTaskMergeBatchTask {
     pub context: CommandContext,
     pub command: ApplyTaskMergeBatchCommand,
-    pub reply: oneshot::Sender<Result<ark_application::sync_storage::TaskMergeBatchAck, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_domain::task_merge_sync::TaskMergeBatchAck, DbError>>,
 }
 
 impl WriterTask for ApplyTaskMergeBatchTask {

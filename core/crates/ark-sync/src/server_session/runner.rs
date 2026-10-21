@@ -1,7 +1,5 @@
-use crate::{
-    protocol::LanSyncMessage,
-    session_io::{SessionIo, SessionIoEvent},
-};
+use ark_sync_contracts::session_io::{SessionIo, SessionIoEvent};
+use ark_sync_contracts::wire::LanSyncMessage;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DirectServerSessionEnd {

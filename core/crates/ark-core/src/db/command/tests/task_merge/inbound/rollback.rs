@@ -13,22 +13,22 @@ async fn inbound_batch_rolls_back_earlier_entries_when_a_later_entry_fails() {
         .await
         .unwrap();
     let identity = ark_application::sync_policy::default_sync_policy_identity();
-    let batch = ark_application::sync_storage::TaskMergeBatch {
+    let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "d1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 2,
         entries: vec![
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 1,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                     operation: operation('1', &[], "first entry"),
                     expected_conflict_digest: None,
                 },
             },
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 2,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                     operation: operation('1', &[], "conflicting duplicate"),
                     expected_conflict_digest: None,
                 },

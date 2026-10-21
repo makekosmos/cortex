@@ -1,6 +1,5 @@
 mod auth;
 mod negotiation;
-
 pub use auth::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, verify_hello_auth_hmac,
 };

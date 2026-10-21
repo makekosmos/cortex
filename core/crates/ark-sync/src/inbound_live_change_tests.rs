@@ -2,15 +2,16 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
 
 use ark_application::replication_storage::AuthenticatedEntityBackend;
-use ark_application::sync_policy::{PolicyIdentity, SyncProfile};
+use ark_application::sync_policy::SyncProfile;
 use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 
 use super::{
     apply_live_change, prepare_live_change, IncomingLiveChange, LiveChangeDisposition,
     VersionVectorWriteMode,
 };
-use crate::protocol::{NegotiatedProtocol, ProtocolCapability};
+use ark_sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
 
 struct FakeStorage {
     trace: Mutex<Vec<&'static str>>,

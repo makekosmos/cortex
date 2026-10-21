@@ -1,9 +1,9 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use crate::{
-    protocol::{LanSyncMessage, ProtocolCapability},
-    session_io::SessionIoSender,
-    task_merge_delivery::prepare_outbound_batch,
-};
+use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_sync_contracts::session_io::SessionIoSender;
+use ark_sync_contracts::wire::LanSyncMessage;
+
+use crate::task_merge_delivery::prepare_outbound_batch;
 
 impl ConnectedServerSession {
     pub(in crate::server_session) async fn pump_task_merge(

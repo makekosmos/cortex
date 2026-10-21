@@ -5,8 +5,9 @@ edition.workspace = true
 description = "Networking transports and host discovery for ARK"
 
 [dependencies]
+ark-domain = { path = "../ark-domain" }
 ark-net-policy = { path = "../ark-net-policy" }
-ark-sync = { path = "../ark-sync" }
+ark-sync-contracts = { path = "../ark-sync-contracts" }
 async-trait.workspace = true
 futures-util.workspace = true
 if-addrs = "0.13"
@@ -31,7 +32,6 @@ default = ["desktop-net"]
 desktop-net = ["iroh/portmapper", "iroh/metrics", "iroh/fast-apple-datapath"]
 
 [dev-dependencies]
-ark-domain = { path = "../ark-domain" }
 ed25519-dalek.workspace = true
 
 [lints]

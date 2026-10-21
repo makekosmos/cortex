@@ -14,14 +14,14 @@ struct ServerPeerOutboundGuard {
 }
 
 #[async_trait::async_trait]
-impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
+impl ark_sync_contracts::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
     async fn allow(&self, message: &LanSyncMessage) -> bool {
-        let ready_peer = if ark_sync::protocol::requires_registry_admission(message) {
+        let ready_peer = if ark_sync_contracts::wire::requires_registry_admission(message) {
             current_ready_peer(self.storage.as_ref(), &self.peers, self.peer_id).await
         } else {
             None
         };
-        if ark_sync::protocol::requires_registry_admission(message) && ready_peer.is_none() {
+        if ark_sync_contracts::wire::requires_registry_admission(message) && ready_peer.is_none() {
             return false;
         }
 

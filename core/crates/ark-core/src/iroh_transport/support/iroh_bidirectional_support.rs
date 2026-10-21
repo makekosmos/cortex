@@ -1,3 +1,4 @@
+use ark_domain::task_merge_sync::TaskMergeBatch;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -5,8 +6,7 @@ use ed25519_dalek::{Signer, SigningKey};
 use tokio::sync::mpsc;
 
 use ark_application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeBatch,
-    TaskMergeDeliveryPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
 use ark_core::integration_replication::{
     encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
@@ -19,7 +19,7 @@ use ark_core::sync_server::{
 };
 use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_sync::protocol::{generate_id, LanSyncMessage};
+use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
 struct TestStorage {
@@ -36,7 +36,7 @@ impl ark_application::sync_storage::PeerSyncPolicyPort for TestStorage {
     async fn accepted_policy_identity_for_peer(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::PolicyIdentity>, String> {
         self.inner
             .accepted_policy_identity_for_peer(peer_device_id)
             .await
@@ -48,7 +48,7 @@ impl TaskMergeDeliveryPort for TestStorage {
     async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         limit: usize,
     ) -> Result<Option<TaskMergeBatch>, ark_application::sync_storage::TaskMergePrepareError> {
         self.inner
@@ -59,7 +59,7 @@ impl TaskMergeDeliveryPort for TestStorage {
     async fn acknowledge_task_merge_batch(
         &self,
         peer_device_id: &str,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         batch_id: &str,
         through_position: i64,
     ) -> Result<i64, String> {
@@ -77,9 +77,9 @@ impl TaskMergeDeliveryPort for TestStorage {
         &self,
         peer_device_id: &str,
         local_device_id: &str,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         batch: &TaskMergeBatch,
-    ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
+    ) -> Result<ark_domain::task_merge_sync::TaskMergeBatchAck, String> {
         self.inner
             .apply_task_merge_batch(peer_device_id, local_device_id, expected_identity, batch)
             .await
@@ -96,7 +96,7 @@ impl PeerProgressPort for TestStorage {
     async fn replace_version_vector_with_policy(
         &self,
         local_device_id: &str,
-        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_domain::sync_policy::PolicyIdentity,
         vector: &ark_core::VersionVector,
     ) -> Result<(), String> {
         self.inner
@@ -109,7 +109,7 @@ impl PeerProgressPort for TestStorage {
     async fn merge_version_vector_with_policy(
         &self,
         local_device_id: &str,
-        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_domain::sync_policy::PolicyIdentity,
         vector: &ark_core::VersionVector,
     ) -> Result<(), String> {
         self.inner
@@ -173,7 +173,7 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     async fn committed_feed_delivery_page_for_peer(
         &self,
         peer: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &ark_domain::sync_policy::PolicyIdentity,
         after_position: i64,
         high_watermark: i64,
         limit: usize,
@@ -211,7 +211,7 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     async fn begin_outbound_policy_identity(
         &self,
         peer: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .begin_outbound_policy_identity(peer, identity)
@@ -220,7 +220,7 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     async fn complete_outbound_snapshot_identity(
         &self,
         peer: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .complete_outbound_snapshot_identity(peer, identity)
@@ -239,7 +239,7 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     async fn record_outbound_scan_identity(
         &self,
         peer: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &ark_domain::sync_policy::PolicyIdentity,
         through: i64,
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
@@ -260,7 +260,7 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     async fn acknowledge_outbound_identity(
         &self,
         peer: &str,
-        identity: &ark_application::sync_storage::PolicyIdentity,
+        identity: &ark_domain::sync_policy::PolicyIdentity,
         position: i64,
         ack: ark_application::sync_storage::OutboundAck,
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {

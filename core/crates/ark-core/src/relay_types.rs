@@ -12,7 +12,12 @@ use crate::sync_server::{
 use crate::sync_transport::{SyncTransport, SyncTransportHandle, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_net::relay::{RelayConfig, RelayTransport};
-use ark_sync::protocol::*;
+use ark_sync::protocol::{
+    is_usage_entity, merge_peer_records, merge_usage_cursors, observe_non_usage_entity,
+    should_send_entity, split_into_batches,
+};
+use ark_sync_contracts::protocol_negotiation::*;
+use ark_sync_contracts::wire::*;
 
 const TAG: &str = "[RelaySync]";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
@@ -34,7 +39,7 @@ struct RelayPeerState {
     platform: Option<String>,
     app_version: Option<String>,
     authenticated: bool,
-    negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
+    negotiated_protocol: Option<ark_sync_contracts::protocol_negotiation::NegotiatedProtocol>,
 }
 
 struct IncomingSyncState {

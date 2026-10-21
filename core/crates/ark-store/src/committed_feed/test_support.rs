@@ -2,11 +2,11 @@ use super::*;
 use crate::writer::SqliteWriter;
 use ark_application::sync_storage::{
     OutboundAck, OutboundProgress, OutboundProgressMutation, OutboundProgressPolicy,
-    OutboundProgressWrite, PolicyIdentity,
+    OutboundProgressWrite,
 };
+use ark_domain::sync_policy::PolicyIdentity;
 
-pub(super) const MAX_FEED_DELIVERY_BYTES: usize =
-    ark_application::sync_storage::MAX_SYNC_BATCH_BYTES - 512;
+pub(super) const MAX_FEED_DELIVERY_BYTES: usize = ark_domain::types::MAX_SYNC_BATCH_BYTES - 512;
 
 pub(super) fn apply_outbound_progress_identity(
     connection: &mut Connection,

@@ -4,28 +4,12 @@ use ark_application::{
 };
 use ark_domain::types::VersionVector;
 
-use crate::{
-    protocol::{
-        compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
-        LanSyncMessage, NegotiatedProtocol, ProtocolCapability, ProtocolOffer, SyncPolicyRuleWire,
-        PROTOCOL_VERSION,
-    },
-    registry_admission::AdmissionUpdate,
+use crate::registry_admission::AdmissionUpdate;
+use ark_sync_contracts::protocol_negotiation::{
+    compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
+    NegotiatedProtocol, ProtocolCapability, ProtocolOffer,
 };
-
-pub struct ConnectedClientTransport {
-    pub io: crate::session_io::SessionIo,
-    pub selected_address: String,
-}
-
-#[async_trait::async_trait]
-pub trait DirectClientConnector: Send + Sync {
-    /// The future must own all dial attempts so dropping it cancels them.
-    async fn connect(
-        &self,
-        addresses: &[String],
-    ) -> Result<Option<ConnectedClientTransport>, crate::session_io::SessionIoError>;
-}
+use ark_sync_contracts::wire::{LanSyncMessage, SyncPolicyRuleWire, PROTOCOL_VERSION};
 
 mod direct;
 mod hello;

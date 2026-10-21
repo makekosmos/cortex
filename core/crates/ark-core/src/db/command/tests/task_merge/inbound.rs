@@ -7,9 +7,9 @@ async fn apply_batch(
     handle: &DbHandle,
     peer_id: &str,
     local_device_id: &str,
-    identity: ark_application::sync_storage::PolicyIdentity,
-    batch: ark_application::sync_storage::TaskMergeBatch,
-) -> Result<ark_application::sync_storage::TaskMergeBatchAck, DbError> {
+    identity: ark_domain::sync_policy::PolicyIdentity,
+    batch: ark_domain::task_merge_sync::TaskMergeBatch,
+) -> Result<ark_domain::task_merge_sync::TaskMergeBatchAck, DbError> {
     handle
         .apply_task_merge_batch(
             CommandContext::authenticated_peer(peer_id.into()),
@@ -184,19 +184,19 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
     let title_baseline = bootstrap.baseline_ids[0].1.clone();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![title_baseline];
-    let batch = ark_application::sync_storage::TaskMergeBatch {
+    let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "b1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 2,
         entries: vec![
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 1,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap),
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(bootstrap),
             },
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 2,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                     operation: edit,
                     expected_conflict_digest: None,
                 },
@@ -239,11 +239,11 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
     );
     assert!(matches!(
         state.journal[0].record,
-        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(_)
     ));
     assert!(matches!(
         state.journal[1].record,
-        ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation { .. }
     ));
     shutdown(&mut owner).await;
 }
@@ -264,14 +264,14 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     let identity = ark_application::sync_policy::default_sync_policy_identity();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![bootstrap().baseline_ids[0].1.clone()];
-    let operation_batch = ark_application::sync_storage::TaskMergeBatch {
+    let operation_batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "c1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 1,
-        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_domain::task_merge_sync::TaskMergeJournalEntry {
             position: 1,
-            record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+            record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                 operation: edit,
                 expected_conflict_digest: None,
             },
@@ -291,13 +291,13 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     assert!(state.journal.is_empty());
 
     let bootstrap_record =
-        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap());
-    let bootstrap_batch = ark_application::sync_storage::TaskMergeBatch {
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(bootstrap());
+    let bootstrap_batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "c2".repeat(16),
         identity: identity.clone(),
         after_position: 1,
         through_position: 2,
-        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_domain::task_merge_sync::TaskMergeJournalEntry {
             position: 2,
             record: bootstrap_record,
         }],
@@ -315,11 +315,11 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     assert_eq!(state.object.unwrap().title, "edited after bootstrap");
     assert!(matches!(
         state.journal[0].record,
-        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(_)
     ));
     assert!(matches!(
         state.journal[1].record,
-        ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation { .. }
     ));
     shutdown(&mut owner).await;
 }
@@ -337,22 +337,22 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
         .await
         .unwrap();
     let identity = ark_application::sync_policy::default_sync_policy_identity();
-    let batch = ark_application::sync_storage::TaskMergeBatch {
+    let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "a1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 2,
         entries: vec![
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 1,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                     operation: operation('1', &[], "remote base"),
                     expected_conflict_digest: None,
                 },
             },
-            ark_application::sync_storage::TaskMergeJournalEntry {
+            ark_domain::task_merge_sync::TaskMergeJournalEntry {
                 position: 2,
-                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                     operation: operation('2', &['1'], "remote resolution"),
                     expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
                 },
@@ -384,7 +384,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
     assert_eq!(replayed.through_position, 2);
 
     let mut altered = batch.clone();
-    altered.entries[1].record = ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+    altered.entries[1].record = ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
         operation: operation('2', &['1'], "altered resolution"),
         expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
     };
@@ -436,14 +436,14 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         .await
         .unwrap();
     let identity = ark_sync::protocol::sync_policy_identity(Some(&profile));
-    let batch = ark_application::sync_storage::TaskMergeBatch {
+    let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "bb".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 1,
-        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_domain::task_merge_sync::TaskMergeJournalEntry {
             position: 1,
-            record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+            record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
                 operation: operation('1', &[], "private on this device"),
                 expected_conflict_digest: None,
             },

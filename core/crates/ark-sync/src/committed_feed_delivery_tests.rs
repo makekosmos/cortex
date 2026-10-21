@@ -1,9 +1,9 @@
 use super::{acknowledge, FeedAck, FeedAckOutcome, FeedFlight};
-use ark_application::sync_policy::PolicyIdentity;
 use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, CommittedFeedPort, FeedSnapshot, OutboundAck,
     OutboundProgress,
 };
+use ark_domain::sync_policy::PolicyIdentity;
 use std::sync::Mutex;
 
 struct FakeFeedStore {

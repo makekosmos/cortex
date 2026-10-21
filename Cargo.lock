@@ -157,6 +157,7 @@ dependencies = [
  "ark-net",
  "ark-store",
  "ark-sync",
+ "ark-sync-contracts",
  "async-trait",
  "chrono",
  "criterion",
@@ -196,7 +197,7 @@ version = "0.1.0"
 dependencies = [
  "ark-domain",
  "ark-net-policy",
- "ark-sync",
+ "ark-sync-contracts",
  "async-trait",
  "ed25519-dalek",
  "futures-util",
@@ -241,11 +242,23 @@ dependencies = [
  "ark-application",
  "ark-domain",
  "ark-store",
+ "ark-sync-contracts",
  "async-trait",
  "chrono",
  "ed25519-dalek",
  "rand 0.8.7",
  "rusqlite",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "ark-sync-contracts"
+version = "0.1.0"
+dependencies = [
+ "ark-domain",
+ "async-trait",
+ "rand 0.8.7",
  "serde",
  "serde_json",
  "sha2 0.10.9",

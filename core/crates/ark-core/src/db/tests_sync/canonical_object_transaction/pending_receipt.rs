@@ -27,7 +27,7 @@ fn save_test_local_policy(
 
 fn test_policy_identity(
     profile: &ark_application::sync_policy::SyncProfile,
-) -> ark_application::sync_storage::PolicyIdentity {
+) -> ark_domain::sync_policy::PolicyIdentity {
     ark_sync::protocol::sync_policy_identity(Some(profile))
 }
 

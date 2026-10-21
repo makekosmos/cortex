@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use ark_domain::hlc::HLC;
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 
-use crate::protocol::{MAX_BATCH_BYTES, MAX_BATCH_SIZE};
+use ark_sync_contracts::wire::{MAX_BATCH_BYTES, MAX_BATCH_SIZE};
 
 pub fn is_usage_entity(entity: &SyncEntity) -> bool {
     matches!(

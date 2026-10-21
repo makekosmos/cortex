@@ -11,7 +11,7 @@ pub(super) async fn is_policy_bound(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1)
         })
 }
 
@@ -19,7 +19,7 @@ pub(super) async fn validate_snapshot_identity(
     storage: &Arc<dyn SyncRuntimeStorage>,
     local_device_id: &str,
     policy_bound: bool,
-    received: &Option<ark_application::sync_storage::PolicyIdentity>,
+    received: &Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let expected = if policy_bound {
         let profile = storage.load_local_sync_profile(local_device_id).await?;
@@ -41,7 +41,7 @@ pub(super) async fn accept(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
+    rules: Vec<ark_sync_contracts::wire::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     if !authenticated {
         return Err("sync policy arrived before authentication".into());
@@ -73,7 +73,7 @@ pub(super) async fn accept_and_start(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
+    rules: Vec<ark_sync_contracts::wire::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     accept(
         storage,

@@ -167,14 +167,16 @@ impl IrohTransport {
             None => (None, None),
         };
         let offer =
-            ark_sync::protocol_negotiation::ProtocolOffer::current_with_registry_history(true)
-                .with_task_merge_bootstrap_v2();
+            ark_sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
+                true,
+            )
+            .with_task_merge_bootstrap_v2();
         let negotiation_hmac =
             auth_secret
                 .as_deref()
                 .zip(auth_nonce.as_deref())
                 .map(|(secret, nonce)| {
-                    ark_sync::protocol_negotiation::compute_negotiation_offer_hmac(
+                    ark_sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(
                         secret,
                         &self.config.space_id,
                         &self.config.device_id,

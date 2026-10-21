@@ -1,8 +1,8 @@
-use ark_application::sync_storage::{
-    TaskMergeJournalEntry, TaskMergeJournalPage, TaskMergeJournalRecord,
-};
 use ark_application::task_merge::TaskMergeConflictRead;
+use ark_application::task_merge::TaskMergeJournalPage;
 use ark_domain::task_merge::{TaskMergeBootstrap, TaskMergeOperation};
+use ark_domain::task_merge_sync::TaskMergeJournalEntry;
+use ark_domain::task_merge_sync::TaskMergeJournalRecord;
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -57,7 +57,7 @@ pub use progress::{
 };
 pub use projection::{materialize_task_if_ready, TaskMergeProjectionOutcome};
 
-const MAX_TASK_MERGE_PAGE_SIZE: usize = ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE;
+const MAX_TASK_MERGE_PAGE_SIZE: usize = ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE;
 
 pub fn ensure_legacy_task_write_allowed(
     connection: &Connection,

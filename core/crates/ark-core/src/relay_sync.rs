@@ -1,3 +1,5 @@
+use ark_sync_contracts::protocol_negotiation::{ProtocolCapability, ProtocolNegotiationError};
+
 mod lifecycle;
 mod registry_exchange;
 mod registry_fanout;

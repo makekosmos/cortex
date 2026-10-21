@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
-use crate::protocol::LanSyncMessage;
 use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 use crate::sync_client::{ClientFeedInFlight, ClientMessageSender};
 
@@ -74,10 +74,10 @@ pub async fn pump_client_committed_feed(
             match page {
                 Ok(page) => page.page,
                 Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
-                    return Ok(())
+                    return Ok(());
                 }
                 Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
-                    return Err(error)
+                    return Err(error);
                 }
             }
         }
@@ -239,7 +239,7 @@ pub async fn acknowledge_client_feed(
     ack: ark_application::sync_storage::OutboundAck,
     receipt_ack: bool,
     policy_bound: bool,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
 ) -> Result<(), String> {
     let mut in_flight = flight.lock().await;
     let flight_state = in_flight.as_ref().map(|(position, identity)| FeedFlight {

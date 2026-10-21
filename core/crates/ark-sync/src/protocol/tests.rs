@@ -1,6 +1,11 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_domain::types::{PeerRecord, SyncEntity};
+    use ark_sync_contracts::wire::LanSyncMessage;
+    use ark_sync_contracts::wire::{
+        deserialize_message, generate_id, requires_registry_admission, serialize_message,
+    };
     use serde_json::json;
 
     #[test]
@@ -19,12 +24,12 @@ mod tests {
 
     #[test]
     fn task_merge_batch_messages_round_trip_with_policy_identity() {
-        let identity = ark_application::sync_storage::PolicyIdentity {
+        let identity = ark_domain::sync_policy::PolicyIdentity {
             revision: 7,
             digest: "ab".repeat(32),
             active: true,
         };
-        let batch = ark_application::sync_storage::TaskMergeBatch {
+        let batch = ark_domain::task_merge_sync::TaskMergeBatch {
             batch_id: "01".repeat(16),
             identity: identity.clone(),
             after_position: 4,

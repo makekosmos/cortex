@@ -2,9 +2,8 @@ use super::{
     read_committed_feed_delivery_page_for_peer, read_committed_feed_delivery_page_with_hook,
 };
 use crate::committed_feed::append_committed_change;
-use ark_application::sync_storage::{
-    CommittedFeedDeliveryPage, PolicyBoundFeedReadError, PolicyIdentity,
-};
+use ark_application::sync_storage::{CommittedFeedDeliveryPage, PolicyBoundFeedReadError};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::ArkObject;
 
 #[test]

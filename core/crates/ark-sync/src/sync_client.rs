@@ -3,12 +3,13 @@ use std::time::Duration;
 
 use tokio::sync::{Mutex, RwLock};
 
-use crate::client_session::DirectClientConnector;
-use crate::protocol::*;
 use crate::task_set::{abort_and_join, join_all, track_task};
 use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::hlc::HLC;
 use ark_domain::integration_replication::SignedSyncEnvelope;
+use ark_sync_contracts::client_transport::DirectClientConnector;
+use ark_sync_contracts::protocol_negotiation::*;
+use ark_sync_contracts::wire::*;
 
 #[path = "sync_client/config.rs"]
 mod config;
@@ -46,7 +47,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) tx: ClientMessageSender,
     pub(crate) sync_started: bool,
     pub(crate) outbound_snapshot: crate::outbound_snapshot::OutboundSnapshotProgress,
-    pub(crate) protocol: crate::protocol::NegotiatedProtocol,
+    pub(crate) protocol: ark_sync_contracts::protocol_negotiation::NegotiatedProtocol,
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
@@ -132,11 +133,11 @@ impl DirectClient {
             let receipt_ack = session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
+                .contains(&ProtocolCapability::DurableReceiptAckV1);
             let policy_bound = session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1);
             drop(guard);
             if let Err(error) = pump_client_committed_feed(
                 &self.storage,

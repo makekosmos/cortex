@@ -17,7 +17,7 @@ impl AuthenticatedEntityBackend for TestStorage {
         _: &str,
         _: &str,
         _: &str,
-        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<bool, String> {
         if policy.is_some() {
             return Err("policy_bound_receipt_unsupported".into());
@@ -49,7 +49,7 @@ impl AuthenticatedEntityBackend for TestStorage {
         peer: &str,
         message_id: &str,
         _: &str,
-        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
         if policy.is_some() {
             return Err("policy_bound_apply_unsupported".into());

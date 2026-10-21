@@ -15,7 +15,7 @@ pub(super) async fn handle(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     batch_id: &str,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
     tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
@@ -44,7 +44,7 @@ async fn apply(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     batch_id: &str,
-    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
     tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
@@ -79,14 +79,12 @@ async fn apply(
     if !session.outbound_snapshot.record_acknowledged(&pending) {
         return Ok(());
     }
-    let receipt_ack = session
-        .protocol
-        .capabilities
-        .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
-    let policy_bound = session
-        .protocol
-        .capabilities
-        .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+    let receipt_ack = session.protocol.capabilities.contains(
+        &ark_sync_contracts::protocol_negotiation::ProtocolCapability::DurableReceiptAckV1,
+    );
+    let policy_bound = session.protocol.capabilities.contains(
+        &ark_sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
+    );
     drop(session_guard);
     super::pump_client_committed_feed(
         storage,

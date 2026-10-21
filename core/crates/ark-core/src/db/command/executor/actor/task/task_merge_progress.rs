@@ -3,7 +3,7 @@ use crate::db::command::commands::{
     AcknowledgeTaskMergeBatchCommand, PrepareTaskMergeBatchCommand,
 };
 use crate::db::DbError;
-use ark_application::sync_storage::TaskMergeBatch;
+use ark_domain::task_merge_sync::TaskMergeBatch;
 use ark_store::task_merge::TaskMergeOutboundError;
 use ark_store::writer::{SqliteWriter, StoreErrorKind, StoreTransactionFailure};
 use tokio::sync::oneshot;

@@ -1,6 +1,7 @@
-use ark_application::sync_policy::PolicyIdentity;
 use ark_application::sync_storage::PeerSyncPolicyPort;
-use ark_application::task_merge::{TaskMergeBatch, TaskMergeDeliveryPort, TaskMergePrepareError};
+use ark_application::task_merge::{TaskMergeDeliveryPort, TaskMergePrepareError};
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::task_merge_sync::TaskMergeBatch;
 
 const OUTBOUND_BATCH_LIMIT: usize = 100;
 
@@ -71,12 +72,10 @@ pub async fn acknowledge_outbound_batch<S: PeerSyncPolicyPort + TaskMergeDeliver
 mod tests {
     use super::{acknowledge_outbound_batch, prepare_outbound_batch};
     use ark_application::{
-        sync_policy::PolicyIdentity,
         sync_storage::PeerSyncPolicyPort,
-        task_merge::{
-            TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergePrepareError,
-        },
+        task_merge::{TaskMergeDeliveryPort, TaskMergePrepareError},
     };
+    use ark_domain::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
     use std::sync::Mutex;
 
     struct FakeStorage {

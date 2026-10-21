@@ -1,7 +1,7 @@
     {
         match result {
             Ok(Some(transport)) => {
-                let crate::client_session::ConnectedClientTransport {
+                let ark_sync_contracts::client_transport::ConnectedClientTransport {
                     io: mut session_io,
                     selected_address: winning_addr,
                 } = transport;

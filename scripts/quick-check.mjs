@@ -26,6 +26,7 @@ const CRATE_MAP = [
   { prefix: "core/crates/ark-domain/", packages: ["ark-domain"] },
   { prefix: "core/crates/ark-application/", packages: ["ark-application"] },
   { prefix: "core/crates/ark-store/", packages: ["ark-store"] },
+  { prefix: "core/crates/ark-sync-contracts/", packages: ["ark-sync-contracts"] },
   { prefix: "core/crates/ark-sync/", packages: ["ark-sync"] },
   { prefix: "core/crates/ark-net-policy/", packages: ["ark-net-policy"] },
   { prefix: "core/crates/ark-net/", packages: ["ark-net"] },

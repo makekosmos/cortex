@@ -82,9 +82,11 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
         assert_eq!(operation.parents.len(), 1);
         assert!(baseline_ids.contains(operation.parents[0].as_str()));
         assert!(operation.observed_heads.len() >= ark_domain::task_merge::TaskMergeUnit::ALL.len());
-        assert!(baseline_ids.iter().all(|baseline| operation
-            .observed_heads
-            .contains(&ark_domain::task_merge::OperationId::parse(baseline.clone()).unwrap())));
+        assert!(baseline_ids.iter().all(|baseline| {
+            operation
+                .observed_heads
+                .contains(&ark_domain::task_merge::OperationId::parse(baseline.clone()).unwrap())
+        }));
     }
     let final_object = handle_request(&state, Request::GetObject { id: id.into() })
         .await

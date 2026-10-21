@@ -1,11 +1,12 @@
 use ark_application::replication_storage::AuthenticatedEntityBackend;
-use ark_application::sync_policy::{PolicyIdentity, SyncProfile};
+use ark_application::sync_policy::SyncProfile;
 use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::SyncEntity;
 
-use crate::protocol::NegotiatedProtocol;
-use crate::protocol::ProtocolCapability;
 use crate::protocol::{is_usage_entity, merge_usage_cursors, observe_non_usage_entity};
+use ark_sync_contracts::protocol_negotiation::NegotiatedProtocol;
+use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
 
 /// An inbound change that has passed policy validation and, when supported,
 /// has had its durable receipt recorded. The caller must send a receipt ACK

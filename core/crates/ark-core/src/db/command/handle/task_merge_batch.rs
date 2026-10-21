@@ -6,7 +6,7 @@ impl DbHandle {
         &self,
         context: CommandContext,
         command: super::super::ApplyTaskMergeBatchCommand,
-    ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, DbError> {
+    ) -> Result<ark_domain::task_merge_sync::TaskMergeBatchAck, DbError> {
         if context.class != CommandClass::SyncLive {
             return Err(DbError::Invalid("database command class mismatch".into()));
         }
