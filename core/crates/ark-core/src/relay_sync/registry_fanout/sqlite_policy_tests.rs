@@ -273,16 +273,11 @@ async fn note_title(peer: &ActorPeer, id: &str) -> Option<String> {
 }
 
 fn pending_note_count(database: &std::path::Path, id: &str) -> i64 {
-    let connection =
-        rusqlite::Connection::open_with_flags(database, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .expect("open policy test database read-only");
-    connection
-        .query_row(
-            "SELECT COUNT(*) FROM sync_pending_objects WHERE id = ?1",
-            [id],
-            |row| row.get(0),
-        )
-        .expect("read pending note count")
+    ark_store::test_support::TypeMutationFixture::open(database)
+        .expect("open Store-owned type-mutation fixture")
+        .inspect("note_obj", id)
+        .expect("inspect pending note state")
+        .pending_objects
 }
 
 async fn write_note(peer: &ActorPeer, id: &str, title: &str) {

@@ -233,13 +233,11 @@ mod tests {
             "writer",
         )
         .expect("typed authorization records seed");
-        assert!(
-            IntegrationReplicationTestFixture::node_may_receive_frames(
-                database.path(),
-                &node.node_id
-            )
-            .expect("current active grant is checked")
-        );
+        assert!(IntegrationReplicationTestFixture::node_may_receive_frames(
+            database.path(),
+            &node.node_id
+        )
+        .expect("current active grant is checked"));
 
         let revoked = current_grant
             .revoke(2, "2026-08-31T00:01:00Z")
@@ -250,12 +248,10 @@ mod tests {
         another_active.integration_id = "other-integration".into();
         IntegrationReplicationTestFixture::upsert_grant(database.path(), &another_active, "writer")
             .expect("other grant persists");
-        assert!(
-            !IntegrationReplicationTestFixture::node_may_receive_frames(
-                database.path(),
-                &node.node_id
-            )
-            .expect("revoked grant blocks frame authorization")
-        );
+        assert!(!IntegrationReplicationTestFixture::node_may_receive_frames(
+            database.path(),
+            &node.node_id
+        )
+        .expect("revoked grant blocks frame authorization"));
     }
 }

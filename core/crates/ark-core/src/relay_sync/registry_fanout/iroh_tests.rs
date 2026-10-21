@@ -1,50 +1,46 @@
 use super::super::*;
-use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
 use ark_domain::device_registry::{
     DeviceId, DisplayName, RegistryEvent, RegistryEventDraft, RegistryOperation,
 };
 use ark_net::iroh::RelayMode;
-use rusqlite::Connection;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-async fn storage_for(device_id: &str) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
-    storage_for_with_policy(device_id, Vec::new()).await
+async fn storage_for(
+    database: &ark_store::test_support::TestDatabase,
+    device_id: &str,
+) -> super::sqlite_test_support::ActorPeer {
+    storage_for_with_policy(database, device_id, Vec::new()).await
 }
 
 async fn storage_for_with_policy(
+    database: &ark_store::test_support::TestDatabase,
     device_id: &str,
     rules: Vec<ark_application::sync_policy::SyncProfileRule>,
-) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
-    let connection = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&connection).unwrap();
-    connection
-        .execute(
-            "INSERT INTO sync_kv (key, value)
-             VALUES ('device_registry.local_device_id', ?1)",
-            [device_id],
-        )
-        .unwrap();
+) -> super::sqlite_test_support::ActorPeer {
+    use crate::db::{CommandContext, SaveLocalSyncProfileCommand};
+
+    let peer = super::sqlite_test_support::open_peer(database.path(), device_id).await;
     if !rules.is_empty() {
-        ark_store::data_platform::upsert_sync_profile(
-            &connection,
-            device_id,
-            "phone",
-            "Phone",
-            true,
-            None,
-            &rules,
-        )
-        .unwrap();
+        peer.db
+            .save_local_sync_profile(
+                CommandContext::engine(),
+                SaveLocalSyncProfileCommand::new(
+                    device_id.into(),
+                    "phone".into(),
+                    "Phone".into(),
+                    true,
+                    None,
+                    rules,
+                ),
+            )
+            .await
+            .unwrap();
     }
-    let secret = crate::iroh_transport::load_or_generate_secret_key(&connection).unwrap();
-    let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        connection,
-    ))));
-    (storage, secret)
+    peer
 }
 
 fn relay_config(device_id: &str) -> RelaySyncConfig {
@@ -95,9 +91,18 @@ async fn wait_for_registry_ready(transports: &[(&crate::iroh_transport::IrohTran
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target() {
-    let (storage_a, key_a) = storage_for("device-A").await;
-    let (storage_b, key_b) = storage_for("device-B").await;
-    let (storage_c, key_c) = storage_for("device-C").await;
+    let database_a = ark_store::test_support::TestDatabase::create().unwrap();
+    let database_b = ark_store::test_support::TestDatabase::create().unwrap();
+    let database_c = ark_store::test_support::TestDatabase::create().unwrap();
+    let peer_a = storage_for(&database_a, "device-A").await;
+    let peer_b = storage_for(&database_b, "device-B").await;
+    let peer_c = storage_for(&database_c, "device-C").await;
+    let storage_a = peer_a.storage.clone();
+    let storage_b = peer_b.storage.clone();
+    let storage_c = peer_c.storage.clone();
+    let key_a = peer_a.secret.clone();
+    let key_b = peer_b.secret.clone();
+    let key_c = peer_c.secret.clone();
     let endpoint_a = key_a.public();
     let endpoint_b = key_b.public();
     let endpoint_c = key_c.public();
@@ -361,7 +366,10 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
 #[tokio::test(flavor = "multi_thread")]
 async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_peer() {
     const AUTH_SECRET: &str = "selective-sync-policy-test-secret";
-    let (storage_a, key_a) = storage_for_with_policy(
+    let database_a = ark_store::test_support::TestDatabase::create().unwrap();
+    let database_b = ark_store::test_support::TestDatabase::create().unwrap();
+    let peer_a = storage_for_with_policy(
+        &database_a,
         "policy-A",
         vec![ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
@@ -371,7 +379,11 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
         }],
     )
     .await;
-    let (storage_b, key_b) = storage_for("policy-B").await;
+    let peer_b = storage_for(&database_b, "policy-B").await;
+    let storage_a = peer_a.storage.clone();
+    let storage_b = peer_b.storage.clone();
+    let key_a = peer_a.secret.clone();
+    let key_b = peer_b.secret.clone();
     let endpoint_a = key_a.public().to_string();
     let endpoint_b = key_b.public().to_string();
     storage_a

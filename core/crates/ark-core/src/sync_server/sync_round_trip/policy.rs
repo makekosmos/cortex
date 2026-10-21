@@ -3,14 +3,16 @@ use ark_application::sync_policy::SyncProfileRule;
 use ark_application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
 };
+use ark_core::db::{
+    CommandContext, DbHandle, DbOwner, ObjectReadQuery, SaveLocalSyncProfileCommand,
+};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
 use ark_core::SqliteStorageBackend;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
-use rusqlite::Connection;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 fn policy_rule(mode: SyncMode) -> SyncProfileRule {
@@ -22,15 +24,28 @@ fn policy_rule(mode: SyncMode) -> SyncProfileRule {
     }
 }
 
-fn make_policy_storage(
+struct PolicyStorage {
+    _database: ark_store::test_support::TestDatabase,
+    db: DbHandle,
+    owner: DbOwner,
+    storage: Arc<SqliteStorageBackend>,
+    endpoint: String,
+}
+
+async fn make_policy_storage(
     device_id: &str,
     profile_rules: Option<Vec<SyncProfileRule>>,
-) -> (Arc<SqliteStorageBackend>, String, Arc<Mutex<Connection>>) {
-    let mut conn = Connection::open_in_memory().expect("in-memory SQLite");
-    ark_store::open::init_schema(&conn).expect("initialize test schema");
-    ark_store::type_registry::upsert_object_type(
-        &conn,
-        &ObjectType {
+) -> PolicyStorage {
+    let database = ark_store::test_support::TestDatabase::create().expect("test database");
+    let (db, owner) = DbHandle::open(
+        database.path().to_string_lossy().into_owned(),
+        device_id.to_owned(),
+    )
+    .await
+    .expect("open test database actor");
+    db.submit_upsert_object_type(
+        CommandContext::engine(),
+        ObjectType {
             id: "book".into(),
             name: "Book".into(),
             schema_json: "{}".into(),
@@ -39,34 +54,38 @@ fn make_policy_storage(
             updated_at: "2026-10-16T00:00:00.000Z".into(),
             system_locked: false,
         },
+        Some(device_id.to_owned()),
     )
+    .await
     .expect("register book type");
     if let Some(rules) = profile_rules {
-        ark_store::data_platform::upsert_sync_profile(
-            &conn,
-            device_id,
-            &format!("profile-{device_id}"),
-            "Device sync selection",
-            true,
-            None,
-            &rules,
+        db.save_local_sync_profile(
+            CommandContext::engine(),
+            SaveLocalSyncProfileCommand::new(
+                device_id.to_owned(),
+                format!("profile-{device_id}"),
+                "Device sync selection".into(),
+                true,
+                None,
+                rules,
+            ),
         )
+        .await
         .expect("persist device sync policy");
     }
-    let candidate = ark_core::iroh_transport::generate_secret_key_candidate();
-    let persisted =
-        ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate_on_connection(
-            &mut conn, candidate,
-        )
+    let secret = ark_core::iroh_transport::load_or_generate_secret_key_via_actor(&db)
+        .await
         .expect("device signing key persisted");
-    let endpoint = ark_core::iroh_transport::parse_secret_key_hex(&persisted)
-        .expect("device signing key")
-        .public()
-        .to_string();
-    let conn = Arc::new(Mutex::new(conn));
-    let storage = Arc::new(SqliteStorageBackend::for_test(conn.clone()));
+    let endpoint = secret.public().to_string();
+    let storage = Arc::new(SqliteStorageBackend::with_db_handle(db.clone()));
     storage.set_device_id(device_id).unwrap();
-    (storage, endpoint, conn)
+    PolicyStorage {
+        _database: database,
+        db,
+        owner,
+        storage,
+        endpoint,
+    }
 }
 
 fn book_entity(title: &str, counter: u64) -> SyncEntity {
@@ -98,17 +117,35 @@ fn book_entity(title: &str, counter: u64) -> SyncEntity {
     }
 }
 
-fn stored_book_title(conn: &Connection) -> String {
-    ark_store::objects::get_object(conn, "book-1")
-        .unwrap()
-        .expect("book row should exist")
-        .title
+async fn stored_book_title(peer: &PolicyStorage) -> Option<String> {
+    let value = peer
+        .db
+        .query_with_store(
+            CommandContext::engine(),
+            ObjectReadQuery::Get("book-1".into()),
+        )
+        .await
+        .expect("read book object");
+    serde_json::from_value::<Option<ArkObject>>(value)
+        .expect("decode book object")
+        .map(|book| book.title)
 }
 
-fn stored_book_title_if_present(conn: &Connection) -> Option<String> {
-    ark_store::objects::get_object(conn, "book-1")
-        .unwrap()
-        .map(|book| book.title)
+async fn save_policy(peer: &PolicyStorage, expected_revision: Option<i64>, mode: SyncMode) {
+    peer.db
+        .save_local_sync_profile(
+            CommandContext::engine(),
+            SaveLocalSyncProfileCommand::new(
+                "device-b".into(),
+                "profile-device-b".into(),
+                "Device sync selection".into(),
+                true,
+                expected_revision,
+                vec![policy_rule(mode)],
+            ),
+        )
+        .await
+        .expect("save receiver sync policy");
 }
 
 fn client_for(
@@ -138,11 +175,17 @@ fn client_for(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
-    let (source, source_endpoint, source_conn) = make_policy_storage("device-a", None);
-    let (receiver, receiver_endpoint, receiver_conn) =
-        make_policy_storage("device-b", Some(vec![policy_rule(SyncMode::Full)]));
-    let (receiver_c, receiver_c_endpoint, receiver_c_conn) =
-        make_policy_storage("device-c", Some(vec![policy_rule(SyncMode::Full)]));
+    let mut source_peer = make_policy_storage("device-a", None).await;
+    let mut receiver_peer =
+        make_policy_storage("device-b", Some(vec![policy_rule(SyncMode::Full)])).await;
+    let mut receiver_c_peer =
+        make_policy_storage("device-c", Some(vec![policy_rule(SyncMode::Full)])).await;
+    let source = source_peer.storage.clone();
+    let source_endpoint = source_peer.endpoint.clone();
+    let receiver = receiver_peer.storage.clone();
+    let receiver_endpoint = receiver_peer.endpoint.clone();
+    let receiver_c = receiver_c_peer.storage.clone();
+    let receiver_c_endpoint = receiver_c_peer.endpoint.clone();
     source
         .apply_entity(&book_entity("Original source version", 1))
         .await
@@ -198,12 +241,11 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
 
     let policy_acceptance = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            if ark_store::data_platform::load_accepted_peer_sync_policy(
-                &source_conn.lock().unwrap(),
-                "device-b",
-            )
-            .unwrap()
-            .is_some_and(|policy| policy.revision == 1)
+            if source
+                .load_accepted_peer_sync_policy("device-b")
+                .await
+                .unwrap()
+                .is_some_and(|policy| policy.revision == 1)
                 && source
                     .load_accepted_peer_sync_policy("device-c")
                     .await
@@ -240,9 +282,8 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     }
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            if stored_book_title_if_present(&receiver_conn.lock().unwrap()).as_deref()
-                == Some("Original source version")
-                && stored_book_title_if_present(&receiver_c_conn.lock().unwrap()).as_deref()
+            if stored_book_title(&receiver_peer).await.as_deref() == Some("Original source version")
+                && stored_book_title(&receiver_c_peer).await.as_deref()
                     == Some("Original source version")
             {
                 break;
@@ -253,25 +294,16 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     .await
     .expect("both opted-in devices should receive the initial book");
     assert_eq!(
-        stored_book_title(&receiver_conn.lock().unwrap()),
-        "Original source version"
+        stored_book_title(&receiver_peer).await.as_deref(),
+        Some("Original source version")
     );
     assert_eq!(
-        stored_book_title(&receiver_c_conn.lock().unwrap()),
-        "Original source version",
+        stored_book_title(&receiver_c_peer).await.as_deref(),
+        Some("Original source version"),
         "a different device's full policy must remain independent"
     );
 
-    ark_store::data_platform::upsert_sync_profile(
-        &receiver_conn.lock().unwrap(),
-        "device-b",
-        "profile-device-b",
-        "Device sync selection",
-        true,
-        Some(1),
-        &[policy_rule(SyncMode::None)],
-    )
-    .unwrap();
+    save_policy(&receiver_peer, Some(1), SyncMode::None).await;
     client.stop_and_join().await;
     let narrowed_client = client_for(&receiver, port, auth_secret, "device-b");
     narrowed_client.start();
@@ -292,8 +324,8 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     .await
     .expect("sender should accept the narrowed receiver policy");
     assert_eq!(
-        stored_book_title(&receiver_conn.lock().unwrap()),
-        "Original source version",
+        stored_book_title(&receiver_peer).await.as_deref(),
+        Some("Original source version"),
         "narrowing a class stops transfer but preserves the received local row"
     );
 
@@ -305,7 +337,8 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     server.broadcast_live_change(None).await;
     let receiver_c_after = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            if stored_book_title(&receiver_c_conn.lock().unwrap()) == "Update while excluded" {
+            if stored_book_title(&receiver_c_peer).await.as_deref() == Some("Update while excluded")
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -314,21 +347,12 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     .await;
     receiver_c_after.expect("another device's full policy should receive the live update");
     assert_eq!(
-        stored_book_title(&receiver_conn.lock().unwrap()),
-        "Original source version",
+        stored_book_title(&receiver_peer).await.as_deref(),
+        Some("Original source version"),
         "an excluded update must not overwrite the receiver's local row"
     );
 
-    ark_store::data_platform::upsert_sync_profile(
-        &receiver_conn.lock().unwrap(),
-        "device-b",
-        "profile-device-b",
-        "Device sync selection",
-        true,
-        Some(2),
-        &[policy_rule(SyncMode::Full)],
-    )
-    .unwrap();
+    save_policy(&receiver_peer, Some(2), SyncMode::Full).await;
     narrowed_client.stop_and_join().await;
     let widened_client = client_for(&receiver, port, auth_secret, "device-b");
     widened_client.start();
@@ -364,7 +388,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     );
     let backfill = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            if stored_book_title(&receiver_conn.lock().unwrap()) == "Update while excluded" {
+            if stored_book_title(&receiver_peer).await.as_deref() == Some("Update while excluded") {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -374,7 +398,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     if backfill.is_err() {
         let source_vector = source.load_version_vector().await.unwrap();
         let receiver_vector = receiver.load_version_vector().await.unwrap();
-        let title = stored_book_title(&receiver_conn.lock().unwrap());
+        let title = stored_book_title(&receiver_peer).await;
         let source_hlc = source_vector.get("book-1").cloned();
         let receiver_hlc = receiver_vector.get("book-1").cloned();
         let connected = server.is_connected_to("device-b").await;
@@ -386,4 +410,10 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     widened_client.stop_and_join().await;
     client_c.stop_and_join().await;
     server.stop().await;
+    for peer in [&mut source_peer, &mut receiver_peer, &mut receiver_c_peer] {
+        peer.owner
+            .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
+    }
 }

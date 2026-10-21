@@ -1,27 +1,38 @@
 use super::*;
-use crate::db::SqliteStorageBackend;
+use crate::db::{DbHandle, DbOwner, SqliteStorageBackend};
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
 use ark_net::iroh::RelayMode;
-use rusqlite::Connection;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-async fn storage(device_id: &str) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
-    let connection = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&connection).unwrap();
-    connection
-        .execute(
-            "INSERT INTO sync_kv (key, value) VALUES ('device_registry.local_device_id', ?1)",
-            [device_id],
-        )
+struct RelayStorageFixture {
+    storage: Arc<SqliteStorageBackend>,
+    secret: ark_net::iroh::SecretKey,
+    _database: ark_store::test_support::TestDatabase,
+    owner: DbOwner,
+}
+
+async fn storage(device_id: &str) -> RelayStorageFixture {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let (db, owner) = DbHandle::open(
+        database.path().to_string_lossy().into_owned(),
+        device_id.to_owned(),
+    )
+    .await
+    .unwrap();
+    let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)
+        .await
         .unwrap();
-    let secret = crate::iroh_transport::load_or_generate_secret_key(&connection).unwrap();
-    let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        connection,
-    ))));
-    (storage, secret)
+    let storage = Arc::new(SqliteStorageBackend::with_db_handle(db));
+    storage.set_device_id(device_id).unwrap();
+    RelayStorageFixture {
+        storage,
+        secret,
+        _database: database,
+        owner,
+    }
 }
 
 fn iroh_config(
@@ -44,8 +55,12 @@ fn iroh_config(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_ready() {
-    let (storage_a, key_a) = storage("device-A").await;
-    let (storage_b, key_b) = storage("device-B").await;
+    let mut peer_a = storage("device-A").await;
+    let mut peer_b = storage("device-B").await;
+    let storage_a = peer_a.storage.clone();
+    let storage_b = peer_b.storage.clone();
+    let key_a = peer_a.secret.clone();
+    let key_b = peer_b.secret.clone();
     storage_a
         .enroll_paired_device("device-A", "device-B", &key_b.public().to_string())
         .await
@@ -158,4 +173,14 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
 
     relay_a.stop().await;
     relay_b.stop().await;
+    peer_a
+        .owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+    peer_b
+        .owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }

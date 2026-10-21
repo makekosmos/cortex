@@ -3,11 +3,29 @@ use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
-use rusqlite::Connection;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
+
+async fn test_storage(
+    device_id: &str,
+) -> (
+    Arc<SqliteStorageBackend>,
+    ark_store::test_support::TestDatabase,
+) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let storage = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+            device_id,
+        )
+        .await
+        .unwrap(),
+    );
+    storage.set_device_id(device_id).unwrap();
+    (storage, database)
+}
 
 struct FailOncePairingAcceptedTransport {
     fail_next_acceptance: AtomicBool,
@@ -144,11 +162,7 @@ fn hello(device_id: &str) -> LanSyncMessage {
 
 #[tokio::test]
 async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplicate_enrollment() {
-    let connection = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&connection).unwrap();
-    let shared_connection = Arc::new(Mutex::new(connection));
-    let storage = Arc::new(SqliteStorageBackend::for_test(shared_connection.clone()));
-    storage.set_device_id("z-local-device").unwrap();
+    let (storage, _database) = test_storage("z-local-device").await;
     let remote_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let transport = Arc::new(FailOncePairingAcceptedTransport {
         fail_next_acceptance: AtomicBool::new(true),
@@ -254,12 +268,7 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
 
 #[tokio::test]
 async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected() {
-    let connection = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&connection).unwrap();
-    let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        connection,
-    ))));
-    storage.set_device_id("z-local-device").unwrap();
+    let (storage, _database) = test_storage("z-local-device").await;
     let transport = Arc::new(FailOncePairingAcceptedTransport {
         fail_next_acceptance: AtomicBool::new(false),
         acceptance_attempts: AtomicUsize::new(0),
@@ -324,11 +333,7 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
         DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
 
-    let connection = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&connection).unwrap();
-    let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        connection,
-    ))));
+    let (storage, _database) = test_storage("local-device").await;
     let transport = Arc::new(FailOncePairingAcceptedTransport {
         fail_next_acceptance: AtomicBool::new(false),
         acceptance_attempts: AtomicUsize::new(0),

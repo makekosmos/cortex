@@ -8,9 +8,9 @@ mod tests {
 
     use super::*;
     use crate::integration_replication::{
-        AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
-        IntegrationNodeGrant, IntegrationReplicationChange, IntegrationReplicationEntity,
-        NodeStatus, SignedSyncEnvelope, encode_hex,
+        encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration,
+        IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationReplicationChange,
+        IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
     };
     use ark_store::{read_snapshot::SqliteReader, test_support::TestDatabase};
 
