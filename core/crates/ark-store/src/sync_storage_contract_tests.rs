@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use ark_domain::hlc::HLC;
 use ark_domain::types::VersionVector;
 use rusqlite::Connection;

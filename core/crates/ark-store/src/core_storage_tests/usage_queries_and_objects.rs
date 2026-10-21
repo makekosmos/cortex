@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use ark_domain::types::{UsageGameDailyTotal, UsageGamePlaytimeBinding};
 
 use crate::objects::upsert_object_compat as upsert_object;

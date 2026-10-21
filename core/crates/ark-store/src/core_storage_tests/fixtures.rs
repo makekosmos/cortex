@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 pub(super) fn setup_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(

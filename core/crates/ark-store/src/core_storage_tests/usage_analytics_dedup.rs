@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 // KOS-287: canonical app identity, top-apps merge, active-time sort.
 
 fn top_app_entry(
