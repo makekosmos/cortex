@@ -357,10 +357,13 @@ impl RelaySync {
         // that can't parse it still gets its connection dropped.
         let transport = session;
         let endpoint = request.transport_public_key.clone();
-        self.tasks.lock().await.push(tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            let _ = transport.disconnect_transport_peer(&endpoint);
-        }));
+        self.tasks
+            .lock()
+            .await
+            .push(crate::task_set::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                let _ = transport.disconnect_transport_peer(&endpoint);
+            }));
         self.notify_pairing_changed().await;
         Ok(())
     }

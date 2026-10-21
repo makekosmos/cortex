@@ -87,7 +87,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             let server = server_for_registry.clone();
             let clients = clients_for_registry.clone();
             let relay = relay_for_registry.clone();
-            registry_tasks.track(tokio::spawn(async move {
+            registry_tasks.track(crate::task_set::spawn(async move {
                 if let Some(server) = server.upgrade() {
                     for event in &events {
                         server.broadcast_registry_event(event.clone()).await;
@@ -121,7 +121,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             let server = server_for_connect.clone();
             let addrs = peer_addrs.clone();
             let record = connected.clone();
-            registry_for_connect.track(tokio::spawn(async move {
+            registry_for_connect.track(crate::task_set::spawn(async move {
                 if let Err(error) = server
                     .register_external_peer(PeerRecord {
                         addresses: addrs,
@@ -146,7 +146,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         .set_on_disconnected(Arc::new(move |peer_device_id| {
             let server = server_for_disconnect.clone();
             let peer_device_id_clone = peer_device_id.clone();
-            registry_for_disconnect.track(tokio::spawn(async move {
+            registry_for_disconnect.track(crate::task_set::spawn(async move {
                 let remaining = server.connected_peer_count().await;
                 emit_event(json!({
                     "event": "peer_disconnected",

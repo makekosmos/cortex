@@ -8,3 +8,14 @@ pub(crate) fn track_task(
     tasks.retain(|task| !task.is_finished());
     tasks.push(task);
 }
+
+pub(crate) fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[cfg(debug_assertions)]
+    let future: std::pin::Pin<Box<dyn std::future::Future<Output = F::Output> + Send>> =
+        Box::pin(future);
+    tokio::spawn(future)
+}

@@ -137,26 +137,32 @@ impl RelaySync {
         self.transport.start(event_tx).await?;
 
         let this = self.clone();
-        self.tasks.lock().await.push(tokio::spawn(async move {
-            while let Some(event) = event_rx.recv().await {
-                this.handle_event(event).await;
-            }
-        }));
-        let incoming_sync = self.incoming_sync.clone();
-        self.tasks.lock().await.push(tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                let mut incoming = incoming_sync.lock().await;
-                let stale = incoming
-                    .as_ref()
-                    .is_some_and(|state| state.last_update.elapsed() >= Duration::from_secs(60));
-                if stale {
-                    *incoming = None;
-                    drop(incoming);
-                    trim_process_heap();
+        self.tasks
+            .lock()
+            .await
+            .push(crate::task_set::spawn(async move {
+                while let Some(event) = event_rx.recv().await {
+                    this.handle_event(event).await;
                 }
-            }
-        }));
+            }));
+        let incoming_sync = self.incoming_sync.clone();
+        self.tasks
+            .lock()
+            .await
+            .push(crate::task_set::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    let mut incoming = incoming_sync.lock().await;
+                    let stale = incoming.as_ref().is_some_and(|state| {
+                        state.last_update.elapsed() >= Duration::from_secs(60)
+                    });
+                    if stale {
+                        *incoming = None;
+                        drop(incoming);
+                        trim_process_heap();
+                    }
+                }
+            }));
 
         Ok(())
     }

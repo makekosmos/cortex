@@ -17,7 +17,7 @@ mod tests {
     async fn rejected_session_closes_sender_and_joins_transport() {
         let (finished_tx, finished_rx) = oneshot::channel();
         let session_io = SessionIo::start_transport(1, move |mut driver| {
-            tokio::spawn(async move {
+            crate::task_set::spawn(async move {
                 let _ = driver.shutdown.changed().await;
                 driver.worker_completion.complete();
                 let _ = finished_tx.send(());

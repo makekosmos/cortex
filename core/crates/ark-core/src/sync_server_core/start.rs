@@ -143,7 +143,7 @@ impl SyncServer {
 
         // Ping ticker shares the accept task: a separate ping task had no
         // shutdown path and leaked (plus duplicated pings) on every restart.
-        let accept_task = tokio::spawn(async move {
+        let accept_task = crate::task_set::spawn(async move {
             let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
             ticker.tick().await;
             let _ = accept_ready_tx.send(());
@@ -276,7 +276,7 @@ impl SyncServer {
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
-                                track_task(&conn_tasks, tokio::spawn(async move {
+                                track_task(&conn_tasks, crate::task_set::spawn(async move {
                                     let result = session_driver
                                         .run_controlled(&mut session_io)
                                         .await;
