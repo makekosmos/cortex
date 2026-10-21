@@ -65,8 +65,10 @@ async fn seed_client_adopts_authenticated_peer_identity() {
     }
     assert_eq!(client.peer_device_id(), "device-server");
 
-    client.disconnect().await;
+    client.stop_and_join().await;
     server.stop().await;
+    server_storage.shutdown().await;
+    client_storage.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -129,8 +131,9 @@ async fn self_address_is_pruned_but_other_addresses_keep_retrying() {
     assert!(!client.is_stopped());
     assert_eq!(client.current_peer().await.addresses, vec![dead_addr]);
 
-    client.disconnect().await;
+    client.stop_and_join().await;
     self_server.stop().await;
+    self_storage.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -180,5 +183,7 @@ async fn self_only_record_still_stops_the_client() {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
 
+    client.stop_and_join().await;
     self_server.stop().await;
+    self_storage.shutdown().await;
 }

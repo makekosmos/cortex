@@ -82,8 +82,10 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         "server should authenticate exactly one matching-secret peer",
     );
 
-    client.stop();
+    client.stop_and_join().await;
     server_a.stop().await;
+    storage_a.shutdown().await;
+    storage_b.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -147,8 +149,10 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         "wrong-secret client must not receive protected sync data",
     );
 
-    client.stop();
+    client.stop_and_join().await;
     server_a.stop().await;
+    storage_a.shutdown().await;
+    storage_b.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -301,7 +305,9 @@ async fn usage_entities_sync_between_two_servers() {
             .collect::<Vec<_>>(),
     );
 
-    client.stop();
+    client.stop_and_join().await;
     server_a.stop().await;
     server_b.stop().await;
+    storage_a.shutdown().await;
+    storage_b.shutdown().await;
 }

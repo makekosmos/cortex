@@ -31,6 +31,13 @@ impl TestStorage {
     pub(super) fn arc(&self) -> Arc<SqliteStorageBackend> {
         Arc::clone(&self.backend)
     }
+
+    pub(super) async fn shutdown(&self) {
+        self.backend
+            .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await
+            .expect("test database actor shuts down before temp directory cleanup");
+    }
 }
 
 impl Deref for TestStorage {

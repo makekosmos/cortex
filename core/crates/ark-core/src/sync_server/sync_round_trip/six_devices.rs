@@ -243,8 +243,11 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
             .any(|entity| entity.id == "interactive-b"),
         "interactive row must remain persisted after profile narrowing"
     );
-    for (_, _, client) in devices {
-        client.stop();
+    for (_, _, client) in &devices {
+        client.stop_and_join().await;
     }
     server.stop().await;
+    for (_, storage, _) in fixtures {
+        storage.shutdown().await;
+    }
 }

@@ -156,9 +156,11 @@ async fn round_trip_sync_between_two_servers() {
         loaded_b_after.iter().map(|e| &e.id).collect::<Vec<_>>(),
     );
 
-    client.stop();
+    client.stop_and_join().await;
     server_a.stop().await;
     server_b.stop().await;
+    storage_a.shutdown().await;
+    storage_b.shutdown().await;
 
     println!("INTEGRATION OK");
 }
@@ -229,6 +231,7 @@ async fn self_connect_is_rejected() {
         "server must not emit peer_connected for a self hello",
     );
 
-    client.stop();
+    client.stop_and_join().await;
     server.stop().await;
+    storage.shutdown().await;
 }

@@ -361,7 +361,9 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         Some("com.kosmos.game")
     );
 
-    reconnect.stop();
+    reconnect.stop_and_join().await;
     server_a.stop().await;
     server_b.stop().await;
+    storage_a.shutdown().await;
+    storage_b.shutdown().await;
 }
