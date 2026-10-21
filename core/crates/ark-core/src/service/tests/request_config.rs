@@ -133,6 +133,11 @@ async fn pairing_restart_params_force_iroh_and_replace_ticket() {
     // boot must switch to the LAN bind so the iroh endpoint can reach the
     // remote ticket (and the firewall prompt happens now, not at boot).
     assert_eq!(params.bind, SyncBind::AllInterfaces);
+    runtime
+        .storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 /// The sync runtime fixture shared by the bind-escalation tests below:

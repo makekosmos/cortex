@@ -2,12 +2,8 @@ use super::*;
 
 #[tokio::test]
 async fn show_pairing_code_params_escalate_loopback_to_lan() {
-    // KOS-269 round 1: showing our own code is the *other* explicit opt-in.
-    // A loopback iroh endpoint advertises only 127.0.0.1, which no remote
-    // device can reach — so `show_pairing_code` must restart sync with the
-    // same all-interfaces/iroh params as entering a code (minus the peer
-    // ticket). The restart itself is covered by the param builder: a real
-    // all-interfaces bind must not happen in tests.
+    // The loopback fixture cannot safely exercise an all-interfaces bind, so
+    // verify the parameters selected for explicit LAN pairing directly.
     let (runtime, _database) = loopback_runtime_fixture().await;
     let params = crate::service::sync::lan_opt_in_params(&runtime, None);
     assert_eq!(params.bind, SyncBind::AllInterfaces);
