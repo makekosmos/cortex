@@ -1,8 +1,6 @@
 use super::super::executor::actor::{
     DeleteObjectLinkTask, ReplaceObjectLinkTask, UpsertObjectLinkTask, WriterTask,
 };
-#[cfg(test)]
-use super::test_writer::spawn_test_store_writer;
 use super::*;
 
 impl DbHandle {
@@ -13,29 +11,16 @@ impl DbHandle {
         device_id: Option<String>,
     ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "object_link.upsert.v1", &object_link, &device_id)?;
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(UpsertObjectLinkTask {
-                    object_link,
-                    device_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = test_admission(self, &context, weight)?;
-                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
-                    ark_store::writer::SqliteWriter::upsert_object_link_on_connection(
-                        connection,
-                        object_link,
-                        device_id,
-                    )
-                })
-                .await
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(UpsertObjectLinkTask {
+                object_link,
+                device_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -46,27 +31,16 @@ impl DbHandle {
         device_id: Option<String>,
     ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "object_link.delete.v1", &id, &device_id)?;
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(DeleteObjectLinkTask {
-                    id,
-                    device_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = test_admission(self, &context, weight)?;
-                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
-                    ark_store::writer::SqliteWriter::delete_object_link_on_connection(
-                        connection, id, device_id,
-                    )
-                })
-                .await
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(DeleteObjectLinkTask {
+                id,
+                device_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -77,29 +51,16 @@ impl DbHandle {
         device_id: Option<String>,
     ) -> Result<ark_application::type_mutation::ReplaceObjectLinkCommit, DbError> {
         let weight = validate(&context, "object_link.replace.v1", &object_link, &device_id)?;
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(ReplaceObjectLinkTask {
-                    object_link,
-                    device_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = test_admission(self, &context, weight)?;
-                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
-                    ark_store::writer::SqliteWriter::replace_object_link_on_connection(
-                        connection,
-                        object_link,
-                        device_id,
-                    )
-                })
-                .await
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(ReplaceObjectLinkTask {
+                object_link,
+                device_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 }
@@ -121,16 +82,4 @@ fn validate(
     } else {
         Ok(weight)
     }
-}
-
-#[cfg(test)]
-fn test_admission(
-    handle: &DbHandle,
-    context: &CommandContext,
-    weight: usize,
-) -> Result<executor::AdmissionPermit, DbError> {
-    handle
-        .admission
-        .try_acquire(context.class, &context.source, weight)
-        .map_err(map_admission_error)
 }

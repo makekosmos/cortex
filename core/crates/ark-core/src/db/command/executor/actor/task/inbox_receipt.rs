@@ -37,7 +37,7 @@ impl WriterTask for InboxReceiptTask {
     }
 }
 
-pub(in crate::db::command) fn map_inbox_receipt_error(error: InboxReceiptWriteError) -> DbError {
+fn map_inbox_receipt_error(error: InboxReceiptWriteError) -> DbError {
     match error {
         InboxReceiptWriteError::PolicyChanged => {
             DbError::Permission("stale_or_unnegotiated_sync_policy".into())

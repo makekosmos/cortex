@@ -85,14 +85,6 @@ impl DbMaintenanceCommand for SetMaxPageCount {
             .map_err(|error| DbError::Storage(error.to_string()))
         })
     }
-
-    fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
-        ark_store::test_support::ProductionActorFailureProbe::set_max_page_count(
-            connection,
-            self.page_count,
-        )
-        .map_err(|error| DbError::Storage(error.to_string()))
-    }
 }
 
 impl StoreReadQuery for ReadProbe {
@@ -236,13 +228,6 @@ impl DbMaintenanceCommand for GateMaintenance {
         self,
         _writer: &mut ark_store::writer::SqliteWriter,
     ) -> Result<Self::Output, DbError> {
-        let _ = self.entered.send(());
-        self.release
-            .recv()
-            .map_err(|error| DbError::Storage(error.to_string()))
-    }
-
-    fn execute_on_connection(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
         let _ = self.entered.send(());
         self.release
             .recv()

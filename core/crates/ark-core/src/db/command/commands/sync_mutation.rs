@@ -32,20 +32,6 @@ impl CommittedFeedProgressCommand {
             .map(CommittedFeedProgress::Outbound)
             .map_err(map_outbound_progress_failure)
     }
-
-    #[cfg(test)]
-    pub(in crate::db::command) fn execute_on_connection(
-        self,
-        context: &CommandContext,
-        connection: &mut rusqlite::Connection,
-    ) -> Result<CommittedFeedProgress, DbError> {
-        context.require_sync_peer_matches(&self.write.peer_device_id)?;
-        ark_store::writer::SqliteWriter::apply_outbound_progress_write_on_connection(
-            connection, self.write,
-        )
-        .map(CommittedFeedProgress::Outbound)
-        .map_err(map_outbound_progress_test_failure)
-    }
 }
 
 fn map_outbound_progress_failure(
@@ -63,22 +49,5 @@ fn map_outbound_progress_failure(
         },
         StoreTransactionFailure::Operation(error) => DbError::Storage(error.to_string()),
         StoreTransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-    }
-}
-
-#[cfg(test)]
-fn map_outbound_progress_test_failure(
-    failure: ark_store::writer::TransactionFailure<
-        ark_application::sync_storage::OutboundProgressWriteError,
-    >,
-) -> DbError {
-    match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-        ark_store::writer::TransactionFailure::Operation(error) => {
-            DbError::Storage(error.to_string())
-        }
-        ark_store::writer::TransactionFailure::Commit(error) => {
-            DbError::CommitFailed(error.to_string())
-        }
     }
 }

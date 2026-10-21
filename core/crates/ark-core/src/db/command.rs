@@ -1,10 +1,6 @@
 #[cfg(test)]
 use ark_store::writer::WriteCapabilities;
-#[cfg(test)]
-use rusqlite::Connection;
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::Mutex;
 
 mod commands;
 mod executor;
@@ -12,8 +8,6 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
-#[cfg(test)]
-pub(crate) use commands::map_signed_frame_operation_error;
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
@@ -203,9 +197,6 @@ pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
 
     fn execute(self, writer: &mut ark_store::writer::SqliteWriter)
         -> Result<Self::Output, DbError>;
-
-    #[cfg(test)]
-    fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
 }
 
 pub(crate) trait StoreReadQuery: sealed::Sealed + Send + 'static {

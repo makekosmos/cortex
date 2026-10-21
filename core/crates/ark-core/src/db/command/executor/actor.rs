@@ -16,25 +16,13 @@ mod runtime;
 mod task;
 #[path = "actor/task/task_merge_progress.rs"]
 mod task_merge_progress;
-#[cfg(test)]
-pub(in crate::db::command) use legacy_mutation_task::map_legacy_transaction_failure;
 pub(in crate::db::command) use legacy_mutation_task::{LegacyDeleteTask, LegacyGraphWriteTask};
 use maintenance::has_maintenance_barrier;
-#[cfg(test)]
-pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;
 pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
-#[cfg(test)]
-pub(in crate::db::command) use registry_local::map_failure as map_registry_local_mutation_failure;
-#[cfg(test)]
-use registry_local_mutation_task as registry_local;
 pub(in crate::db::command) use registry_local_mutation_task::{
     AppendLocalRegistryEventTask, EnrollPairedDeviceTask, SignRegistryHandshakeTask,
 };
 use runtime::{actor_loop, panic_message};
-#[cfg(test)]
-pub(in crate::db::command) use task::map_inbox_receipt_error;
-#[cfg(test)]
-pub(in crate::db::command) use task_merge_progress::map_task_merge_progress_failure;
 pub(in crate::db::command) use task_merge_progress::{
     AcknowledgeTaskMergeBatchTask, PrepareTaskMergeBatchTask,
 };
@@ -46,8 +34,6 @@ mod integration_admin_task;
 pub(in crate::db::command) use integration_admin_task::IntegrationAdminTask;
 #[path = "actor/task/task_merge_batch.rs"]
 mod task_merge_batch_task;
-#[cfg(test)]
-pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
 pub(in crate::db::command) use task::InboundEntityTask;
 pub(in crate::db::command) use task::InboxReceiptTask;
@@ -63,8 +49,6 @@ pub(in crate::db::command) use task::{
     TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask,
     UsageSequenceMigrationTask, WriterTask,
 };
-#[cfg(test)]
-pub(in crate::db::command) use task_merge_batch_task::map_failure as map_task_merge_batch_failure;
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 
 struct Slot {
@@ -109,8 +93,6 @@ struct Ledger {
 
 pub(in crate::db::command) struct ActorShared {
     pub(in crate::db::command) database: ark_store::database::StoreDatabase,
-    #[cfg(test)]
-    pub(in crate::db::command) path: String,
     limits: AdmissionLimits,
     ledger: Mutex<Ledger>,
     wake: Condvar,
@@ -149,8 +131,6 @@ impl ActorShared {
         let (closed_tx, closed_rx) = oneshot::channel();
         let shared = Arc::new(Self {
             database: ark_store::database::StoreDatabase::new(path.clone()),
-            #[cfg(test)]
-            path: path.clone(),
             limits,
             ledger: Mutex::new(Ledger {
                 slots,

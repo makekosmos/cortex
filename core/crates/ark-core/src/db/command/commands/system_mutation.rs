@@ -40,28 +40,6 @@ impl CompactUsageSyncLogCommand {
             )
             .map_err(map_usage_compaction_failure)
     }
-
-    #[cfg(test)]
-    pub(in crate::db::command) fn execute_on_connection(
-        self,
-        context: &CommandContext,
-        connection: &mut rusqlite::Connection,
-    ) -> Result<usize, DbError> {
-        context.require_engine()?;
-        ark_store::writer::SqliteWriter::compact_usage_sync_log_on_connection(
-            connection,
-            self.own_device_id.as_deref(),
-            &self.cutoff_wall_time,
-            self.batch_limit,
-        )
-        .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-            ark_store::writer::TransactionFailure::Operation(error) => DbError::Storage(error),
-            ark_store::writer::TransactionFailure::Commit(error) => {
-                DbError::CommitFailed(error.to_string())
-            }
-        })
-    }
 }
 
 fn map_usage_compaction_failure(
@@ -107,15 +85,6 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
     ) -> Result<Self::Output, DbError> {
         writer
             .restore_snapshot(&self.db_path, &self.backup_id)
-            .map_err(map_restore_error)
-    }
-
-    #[cfg(test)]
-    fn execute_on_connection(
-        self,
-        connection: &mut rusqlite::Connection,
-    ) -> Result<Self::Output, DbError> {
-        ark_store::snapshot::restore_snapshot(connection, &self.db_path, &self.backup_id)
             .map_err(map_restore_error)
     }
 }

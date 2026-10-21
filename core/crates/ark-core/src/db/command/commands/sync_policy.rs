@@ -108,53 +108,6 @@ impl SyncPolicyWrite {
             }
         }
     }
-
-    #[cfg(test)]
-    pub(in crate::db::command) fn execute_on_connection(
-        self,
-        context: &CommandContext,
-        connection: &mut rusqlite::Connection,
-    ) -> Result<SyncPolicyWriteOutput, DbError> {
-        use ark_store::writer::TransactionFailure;
-
-        match self {
-            Self::SaveLocal(command) => {
-                context.require_engine()?;
-                ark_store::writer::SqliteWriter::save_local_sync_profile_on_connection(
-                    connection,
-                    &command.device_id,
-                    &command.profile_id,
-                    &command.name,
-                    command.active,
-                    command.expected_revision,
-                    &command.rules,
-                )
-                .map(SyncPolicyWriteOutput::LocalProfile)
-                .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
-                    TransactionFailure::Operation(error) => map_profile_write_error(error),
-                    TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-                })
-            }
-            Self::AcceptPeer(command) => {
-                context.require_sync_peer_matches(&command.peer_device_id)?;
-                ark_store::writer::SqliteWriter::accept_peer_sync_policy_on_connection(
-                    connection,
-                    &command.peer_device_id,
-                    command.revision,
-                    &command.digest,
-                    command.active,
-                    &command.rules,
-                )
-                .map(SyncPolicyWriteOutput::AcceptedPeer)
-                .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
-                    TransactionFailure::Operation(error) => map_profile_error(error),
-                    TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-                })
-            }
-        }
-    }
 }
 
 fn map_store_profile_failure<E>(

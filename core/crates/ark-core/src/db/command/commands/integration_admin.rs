@@ -45,17 +45,6 @@ impl IntegrationAdminCommand {
             .map_err(map_store_failure)
     }
 
-    #[cfg(test)]
-    pub(crate) fn execute_on_connection(
-        self,
-        context: &CommandContext,
-        connection: &mut rusqlite::Connection,
-    ) -> Result<IntegrationAdminOutput, DbError> {
-        context.require_engine()?;
-        ark_store::writer::apply_integration_admin_on_connection(connection, self.into_write())
-            .map_err(map_transaction_failure)
-    }
-
     fn into_write(self) -> IntegrationAdminWrite {
         match self {
             Self::PersistNodeAuthorization {
@@ -120,19 +109,6 @@ fn map_store_failure(error: ark_store::writer::StoreTransactionFailure<String>) 
             DbError::from_application_error(error)
         }
         ark_store::writer::StoreTransactionFailure::Commit(error) => {
-            DbError::CommitFailed(error.to_string())
-        }
-    }
-}
-
-#[cfg(test)]
-fn map_transaction_failure(error: ark_store::writer::TransactionFailure<String>) -> DbError {
-    match error {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-        ark_store::writer::TransactionFailure::Operation(error) => {
-            DbError::from_application_error(error)
-        }
-        ark_store::writer::TransactionFailure::Commit(error) => {
             DbError::CommitFailed(error.to_string())
         }
     }

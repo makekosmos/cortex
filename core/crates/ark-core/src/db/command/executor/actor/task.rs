@@ -13,8 +13,6 @@ mod inbox_receipt;
 pub(in crate::db::command) use committed_feed_progress::CommittedFeedProgressTask;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
 pub(in crate::db::command) use inbound_entity::InboundEntityTask;
-#[cfg(test)]
-pub(in crate::db::command) use inbox_receipt::map_inbox_receipt_error;
 pub(in crate::db::command) use inbox_receipt::InboxReceiptTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;

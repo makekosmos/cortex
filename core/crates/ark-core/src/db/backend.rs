@@ -16,12 +16,6 @@ pub struct SqliteStorageBackend {
 }
 
 impl SqliteStorageBackend {
-    /// Builds the raw-connection adapter used by SQLite test fixtures.
-    #[cfg(test)]
-    pub fn for_test(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
-        Self::with_db_handle(DbHandle::for_test(conn))
-    }
-
     /// Opens the production writer actor for file-backed integration tests.
     #[cfg(test)]
     pub async fn open_for_test(

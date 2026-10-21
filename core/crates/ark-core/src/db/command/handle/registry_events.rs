@@ -18,45 +18,12 @@ impl DbHandle {
         if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> =
-                    Box::new(ApplyRegistryEventsTask { command, reply });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let connection = Arc::clone(connection);
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                tokio::task::spawn_blocking(move || {
-                    let _admission = admission;
-                    let mut connection =
-                        connection.lock().unwrap_or_else(|error| error.into_inner());
-                    ark_store::writer::SqliteWriter::apply_device_registry_events_on_connection(
-                        &mut connection,
-                        &command.sender_device_id,
-                        &command.events,
-                    )
-                    .map_err(|failure| match failure {
-                        ark_store::writer::StoreTransactionFailure::Begin(error) => {
-                            DbError::Storage(error.to_string())
-                        }
-                        ark_store::writer::StoreTransactionFailure::Operation(error) => {
-                            super::super::executor::actor::map_registry_event_error(error)
-                        }
-                        ark_store::writer::StoreTransactionFailure::Commit(error) => {
-                            DbError::CommitFailed(error.to_string())
-                        }
-                    })
-                })
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(ApplyRegistryEventsTask { command, reply });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 }

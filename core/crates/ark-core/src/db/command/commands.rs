@@ -35,8 +35,6 @@ pub(crate) use device_registry_sync::{
 };
 pub(crate) use integration_admin::{IntegrationAdminCommand, IntegrationAdminOutput};
 pub(crate) use integration_read::IntegrationReadQuery;
-#[cfg(test)]
-pub(crate) use integration_replication::map_signed_frame_operation_error;
 pub(crate) use integration_replication::{
     ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };

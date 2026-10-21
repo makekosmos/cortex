@@ -28,32 +28,16 @@ impl DbHandle {
         if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(CanonicalGameUpsertTask {
-                    command,
-                    fallback_device_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_canonical_game_upsert(
-                    Arc::clone(connection),
-                    command,
-                    fallback_device_id,
-                    admission,
-                )
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(CanonicalGameUpsertTask {
+                command,
+                fallback_device_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -76,23 +60,12 @@ impl DbHandle {
             return Err(DbError::TooLarge);
         }
 
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(LocalBookCoverTask { write, reply });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_local_book_cover(Arc::clone(connection), write, admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(LocalBookCoverTask { write, reply });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -139,42 +112,21 @@ impl DbHandle {
             return Err(DbError::TooLarge);
         }
 
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(LocalObjectUpsertTask {
-                    write,
-                    principal: context.operation_principal(),
-                    operation_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                let outcome = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
-                Ok(super::super::operation_receipt::OperationResult {
-                    value: outcome.value,
-                    replayed: outcome.replayed,
-                })
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                let outcome = spawn_test_local_object_upsert(
-                    Arc::clone(connection),
-                    write,
-                    context.operation_principal(),
-                    operation_id,
-                    admission,
-                )
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))??;
-                Ok(super::super::operation_receipt::OperationResult {
-                    value: outcome.value,
-                    replayed: outcome.replayed,
-                })
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(LocalObjectUpsertTask {
+                write,
+                principal: context.operation_principal(),
+                operation_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            let outcome = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
+            Ok(super::super::operation_receipt::OperationResult {
+                value: outcome.value,
+                replayed: outcome.replayed,
+            })
         }
     }
 
@@ -221,151 +173,18 @@ impl DbHandle {
             return Err(DbError::TooLarge);
         }
 
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(LocalObjectDeleteTask {
-                    write,
-                    principal: context.operation_principal(),
-                    operation_id,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                let (value, replayed) = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
-                Ok(super::super::operation_receipt::OperationResult { value, replayed })
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                let outcome = spawn_test_local_object_delete(
-                    Arc::clone(connection),
-                    write,
-                    context.operation_principal(),
-                    operation_id,
-                    admission,
-                )
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))??;
-                Ok(super::super::operation_receipt::OperationResult {
-                    value: outcome.0,
-                    replayed: outcome.1,
-                })
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(LocalObjectDeleteTask {
+                write,
+                principal: context.operation_principal(),
+                operation_id,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            let (value, replayed) = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
+            Ok(super::super::operation_receipt::OperationResult { value, replayed })
         }
     }
-}
-
-#[cfg(test)]
-fn spawn_test_canonical_game_upsert(
-    connection: Arc<Mutex<Connection>>,
-    command: ark_application::canonical_game::GameUpsertCommand,
-    fallback_device_id: String,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<ark_application::canonical_game::GameMutationResult, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::canonical_game::apply_upsert(&mut connection, command, &fallback_device_id)
-            .map_err(|failure| match failure {
-                ark_store::writer::TransactionFailure::Begin(error) => {
-                    DbError::from_store_error(error)
-                }
-                ark_store::writer::TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                ark_store::writer::TransactionFailure::Commit(error) => {
-                    DbError::CommitFailed(error.to_string())
-                }
-            })
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_local_book_cover(
-    connection: Arc<Mutex<Connection>>,
-    write: ark_application::book_cover::LocalBookCoverWrite,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<bool, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::book_cover::apply_local_book_cover(&mut connection, write).map_err(|failure| {
-            match failure {
-                ark_store::writer::TransactionFailure::Begin(error) => {
-                    DbError::from_store_error(error)
-                }
-                ark_store::writer::TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                ark_store::writer::TransactionFailure::Commit(error) => {
-                    DbError::CommitFailed(error.to_string())
-                }
-            }
-        })
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_local_object_upsert(
-    connection: Arc<Mutex<Connection>>,
-    write: ark_application::object_mutation::LocalObjectUpsert,
-    principal: String,
-    operation_id: Option<String>,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<ark_application::object_mutation::ObjectUpsertOutcome, DbError>>
-{
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        let outcome = ark_store::object_write::apply_local_object_upsert(
-            &mut connection,
-            write,
-            &principal,
-            operation_id.as_deref(),
-        )
-        .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-            ark_store::writer::TransactionFailure::Operation(error) => {
-                DbError::from_application_error(error.to_string())
-            }
-            ark_store::writer::TransactionFailure::Commit(error) => {
-                DbError::CommitFailed(error.to_string())
-            }
-        })?;
-        Ok(outcome)
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_local_object_delete(
-    connection: Arc<Mutex<Connection>>,
-    write: ark_application::object_mutation::LocalObjectDelete,
-    principal: String,
-    operation_id: Option<String>,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<
-    Result<(ark_application::object_mutation::ObjectDeleteCommit, bool), DbError>,
-> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::object_mutation::apply_local_object_delete(
-            &mut connection,
-            write,
-            &principal,
-            operation_id.as_deref(),
-        )
-        .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-            ark_store::writer::TransactionFailure::Operation(error) => {
-                DbError::from_application_error(error.to_string())
-            }
-            ark_store::writer::TransactionFailure::Commit(error) => {
-                DbError::CommitFailed(error.to_string())
-            }
-        })
-    })
 }

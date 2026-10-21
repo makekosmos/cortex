@@ -26,8 +26,6 @@ mod system_mutation;
 mod task_merge_append;
 mod task_merge_batch;
 mod task_merge_progress;
-#[cfg(test)]
-mod test_writer;
 mod tracked_app_mutation;
 mod type_mutation;
 mod usage;
@@ -36,16 +34,7 @@ mod usage_sequence_migration;
 
 #[derive(Clone)]
 pub(crate) struct DbHandle {
-    backend: HandleBackend,
-    #[cfg(test)]
-    admission: executor::AdmissionBudget,
-}
-
-#[derive(Clone)]
-enum HandleBackend {
-    Actor(Arc<ActorShared>),
-    #[cfg(test)]
-    Test(Arc<Mutex<Connection>>),
+    backend: Arc<ActorShared>,
 }
 
 pub(crate) struct DbOwner {
@@ -78,25 +67,10 @@ impl DbHandle {
         let (shared, owner, ready) = ActorShared::spawn(db_path, legacy_task_device_id, limits)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         match tokio::task::spawn_blocking(move || ready.recv()).await {
-            Ok(Ok(Ok(()))) => Ok((
-                Self {
-                    backend: HandleBackend::Actor(shared),
-                    #[cfg(test)]
-                    admission: executor::AdmissionBudget::new(limits),
-                },
-                DbOwner { actor: owner },
-            )),
+            Ok(Ok(Ok(()))) => Ok((Self { backend: shared }, DbOwner { actor: owner })),
             Ok(Ok(Err(error))) => Err(error),
             Ok(Err(_)) => Err(DbError::Unavailable),
             Err(error) => Err(DbError::Storage(error.to_string())),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_test(connection: Arc<Mutex<Connection>>) -> Self {
-        Self {
-            backend: HandleBackend::Test(connection),
-            admission: executor::AdmissionBudget::new(super::DB_ADMISSION_LIMITS),
         }
     }
 
@@ -113,27 +87,16 @@ impl DbHandle {
         if weight == 0 || weight > super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(TypedCommand {
-                    context: context.clone(),
-                    command,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let _admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_submit(Arc::clone(connection), context, command, _admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(TypedCommand {
+                context: context.clone(),
+                command,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -152,23 +115,12 @@ impl DbHandle {
         if weight == 0 || weight > super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(TypedMaintenance { command, reply });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let _admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_maintenance(Arc::clone(connection), command, _admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(TypedMaintenance { command, reply });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -184,173 +136,67 @@ impl DbHandle {
         if weight == 0 || weight > super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let shared = Arc::clone(actor);
-                let _admission = actor.admit_read(query.class(), &context.source, weight)?;
-                tokio::task::spawn_blocking(move || {
-                    let _admission = _admission;
-                    let _snapshot = shared
-                        .readers
-                        .read()
-                        .unwrap_or_else(|error| error.into_inner());
-                    let mut reader = shared
-                        .database
-                        .open_reader()
-                        .map_err(|error| DbError::Storage(error.to_string()))?;
-                    reader
-                        .with_read_snapshot(|capabilities| query.read(&context, &capabilities))
-                        .map_err(map_store_read_failure)
-                })
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let _admission = self
-                    .admission
-                    .try_acquire(query.class(), &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_store_query(Arc::clone(connection), context, query, _admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn shared_connection_for_test(&self) -> Arc<Mutex<Connection>> {
-        match &self.backend {
-            HandleBackend::Test(connection) => Arc::clone(connection),
-            HandleBackend::Actor(actor) => Arc::new(Mutex::new(
-                ark_store::open::open_db(&actor.path).expect("test DB connection"),
-            )),
+        {
+            let actor = &self.backend;
+            let shared = Arc::clone(actor);
+            let _admission = actor.admit_read(query.class(), &context.source, weight)?;
+            tokio::task::spawn_blocking(move || {
+                let _admission = _admission;
+                let _snapshot = shared
+                    .readers
+                    .read()
+                    .unwrap_or_else(|error| error.into_inner());
+                let mut reader = shared
+                    .database
+                    .open_reader()
+                    .map_err(|error| DbError::Storage(error.to_string()))?;
+                reader
+                    .with_read_snapshot(|capabilities| query.read(&context, &capabilities))
+                    .map_err(map_store_read_failure)
+            })
+            .await
+            .map_err(|error| DbError::Storage(error.to_string()))?
         }
     }
 
     #[cfg(test)]
     pub(crate) fn admitted_commands_for_test(&self) -> usize {
-        match &self.backend {
-            HandleBackend::Actor(actor) => actor.admitted_commands(),
-            #[cfg(test)]
-            HandleBackend::Test(_) => 0,
-        }
+        self.backend.admitted_commands()
     }
 
     #[cfg(test)]
     pub(crate) fn actor_ready_for_test(&self) -> bool {
-        match &self.backend {
-            HandleBackend::Actor(actor) => actor.is_ready(),
-            #[cfg(test)]
-            HandleBackend::Test(_) => false,
-        }
+        self.backend.is_ready()
     }
 
     #[cfg(test)]
     pub(crate) fn generation_for_test(&self) -> u64 {
-        match &self.backend {
-            HandleBackend::Actor(actor) => actor.generation(),
-            #[cfg(test)]
-            HandleBackend::Test(_) => 0,
-        }
+        self.backend.generation()
     }
 
     #[cfg(test)]
     pub(crate) fn maintenance_state_for_test(&self) -> (bool, bool) {
-        match &self.backend {
-            HandleBackend::Actor(actor) => actor.maintenance_state(),
-            #[cfg(test)]
-            HandleBackend::Test(_) => (false, false),
-        }
+        self.backend.maintenance_state()
     }
 
     #[cfg(test)]
     pub(crate) fn hold_reader_barrier_for_test(&self) -> impl Drop + '_ {
-        match &self.backend {
-            HandleBackend::Actor(actor) => actor
-                .readers
-                .write()
-                .unwrap_or_else(|error| error.into_inner()),
-            #[cfg(test)]
-            HandleBackend::Test(_) => panic!("reader barrier requires a production actor"),
-        }
+        self.backend
+            .readers
+            .write()
+            .unwrap_or_else(|error| error.into_inner())
     }
 
     #[cfg(test)]
-    pub(super) fn hold_admission_for_test(
+    pub(super) fn hold_read_admission_for_test(
         &self,
         class: CommandClass,
         source: &CommandSource,
     ) -> impl Drop {
-        self.admission
-            .try_acquire(class, source, 1)
+        self.backend
+            .admit_read(class, source, 1)
             .expect("test admission slot")
     }
-}
-
-#[cfg(test)]
-fn map_admission_error(error: executor::AdmissionError) -> DbError {
-    match error {
-        executor::AdmissionError::TooLarge => DbError::TooLarge,
-        executor::AdmissionError::Saturated => DbError::Busy,
-    }
-}
-
-#[cfg(test)]
-fn spawn_test_submit<C: DbCommand>(
-    connection: Arc<Mutex<Connection>>,
-    context: CommandContext,
-    command: C,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<C::Output, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::writer::SqliteWriter::write_with_test_capabilities_on_connection(
-            &mut connection,
-            |capabilities| command.execute(&context, capabilities),
-        )
-        .map_err(|failure| match failure {
-            ark_store::writer::StoreTransactionFailure::Begin(error) => {
-                DbError::from_store_error(error)
-            }
-            ark_store::writer::StoreTransactionFailure::Operation(error) => error,
-            ark_store::writer::StoreTransactionFailure::Commit(error) => {
-                DbError::CommitFailed(error.to_string())
-            }
-        })
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_maintenance<C: DbMaintenanceCommand>(
-    connection: Arc<Mutex<Connection>>,
-    command: C,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<C::Output, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        command.execute_on_connection(&mut connection)
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_store_query<Q: StoreReadQuery>(
-    connection: Arc<Mutex<Connection>>,
-    context: CommandContext,
-    query: Q,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<Q::Output, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::read_snapshot::test_support::with_read_snapshot(
-            &mut connection,
-            |capabilities| query.read(&context, &capabilities),
-        )
-        .map_err(map_store_read_failure)
-    })
 }
 
 impl DbOwner {

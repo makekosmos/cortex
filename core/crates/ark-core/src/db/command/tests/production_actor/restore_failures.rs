@@ -1,5 +1,6 @@
 use super::failures::apply_failure_mutation;
 use super::*;
+use rusqlite::Connection;
 use std::time::Duration;
 
 async fn open_failure_actor() -> (ark_store::test_support::TestDatabase, DbHandle, DbOwner) {
@@ -28,10 +29,6 @@ impl DbMaintenanceCommand for RestoreRecoveryRequired {
         self,
         _writer: &mut ark_store::writer::SqliteWriter,
     ) -> Result<Self::Output, DbError> {
-        Err(DbError::RecoveryRequired)
-    }
-
-    fn execute_on_connection(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
         Err(DbError::RecoveryRequired)
     }
 }
@@ -71,26 +68,6 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
             )
             .map(|_| ())
             .map_err(DbError::RestoreFailed)
-    }
-
-    fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
-        let fail_verification = |_connection: &Connection, _fingerprint: &[String]| {
-            Err("injected restore verification failure".to_string())
-        };
-        let rollback_succeeds = |live: &mut Connection, path: &std::path::Path| {
-            ark_store::test_support::ProductionActorFailureProbe::rollback_restore_fixture(
-                live, path,
-            )
-        };
-        ark_store::snapshot::restore_snapshot_with_hooks(
-            connection,
-            &self.db_path,
-            &self.backup_id,
-            fail_verification,
-            rollback_succeeds,
-        )
-        .map(|_| ())
-        .map_err(DbError::RestoreFailed)
     }
 }
 

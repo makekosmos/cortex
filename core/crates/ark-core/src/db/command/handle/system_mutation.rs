@@ -7,23 +7,12 @@ impl DbHandle {
             return Err(DbError::Invalid("database command class mismatch".into()));
         }
         context.require_engine()?;
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(ClearAllTask { reply });
-                actor.admit(context.class, &context.source, 1, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, 1)
-                    .map_err(map_admission_error)?;
-                spawn_test_clear_all(Arc::clone(connection), admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(ClearAllTask { reply });
+            actor.admit(context.class, &context.source, 1, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 
@@ -40,63 +29,12 @@ impl DbHandle {
         if weight > super::super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(DeleteTrashedTask { device_id, reply });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_delete_trashed(Arc::clone(connection), device_id, admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-fn spawn_test_clear_all(
-    connection: Arc<Mutex<Connection>>,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<(), DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::writer::SqliteWriter::clear_all_on_connection(&mut connection)
-            .map_err(map_storage_transaction_failure)
-    })
-}
-
-#[cfg(test)]
-fn spawn_test_delete_trashed(
-    connection: Arc<Mutex<Connection>>,
-    device_id: String,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<usize, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::writer::SqliteWriter::delete_trashed_on_connection(&mut connection, &device_id)
-            .map_err(map_storage_transaction_failure)
-    })
-}
-
-#[cfg(test)]
-fn map_storage_transaction_failure(
-    failure: ark_store::writer::TransactionFailure<String>,
-) -> DbError {
-    match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-        ark_store::writer::TransactionFailure::Operation(error) => DbError::Storage(error),
-        ark_store::writer::TransactionFailure::Commit(error) => {
-            DbError::CommitFailed(error.to_string())
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(DeleteTrashedTask { device_id, reply });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 }

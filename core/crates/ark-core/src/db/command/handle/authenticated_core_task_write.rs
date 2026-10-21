@@ -15,66 +15,16 @@ impl DbHandle {
         if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(AuthenticatedCoreTaskWriteTask {
-                    peer_id,
-                    command,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = self
-                    .admission
-                    .try_acquire(context.class, &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_authenticated_core_task_write(
-                    Arc::clone(connection),
-                    peer_id,
-                    command,
-                    admission,
-                )
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-fn spawn_test_authenticated_core_task_write(
-    connection: Arc<Mutex<Connection>>,
-    peer_id: String,
-    command: AuthenticatedCoreTaskWrite,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<RemoteCoreTaskOutcome, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        ark_store::writer::SqliteWriter::apply_authenticated_core_task_write_on_connection(
-            &mut connection,
-            &peer_id,
-            command,
-        )
-        .map_err(map_test_authenticated_core_task_failure)
-    })
-}
-
-#[cfg(test)]
-fn map_test_authenticated_core_task_failure(
-    failure: ark_store::writer::TransactionFailure<AuthenticatedCoreTaskWriteError>,
-) -> DbError {
-    match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
-        ark_store::writer::TransactionFailure::Operation(error) => {
-            map_authenticated_core_task_error(error)
-        }
-        ark_store::writer::TransactionFailure::Commit(error) => {
-            DbError::CommitFailed(error.to_string())
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(AuthenticatedCoreTaskWriteTask {
+                peer_id,
+                command,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 }

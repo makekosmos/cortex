@@ -5,13 +5,16 @@ struct ReadProbe;
 
 #[tokio::test]
 async fn read_query_uses_backfill_context() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
+    let (_directory, handle, mut owner) = production_actor::open_actor_fixture().await;
     handle
         .query_with_store(
             CommandContext::sync_system(CommandClass::Backfill),
             ReadProbe,
         )
+        .await
+        .unwrap();
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
         .unwrap();
 }
@@ -138,10 +141,16 @@ async fn open_rejects_an_unreadable_database_before_returning_a_handle() {
 
 #[tokio::test]
 async fn read_queries_share_bounded_source_admission() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
-        .map(|_| handle.hold_admission_for_test(CommandClass::Backfill, &CommandSource::System))
+    let mut limits = production_actor::actor_test_limits();
+    limits.max_commands = 8;
+    limits.max_bytes = 128;
+    limits.max_commands_per_source = 2;
+    let (_directory, handle, mut owner) =
+        production_actor::open_actor_fixture_with_limits(limits).await;
+    let reservations: Vec<_> = (0..limits.max_commands_per_source)
+        .map(|_| {
+            handle.hold_read_admission_for_test(CommandClass::Backfill, &CommandSource::System)
+        })
         .collect();
 
     assert!(matches!(
@@ -162,6 +171,10 @@ async fn read_queries_share_bounded_source_admission() {
         )
         .await
         .is_ok());
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -395,22 +408,70 @@ async fn delete_trashed_runs_through_an_interactive_database_command() {
 
 #[tokio::test]
 async fn submit_rejects_more_work_than_one_source_can_admit() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
-        .map(|_| handle.hold_admission_for_test(CommandClass::Interactive, &CommandSource::Engine))
-        .collect();
+    let (_directory, handle, mut owner) = production_actor::open_actor_fixture().await;
+    let (entered, received) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let blocking_handle = handle.clone();
+    let blocking = tokio::spawn(async move {
+        blocking_handle
+            .submit(
+                CommandContext::engine(),
+                production_actor::QueueProbe::<0> {
+                    sequence: 1,
+                    payload: vec![1],
+                    gate: Some((entered, released)),
+                },
+            )
+            .await
+    });
+    tokio::task::spawn_blocking(move || {
+        received
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("first actor write enters its gate")
+    })
+    .await
+    .unwrap();
+
+    let mut queued = Vec::new();
+    for sequence in 2..=production_actor::actor_test_limits().max_commands_per_source as i64 {
+        let queued_handle = handle.clone();
+        queued.push(tokio::spawn(async move {
+            queued_handle
+                .submit(
+                    CommandContext::engine(),
+                    production_actor::QueueProbe::<0> {
+                        sequence,
+                        payload: vec![1],
+                        gate: None,
+                    },
+                )
+                .await
+        }));
+    }
+    production_actor::wait_for_admitted_commands(
+        &handle,
+        production_actor::actor_test_limits().max_commands_per_source,
+    )
+    .await;
 
     assert!(matches!(
         handle.submit(CommandContext::engine(), WriteProbe).await,
         Err(DbError::Busy)
     ));
 
-    drop(reservations);
+    release.send(()).unwrap();
+    blocking.await.unwrap().unwrap();
+    for task in queued {
+        task.await.unwrap().unwrap();
+    }
     assert!(handle
         .submit(CommandContext::engine(), WriteProbe)
         .await
         .is_ok());
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 mod device_registry;

@@ -136,10 +136,8 @@ async fn setup_sync_with_capturing_transport(
         sent: captured.clone(),
     });
 
-    let backend = Arc::new(crate::db::SqliteStorageBackend::for_test(
-        get_db_handle(state)
-            .map(|db| db.shared_connection_for_test())
-            .unwrap(),
+    let backend = Arc::new(crate::db::SqliteStorageBackend::with_db_handle(
+        get_db_handle(state).unwrap(),
     ));
     backend.set_device_id("test-device").unwrap();
 

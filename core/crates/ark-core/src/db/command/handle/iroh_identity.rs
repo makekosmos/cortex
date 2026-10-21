@@ -1,9 +1,5 @@
 use super::type_mutation::validate;
-#[cfg(test)]
-use super::type_mutation::{spawn_test_type_mutation, test_admission};
 use super::*;
-#[cfg(test)]
-use ark_store::writer::SqliteWriter;
 use executor::actor::IrohIdentityKeyTask;
 
 impl DbHandle {
@@ -13,27 +9,15 @@ impl DbHandle {
         candidate_hex: String,
     ) -> Result<String, DbError> {
         let weight = validate(&context, "iroh.identity.persist.v1", &candidate_hex)?;
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let (reply, response) = tokio::sync::oneshot::channel();
-                let task: Box<dyn WriterTask> = Box::new(IrohIdentityKeyTask {
-                    candidate_hex,
-                    reply,
-                });
-                actor.admit(context.class, &context.source, weight, task)?;
-                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let admission = test_admission(self, &context, weight)?;
-                spawn_test_type_mutation(Arc::clone(connection), admission, move |connection| {
-                    SqliteWriter::persist_iroh_secret_key_candidate_on_connection(
-                        connection,
-                        candidate_hex,
-                    )
-                })
-                .await
-            }
+        {
+            let actor = &self.backend;
+            let (reply, response) = tokio::sync::oneshot::channel();
+            let task: Box<dyn WriterTask> = Box::new(IrohIdentityKeyTask {
+                candidate_hex,
+                reply,
+            });
+            actor.admit(context.class, &context.source, weight, task)?;
+            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
 }
