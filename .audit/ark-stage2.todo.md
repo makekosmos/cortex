@@ -48,8 +48,8 @@ The dependency graph matches the documented ownership, `ark-store` can be exerci
 - [x] Verify the source-size gate rejects new `partN` sources and that the tracked baseline has no remaining entries.
 - [x] Replace remaining string-driven behavior at affected sync boundaries and verify selective-sync policy changes.
 - [x] Complete KOS-428 recovery failure matrix and tests.
-- [ ] Run focused and full checks; commit, push, and verify exact-SHA CI.
-- [ ] Update architecture documentation and reconcile KOS-424/KOS-425 evidence in Linear.
+- [x] Run focused and full checks; commit, push, and verify exact-SHA CI. Commit `a03daba3c52ca9a12e9b761032b58d69d59cb498` is on origin and CI run `39570134543` passed on that exact SHA.
+- [x] Update architecture documentation and reconcile KOS-424/KOS-425 evidence in Linear. Final evidence is in both issues; KOS-424 and KOS-425 are Done.
   - [x] Correct current Core, sync-session, write-boundary, and crate README text for delivered boundaries and service panic behavior.
 
 ## Latest verification
@@ -126,5 +126,12 @@ The detailed interface rationale is in `ark-stage2-boundaries.md`. Run decisions
 - `pnpm run check:affected` passed on the final code and review-comment cleanup: 2,079 Rust tests passed, 5 skipped, Manager 124/124, Clippy with `-D warnings`, formatting, source-size, writer census, storage boundary, and runtime gates passed.
 - Independent correctness/security and maintainability reviews found no actionable blockers. The no-comments follow-up removed one redundant fixture comment and confirmed the six `unwrap_used` allowances are test-only and consistent with Store's existing convention.
 - Exact-SHA platform CI and Linear reconciliation are recorded below once completed.
+
+## Final acceptance — 2026-10-21
+
+- GitHub Actions run `39570134543` passed on exact code SHA `a03daba3c52ca9a12e9b761032b58d69d59cb498`: macOS 2,079/2,079 Engine tests, Windows 2,232/2,232 Engine tests, lint, desktop graph on macOS/Windows, Android release graph, Manager tests (macOS 124/124; Windows 123/123), and production SQLite durability experiments.
+- Windows Engine tests initially exposed two HMAC round-trip test fixtures that dropped database actors without bounded shutdown. Commit `a03daba3` adds explicit `DirectClient::stop_and_join`, shuts down every fixture-owned SQLite actor before temp-directory cleanup, and passes the full Windows temp-leak gate with zero leftovers. The 11 sync round-trip tests pass both serially and with four test threads.
+- Artifacts `ark-sqlite-durability-aarch64-apple-darwin` and `ark-sqlite-durability-x86_64-pc-windows-msvc` verify WAL + `synchronous=FULL` and five trials of 700 checked 512-byte commits per platform. These runner measurements do not claim physical power-loss guarantees or an SLO.
+- KOS-424, KOS-425, and KOS-428 have final evidence comments; KOS-412 and all 17 child issues are Done. The accepted KOS-428 recovery equivalent refuses stale/unverifiable restore before live mutation; the stable identity is retained and physical power-loss limits remain documented.
 
 - CI run `39545524784` passed macOS, lint, Android, and all 2,232 Windows tests, then failed because the Windows leak gate found 64 leftover SQLite files in Core temp directories. Checked temp-directory owners were extended to every raw ArkCore/ArkStore test call. The diagnostic run `39548925015` then identified `canonical_types::core_task_cutover_tests::start_moves_stored_legacy_tasks_once_and_keeps_a_backup`: it dropped ArkService without awaiting its bounded shutdown, leaving `ark.db`, WAL/SHM, and the pre-migration backup open. The test now awaits shutdown for both service instances; its focused test and formatting pass locally. On `39548925015`, macOS Engine tests and production SQLite durability measurement passed, Android graph/release and lint passed; Windows and exact-final-SHA CI remain pending.

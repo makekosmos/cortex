@@ -22,20 +22,28 @@ Complete every phase in `/tmp/cortex-thermo-ark-exocortex/05_remaining_plan.md`.
 - [x] Move task conflict-set reads behind a Store read capability and keep the serialized Engine response shape in an Application-owned result type.
 - [x] Move each remaining SQLite operation family to Store-owned typed capabilities, migrating callers and deleting Core SQL paths in the same unit.
 - [x] Remove Core SQLite source and Cargo dependencies, including test fixtures, and make the boundary gate pass.
-- [ ] Complete the KOS-428 recovery matrix on supported platforms and map each acceptance criterion to evidence.
-- [ ] Run the full local checks and desktop, mobile, and Windows CI on the final SHA.
+- [x] Complete the KOS-428 recovery matrix on supported platforms and map each acceptance criterion to evidence. Production failure/recovery tests and peer restore checks passed; final SQLite artifacts and documented OS/power-loss boundary are in `.audit/kos428-recovery.todo.md` and KOS-428.
+- [x] Run the full local checks and desktop, mobile, and Windows CI on the final SHA. Exact code SHA `a03daba3c52ca9a12e9b761032b58d69d59cb498` passed run `39570134543`.
 - [x] Run the independent correctness and thermo-nuclear code-quality reviews; resolve confirmed findings.
-- [ ] Update architecture and recovery documentation, reconcile KOS-424, KOS-425, KOS-428, and KOS-412 in Linear, and record final evidence.
+- [x] Update architecture and recovery documentation, reconcile KOS-424, KOS-425, KOS-428, and KOS-412 in Linear, and record final evidence. Final comments link the exact SHA and CI; KOS-412 and all 17 children are Done.
 
 ## Baseline
 
 On 2026-10-20, `scripts/check-ark-core-storage-boundary.mjs` reported 846 findings: 162 production findings, 672 test-file findings, 10 inline-test findings, and 2 debug-only findings. This is a source scan, so each finding must be confirmed against the operation map before it is treated as a distinct migration unit.
 
-The plan's earlier estimate of 15–25 active hours is stale. The current baseline contains 846 source findings and only local recovery evidence; re-estimate after the production operation families and test fixture moves are mapped.
+The plan's earlier estimate of 15–25 active hours was an initial forecast. After the storage census and vertical cutovers, implementation is complete; final verification and Linear reconciliation required additional time for a Windows-only test-fixture leak. No implementation work remains in this plan.
 
 ## Current verified commits
 
-Final local acceptance on `codex/ark-stage2-boundaries`: Core has no SQLite dependency or SQL source, the storage census reports zero SQLite ownership references, and the full affected gate passed with 2,079 Rust tests (5 skipped) plus Manager 124/124. Independent correctness/security and maintainability reviews found no actionable blockers. Exact-SHA CI remains the platform acceptance gate; Linear completion follows that result.
+Final local acceptance on `codex/ark-stage2-boundaries`: Core has no SQLite dependency or SQL source, the storage census reports zero SQLite ownership references, and the full affected gate passed with 2,079 Rust tests (5 skipped) plus Manager 124/124. Independent correctness/security and maintainability reviews found no actionable blockers. Exact-SHA CI `39570134543` passed for code commit `a03daba3c52ca9a12e9b761032b58d69d59cb498`; Linear acceptance is reconciled and KOS-412 plus all children are Done.
+
+## Final acceptance — 2026-10-21
+
+- Stage 1 HPKE route/admission fix is included: exact commit `8913f161` is an ancestor of the final code commit, verified with `git merge-base --is-ancestor 8913f161 HEAD`. The named Windows integration test passed in the full final Windows suite.
+- CI `39570134543` passed on exact code SHA `a03daba3c52ca9a12e9b761032b58d69d59cb498`: macOS 2,079/2,079 Engine tests, Windows 2,232/2,232 Engine tests, Android release graph, desktop graphs, lint, Manager tests on both desktops, and production SQLite durability tests.
+- A test teardown gap found by that final Windows run was fixed in commit `a03daba3`: HMAC sync round-trip clients are joined and test-owned SQLite actors are shut down before TempDir cleanup. Focused 11-test round-trip suite passed serially and with four test threads; the final Windows leak gate reports zero leftovers.
+- Both platform artifacts verify WAL + `synchronous=FULL` on SQLite 3.46.0 with 5 × 700 checked commits. The measurement is runner-specific; the documented physical power-loss limitation remains.
+- Final Linear reconciliation: KOS-412, KOS-424, KOS-425, KOS-428, and every other child KOS-413–KOS-429 are Done; comments on KOS-412/424/425/428 link the final evidence.
 
 - `d321caf5` makes version-vector merges atomic inside the Store writer transaction. The four affected packages passed 836 tests, targeted stale-policy and concurrent-merge tests passed, Clippy passed, and the repository pre-commit checks passed.
 - `e9e3a9d9` moves policy-bound snapshot and feed reads to Store-owned read capabilities. `ark-core` and `ark-store` passed 716 tests, Clippy passed, desktop and mobile graph checks passed, and the repository pre-commit checks passed.

@@ -11,8 +11,8 @@
 - [x] Verify stale-restore refusal and preserved pending edits with two persistent SQLite peers (`7e4913fe` and current restore integration tests).
 - [x] Fail both production panic boundaries closed, preserve the active operation's unknown outcome, cancel queued work, and verify explicit owner/service restart.
 - [x] Complete production SQLite failure injection for commit failure, unresolved restore recovery, DB actor panic, and ArkService request panic; prove the service no longer accepts work as Ready.
-- [ ] Complete supported-platform durability evidence. Current live verification is macOS 27.0 arm64; Windows CI has not run this branch.
-- [ ] Reconcile the final contract, Linear acceptance, tests, and commits.
+- [x] Complete supported-platform durability evidence. Exact-SHA CI run `39570134543` passed on macOS and Windows; both production SQLite artifacts verified WAL + `synchronous=FULL`, five trials of 700 checked 512-byte commits, and SQLite 3.46.0.
+- [x] Reconcile the final contract, Linear acceptance, tests, and commits. KOS-428 and KOS-412 are Done with final evidence comments; see run `39570134543` and commit `a03daba3`.
 
 ## Grounding
 
@@ -22,7 +22,9 @@ The identity values that can roll back with a DB snapshot include HLC high-water
 
 The actor supports explicit Ready/Failed lifecycle; startup recovery runs before the actor enters Ready. SQLite busy remains retryable; commit `909d0a4b` classifies disk-full, I/O, corruption, and not-a-database failures as unhealthy and fails the writer closed. Writer-task panic now moves the actor to `Failed`; the service-level request worker also stops after a handler panic. Neither owner returns to Ready. The active panicking request remains outcome-unknown. `ArkService::shutdown(deadline)` is async and deadline-bound; `Drop` closes ingress without joining indefinitely.
 
-The opened production connection sets WAL, `synchronous=FULL`, foreign keys, and a five-second busy timeout in `db/open.rs`; the pinned Rust adapter resolves to `rusqlite 0.32.1` and `libsqlite3-sys 0.30.1`. On macOS 27.0 arm64, six focused production tests passed for commit failure, restore recovery failure, actor panic, request-worker panic, stale restore with pending local changes, and stale restore after an existing Iroh peer observed a change. The full serialized `ark-core --lib` suite passed 540 tests after the panic fix. These results verify the current macOS software path. They do not measure power-loss behavior or Windows flush semantics; the existing Python benchmark is a local SQLite microbenchmark, not a production adapter test.
+The opened production connection sets WAL, `synchronous=FULL`, foreign keys, and a five-second busy timeout in `db/open.rs`; the pinned Rust adapter resolves to `rusqlite 0.32.1` and `libsqlite3-sys 0.30.1`. Six focused production tests passed on macOS for commit failure, restore recovery failure, actor panic, request-worker panic, stale restore with pending local changes, and stale restore after an existing Iroh peer observed a change. Final exact-SHA CI also passed the full Engine suites on macOS (2,079) and Windows (2,232), including recovery paths. Both platforms uploaded production SQLite experiment artifacts; OS/filesystem/hardware flush behavior and physical power-loss guarantees remain explicitly outside the measured evidence.
+
+Final artifact samples: macOS median average commit 283.356 µs (range 148.905–296.828 µs); Windows median average commit 2426.806 µs (range 2353.616–2541.518 µs). These are independent runner measurements, not an SLO or a cross-hardware comparison.
 
 KOS-428 acceptance requires an actual existing peer in a temporary-DB restore test, preservation of untransmitted local changes, no reused origin sequence, no Ready service after disk-full/commit/panic/restore failure, and a stated OS/power-loss durability boundary. A safe contract must distinguish expected user rollback from recovery-required replay and must never silently rotate stable device identity.
 
