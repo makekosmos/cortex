@@ -112,7 +112,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     upsert_integration_node_grant(&source, &origin_grant, "node-a").unwrap();
     upsert_integration_node_grant(&source, &grant, "node-a").unwrap();
     acquire_integration_test_lease(&source, "node-a");
-    publish_integration_credential_envelope(&source, &envelope, "node-a", 15).unwrap();
+    publish_test_envelope(&source, &envelope, "node-a", 15).unwrap();
     upsert_authorized_node(&target, &origin, "bootstrap").unwrap();
     upsert_authorized_node(&target, &recipient, "bootstrap").unwrap();
     upsert_integration_node_grant(&target, &origin_grant, "bootstrap").unwrap();
@@ -214,19 +214,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     .expect("recipient must retain its addressed opaque envelope after source shutdown");
     assert_eq!(consumed.ciphertext, "opaque-ciphertext-only");
 
-    let successor_lease = try_acquire_integration_refresh_lease(
-        &target,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-b".into(),
-            credential_generation: 4,
-            now_ms: 20,
-            ttl_ms: 10,
-            expected_fencing_token: 1,
-            device_id: "node-b".into(),
-        },
-    )
-    .unwrap();
+    let successor_lease = acquire_test_lease(&target, "node-b", 4, 20, 10, 1, "node-b");
     assert_eq!(successor_lease.fencing_token, 2);
     let refreshed = IntegrationCredentialEnvelope {
         integration_id: "integration-a".into(),
@@ -244,7 +232,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         revision: 4,
         hlc: "2026-08-31T00:00:01.000Z:000004:node-b".into(),
     };
-    publish_integration_credential_envelope(&target, &refreshed, "node-b", 21).unwrap();
+    publish_test_envelope(&target, &refreshed, "node-b", 21).unwrap();
     assert_eq!(
         with_integration_replication_read(&mut target, |read| {
             load_integration_credential_envelope(read, "integration-a", "node-b", 4)

@@ -2,13 +2,46 @@ use crate::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
     IntegrationNodeGrant, IntegrationRefreshLease, NodeStatus,
 };
+use ark_store::test_support::{
+    acquire_refresh_lease, publish_credential_envelope, RefreshLeaseAcquireFixture, TestDatabase,
+};
 use ark_store::IntegrationReplicationReadCapabilities;
+use std::ops::{Deref, DerefMut};
 
-fn integration_test_db() -> rusqlite::Connection {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(ark_store::schema::CREATE_TABLES)
-        .unwrap();
-    conn
+struct IntegrationTestDatabase {
+    database: TestDatabase,
+    connection: rusqlite::Connection,
+}
+
+impl IntegrationTestDatabase {
+    fn path(&self) -> &std::path::Path {
+        self.database.path()
+    }
+}
+
+impl Deref for IntegrationTestDatabase {
+    type Target = rusqlite::Connection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.connection
+    }
+}
+
+impl DerefMut for IntegrationTestDatabase {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.connection
+    }
+}
+
+fn integration_test_db() -> IntegrationTestDatabase {
+    let database = TestDatabase::create().expect("integration test database initializes");
+    let connection = database
+        .open_connection()
+        .expect("integration test database opens");
+    IntegrationTestDatabase {
+        database,
+        connection,
+    }
 }
 
 fn with_integration_replication_read<T>(
@@ -89,22 +122,43 @@ fn integration_envelope(generation: u64) -> IntegrationCredentialEnvelope {
 }
 
 fn acquire_integration_test_lease(
-    conn: &rusqlite::Connection,
+    database: &IntegrationTestDatabase,
     device_id: &str,
 ) -> IntegrationRefreshLease {
-    try_acquire_integration_refresh_lease(
-        conn,
-        &RefreshLeaseAcquireParams {
+    acquire_test_lease(database, "node-a", 3, 10, 10, 0, device_id)
+}
+
+fn acquire_test_lease(
+    database: &IntegrationTestDatabase,
+    holder_node_id: &str,
+    credential_generation: u64,
+    now_ms: u64,
+    ttl_ms: u64,
+    expected_fencing_token: u64,
+    device_id: &str,
+) -> IntegrationRefreshLease {
+    acquire_refresh_lease(
+        database.path(),
+        RefreshLeaseAcquireFixture {
             integration_id: "integration-a".into(),
-            holder_node_id: "node-a".into(),
-            credential_generation: 3,
-            now_ms: 10,
-            ttl_ms: 10,
-            expected_fencing_token: 0,
+            holder_node_id: holder_node_id.into(),
+            credential_generation,
+            now_ms,
+            ttl_ms,
+            expected_fencing_token,
             device_id: device_id.into(),
         },
     )
     .unwrap()
+}
+
+fn publish_test_envelope(
+    database: &IntegrationTestDatabase,
+    envelope: &IntegrationCredentialEnvelope,
+    device_id: &str,
+    now_ms: u64,
+) -> Result<(), String> {
+    publish_credential_envelope(database.path(), envelope.clone(), device_id, now_ms)
 }
 
 #[test]
@@ -127,7 +181,7 @@ fn verification_status_is_plaintext_free_and_reports_local_readiness() {
     upsert_authorized_node(&conn, &integration_node(), "node-a").unwrap();
     upsert_integration_node_grant(&conn, &integration_grant(), "node-a").unwrap();
     acquire_integration_test_lease(&conn, "node-a");
-    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
+    publish_test_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
 
     let status = with_integration_replication_read(&mut conn, |read| {
         integration_verification_status(read, "integration-a", "node-a", 15)

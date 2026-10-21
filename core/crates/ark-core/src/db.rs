@@ -3,6 +3,7 @@ mod command;
 mod committed_feed;
 pub(crate) mod constants;
 
+pub use crate::integration_replication::RefreshLeaseAcquireParams;
 pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 #[cfg(test)]
 pub(crate) use ark_store::VERSION_VECTOR_KEY;
@@ -30,34 +31,18 @@ pub use committed_feed::{InboxState, MAX_FEED_DELIVERY_BYTES};
 mod integration_replication_admission;
 #[cfg(test)]
 mod integration_replication_apply;
-#[cfg(test)]
-mod integration_replication_common;
 mod integration_replication_credentials;
 mod integration_replication_issuer_lookup;
-#[cfg(test)]
-mod integration_replication_lease;
-mod integration_replication_publication;
 
-#[cfg(test)]
-pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
 #[cfg(test)]
 pub(in crate::db) use integration_replication_apply::apply_signed_integration_changes;
-#[cfg(test)]
-use integration_replication_credentials as integration_credentials;
 pub use integration_replication_credentials::{
     load_integration_credential_envelope, load_latest_integration_credential_envelope,
 };
 pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,
-};
-#[cfg(test)]
-pub(in crate::db) use integration_replication_lease::upsert_integration_refresh_lease_record;
-pub use integration_replication_publication::RefreshLeaseAcquireParams;
-#[cfg(test)]
-pub use integration_replication_publication::{
-    publish_integration_credential_envelope, try_acquire_integration_refresh_lease,
 };
 #[cfg(test)]
 mod tests {
@@ -73,8 +58,6 @@ mod tests {
         load_integration_node_grant, upsert_authorized_node, upsert_integration_configuration,
         upsert_integration_node_grant,
     };
-    use ark_store::open::open_db;
-    use rusqlite::Connection;
     use serde_json::{json, Value};
 
     include!("db/test_fixtures.rs");
@@ -86,5 +69,4 @@ mod tests {
     include!("db/tests_integration_replication_apply.rs");
     include!("db/tests_integration_replication_adapter.rs");
     include!("db/tests_integration_replication_security.rs");
-    include!("db/tests_integration_replication_publication.rs");
 }

@@ -10,9 +10,10 @@ pub(crate) mod read_store;
 pub use read_store::IntegrationReplicationReadPort;
 pub use read_store::IntegrationReplicationReadPort as IntegrationReplicationReadStore;
 
-#[cfg(test)]
-pub use api::{persist_integration_grant, persist_node_authorization};
-pub use api::{prepare_signed_sync, NodeAuthorizationOperation, SignedSyncPreparation};
+pub use api::{
+    prepare_signed_sync, NodeAuthorizationOperation, RefreshLeaseAcquireParams,
+    SignedSyncPreparation,
+};
 pub use ark_domain::integration_replication::encode_hex;
 #[cfg(test)]
 pub(crate) use ark_domain::integration_replication::envelope_entity_id;

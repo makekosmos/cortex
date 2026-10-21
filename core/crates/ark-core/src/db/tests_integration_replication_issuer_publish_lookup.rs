@@ -1,4 +1,4 @@
-fn setup_publish_key_authority(conn: &rusqlite::Connection) -> (AuthorizedNode, AuthorizedNode) {
+fn setup_publish_key_authority(conn: &IntegrationTestDatabase) -> (AuthorizedNode, AuthorizedNode) {
     upsert_integration_configuration(conn, &integration_config(serde_json::json!({})), "node-a")
         .unwrap();
     let recipient = integration_node();
@@ -83,11 +83,11 @@ fn issuer_key_lookup_for_publish_rejects_wrong_key_and_accepts_rotated_key() {
     rotated_grant.node_encryption_key = rotated.encryption_public_key.clone();
     rotated_grant.grant_epoch = rotated.grant_epoch;
     rotated_grant.hlc = "2026-08-30T00:00:00.000Z:000002:node-b".into();
-    crate::integration_replication::persist_node_authorization(
-        &conn,
-        crate::integration_replication::NodeAuthorizationOperation::Rotate,
-        &rotated,
-        Some(&rotated_grant),
+    ark_store::test_support::persist_node_authorization(
+        conn.path(),
+        ark_application::integration_admin::NodeAuthorizationOperation::Rotate,
+        rotated.clone(),
+        Some(rotated_grant.clone()),
         "node-b",
     )
     .unwrap();
@@ -125,11 +125,11 @@ fn issuer_key_lookup_for_publish_rejects_revoked_authority() {
     let revoked_grant = integration_grant()
         .revoke(3, "2026-08-30T00:01:00Z")
         .unwrap();
-    crate::integration_replication::persist_node_authorization(
-        &conn,
-        crate::integration_replication::NodeAuthorizationOperation::Revoke,
-        &revoked,
-        Some(&revoked_grant),
+    ark_store::test_support::persist_node_authorization(
+        conn.path(),
+        ark_application::integration_admin::NodeAuthorizationOperation::Revoke,
+        revoked,
+        Some(revoked_grant),
         "node-a",
     )
     .unwrap();

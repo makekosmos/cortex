@@ -3,7 +3,7 @@ use crate::integration_replication::{
 };
 use chrono::{Duration, Utc};
 
-fn trusted_target(seed: u8) -> (rusqlite::Connection, SigningKey) {
+fn trusted_target(seed: u8) -> (IntegrationTestDatabase, SigningKey) {
     trusted_target_with_transport(seed, None, None)
 }
 
@@ -11,7 +11,7 @@ fn trusted_target_with_transport(
     seed: u8,
     origin_transport_key: Option<&str>,
     recipient_transport_key: Option<&str>,
-) -> (rusqlite::Connection, SigningKey) {
+) -> (IntegrationTestDatabase, SigningKey) {
     let target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[seed; 32]);
     let recipient_key = SigningKey::from_bytes(&[seed + 1; 32]);

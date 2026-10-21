@@ -1,5 +1,5 @@
 use crate::integration_replication::Reauthorization;
-fn setup_issuer_key_lookup(conn: &rusqlite::Connection) -> AuthorizedNode {
+fn setup_issuer_key_lookup(conn: &IntegrationTestDatabase) -> AuthorizedNode {
     upsert_integration_configuration(conn, &integration_config(serde_json::json!({})), "node-a")
         .unwrap();
     upsert_authorized_node(conn, &integration_node(), "node-a").unwrap();
@@ -18,24 +18,12 @@ fn setup_issuer_key_lookup(conn: &rusqlite::Connection) -> AuthorizedNode {
     upsert_authorized_node(conn, &issuer, "node-a").unwrap();
     upsert_integration_node_grant(conn, &issuer_grant, "node-a").unwrap();
 
-    let lease = try_acquire_integration_refresh_lease(
-        conn,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-b".into(),
-            credential_generation: 3,
-            now_ms: 10,
-            ttl_ms: 10,
-            expected_fencing_token: 0,
-            device_id: "node-b".into(),
-        },
-    )
-    .unwrap();
+    let lease = acquire_test_lease(conn, "node-b", 3, 10, 10, 0, "node-b");
     let mut envelope = integration_envelope(lease.credential_generation);
     envelope.issuer_node_id = issuer.node_id.clone();
     envelope.refresh_fencing_token = lease.fencing_token;
     envelope.hlc = "2026-08-30T00:00:00.000Z:000002:node-b".into();
-    publish_integration_credential_envelope(conn, &envelope, "node-b", 15).unwrap();
+    publish_test_envelope(conn, &envelope, "node-b", 15).unwrap();
     issuer
 }
 
@@ -83,24 +71,12 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
     let mut conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
-    let next_lease = try_acquire_integration_refresh_lease(
-        &conn,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-b".into(),
-            credential_generation: 4,
-            now_ms: 20,
-            ttl_ms: 10,
-            expected_fencing_token: 1,
-            device_id: "node-b".into(),
-        },
-    )
-    .unwrap();
+    let next_lease = acquire_test_lease(&conn, "node-b", 4, 20, 10, 1, "node-b");
     let mut latest = integration_envelope(4);
     latest.issuer_node_id = issuer.node_id.clone();
     latest.refresh_fencing_token = next_lease.fencing_token;
     latest.hlc = "2026-08-30T00:00:00.000Z:000004:node-b".into();
-    publish_integration_credential_envelope(&conn, &latest, "node-b", 25).unwrap();
+    publish_test_envelope(&conn, &latest, "node-b", 25).unwrap();
 
     let older_error = with_integration_replication_read(&mut conn, |read| {
         load_issuer_encryption_key(
@@ -180,11 +156,11 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
     rotated_grant.node_encryption_key = rotated.encryption_public_key.clone();
     rotated_grant.grant_epoch = rotated.grant_epoch;
     rotated_grant.hlc = "2026-08-30T00:00:00.000Z:000003:node-b".into();
-    crate::integration_replication::persist_node_authorization(
-        &conn,
-        crate::integration_replication::NodeAuthorizationOperation::Rotate,
-        &rotated,
-        Some(&rotated_grant),
+    ark_store::test_support::persist_node_authorization(
+        conn.path(),
+        ark_application::integration_admin::NodeAuthorizationOperation::Rotate,
+        rotated.clone(),
+        Some(rotated_grant.clone()),
         "node-b",
     )
     .unwrap();
@@ -204,11 +180,11 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
 
     let revoked = rotated.revoke(4, "2026-08-30T00:01:00Z").unwrap();
     let revoked_grant = rotated_grant.revoke(4, "2026-08-30T00:01:00Z").unwrap();
-    crate::integration_replication::persist_node_authorization(
-        &conn,
-        crate::integration_replication::NodeAuthorizationOperation::Revoke,
-        &revoked,
-        Some(&revoked_grant),
+    ark_store::test_support::persist_node_authorization(
+        conn.path(),
+        ark_application::integration_admin::NodeAuthorizationOperation::Revoke,
+        revoked,
+        Some(revoked_grant),
         "node-b",
     )
     .unwrap();
