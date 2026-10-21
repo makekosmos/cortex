@@ -181,17 +181,14 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
             .await
             .unwrap();
         }
-        with_conn(&state, |conn| {
-            crate::type_registry::register_alias(
-                conn,
-                &crate::type_registry::AliasRecord {
-                    alias: "rpc.alias".into(),
-                    canonical_type_id: "rpc-a".into(),
-                    created_at: "a".into(),
-                },
-            )
-        })
-        .unwrap();
+        ark_store::test_support::TypeMutationFixture::open(&path)
+            .unwrap()
+            .register_alias(&crate::type_registry::AliasRecord {
+                alias: "rpc.alias".into(),
+                canonical_type_id: "rpc-a".into(),
+                created_at: "a".into(),
+            })
+            .unwrap();
         let list = handle_request(&state, Request::TypesList).await.unwrap();
         let list_ids = list
             .as_array()

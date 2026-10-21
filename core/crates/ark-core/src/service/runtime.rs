@@ -5,14 +5,6 @@
 
 use super::*;
 
-#[cfg(test)]
-pub(super) fn with_conn<T, F>(state: &ServiceState, f: F) -> Result<T, String>
-where
-    F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
-{
-    get_db_handle(state)?.with_connection(f)
-}
-
 pub(super) fn get_db_handle(state: &ServiceState) -> Result<db::DbHandle, String> {
     state
         .db

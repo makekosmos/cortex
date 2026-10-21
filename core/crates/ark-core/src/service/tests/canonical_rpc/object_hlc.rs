@@ -26,16 +26,22 @@ async fn canonical_task_write_keeps_legacy_local_hlc_fallback() {
     )
     .await
     .unwrap();
-    with_conn(&state, |conn| {
-        let revision =
-            ark_store::sync_versions::object_revision(conn, "canonical-task-hlc-fallback")?
-                .ok_or_else(|| "missing object revision".to_string())?;
-        assert_eq!(
-            crate::hlc::HLC::from_string(&revision).device_id,
-            "ark-core-rpc-local"
-        );
-        Ok(())
-    })
+    let version_vector = handle_request(
+        &state,
+        Request::GetSyncKv {
+            key: "lan_sync.version_vector".into(),
+        },
+    )
+    .await
     .unwrap();
+    let version_vector: ark_domain::types::VersionVector =
+        serde_json::from_str(version_vector.as_str().unwrap()).unwrap();
+    let revision = version_vector
+        .get("canonical-task-hlc-fallback")
+        .expect("object revision is in the public sync version vector");
+    assert_eq!(
+        crate::hlc::HLC::from_string(revision).device_id,
+        "ark-core-rpc-local"
+    );
     fixture.shutdown().await;
 }

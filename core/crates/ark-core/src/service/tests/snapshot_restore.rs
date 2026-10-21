@@ -59,22 +59,26 @@ async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
 }
 
 /// Пишет snapshot live DB в Core-owned `backups/` через Online Backup.
-pub(super) fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str) {
+pub(super) fn write_snapshot(db_path: &str, id: &str) {
     let dir = ark_store::snapshot::backups_dir(db_path);
     std::fs::create_dir_all(&dir).unwrap();
     let dest = dir.join(id);
-    with_conn(state, |conn| {
-        ark_store::snapshot::backup_connection_to_file(conn, dest.to_str().unwrap())
-    })
+    ark_store::test_support::SnapshotTestFixture::backup_database(
+        std::path::Path::new(db_path),
+        &dest,
+    )
     .unwrap();
 }
 
-fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
-    with_conn(state, |conn| {
-        let objects = ark_store::objects::list_objects(conn)?;
-        Ok(objects.into_iter().map(|o| o.id).collect::<Vec<_>>())
-    })
-    .unwrap()
+async fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
+    handle_request(state, Request::ListObjects)
+        .await
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|object| object["id"].as_str().unwrap().to_owned())
+        .collect()
 }
 
 /// Restore refuses a stale snapshot before changing live data, including
@@ -85,7 +89,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-before", "before").await;
-    write_snapshot(&state, &db_path, "ark.db.backup-rt");
+    write_snapshot(&db_path, "ark.db.backup-rt");
 
     // Live расходится со snapshot'ом.
     handle_request(
@@ -100,7 +104,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     .await
     .unwrap();
     seed_rpc_object(&state, "obj-after", "after").await;
-    assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
 
     handle_request(
         &state,
@@ -136,7 +140,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     assert!(error.contains("snapshot predates committed sync history"));
     assert!(error.contains("without changing the live database"));
 
-    assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
     assert_eq!(
         handle_request(&state, Request::GetSyncSnapshot)
             .await
@@ -155,7 +159,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     )
     .await
     .unwrap();
-    assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
 }
 
 #[tokio::test]
@@ -164,7 +168,7 @@ async fn db_backup_restore_quiesces_and_restarts_running_sync() {
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-before-sync", "before sync").await;
-    write_snapshot(&state, &db_path, "ark.db.backup-sync-restore");
+    write_snapshot(&db_path, "ark.db.backup-sync-restore");
 
     handle_request(
         &state,
@@ -214,7 +218,10 @@ async fn db_backup_restore_quiesces_and_restarts_running_sync() {
     .expect("restore must finish and restart sync");
 
     assert_eq!(report["restored"], json!(true));
-    assert_eq!(live_object_ids(&state), vec!["obj-before-sync".to_string()]);
+    assert_eq!(
+        live_object_ids(&state).await,
+        vec!["obj-before-sync".to_string()]
+    );
     let restarted_server = state
         .sync
         .lock()
@@ -252,7 +259,7 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-live", "alive").await;
-    write_snapshot(&state, &db_path, "ark.db.backup-good");
+    write_snapshot(&db_path, "ark.db.backup-good");
 
     // Не-SQLite garbage.
     std::fs::write(
@@ -283,8 +290,9 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
         assert!(result.is_err(), "must reject {bad_id:?}");
     }
 
-    assert_eq!(live_object_ids(&state), vec!["obj-live".to_string()]);
-    with_conn(&state, ark_store::open::check_integrity).unwrap();
+    assert_eq!(live_object_ids(&state).await, vec!["obj-live".to_string()]);
+    ark_store::test_support::SnapshotTestFixture::check_integrity(std::path::Path::new(&db_path))
+        .unwrap();
 }
 
 /// AC6: list возвращает только regular files из backups/; validate даёт
@@ -295,7 +303,7 @@ async fn db_backup_list_and_validate_contract() {
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-l", "l").await;
-    write_snapshot(&state, &db_path, "ark.db.backup-listed");
+    write_snapshot(&db_path, "ark.db.backup-listed");
 
     let backups = ark_store::snapshot::backups_dir(&db_path);
     std::fs::write(backups.join(".staging-tmp"), b"junk").unwrap();
@@ -358,7 +366,7 @@ fn db_backup_restore_waits_for_backup_gate() {
         seed_rpc_object(&fixture.state, "obj-g", "g").await;
         path
     });
-    write_snapshot(&state, &db_path, "ark.db.backup-gated");
+    write_snapshot(&db_path, "ark.db.backup-gated");
 
     let gate = state.backup_gate.blocking_lock();
     let order = Arc::new(StdMutex::new(Vec::<&'static str>::new()));

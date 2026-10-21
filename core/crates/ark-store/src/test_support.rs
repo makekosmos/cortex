@@ -27,6 +27,7 @@ mod object_write_rollback;
 mod production_actor;
 mod registry_enrollment;
 mod replace_object_link;
+mod snapshot;
 mod sync_test_state;
 mod task_merge_inbound;
 mod task_merge_legacy;
@@ -63,6 +64,7 @@ pub use object_write_rollback::{ObjectWriteRollbackFixture, ObjectWriteRollbackS
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 pub use registry_enrollment::{reject_device_registry_projection, reject_remote_device_rename};
 pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
+pub use snapshot::SnapshotTestFixture;
 pub use sync_test_state::SyncTestState;
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};

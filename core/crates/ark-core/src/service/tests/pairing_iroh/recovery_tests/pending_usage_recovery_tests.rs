@@ -21,7 +21,7 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
 
     let db_path = fixture_a.db_path().to_string_lossy().into_owned();
     let backup_id = "ark.db.backup-before-pending-usage";
-    write_backup(&state_a, &db_path, backup_id);
+    write_backup(&db_path, backup_id);
 
     handle_request(&state_b, Request::StopSync)
         .await

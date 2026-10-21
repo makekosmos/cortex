@@ -2,7 +2,7 @@
 // `handle_request` against a per-test `ServiceState` (no process-wide
 // statics, so tests run in parallel without mutexes).
 
-use super::runtime::{get_db_handle, with_conn};
+use super::runtime::get_db_handle;
 use super::*;
 use ark_application::sync_storage::SyncEntityMutationPort;
 

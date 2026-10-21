@@ -12,6 +12,15 @@ async fn snapshot(state: &Arc<ServiceState>, id: &str) -> ObjectWriteSnapshot {
     .unwrap()
 }
 
+async fn object(state: &Arc<ServiceState>, id: &str) -> ark_domain::types::ArkObject {
+    serde_json::from_value(
+        handle_request(state, Request::GetObject { id: id.to_string() })
+            .await
+            .unwrap(),
+    )
+    .unwrap()
+}
+
 fn task(id: &str, title: &str) -> ArkObjectWrite {
     let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
     object.id = id.to_string();
@@ -253,11 +262,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     .unwrap();
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
-    let local = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "remote-guarded-object")?
-            .ok_or("object missing".to_string())
-    })
-    .unwrap();
+    let local = object(&state, "remote-guarded-object").await;
     let before_update = snapshot(&state, "remote-guarded-object").await;
     backend
         .apply_entity(&remote_entity(
@@ -268,16 +273,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
         ))
         .await
         .unwrap();
-    assert_eq!(
-        with_conn(&state, |conn| ark_store::objects::get_object(
-            conn,
-            "remote-guarded-object"
-        ))
-        .unwrap()
-        .unwrap()
-        .title,
-        "local"
-    );
+    assert_eq!(object(&state, "remote-guarded-object").await.title, "local");
     guarded_upsert(
         &state,
         project("remote-guarded-object", "guarded"),
@@ -287,11 +283,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     .unwrap();
 
     let before_delete = snapshot(&state, "remote-guarded-object").await;
-    let local = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "remote-guarded-object")?
-            .ok_or("object missing".to_string())
-    })
-    .unwrap();
+    let local = object(&state, "remote-guarded-object").await;
     backend
         .apply_entity(&remote_entity(
             &local,
@@ -340,11 +332,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     .unwrap();
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
-    let local = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "remote-race-object")?
-            .ok_or("object missing".to_string())
-    })
-    .unwrap();
+    let local = object(&state, "remote-race-object").await;
     let before_remote_update = snapshot(&state, "remote-race-object").await;
     backend
         .apply_entity(&remote_entity(
@@ -366,11 +354,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
         "object_conflict:stale_snapshot"
     );
 
-    let remote = with_conn(&state, |conn| {
-        ark_store::objects::get_object(conn, "remote-race-object")?
-            .ok_or("object missing".to_string())
-    })
-    .unwrap();
+    let remote = object(&state, "remote-race-object").await;
     let before_remote_delete = snapshot(&state, "remote-race-object").await;
     backend
         .apply_entity(&remote_entity(

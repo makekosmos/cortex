@@ -218,17 +218,20 @@ async fn sync_selection_does_not_revoke_an_application_grant() {
     .await
     .expect("exclude notes from device sync");
 
-    let grant = with_conn(&state, |connection| {
-        ark_store::integration_replication::load_integration_node_grant(
-            connection,
-            "notes-app",
-            "app-node",
-        )
-    })
-    .expect("load application grant after changing sync selection")
-    .expect("sync selection must preserve the application grant");
+    let verification = handle_request(
+        &state,
+        Request::IntegrationVerificationStatus {
+            integration_id: "notes-app".into(),
+            local_node_id: "app-node".into(),
+            now_ms: 0,
+        },
+    )
+    .await
+    .expect("read application verification status after changing sync selection");
+    let verification: crate::integration_replication::IntegrationVerificationStatus =
+        serde_json::from_value(verification).unwrap();
     assert_eq!(
-        grant.status,
-        crate::integration_replication::GrantStatus::Active
+        verification.grant_status,
+        Some(crate::integration_replication::GrantStatus::Active)
     );
 }

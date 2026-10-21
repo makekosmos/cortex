@@ -1,12 +1,13 @@
 use super::*;
 
-fn write_backup(state: &Arc<ServiceState>, db_path: &str, backup_id: &str) {
+fn write_backup(db_path: &str, backup_id: &str) {
     let directory = ark_store::snapshot::backups_dir(db_path);
     std::fs::create_dir_all(&directory).unwrap();
     let destination = directory.join(backup_id);
-    with_conn(state, |connection| {
-        ark_store::snapshot::backup_connection_to_file(connection, destination.to_str().unwrap())
-    })
+    ark_store::test_support::SnapshotTestFixture::backup_database(
+        std::path::Path::new(db_path),
+        &destination,
+    )
     .unwrap();
 }
 
@@ -154,7 +155,7 @@ async fn stale_restore_is_refused_after_existing_iroh_peer_received_change() {
 
     let db_path = fixture_a.db_path().to_string_lossy().into_owned();
     let backup_id = "ark.db.backup-before-peer-change";
-    write_backup(&state_a, &db_path, backup_id);
+    write_backup(&db_path, backup_id);
     upsert_note(&state_a, "peer-visible-note", "Peer-visible change").await;
     wait_until("B receives A's committed note", async || {
         note_title(&state_b, "peer-visible-note").await.as_deref() == Some("Peer-visible change")

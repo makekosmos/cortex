@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ark_domain::canonical_type::TypeRegistration;
+use ark_domain::canonical_type::{AliasRecord, TypeRegistration};
 use ark_domain::types::SyncEntity;
 use rusqlite::Connection;
 
@@ -31,6 +31,10 @@ impl TypeMutationFixture {
 
     pub fn register_type(&self, registration: &TypeRegistration) -> Result<(), String> {
         crate::type_registry::register_type(&self.connection, registration).map(|_| ())
+    }
+
+    pub fn register_alias(&self, alias: &AliasRecord) -> Result<(), String> {
+        crate::type_registry::register_alias(&self.connection, alias)
     }
 
     pub fn load_registered_type(

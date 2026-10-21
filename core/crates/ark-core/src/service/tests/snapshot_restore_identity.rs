@@ -65,7 +65,7 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     )
     .await
     .expect("append initial enrollment");
-    super::snapshot_restore::write_snapshot(&state, &db_path, "ark.db.backup-registry-chain");
+    super::snapshot_restore::write_snapshot(&db_path, "ark.db.backup-registry-chain");
 
     handle_request(
         &state,
