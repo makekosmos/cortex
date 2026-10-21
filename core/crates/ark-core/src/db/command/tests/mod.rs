@@ -171,9 +171,17 @@ async fn read_queries_share_bounded_source_admission() {
 
 #[tokio::test]
 async fn actor_store_keeps_the_persisted_iroh_identity() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, mut owner) = DbHandle::open(
+        directory
+            .path()
+            .join("persisted-identity.db")
+            .to_string_lossy()
+            .into_owned(),
+        "identity-device".into(),
+    )
+    .await
+    .unwrap();
 
     let first = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
@@ -183,29 +191,45 @@ async fn actor_store_keeps_the_persisted_iroh_identity() {
         .unwrap();
 
     assert_eq!(first.to_bytes(), second.to_bytes());
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, mut owner) = DbHandle::open(
+        directory
+            .path()
+            .join("usage-sequence.db")
+            .to_string_lossy()
+            .into_owned(),
+        "usage-sequence-device".into(),
+    )
+    .await
+    .unwrap();
 
     handle
         .ensure_usage_sequence_migrated(CommandContext::engine(), "device-under-test".into())
         .await
         .unwrap();
 
-    let migration_complete = handle.with_connection(|connection| {
-        ark_store::sync_kv::get_sync_kv(
-            connection,
-            ark_store::usage_sync_log::USAGE_SEQUENCE_MIGRATION_KEY,
+    let migration_marker = handle
+        .query_with_store(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            GetSyncKeyValueQuery::new(
+                ark_store::usage_sync_log::USAGE_SEQUENCE_MIGRATION_KEY.into(),
+            ),
         )
-        .unwrap()
-        .as_deref()
-            == Some("1")
-    });
-    assert!(migration_complete);
+        .await
+        .unwrap();
+    assert_eq!(migration_marker.as_deref(), Some("1"));
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -321,9 +345,17 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
 
 #[tokio::test]
 async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, mut owner) = DbHandle::open(
+        directory
+            .path()
+            .join("usage-compaction.db")
+            .to_string_lossy()
+            .into_owned(),
+        "usage-compaction-device".into(),
+    )
+    .await
+    .unwrap();
 
     let deleted = handle
         .compact_usage_sync_log(
@@ -334,6 +366,10 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
         .unwrap();
 
     assert_eq!(deleted, 0);
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
