@@ -41,19 +41,21 @@ fn setup_issuer_key_lookup(conn: &rusqlite::Connection) -> AuthorizedNode {
 
 #[test]
 fn issuer_key_lookup_returns_current_public_material_only() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
 
-    let key = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        3,
-        &expected_key_id,
-    )
+    let key = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            3,
+            &expected_key_id,
+        )
+    })
     .unwrap();
     assert_eq!(key.schema_version, 1);
     assert_eq!(key.space_id, "space-a");
@@ -78,7 +80,7 @@ fn issuer_key_lookup_returns_current_public_material_only() {
 
 #[test]
 fn issuer_key_lookup_rejects_a_retained_older_generation() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
     let next_lease = try_acquire_integration_refresh_lease(
@@ -100,57 +102,65 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
     latest.hlc = "2026-08-30T00:00:00.000Z:000004:node-b".into();
     publish_integration_credential_envelope(&conn, &latest, "node-b", 25).unwrap();
 
-    let older_error = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        3,
-        &expected_key_id,
-    )
+    let older_error = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            3,
+            &expected_key_id,
+        )
+    })
     .unwrap_err();
     assert!(older_error.contains("credential_generation"));
-    let current = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        4,
-        &expected_key_id,
-    )
+    let current = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            4,
+            &expected_key_id,
+        )
+    })
     .unwrap();
     assert_eq!(current.credential_generation, 4);
 }
 
 #[test]
 fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
 
-    let wrong_issuer = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-a",
-        3,
-        &expected_key_id,
-    )
+    let wrong_issuer = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-a",
+            3,
+            &expected_key_id,
+        )
+    })
     .unwrap_err();
     assert!(wrong_issuer.contains("issuer_node_id"));
 
-    let stale_key = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        3,
-        "sha256:stale",
-    )
+    let stale_key = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            3,
+            "sha256:stale",
+        )
+    })
     .unwrap_err();
     assert!(stale_key.contains("issuer_key_id"));
 
@@ -178,15 +188,17 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
         "node-b",
     )
     .unwrap();
-    let rotated_error = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        3,
-        &expected_key_id,
-    )
+    let rotated_error = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            3,
+            &expected_key_id,
+        )
+    })
     .unwrap_err();
     assert!(rotated_error.contains("issuer_key_id"));
 
@@ -200,15 +212,17 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
         "node-b",
     )
     .unwrap();
-    let revoked_error = load_issuer_encryption_key(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        3,
-        &encryption_key_id(&rotated.encryption_public_key),
-    )
+    let revoked_error = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            3,
+            &encryption_key_id(&rotated.encryption_public_key),
+        )
+    })
     .unwrap_err();
     assert_eq!(revoked_error, "node is revoked");
 }

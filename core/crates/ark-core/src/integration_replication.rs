@@ -7,7 +7,8 @@ mod api;
 mod contracts;
 mod outbound;
 pub(crate) mod read_store;
-pub use read_store::IntegrationReplicationReadStore;
+pub use read_store::IntegrationReplicationReadPort;
+pub use read_store::IntegrationReplicationReadPort as IntegrationReplicationReadStore;
 
 #[cfg(test)]
 pub use api::{persist_integration_grant, persist_node_authorization};

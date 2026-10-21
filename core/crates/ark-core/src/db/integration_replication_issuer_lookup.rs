@@ -1,12 +1,12 @@
 use super::{load_integration_credential_envelope, load_latest_integration_credential_envelope};
-use crate::integration_replication::read_store::IntegrationReplicationReadStore;
+use crate::integration_replication::read_store::IntegrationReplicationReadPort;
 use crate::integration_replication::{
     encryption_key_id, GrantStatus, IntegrationContractError, NodeStatus,
 };
 
 use crate::integration_replication::{IssuerEncryptionKey, IssuerEncryptionKeyForPublish};
 
-pub fn load_issuer_encryption_key<S: IntegrationReplicationReadStore>(
+pub fn load_issuer_encryption_key<S: IntegrationReplicationReadPort>(
     conn: &S,
     space_id: &str,
     integration_id: &str,
@@ -125,7 +125,7 @@ pub struct CredentialFenceExpectation<'a> {
 /// lease for this integration — same holder, generation and fencing token.
 /// A lease that moved on (newer fence, different holder, next generation)
 /// means the replicated credential was superseded before it was stored.
-pub fn check_integration_credential_fence<S: IntegrationReplicationReadStore>(
+pub fn check_integration_credential_fence<S: IntegrationReplicationReadPort>(
     conn: &S,
     expected: &CredentialFenceExpectation<'_>,
 ) -> Result<(), String> {
@@ -164,7 +164,7 @@ pub fn check_integration_credential_fence<S: IntegrationReplicationReadStore>(
     Ok(())
 }
 
-pub fn load_issuer_encryption_key_for_publish<S: IntegrationReplicationReadStore>(
+pub fn load_issuer_encryption_key_for_publish<S: IntegrationReplicationReadPort>(
     conn: &S,
     space_id: &str,
     integration_id: &str,

@@ -5,6 +5,80 @@ use ark_domain::integration_replication::{
 };
 use ark_domain::types::VersionVector;
 
+impl ark_application::integration_replication_read::IntegrationReplicationReadPort
+    for IntegrationReplicationReadCapabilities<'_>
+{
+    fn authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String> {
+        IntegrationReplicationReadCapabilities::authorized_node(self, node_id)
+    }
+
+    fn grant(
+        &self,
+        integration_id: &str,
+        node_id: &str,
+    ) -> Result<Option<IntegrationNodeGrant>, String> {
+        IntegrationReplicationReadCapabilities::grant(self, integration_id, node_id)
+    }
+
+    fn configuration(
+        &self,
+        integration_id: &str,
+    ) -> Result<Option<IntegrationConfiguration>, String> {
+        IntegrationReplicationReadCapabilities::configuration(self, integration_id)
+    }
+
+    fn refresh_lease(
+        &self,
+        integration_id: &str,
+    ) -> Result<Option<IntegrationRefreshLease>, String> {
+        IntegrationReplicationReadCapabilities::refresh_lease(self, integration_id)
+    }
+
+    fn credential_envelope(
+        &self,
+        integration_id: &str,
+        recipient_node_id: &str,
+        generation: u64,
+    ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
+        IntegrationReplicationReadCapabilities::credential_envelope(
+            self,
+            integration_id,
+            recipient_node_id,
+            generation,
+        )
+    }
+
+    fn latest_credential_envelope(
+        &self,
+        integration_id: &str,
+        recipient_node_id: &str,
+    ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
+        IntegrationReplicationReadCapabilities::latest_credential_envelope(
+            self,
+            integration_id,
+            recipient_node_id,
+        )
+    }
+
+    fn credential_generations_for_epoch(
+        &self,
+        integration_id: &str,
+        recipient_node_id: &str,
+        grant_epoch: u64,
+    ) -> Result<Vec<u64>, String> {
+        IntegrationReplicationReadCapabilities::credential_generations_for_epoch(
+            self,
+            integration_id,
+            recipient_node_id,
+            grant_epoch,
+        )
+    }
+
+    fn version_vector(&self) -> Result<Option<VersionVector>, String> {
+        IntegrationReplicationReadCapabilities::version_vector(self)
+    }
+}
+
 impl IntegrationReplicationReadCapabilities<'_> {
     pub fn authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String> {
         crate::integration_replication::load_authorized_node(self.connection, node_id)

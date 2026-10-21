@@ -22,17 +22,19 @@ fn setup_publish_key_authority(conn: &rusqlite::Connection) -> (AuthorizedNode, 
 
 #[test]
 fn issuer_key_lookup_for_publish_supports_first_publish_without_an_envelope() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let (_recipient, issuer) = setup_publish_key_authority(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
-    let key = load_issuer_encryption_key_for_publish(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        &expected_key_id,
-    )
+    let key = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key_for_publish(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            &expected_key_id,
+        )
+    })
     .unwrap();
     assert_eq!(key.schema_version, 1);
     assert_eq!(key.encryption_public_key, "enc-b");
@@ -49,17 +51,19 @@ fn issuer_key_lookup_for_publish_supports_first_publish_without_an_envelope() {
 
 #[test]
 fn issuer_key_lookup_for_publish_rejects_wrong_key_and_accepts_rotated_key() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let (_recipient, issuer) = setup_publish_key_authority(&conn);
     let stale_key_id = encryption_key_id(&issuer.encryption_public_key);
-    assert!(load_issuer_encryption_key_for_publish(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        "sha256:stale",
-    )
+    assert!(with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key_for_publish(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            "sha256:stale",
+        )
+    })
     .unwrap_err()
     .contains("issuer_key_id"));
 
@@ -87,31 +91,35 @@ fn issuer_key_lookup_for_publish_rejects_wrong_key_and_accepts_rotated_key() {
         "node-b",
     )
     .unwrap();
-    assert!(load_issuer_encryption_key_for_publish(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        &stale_key_id,
-    )
+    assert!(with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key_for_publish(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            &stale_key_id,
+        )
+    })
     .unwrap_err()
     .contains("issuer_key_id"));
-    let current = load_issuer_encryption_key_for_publish(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        &encryption_key_id(&rotated.encryption_public_key),
-    )
+    let current = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key_for_publish(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            &encryption_key_id(&rotated.encryption_public_key),
+        )
+    })
     .unwrap();
     assert_eq!(current.grant_epoch, 3);
 }
 
 #[test]
 fn issuer_key_lookup_for_publish_rejects_revoked_authority() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let (recipient, _issuer) = setup_publish_key_authority(&conn);
     let revoked = recipient.revoke(3, "2026-08-30T00:01:00Z").unwrap();
     let revoked_grant = integration_grant()
@@ -125,14 +133,16 @@ fn issuer_key_lookup_for_publish_rejects_revoked_authority() {
         "node-a",
     )
     .unwrap();
-    let error = load_issuer_encryption_key_for_publish(
-        &conn,
-        "space-a",
-        "integration-a",
-        "node-a",
-        "node-b",
-        "sha256:issuer",
-    )
+    let error = with_integration_replication_read(&mut conn, |read| {
+        load_issuer_encryption_key_for_publish(
+            read,
+            "space-a",
+            "integration-a",
+            "node-a",
+            "node-b",
+            "sha256:issuer",
+        )
+    })
     .unwrap_err();
     assert_eq!(error, "node is revoked");
 }

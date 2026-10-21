@@ -2,7 +2,7 @@
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use super::read_store::IntegrationReplicationReadStore;
+use super::read_store::IntegrationReplicationReadPort;
 #[cfg(test)]
 use super::IntegrationNodeGrant;
 use super::{AuthorizedNode, GrantStatus, NodeStatus, SignedSyncEnvelope};
@@ -22,7 +22,7 @@ pub struct SignedSyncPreparation {
     pub canonical_signing_bytes_hex: String,
 }
 
-pub fn prepare_signed_sync<S: IntegrationReplicationReadStore>(
+pub fn prepare_signed_sync<S: IntegrationReplicationReadPort>(
     conn: &S,
     space_id: &str,
     origin_node_id: &str,
@@ -57,8 +57,11 @@ pub fn prepare_signed_sync<S: IntegrationReplicationReadStore>(
     }
     require_current_grant(conn, integration_id, &recipient)?;
 
-    let payload =
-        crate::db::export_integration_replication(conn, integration_id, recipient_node_id)?;
+    let payload = ark_application::integration_export::export_integration_replication(
+        conn,
+        integration_id,
+        recipient_node_id,
+    )?;
     if payload.is_empty() {
         return Err("integration replication export is empty".into());
     }
@@ -227,7 +230,7 @@ fn with_immediate_write<T>(
     }
 }
 
-pub(crate) fn require_current_grant<S: IntegrationReplicationReadStore>(
+pub(crate) fn require_current_grant<S: IntegrationReplicationReadPort>(
     conn: &S,
     integration_id: &str,
     node: &AuthorizedNode,

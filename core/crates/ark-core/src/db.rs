@@ -46,12 +46,12 @@ mod integration_replication_apply;
 #[cfg(test)]
 mod integration_replication_common;
 mod integration_replication_credentials;
-mod integration_replication_export;
 mod integration_replication_issuer_lookup;
 #[cfg(test)]
 mod integration_replication_lease;
 mod integration_replication_publication;
 
+pub use ark_application::integration_export::export_integration_replication;
 pub use ark_store::integration_replication::load_integration_node_grant;
 pub use ark_store::integration_replication::upsert_integration_node_grant;
 pub use ark_store::integration_replication::{
@@ -69,7 +69,6 @@ use integration_replication_credentials as integration_credentials;
 pub use integration_replication_credentials::{
     load_integration_credential_envelope, load_latest_integration_credential_envelope,
 };
-pub use integration_replication_export::export_integration_replication;
 pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,

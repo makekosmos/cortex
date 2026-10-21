@@ -2,12 +2,27 @@ use crate::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
     IntegrationNodeGrant, IntegrationRefreshLease, NodeStatus,
 };
+use ark_store::IntegrationReplicationReadCapabilities;
 
 fn integration_test_db() -> rusqlite::Connection {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch(ark_store::schema::CREATE_TABLES)
         .unwrap();
     conn
+}
+
+fn with_integration_replication_read<T>(
+    connection: &mut rusqlite::Connection,
+    operation: impl FnOnce(&IntegrationReplicationReadCapabilities<'_>) -> Result<T, String>,
+) -> Result<T, String> {
+    ark_store::read_snapshot::test_support::with_read_snapshot(connection, |capabilities| {
+        let integration = capabilities.integration_replication();
+        operation(&integration)
+    })
+    .map_err(|error| match error {
+        ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
+        error => error.to_string(),
+    })
 }
 
 fn integration_config(settings: serde_json::Value) -> IntegrationConfiguration {
@@ -94,8 +109,11 @@ fn acquire_integration_test_lease(
 
 #[test]
 fn verification_status_is_plaintext_free_and_reports_local_readiness() {
-    let conn = integration_test_db();
-    let empty = integration_verification_status(&conn, "integration-a", "node-a", 15).unwrap();
+    let mut conn = integration_test_db();
+    let empty = with_integration_replication_read(&mut conn, |read| {
+        integration_verification_status(read, "integration-a", "node-a", 15)
+    })
+    .unwrap();
     assert!(!empty.integration_present);
     assert!(!empty.ready_for_collection);
     assert!(!empty.ready_for_refresh);
@@ -111,7 +129,10 @@ fn verification_status_is_plaintext_free_and_reports_local_readiness() {
     acquire_integration_test_lease(&conn, "node-a");
     publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
 
-    let status = integration_verification_status(&conn, "integration-a", "node-a", 15).unwrap();
+    let status = with_integration_replication_read(&mut conn, |read| {
+        integration_verification_status(read, "integration-a", "node-a", 15)
+    })
+    .unwrap();
     assert!(status.integration_present);
     assert_eq!(status.integration_enabled, Some(true));
     assert_eq!(status.node_status, Some(NodeStatus::Active));
@@ -122,9 +143,11 @@ fn verification_status_is_plaintext_free_and_reports_local_readiness() {
     assert!(status.ready_for_collection);
     assert!(!status.ready_for_refresh);
     assert!(
-        integration_verification_status(&conn, "integration-a", "node-a", 20)
-            .unwrap()
-            .ready_for_refresh
+        with_integration_replication_read(&mut conn, |read| {
+            integration_verification_status(read, "integration-a", "node-a", 20)
+        })
+        .unwrap()
+        .ready_for_refresh
     );
     let encoded = serde_json::to_string(&status).unwrap();
     for forbidden in [

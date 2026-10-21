@@ -1,9 +1,9 @@
 use super::load_latest_integration_credential_envelope;
-use crate::integration_replication::read_store::IntegrationReplicationReadStore;
+use crate::integration_replication::read_store::IntegrationReplicationReadPort;
 
 use crate::integration_replication::IntegrationVerificationStatus;
 
-pub fn integration_verification_status<S: IntegrationReplicationReadStore>(
+pub fn integration_verification_status<S: IntegrationReplicationReadPort>(
     conn: &S,
     integration_id: &str,
     local_node_id: &str,

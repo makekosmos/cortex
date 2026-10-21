@@ -2,7 +2,7 @@
 use super::integration_replication_common::{envelope_version_is_newer, persist_with_vector};
 #[cfg(test)]
 use super::load_integration_node_grant;
-use crate::integration_replication::read_store::IntegrationReplicationReadStore;
+use crate::integration_replication::read_store::IntegrationReplicationReadPort;
 #[cfg(test)]
 use crate::integration_replication::{envelope_entity_id, GrantStatus, NodeStatus};
 use crate::integration_replication::{
@@ -147,7 +147,7 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
     )
 }
 
-pub fn load_integration_credential_envelope<S: IntegrationReplicationReadStore>(
+pub fn load_integration_credential_envelope<S: IntegrationReplicationReadPort>(
     conn: &S,
     integration_id: &str,
     recipient_node_id: &str,
@@ -162,7 +162,7 @@ pub fn load_integration_credential_envelope<S: IntegrationReplicationReadStore>(
     Ok(Some(envelope))
 }
 
-pub fn load_latest_integration_credential_envelope<S: IntegrationReplicationReadStore>(
+pub fn load_latest_integration_credential_envelope<S: IntegrationReplicationReadPort>(
     conn: &S,
     integration_id: &str,
     recipient_node_id: &str,
@@ -174,7 +174,7 @@ pub fn load_latest_integration_credential_envelope<S: IntegrationReplicationRead
     Ok(Some(envelope))
 }
 
-fn validate_loaded_envelope_recipient<S: IntegrationReplicationReadStore>(
+fn validate_loaded_envelope_recipient<S: IntegrationReplicationReadPort>(
     conn: &S,
     envelope: &IntegrationCredentialEnvelope,
 ) -> Result<(), String> {

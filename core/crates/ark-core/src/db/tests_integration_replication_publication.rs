@@ -7,7 +7,7 @@ fn setup_refresh_authority(conn: &Connection) {
 
 #[test]
 fn publication_requires_the_current_refresh_fence() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     setup_refresh_authority(&conn);
     let lease = acquire_integration_test_lease(&conn, "node-a");
     let mut envelope = integration_envelope(lease.credential_generation);
@@ -25,19 +25,22 @@ fn publication_requires_the_current_refresh_fence() {
     envelope.refresh_fencing_token = lease.fencing_token;
     publish_integration_credential_envelope(&conn, &envelope, "node-a", 15).unwrap();
     assert_eq!(
-        load_integration_credential_envelope(&conn, "integration-a", "node-a", 3).unwrap(),
+        with_integration_replication_read(&mut conn, |read| {
+            load_integration_credential_envelope(read, "integration-a", "node-a", 3)
+        })
+        .unwrap(),
         Some(envelope)
     );
-    assert!(
-        load_latest_integration_credential_envelope(&conn, "integration-a", "node-a")
-            .unwrap()
-            .is_some()
-    );
-    assert!(
-        load_latest_integration_credential_envelope(&conn, "integration-a", "node-b")
-            .unwrap()
-            .is_none()
-    );
+    assert!(with_integration_replication_read(&mut conn, |read| {
+        load_latest_integration_credential_envelope(read, "integration-a", "node-a")
+    })
+    .unwrap()
+    .is_some());
+    assert!(with_integration_replication_read(&mut conn, |read| {
+        load_latest_integration_credential_envelope(read, "integration-a", "node-b")
+    })
+    .unwrap()
+    .is_none());
 
     assert!(try_acquire_integration_refresh_lease(
         &conn,
@@ -86,7 +89,7 @@ fn local_refresh_writes_cannot_impersonate_another_node() {
 
 #[test]
 fn rotated_recipient_rejects_stale_key_publication_without_vector_change() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     setup_refresh_authority(&conn);
 
     let mut rotated_node = integration_node();
@@ -121,12 +124,14 @@ fn rotated_recipient_rejects_stale_key_publication_without_vector_change() {
         ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap(),
         vector_before
     );
-    assert!(load_integration_credential_envelope(
-        &conn,
-        "integration-a",
-        "node-a",
-        lease.credential_generation,
-    )
+    assert!(with_integration_replication_read(&mut conn, |read| {
+        load_integration_credential_envelope(
+            read,
+            "integration-a",
+            "node-a",
+            lease.credential_generation,
+        )
+    })
     .unwrap()
     .is_none());
 

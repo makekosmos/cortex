@@ -60,7 +60,7 @@ fn sign_replication_batch(
 
 #[test]
 fn signed_integration_batch_moves_opaque_envelope_between_independent_databases() {
-    let source = integration_test_db();
+    let mut source = integration_test_db();
     let mut target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[21; 32]);
     let recipient_key = SigningKey::from_bytes(&[22; 32]);
@@ -134,7 +134,10 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     )
     .unwrap();
 
-    let changes = export_integration_replication(&source, "integration-a", "node-b").unwrap();
+    let changes = with_integration_replication_read(&mut source, |read| {
+        export_integration_replication(read, "integration-a", "node-b")
+    })
+    .unwrap();
     let expected_vectors = changes
         .iter()
         .map(|change| (change.vector_key(), change.vector_hlc.clone()))
@@ -159,7 +162,10 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         Some(grant)
     );
     assert_eq!(
-        load_integration_credential_envelope(&target, "integration-a", "node-b", 3).unwrap(),
+        with_integration_replication_read(&mut target, |read| {
+            load_integration_credential_envelope(read, "integration-a", "node-b", 3)
+        })
+        .unwrap(),
         Some(envelope)
     );
     let target_vector: VersionVector = serde_json::from_str(
@@ -201,9 +207,11 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     .unwrap();
     assert_eq!(repaired_vector.get(missing_key), Some(expected_hlc));
 
-    let consumed = load_integration_credential_envelope(&target, "integration-a", "node-b", 3)
-        .unwrap()
-        .expect("recipient must retain its addressed opaque envelope after source shutdown");
+    let consumed = with_integration_replication_read(&mut target, |read| {
+        load_integration_credential_envelope(read, "integration-a", "node-b", 3)
+    })
+    .unwrap()
+    .expect("recipient must retain its addressed opaque envelope after source shutdown");
     assert_eq!(consumed.ciphertext, "opaque-ciphertext-only");
 
     let successor_lease = try_acquire_integration_refresh_lease(
@@ -238,7 +246,10 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     };
     publish_integration_credential_envelope(&target, &refreshed, "node-b", 21).unwrap();
     assert_eq!(
-        load_integration_credential_envelope(&target, "integration-a", "node-b", 4).unwrap(),
+        with_integration_replication_read(&mut target, |read| {
+            load_integration_credential_envelope(read, "integration-a", "node-b", 4)
+        })
+        .unwrap(),
         Some(refreshed)
     );
     let mut continued_config = config;

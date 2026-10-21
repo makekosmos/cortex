@@ -2,7 +2,7 @@ use crate::integration_replication::IntegrationReplicationEntity;
 
 #[test]
 fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let config = integration_config(serde_json::json!({"display": {"region": "us"}}));
     let node_a = integration_node();
     let grant_a = integration_grant();
@@ -27,7 +27,10 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     upsert_authorized_node(&conn, &node_b, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant_b, "device-a").unwrap();
 
-    let changes = export_integration_replication(&conn, "integration-a", "node-a").unwrap();
+    let changes = with_integration_replication_read(&mut conn, |read| {
+        export_integration_replication(read, "integration-a", "node-a")
+    })
+    .unwrap();
     assert!(changes
         .windows(2)
         .all(|pair| rank(&pair[0].entity) <= rank(&pair[1].entity)));
@@ -64,7 +67,7 @@ fn rank(entity: &IntegrationReplicationEntity) -> u8 {
 
 #[test]
 fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
-    let conn = integration_test_db();
+    let mut conn = integration_test_db();
     let config = integration_config(serde_json::json!({}));
     let node = integration_node();
     let grant = integration_grant();
@@ -75,7 +78,10 @@ fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
     publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
     let revoked = node.revoke(3, "2026-08-30T01:00:00Z").unwrap();
     upsert_authorized_node(&conn, &revoked, "device-a").unwrap();
-    let changes = export_integration_replication(&conn, "integration-a", "node-a").unwrap();
+    let changes = with_integration_replication_read(&mut conn, |read| {
+        export_integration_replication(read, "integration-a", "node-a")
+    })
+    .unwrap();
     assert!(!changes.iter().any(|change| matches!(
         change.entity,
         IntegrationReplicationEntity::IntegrationCredentialEnvelope(_)

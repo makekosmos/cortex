@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::read_store::IntegrationReplicationReadStore;
+use super::read_store::IntegrationReplicationReadPort;
 #[cfg(test)]
 use rusqlite::Connection;
 
@@ -8,7 +8,7 @@ use super::{IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, Verifi
 
 /// Revalidate a host-signed frame against current authorization immediately
 /// before transport routing. A frame prepared before revocation must not send.
-pub fn validate_outbound_signed_sync<S: IntegrationReplicationReadStore>(
+pub fn validate_outbound_signed_sync<S: IntegrationReplicationReadPort>(
     conn: &S,
     expected_space_id: &str,
     expected_origin_node_id: &str,
@@ -61,7 +61,7 @@ pub fn validate_outbound_signed_sync<S: IntegrationReplicationReadStore>(
     Ok(())
 }
 
-pub fn validate_outbound_signed_sync_with_transport<S: IntegrationReplicationReadStore>(
+pub fn validate_outbound_signed_sync_with_transport<S: IntegrationReplicationReadPort>(
     conn: &S,
     expected_space_id: &str,
     expected_origin_node_id: &str,
@@ -133,9 +133,27 @@ mod tests {
         NodeStatus,
     };
 
+    fn validate_with_store_snapshot(
+        connection: &mut rusqlite::Connection,
+        frame: &SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        ark_store::read_snapshot::test_support::with_read_snapshot(connection, |capabilities| {
+            validate_outbound_signed_sync(
+                &capabilities.integration_replication(),
+                "space",
+                "origin",
+                frame,
+            )
+        })
+        .map_err(|error| match error {
+            ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
+            error => error.to_string(),
+        })
+    }
+
     #[test]
     fn revoked_grant_invalidates_an_already_signed_frame() {
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let mut conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(ark_store::schema::CREATE_TABLES)
             .unwrap();
         let key = SigningKey::from_bytes(&[7; 32]);
@@ -182,7 +200,7 @@ mod tests {
             &key.sign(&frame.canonical_signing_bytes().unwrap())
                 .to_bytes(),
         );
-        validate_outbound_signed_sync(&conn, "space", "origin", &frame).unwrap();
+        validate_with_store_snapshot(&mut conn, &frame).unwrap();
         assert!(node_may_receive_integration_frames(&conn, "recipient").unwrap());
 
         let mut forged = frame.clone();
@@ -211,11 +229,11 @@ mod tests {
             &key.sign(&forged.canonical_signing_bytes().unwrap())
                 .to_bytes(),
         );
-        assert!(validate_outbound_signed_sync(&conn, "space", "origin", &forged).is_err());
+        assert!(validate_with_store_snapshot(&mut conn, &forged).is_err());
 
         let revoked = recipient_grant.revoke(2, "2026-08-31T00:01:00Z").unwrap();
         crate::db::upsert_integration_node_grant(&conn, &revoked, "writer").unwrap();
-        assert!(validate_outbound_signed_sync(&conn, "space", "origin", &frame).is_err());
+        assert!(validate_with_store_snapshot(&mut conn, &frame).is_err());
         let mut other_active = grant("recipient", "recipient-key");
         other_active.integration_id = "other-integration".into();
         crate::db::upsert_integration_node_grant(&conn, &other_active, "writer").unwrap();
