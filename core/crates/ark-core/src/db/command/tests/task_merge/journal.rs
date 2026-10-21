@@ -71,17 +71,19 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     };
     let digest =
         ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&limited_policy));
-    handle.with_connection(|connection| {
-        ark_store::data_platform::accept_peer_sync_policy(
-            connection,
-            "peer-a",
-            1,
-            &digest,
-            true,
-            std::slice::from_ref(&limited_policy),
+    handle
+        .accept_peer_sync_policy(
+            CommandContext::authenticated_peer("peer-a".into()),
+            AcceptPeerSyncPolicyCommand::new(
+                "peer-a".into(),
+                1,
+                digest.clone(),
+                true,
+                vec![limited_policy.clone()],
+            ),
         )
+        .await
         .unwrap();
-    });
     let identity = ark_application::sync_storage::PolicyIdentity {
         revision: 1,
         digest,
@@ -118,17 +120,19 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     };
     let filtered_digest =
         ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&filtered_policy));
-    handle.with_connection(|connection| {
-        ark_store::data_platform::accept_peer_sync_policy(
-            connection,
-            "peer-a",
-            2,
-            &filtered_digest,
-            true,
-            std::slice::from_ref(&filtered_policy),
+    handle
+        .accept_peer_sync_policy(
+            CommandContext::authenticated_peer("peer-a".into()),
+            AcceptPeerSyncPolicyCommand::new(
+                "peer-a".into(),
+                2,
+                filtered_digest.clone(),
+                true,
+                vec![filtered_policy.clone()],
+            ),
         )
+        .await
         .unwrap();
-    });
     let filtered = handle
         .prepare_task_merge_batch(
             CommandContext::authenticated_peer("peer-a".into()),
@@ -323,7 +327,7 @@ async fn outbound_merge_batches_obey_the_wire_size_budget() {
 
 #[tokio::test]
 async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
@@ -355,17 +359,19 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     };
     let excluded_digest =
         ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded));
-    handle.with_connection(|connection| {
-        ark_store::data_platform::accept_peer_sync_policy(
-            connection,
-            "peer-a",
-            1,
-            &excluded_digest,
-            true,
-            std::slice::from_ref(&excluded),
+    handle
+        .accept_peer_sync_policy(
+            CommandContext::authenticated_peer("peer-a".into()),
+            AcceptPeerSyncPolicyCommand::new(
+                "peer-a".into(),
+                1,
+                excluded_digest.clone(),
+                true,
+                vec![excluded.clone()],
+            ),
         )
+        .await
         .unwrap();
-    });
     let excluded_identity = ark_application::sync_storage::PolicyIdentity {
         revision: 1,
         digest: excluded_digest,
@@ -373,13 +379,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     };
     let denied = prepare_batch(&handle, "peer-a", excluded_identity, 1).await;
     assert!(matches!(denied, Err(DbError::Permission(_))));
-    let local_operations: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
+    let local_operations = super::inspect(&path).operation_count;
     assert_eq!(local_operations, 2);
 
     let full = ark_application::sync_policy::SyncProfileRule {
@@ -389,17 +389,19 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
     let full_digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&full));
-    handle.with_connection(|connection| {
-        ark_store::data_platform::accept_peer_sync_policy(
-            connection,
-            "peer-a",
-            2,
-            &full_digest,
-            true,
-            std::slice::from_ref(&full),
+    handle
+        .accept_peer_sync_policy(
+            CommandContext::authenticated_peer("peer-a".into()),
+            AcceptPeerSyncPolicyCommand::new(
+                "peer-a".into(),
+                2,
+                full_digest.clone(),
+                true,
+                vec![full.clone()],
+            ),
         )
+        .await
         .unwrap();
-    });
     let widened_identity = ark_application::sync_storage::PolicyIdentity {
         revision: 2,
         digest: full_digest,
