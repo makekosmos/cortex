@@ -11,7 +11,7 @@
 //! fixture drift test there.
 
 use ark_core::types::ArkObjectWrite;
-use rusqlite::Connection;
+use ark_store::test_support::{ObjectRevisionFixture, TestDatabase};
 use std::path::PathBuf;
 
 fn fixture_dir() -> PathBuf {
@@ -20,8 +20,8 @@ fn fixture_dir() -> PathBuf {
 
 #[test]
 fn agenda_write_payloads_pass_engine_validation() {
-    let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    let database = TestDatabase::create().unwrap();
+    let fixture = ObjectRevisionFixture::open(database.path()).unwrap();
 
     let mut names: Vec<String> = std::fs::read_dir(fixture_dir())
         .unwrap()
@@ -53,7 +53,8 @@ fn agenda_write_payloads_pass_engine_validation() {
                 .unwrap();
         let write: ArkObjectWrite = serde_json::from_value(raw)
             .unwrap_or_else(|e| panic!("{name}: not an engine object envelope: {e}"));
-        ark_store::object_write::prepare_object(&conn, write)
+        fixture
+            .prepare_object(write)
             .unwrap_or_else(|e| panic!("{name}: Engine ingress rejected Agenda payload: {e}"));
     }
 }

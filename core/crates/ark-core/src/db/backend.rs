@@ -36,6 +36,13 @@ impl SqliteStorageBackend {
         Ok(backend)
     }
 
+    #[cfg(test)]
+    pub(crate) async fn load_or_generate_iroh_secret_key_for_test(
+        &self,
+    ) -> Result<ark_net::iroh::SecretKey, String> {
+        crate::iroh_transport::load_or_generate_secret_key_via_actor(&self.db).await
+    }
+
     pub(crate) fn with_db_handle(db: DbHandle) -> Self {
         Self {
             db,

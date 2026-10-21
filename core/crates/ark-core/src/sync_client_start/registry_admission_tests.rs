@@ -8,30 +8,38 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-fn registry_backend(
+async fn registry_backend(
     device_id: &str,
 ) -> (
     Arc<crate::db::SqliteStorageBackend>,
     ark_net::iroh::SecretKey,
+    ark_store::test_support::TestDatabase,
 ) {
-    let connection = rusqlite::Connection::open_in_memory().expect("open test database");
-    ark_store::open::init_schema(&connection).expect("initialize test schema");
-    let secret = crate::iroh_transport::load_or_generate_secret_key(&connection)
-        .expect("persist local signing identity");
-    let backend = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(
-        Mutex::new(connection),
-    )));
+    let database = ark_store::test_support::TestDatabase::create()
+        .expect("initialize file-backed test database");
+    let backend = Arc::new(
+        crate::db::SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+            device_id,
+        )
+        .await
+        .expect("open writer actor"),
+    );
     backend
         .set_device_id(device_id)
         .expect("set local device id");
-    (backend, secret)
+    let secret = backend
+        .load_or_generate_iroh_secret_key_for_test()
+        .await
+        .expect("persist local signing identity");
+    (backend, secret, database)
 }
 
 include!("registry_admission_tests/registry_exchange.rs");
 
 #[tokio::test]
 async fn direct_server_sends_no_data_or_ack_before_registry_admission() {
-    let (server_storage, _server_key) = registry_backend("server-device");
+    let (server_storage, _server_key, _server_database) = registry_backend("server-device").await;
     let client_key = ark_net::iroh::SecretKey::generate();
     server_storage
         .enroll_paired_device(

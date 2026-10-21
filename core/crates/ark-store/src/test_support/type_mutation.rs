@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use ark_domain::canonical_type::TypeRegistration;
 use ark_domain::types::SyncEntity;
 use rusqlite::Connection;
 
@@ -26,6 +27,18 @@ impl TypeMutationFixture {
 
     pub fn insert_pending_object(&self, entity: &SyncEntity, type_id: &str) -> Result<(), String> {
         crate::pending_objects::insert_pending_object(&self.connection, entity, type_id)
+    }
+
+    pub fn register_type(&self, registration: &TypeRegistration) -> Result<(), String> {
+        crate::type_registry::register_type(&self.connection, registration).map(|_| ())
+    }
+
+    pub fn load_registered_type(
+        &self,
+        type_id: &str,
+        version: &str,
+    ) -> Result<Option<ark_application::type_registry::TypeGetResponse>, String> {
+        crate::type_registry::get_type(&self.connection, type_id, Some(version))
     }
 
     pub fn reject_sync_revision_writes(&self) -> Result<(), String> {

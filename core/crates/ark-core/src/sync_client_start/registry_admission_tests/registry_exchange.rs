@@ -1,8 +1,9 @@
 #[tokio::test]
 async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
-    let (client_storage, client_key) = registry_backend("client-device");
-    let (server_storage, server_key) = registry_backend("server-device");
-    let (observer_storage, observer_key) = registry_backend("observer-device");
+    let (client_storage, client_key, _client_database) = registry_backend("client-device").await;
+    let (server_storage, server_key, _server_database) = registry_backend("server-device").await;
+    let (observer_storage, observer_key, _observer_database) =
+        registry_backend("observer-device").await;
     client_storage
         .enroll_paired_device(
             "client-device",
