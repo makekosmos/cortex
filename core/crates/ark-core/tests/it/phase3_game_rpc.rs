@@ -62,4 +62,9 @@ async fn game_upsert_rpc_uses_actor_and_publishes_only_changed_events() {
             .await
             .is_err()
     );
+
+    service
+        .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }
