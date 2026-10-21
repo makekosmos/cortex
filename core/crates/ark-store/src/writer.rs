@@ -73,6 +73,11 @@ pub struct CanonicalGameWrites<'scope, 'connection> {
 }
 
 impl WriteCapabilities<'_, '_> {
+    #[cfg(feature = "test-support")]
+    pub fn test_support(&mut self) -> crate::test_support::ActorTestWrites<'_, '_> {
+        crate::test_support::ActorTestWrites::new(self.transaction)
+    }
+
     pub fn usage(&mut self) -> UsageWrites<'_, '_> {
         UsageWrites {
             transaction: self.transaction,
@@ -187,6 +192,11 @@ pub type TransactionFailure<E> = StoreTransactionFailure<E>;
 impl SqliteWriter {
     pub fn from_connection(connection: Connection) -> Self {
         Self { connection }
+    }
+
+    #[cfg(feature = "test-support")]
+    pub fn test_support(&mut self) -> crate::test_support::ActorTestWriterMaintenance<'_> {
+        crate::test_support::ActorTestWriterMaintenance::new(&mut self.connection)
     }
 
     pub fn open(path: &str) -> Result<Self, String> {

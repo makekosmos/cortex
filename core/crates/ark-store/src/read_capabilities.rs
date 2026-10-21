@@ -55,6 +55,11 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
         Self { connection }
     }
 
+    #[cfg(feature = "test-support")]
+    pub fn test_support(&self) -> crate::test_support::ActorTestReads<'_> {
+        crate::test_support::ActorTestReads::new(self.connection)
+    }
+
     pub fn objects(&self) -> ObjectReadCapabilities<'_> {
         ObjectReadCapabilities {
             connection: self.connection,

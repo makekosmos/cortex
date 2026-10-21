@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use tempfile::TempDir;
 
+mod actor_capabilities;
 mod actor_log;
 mod blocked_write;
 mod book_cover_rollback;
@@ -32,6 +33,7 @@ mod type_mutation;
 mod usage_event_recovery;
 mod usage_rollback;
 
+pub use actor_capabilities::{ActorTestReads, ActorTestWriterMaintenance, ActorTestWrites};
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use blocked_write::create_blocked_write_legacy_fixture;
 pub use book_cover_rollback::{BookCoverRollbackFixture, BookCoverRollbackState};
