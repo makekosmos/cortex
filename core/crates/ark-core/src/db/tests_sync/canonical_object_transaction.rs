@@ -91,6 +91,11 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         error,
         ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

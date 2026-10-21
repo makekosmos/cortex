@@ -86,4 +86,8 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         .unwrap();
     assert_eq!(after_second_receipt.applied_through, 0);
     assert!(rx.try_recv().is_err());
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

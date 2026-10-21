@@ -162,6 +162,11 @@ async fn storage_backend_roundtrip_todo() {
         found.data.get("title").and_then(|v| v.as_str()),
         Some("Roundtrip")
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -178,6 +183,11 @@ async fn storage_backend_rejects_invalid_sync_payload() {
         err.contains("invalid type") || err.contains("expected"),
         "unexpected error: {err}",
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -194,6 +204,11 @@ async fn storage_backend_rejects_unknown_sync_entity_type() {
         err.contains("unknown sync entity type"),
         "unexpected error: {err}"
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -245,6 +260,11 @@ async fn storage_backend_roundtrip_usage_entities() {
         event.data.get("kind").and_then(|v| v.as_str()),
         Some("foreground")
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -281,6 +301,11 @@ async fn storage_backend_pages_large_usage_history() {
     }
 
     assert_eq!(usage_event_ids.len(), 250);
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -319,4 +344,9 @@ async fn storage_backend_roundtrip_object_entities() {
         link.data.get("sourceObjectId").and_then(|v| v.as_str()),
         Some("obj-sync-a")
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

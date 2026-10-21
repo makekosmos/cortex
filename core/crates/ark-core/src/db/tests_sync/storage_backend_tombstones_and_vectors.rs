@@ -26,6 +26,11 @@ async fn storage_backend_delete_removes_entity() {
     assert_eq!(found.deleted, Some(true));
     assert_eq!(found.hlc, "2026-01-02T00:00:00.000Z:000001:peer-a");
     assert!(found.data.is_empty());
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -45,6 +50,10 @@ async fn storage_backend_tombstone_survives_backend_recreation() {
     };
     backend.apply_entity(&tombstone).await.unwrap();
 
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
     drop(backend);
     let recreated = SqliteStorageBackend::open_for_test(database_path, "device-under-test")
         .await
@@ -57,6 +66,10 @@ async fn storage_backend_tombstone_survives_backend_recreation() {
             .any(|e| e.id == "tbk-recreated" && e.deleted == Some(true)),
         "tombstone should survive recreating the storage backend",
     );
+    recreated
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -89,6 +102,11 @@ async fn storage_backend_live_entity_clears_tombstone() {
         matching[0].data.get("title").and_then(|v| v.as_str()),
         Some("Live again")
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -131,6 +149,11 @@ async fn storage_backend_delete_usage_entity_removes_entity() {
     assert_eq!(found.entity_type, "usage_event");
     assert_eq!(found.deleted, Some(true));
     assert!(found.data.is_empty());
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -144,6 +167,11 @@ async fn storage_backend_persists_version_vector_progress() {
     );
     backend.replace_version_vector(&vector).await.unwrap();
     assert_eq!(backend.load_version_vector().await.unwrap(), vector);
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -168,6 +196,11 @@ async fn storage_backend_uses_stored_hlc_when_present() {
         "2026-03-01T00:00:00.000Z:000005:peer-b".to_string(),
         "load_entities should prefer HLC from the passed version vector",
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 // -----------------------------------------------------------------------

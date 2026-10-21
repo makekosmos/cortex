@@ -50,4 +50,9 @@ async fn persist_pull_vector_preserves_concurrent_keys() {
         get("entity-b"),
         Some("2026-01-02T00:00:00.000Z:000000:local"),
     );
+    test_backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

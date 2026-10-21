@@ -144,4 +144,8 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .await
         .unwrap();
     assert_eq!(progress.applied_through, position);
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

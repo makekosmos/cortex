@@ -11,6 +11,11 @@ async fn pending_authenticated_object_is_accepted() {
         .apply_authenticated_entity_with_id(&entity, "peer-a", "feed-change-1")
         .await
         .unwrap();
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 fn save_test_local_policy(
@@ -63,6 +68,11 @@ async fn stale_policy_at_receipt_transaction_rejects_before_inbox_write() {
             .unwrap(),
         "stale policy rejection must not reserve the message id for the old payload"
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -131,4 +141,9 @@ async fn stale_policy_after_receipt_rejects_apply_without_advancing_inbox_or_obj
     )
     .iter()
     .any(|entry| entry.entry.entity_id == entity.id));
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

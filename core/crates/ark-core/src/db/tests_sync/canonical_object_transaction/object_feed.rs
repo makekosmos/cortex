@@ -181,6 +181,11 @@ async fn feed_delivery_coalesces_entity_and_keeps_payload_revision_consistent_wi
             .all(|delivery| delivery.entry.entity_id != entity.id),
         "a post-watermark payload must not be paired with an older cursor"
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -344,4 +349,9 @@ async fn object_tombstone_feed_projection_preserves_type_id_for_selective_sync()
         .find(|delivery| delivery.entry.entity_id == tombstone.id && delivery.entry.deleted)
         .expect("tombstone is present in committed feed");
     assert_eq!(deleted.entity.data.get("typeId"), Some(&json!("core.task")));
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
