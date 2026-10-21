@@ -35,7 +35,7 @@ async fn cross_unit_observed_head_stays_pending_until_it_arrives() {
 
 #[tokio::test]
 async fn sqlite_history_preserves_a_concurrent_delete_and_field_edit() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
     append(&handle, operation('1', &[], "before"), None)
         .await
         .unwrap();
@@ -73,30 +73,10 @@ async fn sqlite_history_preserves_a_concurrent_delete_and_field_edit() {
     append(&handle, deletion.clone(), None).await.unwrap();
     append(&handle, edit.clone(), None).await.unwrap();
 
-    handle
-        .with_connection(|connection| {
-            let mut statement = connection
-                .prepare(
-                    "SELECT operation_json FROM task_merge_operations
-                     WHERE object_id = 'task-1' ORDER BY operation_id",
-                )
-                .map_err(|error| error.to_string())?;
-            let operations = statement
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|error| error.to_string())?
-                .map(|row| {
-                    let json = row.map_err(|error| error.to_string())?;
-                    serde_json::from_str::<TaskMergeOperation>(&json)
-                        .map_err(|error| error.to_string())
-                })
-                .collect::<Result<Vec<_>, String>>()?;
-            let conflicts = ark_domain::task_merge::lifecycle_conflicts(&operations)
-                .map_err(|error| error.to_string())?;
-            assert_eq!(conflicts.len(), 1);
-            assert_eq!(conflicts[0].deletion, deletion);
-            assert_eq!(conflicts[0].concurrent_head, edit);
-            Ok::<(), String>(())
-        })
-        .unwrap();
+    let persisted = inspect(&path);
+    let conflicts = ark_domain::task_merge::lifecycle_conflicts(&persisted.operations).unwrap();
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].deletion, deletion);
+    assert_eq!(conflicts[0].concurrent_head, edit);
     shutdown(&mut owner).await;
 }
