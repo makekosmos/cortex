@@ -35,7 +35,7 @@ const patterns = [
 ];
 
 const isTestFile = (relative) =>
-  /(?:^|\/)tests?(?:_[^/]+)?(?:\.rs|\/)|(?:^|\/)[^/]+_tests?\.rs$/.test(relative);
+  /(?:^|\/)(?:tests?(?:_[^/]+)?|[^/]+_tests)(?:\.rs|\/)|(?:^|\/)[^/]+_tests?\.rs$/.test(relative);
 
 function lineStarts(source) {
   const starts = [0];

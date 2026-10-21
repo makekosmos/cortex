@@ -112,6 +112,21 @@ test("writer census classifies standalone tests.rs modules as test code", async 
   );
 });
 
+test("writer census classifies *_tests directory modules as test code", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ark-writer-census-tests-directory-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const storeRoot = path.join(root, "core", "crates", "ark-store", "src");
+  const fixture = path.join(storeRoot, "core_storage_tests", "fixtures.rs");
+  await mkdir(path.dirname(fixture), { recursive: true });
+  await writeFile(fixture, 'fn setup(conn: &Connection) { conn.execute("INSERT", []); }\n');
+
+  const findings = await collectWriterFindings(storeRoot, root);
+  assert.deepEqual(
+    findings.map(({ scope }) => scope),
+    ["test_file"],
+  );
+});
+
 test("allowlist detects both new writer findings and stale counts", () => {
   const finding = {
     path: "core/crates/ark-core/src/service/writer.rs",
