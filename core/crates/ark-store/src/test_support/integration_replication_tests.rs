@@ -5,11 +5,53 @@ use super::{
 };
 use crate::test_support::TestDatabase;
 use ark_application::integration_admin::NodeAuthorizationOperation;
+use ark_application::integration_replication_read::IntegrationReplicationReadPort;
 use ark_domain::integration_replication::{
     encryption_key_id, AuthorizedNode, GrantStatus, IntegrationCredentialEnvelope,
     IntegrationNodeGrant, NodeStatus,
 };
 use std::sync::{Arc, Barrier};
+
+#[test]
+fn fixture_authorization_seed_rolls_back_as_one_unit() {
+    let fixture = IntegrationReplicationTestFixture::create().expect("fixture creates");
+    let node = AuthorizedNode {
+        node_id: "node-a".into(),
+        key_fingerprint: "fingerprint-node-a".into(),
+        signing_public_key: "signing-node-a".into(),
+        encryption_public_key: "encryption-node-a".into(),
+        transport_public_key: None,
+        grant_epoch: 1,
+        status: NodeStatus::Active,
+        authorized_at: "2026-08-31T00:00:00Z".into(),
+        revoked_at: None,
+        revocation_epoch: None,
+        revision: 1,
+        hlc: "2026-08-31T00:00:00.000Z:000001:node-a".into(),
+    };
+    let invalid_grant = IntegrationNodeGrant {
+        integration_id: "integration-a".into(),
+        node_id: node.node_id.clone(),
+        node_encryption_key: node.encryption_public_key.clone(),
+        grant_epoch: u64::MAX,
+        status: GrantStatus::Active,
+        authorized_at: node.authorized_at.clone(),
+        revoked_at: None,
+        revision: 1,
+        hlc: "invalid-hlc".into(),
+    };
+
+    assert!(fixture
+        .seed_authorization_records(&[node], &[invalid_grant], "writer")
+        .is_err());
+    let snapshot = fixture.read_snapshot().expect("database snapshot loads");
+    assert_eq!(
+        snapshot
+            .authorized_node("node-a")
+            .expect("snapshot lookup succeeds"),
+        None
+    );
+}
 
 #[test]
 fn outbound_frame_authorization_tracks_persisted_grants() {

@@ -54,10 +54,6 @@ mod tests {
     use crate::types::*;
     use ark_application::integration_export::export_integration_replication;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
-    use ark_store::integration_replication::{
-        load_integration_node_grant, upsert_authorized_node, upsert_integration_configuration,
-        upsert_integration_node_grant,
-    };
     use serde_json::{json, Value};
 
     include!("db/test_fixtures.rs");

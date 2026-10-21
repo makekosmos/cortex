@@ -29,11 +29,11 @@ fn setup_issuer_key_lookup(conn: &IntegrationTestDatabase) -> AuthorizedNode {
 
 #[test]
 fn issuer_key_lookup_returns_current_public_material_only() {
-    let mut conn = integration_test_db();
+    let conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
 
-    let key = with_integration_replication_read(&mut conn, |read| {
+    let key = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -68,7 +68,7 @@ fn issuer_key_lookup_returns_current_public_material_only() {
 
 #[test]
 fn issuer_key_lookup_rejects_a_retained_older_generation() {
-    let mut conn = integration_test_db();
+    let conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
     let next_lease = acquire_test_lease(&conn, "node-b", 4, 20, 10, 1, "node-b");
@@ -78,7 +78,7 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
     latest.hlc = "2026-08-30T00:00:00.000Z:000004:node-b".into();
     publish_test_envelope(&conn, &latest, "node-b", 25).unwrap();
 
-    let older_error = with_integration_replication_read(&mut conn, |read| {
+    let older_error = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -91,7 +91,7 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
     })
     .unwrap_err();
     assert!(older_error.contains("credential_generation"));
-    let current = with_integration_replication_read(&mut conn, |read| {
+    let current = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -108,11 +108,11 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
 
 #[test]
 fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
-    let mut conn = integration_test_db();
+    let conn = integration_test_db();
     let issuer = setup_issuer_key_lookup(&conn);
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
 
-    let wrong_issuer = with_integration_replication_read(&mut conn, |read| {
+    let wrong_issuer = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -126,7 +126,7 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
     .unwrap_err();
     assert!(wrong_issuer.contains("issuer_node_id"));
 
-    let stale_key = with_integration_replication_read(&mut conn, |read| {
+    let stale_key = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -164,7 +164,7 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
         "node-b",
     )
     .unwrap();
-    let rotated_error = with_integration_replication_read(&mut conn, |read| {
+    let rotated_error = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",
@@ -188,7 +188,7 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
         "node-b",
     )
     .unwrap();
-    let revoked_error = with_integration_replication_read(&mut conn, |read| {
+    let revoked_error = with_integration_replication_read(&conn, |read| {
         load_issuer_encryption_key(
             read,
             "space-a",

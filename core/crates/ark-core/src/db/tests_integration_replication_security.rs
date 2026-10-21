@@ -45,7 +45,7 @@ fn grant_for(integration_id: &str, node_id: &str, encryption_key: &str) -> Integ
 
 #[test]
 fn signed_apply_rejects_payload_authorization_without_preexisting_local_trust() {
-    let mut target = integration_test_db();
+    let target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[51; 32]);
     let recipient_key = SigningKey::from_bytes(&[52; 32]);
     upsert_authorized_node(
@@ -79,23 +79,20 @@ fn signed_apply_rejects_payload_authorization_without_preexisting_local_trust() 
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing integration grant")
     ));
-    assert!(
-        ark_store::integration_replication::load_integration_configuration(
-            &target,
-            "integration-a"
-        )
+    assert!(integration_read_snapshot(&target)
+        .configuration("integration-a")
         .unwrap()
-        .is_none()
-    );
+        .is_none());
 }
 
 #[test]
 fn signed_apply_rejects_new_node_authorization_without_local_trust() {
-    let (mut target, origin_key) = trusted_target(61);
+    let (target, origin_key) = trusted_target(61);
     let new_key = SigningKey::from_bytes(&[63; 32]);
     let frame = sign_replication_batch(
         &origin_key,
@@ -118,20 +115,20 @@ fn signed_apply_rejects_new_node_authorization_without_local_trust() {
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing authorization")
     ));
-    assert!(
-        ark_store::integration_replication::load_authorized_node(&target, "node-c")
-            .unwrap()
-            .is_none()
-    );
+    assert!(integration_read_snapshot(&target)
+        .authorized_node("node-c")
+        .unwrap()
+        .is_none());
 }
 
 #[test]
 fn signed_apply_cannot_use_trust_from_another_integration() {
-    let (mut target, origin_key) = trusted_target(66);
+    let (target, origin_key) = trusted_target(66);
     let third_key = SigningKey::from_bytes(&[68; 32]);
     let third = replication_node("node-c", &third_key, "enc-c", "node-a");
     upsert_authorized_node(&target, &third, "bootstrap").unwrap();
@@ -168,8 +165,9 @@ fn signed_apply_cannot_use_trust_from_another_integration() {
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing integration grant")
     ));
     assert!(
@@ -181,7 +179,7 @@ fn signed_apply_cannot_use_trust_from_another_integration() {
 
 #[test]
 fn signed_apply_rejects_hlcs_not_owned_by_the_signer_or_too_far_in_the_future() {
-    let (mut target, origin_key) = trusted_target(71);
+    let (target, origin_key) = trusted_target(71);
     let mut foreign = integration_config(serde_json::json!({}));
     foreign.hlc = "2026-08-31T00:00:00.000Z:000001:node-c".into();
     let frame = sign_replication_batch(
@@ -193,8 +191,9 @@ fn signed_apply_rejects_hlcs_not_owned_by_the_signer_or_too_far_in_the_future() 
             vector_hlc: "2026-08-31T00:00:00.000Z:000002:node-a".into(),
         }],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("does not match signed origin")
     ));
     let future = (Utc::now() + Duration::hours(1))
@@ -211,8 +210,9 @@ fn signed_apply_rejects_hlcs_not_owned_by_the_signer_or_too_far_in_the_future() 
             vector_hlc: format!("{future}:000002:node-a"),
         }],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 16),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 16),
         Err(SignedSyncError::Apply(error)) if error.contains("too far in the future")
     ));
 }

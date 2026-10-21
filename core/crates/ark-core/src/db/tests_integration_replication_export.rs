@@ -2,7 +2,7 @@ use crate::integration_replication::IntegrationReplicationEntity;
 
 #[test]
 fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
-    let mut conn = integration_test_db();
+    let conn = integration_test_db();
     let config = integration_config(serde_json::json!({"display": {"region": "us"}}));
     let node_a = integration_node();
     let grant_a = integration_grant();
@@ -27,7 +27,7 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     upsert_authorized_node(&conn, &node_b, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant_b, "device-a").unwrap();
 
-    let changes = with_integration_replication_read(&mut conn, |read| {
+    let changes = with_integration_replication_read(&conn, |read| {
         export_integration_replication(read, "integration-a", "node-a")
     })
     .unwrap();
@@ -54,7 +54,7 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     )));
     assert!(changes.iter().all(|change| !change.vector_hlc.is_empty()));
 
-    let prepared = with_integration_replication_read(&mut conn, |read| {
+    let prepared = with_integration_replication_read(&conn, |read| {
         crate::integration_replication::prepare_signed_sync(
             read,
             "space-a",
@@ -83,7 +83,7 @@ fn rank(entity: &IntegrationReplicationEntity) -> u8 {
 
 #[test]
 fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
-    let mut conn = integration_test_db();
+    let conn = integration_test_db();
     let config = integration_config(serde_json::json!({}));
     let node = integration_node();
     let grant = integration_grant();
@@ -94,7 +94,7 @@ fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
     publish_test_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
     let revoked = node.revoke(3, "2026-08-30T01:00:00Z").unwrap();
     upsert_authorized_node(&conn, &revoked, "device-a").unwrap();
-    let changes = with_integration_replication_read(&mut conn, |read| {
+    let changes = with_integration_replication_read(&conn, |read| {
         export_integration_replication(read, "integration-a", "node-a")
     })
     .unwrap();

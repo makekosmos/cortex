@@ -1,61 +1,96 @@
+use crate::integration_replication::IntegrationReplicationReadPort;
 use crate::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
     IntegrationNodeGrant, IntegrationRefreshLease, NodeStatus,
 };
 use ark_store::test_support::{
-    acquire_refresh_lease, publish_credential_envelope, RefreshLeaseAcquireFixture, TestDatabase,
+    IntegrationReplicationReadSnapshot, IntegrationReplicationTestFixture,
+    RefreshLeaseAcquireFixture,
 };
-use ark_store::IntegrationReplicationReadCapabilities;
-use std::ops::{Deref, DerefMut};
 
 struct IntegrationTestDatabase {
-    database: TestDatabase,
-    connection: rusqlite::Connection,
+    fixture: IntegrationReplicationTestFixture,
 }
 
 impl IntegrationTestDatabase {
+    fn create() -> Self {
+        Self {
+            fixture: IntegrationReplicationTestFixture::create()
+                .expect("integration test database initializes"),
+        }
+    }
+
     fn path(&self) -> &std::path::Path {
-        self.database.path()
-    }
-}
-
-impl Deref for IntegrationTestDatabase {
-    type Target = rusqlite::Connection;
-
-    fn deref(&self) -> &Self::Target {
-        &self.connection
-    }
-}
-
-impl DerefMut for IntegrationTestDatabase {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.connection
+        self.fixture.path()
     }
 }
 
 fn integration_test_db() -> IntegrationTestDatabase {
-    let database = TestDatabase::create().expect("integration test database initializes");
-    let connection = database
-        .open_connection()
-        .expect("integration test database opens");
-    IntegrationTestDatabase {
-        database,
-        connection,
-    }
+    IntegrationTestDatabase::create()
 }
 
 fn with_integration_replication_read<T>(
-    connection: &mut rusqlite::Connection,
-    operation: impl FnOnce(&IntegrationReplicationReadCapabilities<'_>) -> Result<T, String>,
+    database: &IntegrationTestDatabase,
+    operation: impl FnOnce(&IntegrationReplicationReadSnapshot) -> Result<T, String>,
 ) -> Result<T, String> {
-    ark_store::read_snapshot::test_support::with_read_snapshot(connection, |capabilities| {
-        let integration = capabilities.integration_replication();
-        operation(&integration)
-    })
-    .map_err(|error| match error {
-        ark_store::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
-        error => error.to_string(),
-    })
+    operation(&database.fixture.read_snapshot()?)
+}
+
+fn integration_read_snapshot(
+    database: &IntegrationTestDatabase,
+) -> IntegrationReplicationReadSnapshot {
+    database
+        .fixture
+        .read_snapshot()
+        .expect("integration read snapshot loads")
+}
+
+fn upsert_integration_configuration(
+    database: &IntegrationTestDatabase,
+    configuration: &IntegrationConfiguration,
+    device_id: &str,
+) -> Result<(), String> {
+    database
+        .fixture
+        .upsert_configuration(configuration, device_id)
+}
+
+fn upsert_authorized_node(
+    database: &IntegrationTestDatabase,
+    node: &AuthorizedNode,
+    device_id: &str,
+) -> Result<(), String> {
+    database.fixture.upsert_node(node, device_id)
+}
+
+fn upsert_integration_node_grant(
+    database: &IntegrationTestDatabase,
+    grant: &IntegrationNodeGrant,
+    device_id: &str,
+) -> Result<(), String> {
+    database.fixture.upsert_integration_grant(grant, device_id)
+}
+
+fn load_integration_node_grant(
+    database: &IntegrationTestDatabase,
+    integration_id: &str,
+    node_id: &str,
+) -> Result<Option<IntegrationNodeGrant>, String> {
+    integration_read_snapshot(database).grant(integration_id, node_id)
+}
+
+fn current_version_vector(database: &IntegrationTestDatabase) -> VersionVector {
+    integration_read_snapshot(database)
+        .version_vector()
+        .expect("typed version vector reads")
+        .expect("typed version vector exists")
+}
+
+fn replace_version_vector_for_test(database: &IntegrationTestDatabase, vector: &VersionVector) {
+    database
+        .fixture
+        .replace_version_vector_for_test(vector)
+        .expect("typed version vector replacement succeeds");
 }
 
 fn integration_config(settings: serde_json::Value) -> IntegrationConfiguration {
@@ -137,9 +172,9 @@ fn acquire_test_lease(
     expected_fencing_token: u64,
     device_id: &str,
 ) -> IntegrationRefreshLease {
-    acquire_refresh_lease(
-        database.path(),
-        RefreshLeaseAcquireFixture {
+    database
+        .fixture
+        .acquire_refresh_lease(RefreshLeaseAcquireFixture {
             integration_id: "integration-a".into(),
             holder_node_id: holder_node_id.into(),
             credential_generation,
@@ -147,9 +182,8 @@ fn acquire_test_lease(
             ttl_ms,
             expected_fencing_token,
             device_id: device_id.into(),
-        },
-    )
-    .unwrap()
+        })
+        .unwrap()
 }
 
 fn publish_test_envelope(
@@ -158,13 +192,15 @@ fn publish_test_envelope(
     device_id: &str,
     now_ms: u64,
 ) -> Result<(), String> {
-    publish_credential_envelope(database.path(), envelope.clone(), device_id, now_ms)
+    database
+        .fixture
+        .publish_credential_envelope(envelope.clone(), device_id, now_ms)
 }
 
 #[test]
 fn verification_status_is_plaintext_free_and_reports_local_readiness() {
-    let mut conn = integration_test_db();
-    let empty = with_integration_replication_read(&mut conn, |read| {
+    let conn = integration_test_db();
+    let empty = with_integration_replication_read(&conn, |read| {
         integration_verification_status(read, "integration-a", "node-a", 15)
     })
     .unwrap();
@@ -183,7 +219,7 @@ fn verification_status_is_plaintext_free_and_reports_local_readiness() {
     acquire_integration_test_lease(&conn, "node-a");
     publish_test_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
 
-    let status = with_integration_replication_read(&mut conn, |read| {
+    let status = with_integration_replication_read(&conn, |read| {
         integration_verification_status(read, "integration-a", "node-a", 15)
     })
     .unwrap();
@@ -197,7 +233,7 @@ fn verification_status_is_plaintext_free_and_reports_local_readiness() {
     assert!(status.ready_for_collection);
     assert!(!status.ready_for_refresh);
     assert!(
-        with_integration_replication_read(&mut conn, |read| {
+        with_integration_replication_read(&conn, |read| {
             integration_verification_status(read, "integration-a", "node-a", 20)
         })
         .unwrap()

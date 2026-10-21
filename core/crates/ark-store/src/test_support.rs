@@ -19,6 +19,7 @@ mod external_ref;
 mod foreign_schema;
 mod inbox;
 mod integration_replication;
+mod integration_replication_snapshot;
 mod legacy_writes;
 mod object_mutation_replay;
 mod object_revision;
@@ -54,6 +55,7 @@ pub use integration_replication::{
     load_refresh_lease, load_version_vector, persist_node_authorization,
     publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
 };
+pub use integration_replication_snapshot::IntegrationReplicationReadSnapshot;
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
 };

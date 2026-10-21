@@ -60,8 +60,8 @@ fn sign_replication_batch(
 
 #[test]
 fn signed_integration_batch_moves_opaque_envelope_between_independent_databases() {
-    let mut source = integration_test_db();
-    let mut target = integration_test_db();
+    let source = integration_test_db();
+    let target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[21; 32]);
     let recipient_key = SigningKey::from_bytes(&[22; 32]);
     let origin = replication_node("node-a", &origin_key, "enc-a", "node-a");
@@ -127,14 +127,9 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
             "2000-01-01T00:00:00.000Z:000001:bootstrap".into(),
         ),
     ]);
-    ark_store::sync_kv::set_sync_kv(
-        &target,
-        VERSION_VECTOR_KEY,
-        &serde_json::to_string(&target_vector).unwrap(),
-    )
-    .unwrap();
+    replace_version_vector_for_test(&target, &target_vector);
 
-    let changes = with_integration_replication_read(&mut source, |read| {
+    let changes = with_integration_replication_read(&source, |read| {
         export_integration_replication(read, "integration-a", "node-b")
     })
     .unwrap();
@@ -145,16 +140,18 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let vector_repair_changes = changes.clone();
     let frame = sign_replication_batch(&origin_key, 2, "message-two-db", changes);
     drop(source);
-    apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15).unwrap();
+    target.fixture.admit_peer_for_test("node-a").unwrap();
+    apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15)
+        .unwrap();
 
-    let loaded = ark_store::integration_replication::load_integration_configuration(
-        &target,
-        "integration-a",
-    )
-    .unwrap();
+    let loaded = integration_read_snapshot(&target)
+        .configuration("integration-a")
+        .unwrap();
     assert_eq!(loaded, Some(config.clone()));
     assert_eq!(
-        ark_store::integration_replication::load_authorized_node(&target, "node-b").unwrap(),
+        integration_read_snapshot(&target)
+            .authorized_node("node-b")
+            .unwrap(),
         Some(recipient)
     );
     assert_eq!(
@@ -162,18 +159,13 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         Some(grant)
     );
     assert_eq!(
-        with_integration_replication_read(&mut target, |read| {
+        with_integration_replication_read(&target, |read| {
             load_integration_credential_envelope(read, "integration-a", "node-b", 3)
         })
         .unwrap(),
         Some(envelope)
     );
-    let target_vector: VersionVector = serde_json::from_str(
-        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
-            .unwrap()
-            .unwrap(),
-    )
-    .unwrap();
+    let target_vector = current_version_vector(&target);
     for (key, hlc) in &expected_vectors {
         let merged = target_vector.get(key).expect("missing merged typed vector");
         assert!(
@@ -185,29 +177,27 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let (missing_key, expected_hlc) = expected_vectors.last().unwrap();
     let mut missing_vector = target_vector;
     missing_vector.remove(missing_key);
-    ark_store::sync_kv::set_sync_kv(
-        &target,
-        VERSION_VECTOR_KEY,
-        &serde_json::to_string(&missing_vector).unwrap(),
-    )
-    .unwrap();
+    replace_version_vector_for_test(&target, &missing_vector);
     let repair_frame = sign_replication_batch(
         &origin_key,
         2,
         "message-vector-repair",
         vector_repair_changes,
     );
-    apply_signed_integration_changes(&mut target, &repair_frame, "space-a", "node-b", None, 16)
-        .unwrap();
-    let repaired_vector: VersionVector = serde_json::from_str(
-        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
-            .unwrap()
-            .unwrap(),
+    target.fixture.admit_peer_for_test("node-a").unwrap();
+    apply_signed_integration_changes(
+        &target.fixture,
+        &repair_frame,
+        "space-a",
+        "node-b",
+        None,
+        16,
     )
     .unwrap();
+    let repaired_vector = current_version_vector(&target);
     assert_eq!(repaired_vector.get(missing_key), Some(expected_hlc));
 
-    let consumed = with_integration_replication_read(&mut target, |read| {
+    let consumed = with_integration_replication_read(&target, |read| {
         load_integration_credential_envelope(read, "integration-a", "node-b", 3)
     })
     .unwrap()
@@ -234,7 +224,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     };
     publish_test_envelope(&target, &refreshed, "node-b", 21).unwrap();
     assert_eq!(
-        with_integration_replication_read(&mut target, |read| {
+        with_integration_replication_read(&target, |read| {
             load_integration_credential_envelope(read, "integration-a", "node-b", 4)
         })
         .unwrap(),
@@ -246,21 +236,14 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     continued_config.hlc = "2026-08-31T00:00:02.000Z:000001:node-b".into();
     upsert_integration_configuration(&target, &continued_config, "node-b").unwrap();
     assert_eq!(
-        ark_store::integration_replication::load_integration_configuration(
-            &target,
-            "integration-a"
-        )
-        .unwrap()
-        .unwrap()
-        .sync_cursor,
+        integration_read_snapshot(&target)
+            .configuration("integration-a")
+            .unwrap()
+            .unwrap()
+            .sync_cursor,
         Some(4)
     );
-    let target_vector: VersionVector = serde_json::from_str(
-        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
-            .unwrap()
-            .unwrap(),
-    )
-    .unwrap();
+    let target_vector = current_version_vector(&target);
     let configuration_vector = target_vector
         .get("integration_configuration:integration-a")
         .expect("local configuration write must advance its typed vector");
@@ -274,8 +257,9 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         envelope_entity_id("integration-a", "node-b", 4)
     )));
 
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 16),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 16),
         Err(SignedSyncError::Replay)
     ));
 }

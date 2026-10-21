@@ -1,6 +1,5 @@
 use super::failures::apply_failure_mutation;
 use super::*;
-use rusqlite::Connection;
 use std::time::Duration;
 
 async fn open_failure_actor() -> (ark_store::test_support::TestDatabase, DbHandle, DbOwner) {
@@ -51,23 +50,12 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
         self,
         writer: &mut ark_store::writer::SqliteWriter,
     ) -> Result<Self::Output, DbError> {
-        let fail_verification = |_connection: &Connection, _fingerprint: &[String]| {
-            Err("injected restore verification failure".to_string())
-        };
-        let rollback_succeeds = |live: &mut Connection, path: &std::path::Path| {
-            ark_store::test_support::ProductionActorFailureProbe::rollback_restore_fixture(
-                live, path,
-            )
-        };
-        writer
-            .restore_snapshot_with_hooks(
-                &self.db_path,
-                &self.backup_id,
-                fail_verification,
-                rollback_succeeds,
-            )
-            .map(|_| ())
-            .map_err(DbError::RestoreFailed)
+        ark_store::test_support::ProductionActorFailureProbe::restore_post_verify_failure(
+            writer,
+            &self.db_path,
+            &self.backup_id,
+        )
+        .map_err(DbError::RestoreFailed)
     }
 }
 

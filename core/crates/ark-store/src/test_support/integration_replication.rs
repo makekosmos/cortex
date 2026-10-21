@@ -1,13 +1,14 @@
 use std::path::Path;
 
+use super::integration_replication_snapshot::IntegrationReplicationReadSnapshot;
 use crate::writer::SqliteWriter;
 use ark_application::integration_admin::{
     IntegrationAdminWrite, NodeAuthorizationOperation, PersistNodeAuthorization,
     PublishCredentialEnvelope, RefreshLeaseAcquire,
 };
 use ark_domain::integration_replication::{
-    AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
-    IntegrationNodeGrant, IntegrationRefreshLease, NodeStatus,
+    AuthorizedNode, IntegrationConfiguration, IntegrationCredentialEnvelope, IntegrationNodeGrant,
+    IntegrationRefreshLease, NodeStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -156,9 +157,173 @@ pub fn load_version_vector(
         .transpose()
 }
 
-pub struct IntegrationReplicationTestFixture;
+pub struct IntegrationReplicationTestFixture {
+    database: super::TestDatabase,
+}
 
 impl IntegrationReplicationTestFixture {
+    pub fn create() -> Result<Self, String> {
+        Ok(Self {
+            database: super::TestDatabase::create()?,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        self.database.path()
+    }
+
+    pub fn replace_version_vector_for_test(
+        &self,
+        vector: &ark_domain::types::VersionVector,
+    ) -> Result<(), String> {
+        let connection = self.database.open_connection()?;
+        let value = serde_json::to_string(vector).map_err(|error| error.to_string())?;
+        crate::sync_kv::set_sync_kv(&connection, crate::VERSION_VECTOR_KEY, &value)
+    }
+
+    pub fn admit_peer_for_test(&self, node_id: &str) -> Result<(), String> {
+        use rusqlite::params;
+
+        let connection = self.database.open_connection()?;
+        let node = crate::integration_replication::load_authorized_node(&connection, node_id)?
+            .ok_or_else(|| "test peer is not authorized".to_string())?;
+        let signing_key = decode_public_key(&node.signing_public_key)
+            .map_err(|error| format!("test peer signing key is invalid: {error}"))?;
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO device_registry_projection
+                 (device_id, signing_public_key, key_epoch, admission_epoch, display_name,
+                  disabled_event_id, display_name_hlc, updated_hlc, updated_event_id)
+                 VALUES (?1, ?2, 1, 1, NULL, NULL, NULL, NULL, NULL)",
+                params![node_id, signing_key],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn read_snapshot(&self) -> Result<IntegrationReplicationReadSnapshot, String> {
+        IntegrationReplicationReadSnapshot::load(self.path())
+    }
+
+    pub fn upsert_configuration(
+        &self,
+        configuration: &IntegrationConfiguration,
+        device_id: &str,
+    ) -> Result<(), String> {
+        let connection = self.database.open_connection()?;
+        crate::integration_replication::upsert_integration_configuration(
+            &connection,
+            configuration,
+            device_id,
+        )
+    }
+
+    pub fn upsert_node(&self, node: &AuthorizedNode, device_id: &str) -> Result<(), String> {
+        let connection = self.database.open_connection()?;
+        crate::integration_replication::upsert_authorized_node(&connection, node, device_id)
+    }
+
+    pub fn upsert_integration_grant(
+        &self,
+        grant: &IntegrationNodeGrant,
+        device_id: &str,
+    ) -> Result<(), String> {
+        let connection = self.database.open_connection()?;
+        crate::integration_replication::upsert_integration_node_grant(&connection, grant, device_id)
+    }
+
+    pub fn seed_authorization_records(
+        &self,
+        nodes: &[AuthorizedNode],
+        grants: &[IntegrationNodeGrant],
+        device_id: &str,
+    ) -> Result<(), String> {
+        let mut connection = self.database.open_connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| error.to_string())?;
+        for node in nodes {
+            crate::integration_replication::upsert_authorized_node(&transaction, node, device_id)?;
+        }
+        for grant in grants {
+            crate::integration_replication::upsert_integration_node_grant(
+                &transaction,
+                grant,
+                device_id,
+            )?;
+        }
+        transaction.commit().map_err(|error| error.to_string())
+    }
+
+    pub fn validate_outbound_signed_frame(
+        &self,
+        envelope: &ark_domain::integration_replication::SignedSyncEnvelope,
+        space_id: &str,
+        origin_node_id: &str,
+    ) -> Result<(), String> {
+        let path = self
+            .path()
+            .to_str()
+            .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+        let mut reader = crate::read_snapshot::SqliteReader::open_read_only(path)
+            .map_err(|error| error.to_string())?;
+        reader
+            .with_read_snapshot(|capabilities| {
+                ark_application::integration_sync::validate_outbound_signed_sync(
+                    &capabilities.integration_replication(),
+                    space_id,
+                    origin_node_id,
+                    envelope,
+                )
+            })
+            .map_err(|error| match error {
+                crate::read_snapshot::ReadSnapshotFailure::Operation(error) => error,
+                error => error.to_string(),
+            })
+    }
+
+    /// Applies a signed frame through Store's production transaction boundary.
+    pub fn apply_signed_frame(
+        &self,
+        envelope: &ark_domain::integration_replication::SignedSyncEnvelope,
+        expected_space_id: &str,
+        expected_recipient_node_id: &str,
+        authenticated_transport_public_key: Option<&str>,
+        reserved_at_ms: u64,
+    ) -> Result<(), ark_domain::integration_replication::SignedSyncError> {
+        use crate::writer::{SignedIntegrationFrameWriteError, SqliteWriter, TransactionFailure};
+        use ark_application::signed_integration::ApplySignedIntegrationFrame;
+        use ark_domain::integration_replication::SignedSyncError;
+
+        let mut connection = self
+            .database
+            .open_connection()
+            .map_err(SignedSyncError::Storage)?;
+
+        let request = ApplySignedIntegrationFrame {
+            envelope: envelope.clone(),
+            expected_space_id: expected_space_id.into(),
+            expected_recipient_node_id: expected_recipient_node_id.into(),
+            authenticated_transport_public_key: authenticated_transport_public_key
+                .map(str::to_owned),
+            reserved_at_ms,
+        };
+        SqliteWriter::apply_signed_integration_frame_on_connection(
+            &mut connection,
+            &envelope.origin_node_id,
+            request,
+        )
+        .map_err(|failure| match failure {
+            TransactionFailure::Begin(error) | TransactionFailure::Commit(error) => {
+                SignedSyncError::Storage(error.to_string())
+            }
+            TransactionFailure::Operation(SignedIntegrationFrameWriteError::Apply(error)) => error,
+            TransactionFailure::Operation(SignedIntegrationFrameWriteError::PeerNotAdmitted) => {
+                SignedSyncError::Apply("authenticated peer is not admitted".into())
+            }
+        })
+    }
+
     /// Seeds typed authorization records for Core's outbound validation tests.
     pub fn seed_authorization(
         path: &Path,
@@ -218,6 +383,22 @@ impl IntegrationReplicationTestFixture {
         )
     }
 
+    pub fn acquire_refresh_lease(
+        &self,
+        request: RefreshLeaseAcquireFixture,
+    ) -> Result<IntegrationRefreshLease, String> {
+        acquire_refresh_lease(self.path(), request)
+    }
+
+    pub fn publish_credential_envelope(
+        &self,
+        envelope: IntegrationCredentialEnvelope,
+        device_id: &str,
+        now_ms: u64,
+    ) -> Result<(), String> {
+        publish_credential_envelope(self.path(), envelope, device_id, now_ms)
+    }
+
     pub fn seed_authorized_pair(
         path: &Path,
         origin_signing_key: &str,
@@ -267,41 +448,31 @@ impl IntegrationReplicationTestFixture {
     }
 }
 
-fn authorized_node(
-    node_id: &str,
-    signing_public_key: &str,
-    encryption_public_key: &str,
-    transport_public_key: Option<&str>,
-) -> AuthorizedNode {
-    AuthorizedNode {
-        node_id: node_id.into(),
-        key_fingerprint: format!("fingerprint-{node_id}"),
-        signing_public_key: signing_public_key.into(),
-        encryption_public_key: encryption_public_key.into(),
-        transport_public_key: transport_public_key.map(str::to_owned),
-        grant_epoch: 2,
-        status: NodeStatus::Active,
-        authorized_at: "2026-08-31T00:00:00Z".into(),
-        revoked_at: None,
-        revocation_epoch: None,
-        revision: 1,
-        hlc: format!("2026-08-31T00:00:00.000Z:000001:{node_id}"),
+fn decode_public_key(
+    value: &str,
+) -> Result<Vec<u8>, ark_domain::integration_replication::SignedSyncError> {
+    use ark_domain::integration_replication::SignedSyncError;
+
+    let bytes = value.as_bytes();
+    if bytes.len() != 64 {
+        return Err(SignedSyncError::Storage(
+            "authorized node signing key must be 32-byte hex".into(),
+        ));
     }
+    (0..bytes.len())
+        .step_by(2)
+        .map(|index| {
+            let pair = std::str::from_utf8(&bytes[index..index + 2])
+                .map_err(|error| SignedSyncError::Storage(error.to_string()))?;
+            u8::from_str_radix(pair, 16)
+                .map_err(|error| SignedSyncError::Storage(error.to_string()))
+        })
+        .collect()
 }
 
-fn integration_grant(node_id: &str, encryption_key: &str) -> IntegrationNodeGrant {
-    IntegrationNodeGrant {
-        integration_id: "integration-a".into(),
-        node_id: node_id.into(),
-        node_encryption_key: encryption_key.into(),
-        grant_epoch: 2,
-        status: GrantStatus::Active,
-        authorized_at: "2026-08-31T00:00:00Z".into(),
-        revoked_at: None,
-        revision: 1,
-        hlc: format!("2026-08-31T00:00:00.000Z:000002:{node_id}"),
-    }
-}
+#[path = "seed_helpers.rs"]
+mod seed_helpers;
+use seed_helpers::{authorized_node, integration_grant};
 
 #[cfg(test)]
 #[path = "integration_replication_tests.rs"]

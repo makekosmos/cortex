@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::writer::SqliteWriter;
 use rusqlite::{Connection, Result, Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,21 @@ impl CompetingWriter {
 }
 
 impl ProductionActorFailureProbe {
+    pub fn restore_post_verify_failure(
+        writer: &mut SqliteWriter,
+        db_path: &str,
+        backup_id: &str,
+    ) -> Result<(), String> {
+        let fail_verification = |_connection: &Connection, _fingerprint: &[String]| {
+            Err("injected restore verification failure".to_string())
+        };
+        let rollback_succeeds =
+            |live: &mut Connection, path: &Path| Self::rollback_restore_fixture(live, path);
+        writer
+            .restore_snapshot_with_hooks(db_path, backup_id, fail_verification, rollback_succeeds)
+            .map(|_| ())
+    }
+
     pub fn prepare_path(path: &Path) -> Result<(), String> {
         let path = path
             .to_str()
