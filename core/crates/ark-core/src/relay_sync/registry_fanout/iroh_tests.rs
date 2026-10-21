@@ -94,9 +94,9 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
     let database_a = ark_store::test_support::TestDatabase::create().unwrap();
     let database_b = ark_store::test_support::TestDatabase::create().unwrap();
     let database_c = ark_store::test_support::TestDatabase::create().unwrap();
-    let peer_a = storage_for(&database_a, "device-A").await;
-    let peer_b = storage_for(&database_b, "device-B").await;
-    let peer_c = storage_for(&database_c, "device-C").await;
+    let mut peer_a = storage_for(&database_a, "device-A").await;
+    let mut peer_b = storage_for(&database_b, "device-B").await;
+    let mut peer_c = storage_for(&database_c, "device-C").await;
     let storage_a = peer_a.storage.clone();
     let storage_b = peer_b.storage.clone();
     let storage_c = peer_c.storage.clone();
@@ -361,6 +361,12 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
     relay_a.stop().await;
     relay_b.stop().await;
     relay_c.stop().await;
+    for peer in [&mut peer_a, &mut peer_b, &mut peer_c] {
+        peer.owner
+            .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -368,7 +374,7 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
     const AUTH_SECRET: &str = "selective-sync-policy-test-secret";
     let database_a = ark_store::test_support::TestDatabase::create().unwrap();
     let database_b = ark_store::test_support::TestDatabase::create().unwrap();
-    let peer_a = storage_for_with_policy(
+    let mut peer_a = storage_for_with_policy(
         &database_a,
         "policy-A",
         vec![ark_application::sync_policy::SyncProfileRule {
@@ -379,7 +385,7 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
         }],
     )
     .await;
-    let peer_b = storage_for(&database_b, "policy-B").await;
+    let mut peer_b = storage_for(&database_b, "policy-B").await;
     let storage_a = peer_a.storage.clone();
     let storage_b = peer_b.storage.clone();
     let key_a = peer_a.secret.clone();
@@ -455,4 +461,14 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
 
     relay_a.stop().await;
     relay_b.stop().await;
+    peer_a
+        .owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+    peer_b
+        .owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }
