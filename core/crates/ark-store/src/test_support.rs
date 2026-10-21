@@ -50,7 +50,8 @@ pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
 pub use foreign_schema::ForeignSchemaFixture;
 pub use inbox::has_inbox_receipt;
 pub use integration_replication::{
-    acquire_refresh_lease, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
+    acquire_refresh_lease, load_credential_envelope, load_version_vector,
+    publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
 };
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,

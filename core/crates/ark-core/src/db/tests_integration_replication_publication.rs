@@ -6,64 +6,6 @@ fn setup_refresh_authority(conn: &Connection) {
 }
 
 #[test]
-fn publication_requires_the_current_refresh_fence() {
-    let mut conn = integration_test_db();
-    setup_refresh_authority(&conn);
-    let lease = acquire_integration_test_lease(&conn, "node-a");
-    let mut envelope = integration_envelope(lease.credential_generation);
-    envelope.refresh_fencing_token = lease.fencing_token.saturating_add(1);
-    assert!(publish_integration_credential_envelope(&conn, &envelope, "node-a", 15).is_err());
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM integration_credential_envelopes",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(count, 0);
-
-    envelope.refresh_fencing_token = lease.fencing_token;
-    publish_integration_credential_envelope(&conn, &envelope, "node-a", 15).unwrap();
-    assert_eq!(
-        with_integration_replication_read(&mut conn, |read| {
-            load_integration_credential_envelope(read, "integration-a", "node-a", 3)
-        })
-        .unwrap(),
-        Some(envelope)
-    );
-    assert!(with_integration_replication_read(&mut conn, |read| {
-        load_latest_integration_credential_envelope(read, "integration-a", "node-a")
-    })
-    .unwrap()
-    .is_some());
-    assert!(with_integration_replication_read(&mut conn, |read| {
-        load_latest_integration_credential_envelope(read, "integration-a", "node-b")
-    })
-    .unwrap()
-    .is_none());
-
-    assert!(try_acquire_integration_refresh_lease(
-        &conn,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-a".into(),
-            credential_generation: 3,
-            now_ms: 20,
-            ttl_ms: 10,
-            expected_fencing_token: lease.fencing_token,
-            device_id: "node-a".into(),
-        },
-    )
-    .is_err());
-    assert_eq!(
-        ark_store::integration_replication::load_integration_refresh_lease(&conn, "integration-a")
-            .unwrap()
-            .unwrap(),
-        lease
-    );
-}
-
-#[test]
 fn local_refresh_writes_cannot_impersonate_another_node() {
     let conn = integration_test_db();
     setup_refresh_authority(&conn);

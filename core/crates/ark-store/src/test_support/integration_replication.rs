@@ -1,10 +1,12 @@
 use std::path::Path;
 
 use crate::writer::SqliteWriter;
-use ark_application::integration_admin::{IntegrationAdminWrite, RefreshLeaseAcquire};
+use ark_application::integration_admin::{
+    IntegrationAdminWrite, PublishCredentialEnvelope, RefreshLeaseAcquire,
+};
 use ark_domain::integration_replication::{
-    AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
-    IntegrationRefreshLease, NodeStatus,
+    AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationCredentialEnvelope,
+    IntegrationNodeGrant, IntegrationRefreshLease, NodeStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,59 @@ pub fn acquire_refresh_lease(
             Err("integration fixture lease acquisition returned no lease".into())
         }
     }
+}
+
+/// Publishes a typed credential envelope through Store's production transaction path.
+pub fn publish_credential_envelope(
+    path: &Path,
+    envelope: IntegrationCredentialEnvelope,
+    device_id: &str,
+    now_ms: u64,
+) -> Result<(), String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+    let mut writer = SqliteWriter::open(path)?;
+    writer
+        .apply_integration_admin(IntegrationAdminWrite::PublishCredentialEnvelope(
+            PublishCredentialEnvelope {
+                envelope,
+                device_id: device_id.to_owned(),
+                now_ms,
+            },
+        ))
+        .map(|_| ())
+        .map_err(|error| format!("integration fixture envelope publication failed: {error:?}"))
+}
+
+pub fn load_credential_envelope(
+    path: &Path,
+    integration_id: &str,
+    recipient_node_id: &str,
+    credential_generation: u64,
+) -> Result<Option<IntegrationCredentialEnvelope>, String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+    let connection = crate::open::open_db(path)?;
+    crate::integration_replication::load_integration_credential_envelope_record(
+        &connection,
+        integration_id,
+        recipient_node_id,
+        credential_generation,
+    )
+}
+
+pub fn load_version_vector(
+    path: &Path,
+) -> Result<Option<ark_domain::types::VersionVector>, String> {
+    let path = path
+        .to_str()
+        .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
+    let connection = crate::open::open_db(path)?;
+    crate::sync_kv::get_sync_kv(&connection, crate::VERSION_VECTOR_KEY)?
+        .map(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
+        .transpose()
 }
 
 pub struct IntegrationReplicationTestFixture;
@@ -199,11 +254,13 @@ fn integration_grant(node_id: &str, encryption_key: &str) -> IntegrationNodeGran
 #[cfg(test)]
 mod tests {
     use super::{
-        acquire_refresh_lease, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
+        acquire_refresh_lease, load_credential_envelope, load_version_vector,
+        publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
     };
     use crate::test_support::TestDatabase;
     use ark_domain::integration_replication::{
-        AuthorizedNode, GrantStatus, IntegrationNodeGrant, NodeStatus,
+        encryption_key_id, AuthorizedNode, GrantStatus, IntegrationCredentialEnvelope,
+        IntegrationNodeGrant, NodeStatus,
     };
     use std::sync::{Arc, Barrier};
 
@@ -313,6 +370,72 @@ mod tests {
                 .expect("one acquisition succeeds")
                 .fencing_token,
             1
+        );
+    }
+
+    #[test]
+    fn credential_publication_requires_the_current_refresh_fence() {
+        let database = TestDatabase::create().expect("test database initializes");
+        IntegrationReplicationTestFixture::seed_authorized_pair(
+            database.path(),
+            "node-a-signing",
+            "node-b-signing",
+            None,
+            None,
+        )
+        .expect("authorized pair seeds");
+        let lease = acquire_refresh_lease(
+            database.path(),
+            RefreshLeaseAcquireFixture {
+                integration_id: "integration-a".into(),
+                holder_node_id: "node-a".into(),
+                credential_generation: 3,
+                now_ms: 10,
+                ttl_ms: 10,
+                expected_fencing_token: 0,
+                device_id: "node-a".into(),
+            },
+        )
+        .expect("refresh lease is acquired");
+        let envelope = IntegrationCredentialEnvelope {
+            integration_id: "integration-a".into(),
+            recipient_node_id: "node-a".into(),
+            grant_epoch: 2,
+            credential_generation: lease.credential_generation,
+            refresh_fencing_token: lease.fencing_token + 1,
+            key_id: encryption_key_id("enc-a"),
+            algorithm: "opaque-test".into(),
+            nonce: "nonce-3".into(),
+            ciphertext: "opaque-ciphertext-3".into(),
+            authenticated_metadata: Some(serde_json::json!({"content_type": "oauth"})),
+            issuer_node_id: "node-a".into(),
+            issued_at: "2026-08-30T00:00:00Z".into(),
+            revision: 3,
+            hlc: "2026-08-30T00:00:00.000Z:000003:node-a".into(),
+        };
+        let vector_before =
+            load_version_vector(database.path()).expect("version vector loads before publication");
+        assert!(
+            publish_credential_envelope(database.path(), envelope.clone(), "node-a", 15,).is_err()
+        );
+        assert_eq!(
+            load_version_vector(database.path()).expect("version vector loads after rejection"),
+            vector_before
+        );
+        assert_eq!(
+            load_credential_envelope(database.path(), "integration-a", "node-a", 3)
+                .expect("rejected generation is checked"),
+            None
+        );
+
+        let mut current_envelope = envelope;
+        current_envelope.refresh_fencing_token = lease.fencing_token;
+        publish_credential_envelope(database.path(), current_envelope.clone(), "node-a", 15)
+            .expect("current fence publication succeeds");
+        assert_eq!(
+            load_credential_envelope(database.path(), "integration-a", "node-a", 3)
+                .expect("published envelope loads"),
+            Some(current_envelope)
         );
     }
 }
