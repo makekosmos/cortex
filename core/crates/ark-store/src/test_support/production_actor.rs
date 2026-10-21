@@ -131,6 +131,19 @@ impl ProductionActorFailureProbe {
         crate::snapshot::backup_connection_to_file(&connection, snapshot_path)
     }
 
+    pub fn rollback_restore_fixture(
+        connection: &mut Connection,
+        path: &Path,
+    ) -> Result<(), String> {
+        connection
+            .restore(
+                rusqlite::DatabaseName::Main,
+                path,
+                None::<fn(rusqlite::backup::Progress)>,
+            )
+            .map_err(|error| error.to_string())
+    }
+
     pub fn restore_probe_value(path: &Path) -> Result<String> {
         let connection = Connection::open(path)?;
         connection.query_row("SELECT value FROM restore_failure_probe", [], |row| {

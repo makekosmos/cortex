@@ -1,22 +1,16 @@
 use super::failures::apply_failure_mutation;
 use super::*;
-use rusqlite::Connection;
 use std::time::Duration;
 
-fn actor_path(directory: &tempfile::TempDir) -> String {
-    directory
-        .path()
-        .join("actor.db")
-        .to_string_lossy()
-        .into_owned()
-}
-
-async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
-    let directory = tempfile::tempdir().unwrap();
-    let (handle, owner) = DbHandle::open(actor_path(&directory), "actor-test-device".into())
-        .await
-        .unwrap();
-    (directory, handle, owner)
+async fn open_failure_actor() -> (ark_store::test_support::TestDatabase, DbHandle, DbOwner) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let (handle, owner) = DbHandle::open(
+        database.path().to_string_lossy().into_owned(),
+        "actor-test-device".into(),
+    )
+    .await
+    .unwrap();
+    (database, handle, owner)
 }
 
 struct RestoreRecoveryRequired;
@@ -64,12 +58,9 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
             Err("injected restore verification failure".to_string())
         };
         let rollback_succeeds = |live: &mut Connection, path: &std::path::Path| {
-            live.restore(
-                rusqlite::DatabaseName::Main,
-                path,
-                None::<fn(rusqlite::backup::Progress)>,
+            ark_store::test_support::ProductionActorFailureProbe::rollback_restore_fixture(
+                live, path,
             )
-            .map_err(|error| error.to_string())
         };
         writer
             .restore_snapshot_with_hooks(
@@ -87,12 +78,9 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
             Err("injected restore verification failure".to_string())
         };
         let rollback_succeeds = |live: &mut Connection, path: &std::path::Path| {
-            live.restore(
-                rusqlite::DatabaseName::Main,
-                path,
-                None::<fn(rusqlite::backup::Progress)>,
+            ark_store::test_support::ProductionActorFailureProbe::rollback_restore_fixture(
+                live, path,
             )
-            .map_err(|error| error.to_string())
         };
         ark_store::snapshot::restore_snapshot_with_hooks(
             connection,
@@ -108,7 +96,7 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
 
 #[tokio::test]
 async fn production_actor_restore_recovery_required_fails_closed() {
-    let (_directory, handle, mut owner) = open_failure_actor().await;
+    let (_database, handle, mut owner) = open_failure_actor().await;
 
     let failed = handle
         .submit_maintenance(
@@ -136,8 +124,8 @@ async fn production_actor_restore_recovery_required_fails_closed() {
 
 #[tokio::test]
 async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
-    let (directory, handle, mut owner) = open_failure_actor().await;
-    let db_path = actor_path(&directory);
+    let (database, handle, mut owner) = open_failure_actor().await;
+    let db_path = database.path().to_string_lossy().into_owned();
     let backup_id = "ark.db.backup-restore-failure";
     let backup_path = ark_store::snapshot::backups_dir(&db_path);
     std::fs::create_dir_all(&backup_path).unwrap();

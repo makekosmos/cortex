@@ -24,21 +24,18 @@ fn operation(operation_id: char, parents: &[char], title: &str) -> TaskMergeOper
     }
 }
 
-async fn open_merge_fixture() -> (tempfile::TempDir, String, DbHandle, DbOwner) {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("task-merge.db");
-    let (handle, owner) = DbHandle::open(
-        path.to_string_lossy().into_owned(),
-        "merge-test-device".into(),
-    )
-    .await
-    .unwrap();
-    (
-        directory,
-        path.to_string_lossy().into_owned(),
-        handle,
-        owner,
-    )
+async fn open_merge_fixture() -> (
+    ark_store::test_support::TestDatabase,
+    String,
+    DbHandle,
+    DbOwner,
+) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let path = database.path().to_string_lossy().into_owned();
+    let (handle, owner) = DbHandle::open(path.clone(), "merge-test-device".into())
+        .await
+        .unwrap();
+    (database, path, handle, owner)
 }
 
 fn inspect(path: &str) -> ark_store::test_support::LegacyTaskMergeState {
@@ -78,14 +75,14 @@ async fn append_actor_requires_the_engine_principal() {
 
 #[cfg(test)]
 #[tokio::test]
-async fn append_test_backend_uses_the_store_writer_transaction() {
-    let connection = std::sync::Arc::new(std::sync::Mutex::new(
-        rusqlite::Connection::open_in_memory().expect("database opens"),
-    ));
-    let handle = DbHandle::for_test(std::sync::Arc::clone(&connection));
-    handle.with_connection(|connection| {
-        ark_store::open::init_schema(connection).expect("database schema initializes");
-    });
+async fn append_actor_uses_the_store_writer_transaction() {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let (handle, mut owner) = DbHandle::open(
+        database.path().to_string_lossy().into_owned(),
+        "merge-test-device".into(),
+    )
+    .await
+    .unwrap();
 
     let result = append(&handle, operation('1', &[], "test backend"), None)
         .await
@@ -95,6 +92,7 @@ async fn append_test_backend_uses_the_store_writer_transaction() {
         result.conflict_set.unwrap().variants[0].value,
         TaskMergeValue::Field(serde_json::Value::String("test backend".into()))
     );
+    shutdown(&mut owner).await;
 }
 
 async fn read(handle: &DbHandle) -> ark_application::task_merge::TaskMergeConflictRead {
@@ -116,7 +114,7 @@ async fn shutdown(owner: &mut DbOwner) {
 
 #[tokio::test]
 async fn operation_replay_conflict_guard_and_sqlite_reopen() {
-    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
+    let (_database, path, handle, mut owner) = open_merge_fixture().await;
     let first = append(&handle, operation('1', &[], "base"), None)
         .await
         .unwrap();
