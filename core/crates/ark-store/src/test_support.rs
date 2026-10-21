@@ -20,6 +20,7 @@ mod integration_replication;
 mod legacy_writes;
 mod object_mutation_replay;
 mod object_revision;
+mod object_validation;
 mod object_write_rollback;
 mod production_actor;
 mod registry_enrollment;
@@ -50,6 +51,7 @@ pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationRepl
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,
 };
+pub use object_validation::{ObjectValidationFixture, ObjectValidationState};
 pub use object_write_rollback::{ObjectWriteRollbackFixture, ObjectWriteRollbackState};
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};
