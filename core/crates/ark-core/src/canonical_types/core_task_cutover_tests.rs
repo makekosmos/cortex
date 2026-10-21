@@ -122,7 +122,10 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     assert_eq!(stored["typeId"], "core.task");
     assert_eq!(stored["typeVersion"], "0.1.0");
     assert_eq!(stored["propsJson"]["planning"]["kind"], "today");
-    drop(service);
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
     assert!(dir.path().join("ark.db.pre-core-task.bak").exists());
 
     // A second start finds nothing left to move and keeps the object as it is.
@@ -134,4 +137,8 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
         .await
         .unwrap();
     assert_eq!(again["typeVersion"], "0.1.0");
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
