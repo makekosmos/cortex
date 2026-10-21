@@ -26,12 +26,12 @@ impl DbCommand for CommitFailure {
     fn execute(
         self,
         _context: &CommandContext,
-        transaction: &rusqlite::Transaction<'_>,
+        capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
-        ark_store::test_support::ProductionActorFailureProbe::trigger_deferred_commit_failure(
-            transaction,
-        )
-        .map_err(|error| DbError::Storage(error.to_string()))?;
+        capabilities
+            .test_support()
+            .trigger_deferred_commit_failure()
+            .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(())
     }
 }

@@ -219,6 +219,18 @@ impl SqliteWriter {
         Self::write_with_capabilities_on_connection(&mut self.connection, operation)
     }
 
+    /// Runs a typed capability write on a borrowed connection for test-only
+    /// command harnesses that share their fixture connection.
+    #[cfg(feature = "test-support")]
+    pub fn write_with_test_capabilities_on_connection<T, E>(
+        connection: &mut Connection,
+        operation: impl for<'scope, 'connection> FnOnce(
+            &mut WriteCapabilities<'scope, 'connection>,
+        ) -> Result<T, E>,
+    ) -> Result<T, StoreTransactionFailure<E>> {
+        Self::write_with_capabilities_on_connection(connection, operation)
+    }
+
     fn write_with_capabilities_on_connection<T, E>(
         connection: &mut Connection,
         operation: impl for<'scope, 'connection> FnOnce(

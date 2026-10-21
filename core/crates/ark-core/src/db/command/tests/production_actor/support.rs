@@ -25,7 +25,7 @@ impl DbCommand for WriteProbe {
     fn execute(
         self,
         context: &CommandContext,
-        _transaction: &Transaction<'_>,
+        _capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()
     }
@@ -50,13 +50,12 @@ impl DbCommand for FailureMutation {
     fn execute(
         self,
         _context: &CommandContext,
-        transaction: &Transaction<'_>,
+        capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
-        ark_store::test_support::ProductionActorFailureProbe::insert_mutation(
-            transaction,
-            self.payload_bytes,
-        )
-        .map_err(DbError::from_test_sqlite_error)?;
+        capabilities
+            .test_support()
+            .write_failure_mutation(self.payload_bytes)
+            .map_err(DbError::from_store_error)?;
         Ok(format!("inserted:{}", self.payload_bytes))
     }
 }
@@ -172,7 +171,7 @@ impl<const CLASS_ID: u8> DbCommand for QueueProbe<CLASS_ID> {
     fn execute(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
+        capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
         if let Some((entered, release)) = self.gate {
             let _ = entered.send(());
@@ -181,7 +180,9 @@ impl<const CLASS_ID: u8> DbCommand for QueueProbe<CLASS_ID> {
                 .map_err(|error| DbError::Storage(error.to_string()))?;
         }
         let source = format!("{:?}", context.source);
-        ark_store::test_support::ActorTestLog::append(transaction, self.sequence, &source)
+        capabilities
+            .test_support()
+            .write_actor_log_row(self.sequence, &source)
             .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(())
     }
@@ -203,9 +204,11 @@ impl DbCommand for PanicAfterWriteProbe {
     fn execute(
         self,
         _context: &CommandContext,
-        transaction: &Transaction<'_>,
+        capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
-        ark_store::test_support::ActorTestLog::insert_panic_probe(transaction)
+        capabilities
+            .test_support()
+            .write_panic_probe()
             .map_err(|error| DbError::Storage(error.to_string()))?;
         panic!("actor panic probe after an uncommitted write");
     }

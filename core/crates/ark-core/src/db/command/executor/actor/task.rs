@@ -92,7 +92,7 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
             reply,
         } = *self;
         let result = writer
-            .immediate(|transaction| command.execute(&context, transaction))
+            .write_with_capabilities(|capabilities| command.execute(&context, capabilities))
             .map_err(|failure| match failure {
                 TransactionFailure::Begin(error) => DbError::from_store_error(error),
                 TransactionFailure::Operation(error) => error,

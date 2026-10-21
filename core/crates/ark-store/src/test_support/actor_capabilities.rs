@@ -30,6 +30,25 @@ impl<'scope, 'connection> ActorTestWrites<'scope, 'connection> {
         ProductionActorFailureProbe::trigger_deferred_commit_failure(self.transaction)
             .map_err(store_error_from_sqlite)
     }
+
+    pub fn load_operation_receipt(
+        &self,
+        principal: &str,
+        operation_id: &str,
+    ) -> Result<Option<crate::operation_receipt::OperationReceipt>, StoreError> {
+        crate::operation_receipt::load(self.transaction, principal, operation_id)
+            .map_err(store_error_from_sqlite)
+    }
+
+    pub fn insert_operation_receipt(
+        &mut self,
+        principal: &str,
+        operation_id: &str,
+        receipt: &crate::operation_receipt::OperationReceipt,
+    ) -> Result<(), StoreError> {
+        crate::operation_receipt::insert(self.transaction, principal, operation_id, receipt)
+            .map_err(store_error_from_sqlite)
+    }
 }
 
 pub struct ActorTestReads<'snapshot> {

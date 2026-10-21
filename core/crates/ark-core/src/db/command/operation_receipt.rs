@@ -1,8 +1,6 @@
 #[cfg(test)]
 use super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbHandle};
 #[cfg(test)]
-use rusqlite::Transaction;
-#[cfg(test)]
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -60,16 +58,17 @@ where
     fn execute(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
+        capabilities: &mut ark_store::writer::WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError> {
         let payload_hash =
             ark_store::operation_receipt::payload_hash(self.command_type, &self.command)
                 .map_err(DbError::from_application_error)?;
         let principal = context.operation_principal();
 
-        let stored =
-            ark_store::operation_receipt::load(transaction, &principal, &self.operation_id)
-                .map_err(|error| DbError::Storage(error.to_string()))?;
+        let stored = capabilities
+            .test_support()
+            .load_operation_receipt(&principal, &self.operation_id)
+            .map_err(|error| DbError::Storage(error.to_string()))?;
 
         if let Some(stored) = stored {
             if stored.command_type != self.command_type || stored.payload_sha256 != payload_hash {
@@ -85,20 +84,21 @@ where
             });
         }
 
-        let value = self.command.execute(context, transaction)?;
+        let value = self.command.execute(context, capabilities)?;
         let result_json =
             serde_json::to_string(&value).map_err(|error| DbError::Storage(error.to_string()))?;
-        ark_store::operation_receipt::insert(
-            transaction,
-            &principal,
-            &self.operation_id,
-            &ark_store::operation_receipt::OperationReceipt {
-                command_type: self.command_type.to_owned(),
-                payload_sha256: payload_hash,
-                result_json,
-            },
-        )
-        .map_err(|error| DbError::Storage(error.to_string()))?;
+        capabilities
+            .test_support()
+            .insert_operation_receipt(
+                &principal,
+                &self.operation_id,
+                &ark_store::operation_receipt::OperationReceipt {
+                    command_type: self.command_type.to_owned(),
+                    payload_sha256: payload_hash,
+                    result_json,
+                },
+            )
+            .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(OperationResult {
             value,
             replayed: false,

@@ -1,7 +1,7 @@
 #[cfg(test)]
-use rusqlite::Connection;
+use ark_store::writer::WriteCapabilities;
 #[cfg(test)]
-use rusqlite::Transaction;
+use rusqlite::Connection;
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
@@ -191,7 +191,7 @@ pub(crate) trait DbCommand: sealed::Sealed + Send + 'static {
     fn execute(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
+        capabilities: &mut WriteCapabilities<'_, '_>,
     ) -> Result<Self::Output, DbError>;
 }
 
@@ -276,26 +276,6 @@ pub(crate) enum DbError {
 }
 
 impl DbError {
-    #[cfg(test)]
-    pub(crate) fn from_test_sqlite_error(error: rusqlite::Error) -> Self {
-        let unhealthy = matches!(
-            &error,
-            rusqlite::Error::SqliteFailure(code, _)
-                if matches!(
-                    code.code,
-                    rusqlite::ErrorCode::DiskFull
-                        | rusqlite::ErrorCode::SystemIoFailure
-                        | rusqlite::ErrorCode::DatabaseCorrupt
-                        | rusqlite::ErrorCode::NotADatabase
-                )
-        );
-        if unhealthy {
-            Self::StorageUnhealthy(error.to_string())
-        } else {
-            Self::Storage(error.to_string())
-        }
-    }
-
     pub(crate) fn from_store_error(error: ark_store::writer::StoreError) -> Self {
         use ark_store::writer::StoreErrorKind;
         match error.kind {

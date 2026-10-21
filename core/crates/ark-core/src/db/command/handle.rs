@@ -372,14 +372,20 @@ fn spawn_test_submit<C: DbCommand>(
 ) -> tokio::task::JoinHandle<Result<C::Output, DbError>> {
     tokio::task::spawn_blocking(move || {
         let _admission = _admission;
-        let connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        let transaction = Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        let output = command.execute(&context, &transaction)?;
-        transaction
-            .commit()
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        Ok(output)
+        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
+        ark_store::writer::SqliteWriter::write_with_test_capabilities_on_connection(
+            &mut connection,
+            |capabilities| command.execute(&context, capabilities),
+        )
+        .map_err(|failure| match failure {
+            ark_store::writer::StoreTransactionFailure::Begin(error) => {
+                DbError::from_store_error(error)
+            }
+            ark_store::writer::StoreTransactionFailure::Operation(error) => error,
+            ark_store::writer::StoreTransactionFailure::Commit(error) => {
+                DbError::CommitFailed(error.to_string())
+            }
+        })
     })
 }
 
