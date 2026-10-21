@@ -101,20 +101,6 @@ impl DbHandle {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_connection<T>(&self, f: impl FnOnce(&Connection) -> T) -> T {
-        match &self.backend {
-            HandleBackend::Test(connection) => {
-                let guard = connection.lock().unwrap_or_else(|error| error.into_inner());
-                f(&guard)
-            }
-            HandleBackend::Actor(actor) => {
-                let connection = ark_store::open::open_db(&actor.path).expect("test DB connection");
-                f(&connection)
-            }
-        }
-    }
-
-    #[cfg(test)]
     pub(crate) async fn submit<C: DbCommand>(
         &self,
         context: CommandContext,
