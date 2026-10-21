@@ -1,6 +1,6 @@
 # ARK Core
 
-ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust library backed by SQLite; the Kosmos Engine hosts it in-process via `ark_core::service::ArkService`.
+ARK Core is the canonical local-first data runtime for Kosmos. It composes the Store-backed runtime and exposes it to the Kosmos Engine in-process through `ark_core::service::ArkService`.
 
 ## Source Layout
 
@@ -21,7 +21,7 @@ The Rust workspace lives in `core/`. Its main crate boundaries are:
 ## Build And Test
 
 ```powershell
-cargo nextest run -p ark-core
+mbx nextest run -p ark-core
 pnpm run test:ark-core-storage-boundary
 node scripts/check-ark-dependency-graph.mjs --profile desktop --target x86_64-pc-windows-msvc
 node scripts/check-ark-dependency-graph.mjs --profile mobile --target aarch64-linux-android

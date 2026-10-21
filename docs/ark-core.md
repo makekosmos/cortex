@@ -28,9 +28,9 @@ longer exists (`runtime/src/ark_host.rs` is the host wrapper).
 
 `ark-store` owns SQLite opening, the single writer connection, transaction
 execution, snapshots and restore, compatibility migrations, and the extracted
-query and persistence adapters. Canonical type migration coordination and
-some SQL-backed runtime paths still live in `ark-core`; those are explicit
-remaining boundaries, not claims that Core is already a storage-free facade.
+query and persistence adapters. `ark-core` has no SQLite dependency or SQL
+source; it composes Store operations with application policy and the stable
+Engine request contract.
 
 - Typed objects: `object_types` + `objects` (+ `object_links`), registered
   through `type_registry` / `TypeRegistration`.
@@ -79,18 +79,18 @@ peer behavior; they do not simulate physical power loss.
 - `ark-domain` contains shared domain values and protocol-independent types.
 - `ark-application` defines capabilities used by runtime, sync, and storage.
 - `ark-store` owns SQLite opening, the writer actor, snapshots, compatibility
-  migrations, and extracted query and persistence adapters. Canonical type
-  migration coordination and selected SQL-backed runtime paths remain in Core.
+  migrations, and query and persistence adapters. Core supplies orchestration
+  and policy through typed application and storage capabilities.
 - `ark-sync` owns direct client and server session admission, readiness,
   protocol message handling, snapshot/feed/task-merge/live coordination, ACK
   validation, retry state, and session progress. Core supplies storage,
   Engine callbacks, peer-map projection, and service lifecycle.
 - `ark-net` owns concrete WebSocket, relay, Iroh, and discovery transports.
 - `ark-core` exposes `ArkService`, adapts the Engine JSON contract, and
-  composes these crates. It still owns request handlers, migration
-  coordination, and selected SQL-backed runtime paths.
+  composes these crates. It still owns request handlers and coordinates
+  canonical migrations through Store capabilities.
 
 ## Tests
 
-From the Cortex repository root, run `cargo nextest run -p ark-core`. The crate builds through the root workspace.
+From the Cortex repository root, run `mbx nextest run -p ark-core`. The crate builds through the root workspace.
 `cargo shear`, clippy, and deny run repo-wide.
