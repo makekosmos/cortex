@@ -357,7 +357,7 @@ async fn production_actor_maintenance_waits_for_admitted_reads_before_the_reader
 
 #[tokio::test]
 async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("restart.db");
     let db_path = database_path.to_string_lossy().into_owned();
     let (handle, mut owner) = DbHandle::open_with_limits(

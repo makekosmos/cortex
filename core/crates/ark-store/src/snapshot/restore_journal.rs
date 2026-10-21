@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn recovery_rolls_back_an_interrupted_restore_before_returning() {
-        let directory = tempfile::tempdir().expect("test operation succeeds");
+        let directory = crate::test_support::test_temp_dir().expect("test operation succeeds");
         let db_path = directory.path().join("ark.db");
         let db_path_text = db_path.to_str().expect("test operation succeeds");
         let connection = crate::open::open_db(db_path_text).expect("test operation succeeds");
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn invalid_capsule_keeps_intent_and_does_not_mutate_live_database() {
-        let directory = tempfile::tempdir().expect("test operation succeeds");
+        let directory = crate::test_support::test_temp_dir().expect("test operation succeeds");
         let db_path = directory.path().join("ark.db");
         let db_path_text = db_path.to_str().expect("test operation succeeds");
         let connection = Connection::open(&db_path).expect("test operation succeeds");

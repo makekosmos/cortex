@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn watermark_survives_feed_pruning_and_reopen() {
-        let directory = tempfile::tempdir().expect("temporary directory opens");
+        let directory = crate::test_support::test_temp_dir().expect("temporary directory opens");
         let path = directory.path().join("ark.db");
         let connection = Connection::open(&path).expect("database opens");
         connection

@@ -9,7 +9,7 @@ mod handshake;
 
 #[tokio::test]
 async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry.db")
@@ -92,7 +92,7 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
 
 #[tokio::test]
 async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-rollback.db")
@@ -142,7 +142,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
     };
     use ed25519_dalek::SigningKey;
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-exchange.db")
@@ -254,7 +254,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
 async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission() {
     use ark_domain::device_registry::DeviceId;
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-revocation.db")
@@ -337,7 +337,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
 
 #[tokio::test]
 async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-clear.db")

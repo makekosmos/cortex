@@ -21,7 +21,7 @@ async fn read_query_uses_backfill_context() {
 
 #[tokio::test]
 async fn open_publishes_only_a_database_ready_for_commands() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("ark.db")
@@ -47,7 +47,7 @@ async fn open_publishes_only_a_database_ready_for_commands() {
 
 #[tokio::test]
 async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("object-write.db");
     let (handle, mut owner) = DbHandle::open(
         db_path.to_string_lossy().into_owned(),
@@ -126,7 +126,7 @@ async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() 
 
 #[tokio::test]
 async fn open_rejects_an_unreadable_database_before_returning_a_handle() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("not-a-database.db");
     std::fs::write(&db_path, b"not a SQLite database").unwrap();
 
@@ -179,7 +179,7 @@ async fn read_queries_share_bounded_source_admission() {
 
 #[tokio::test]
 async fn actor_store_keeps_the_persisted_iroh_identity() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let (handle, mut owner) = DbHandle::open(
         directory
             .path()
@@ -207,7 +207,7 @@ async fn actor_store_keeps_the_persisted_iroh_identity() {
 
 #[tokio::test]
 async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let (handle, mut owner) = DbHandle::open(
         directory
             .path()
@@ -242,7 +242,7 @@ async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
 
 #[tokio::test]
 async fn usage_write_returns_typed_validation_error_and_rolls_back() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("usage-write.db");
     let (handle, mut owner) = DbHandle::open(
         db_path.to_string_lossy().into_owned(),
@@ -314,7 +314,7 @@ async fn usage_write_returns_typed_validation_error_and_rolls_back() {
 
 #[tokio::test]
 async fn clear_all_runs_inside_a_maintenance_database_command() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("clear-all.db")
@@ -353,7 +353,7 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
 
 #[tokio::test]
 async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let (handle, mut owner) = DbHandle::open(
         directory
             .path()
@@ -382,7 +382,7 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
 
 #[tokio::test]
 async fn delete_trashed_runs_through_an_interactive_database_command() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("delete-trashed.db");
     let (handle, mut owner) = DbHandle::open(
         db_path.to_string_lossy().into_owned(),

@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn reopened_database_keeps_durable_foreign_key_settings() {
-        let directory = tempfile::tempdir().expect("temporary directory opens");
+        let directory = crate::test_support::test_temp_dir().expect("temporary directory opens");
         let path = directory.path().join("ark.db");
         let path = path.to_str().expect("temporary path is UTF-8");
 

@@ -195,7 +195,7 @@ mod accepted_peer_sync_policy_tests {
 
     #[test]
     fn accepted_peer_policy_is_monotonic_validated_and_durable() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("peer-policy.db");
         let conn = Connection::open(&path).unwrap();
         ensure_schema(&conn).unwrap();

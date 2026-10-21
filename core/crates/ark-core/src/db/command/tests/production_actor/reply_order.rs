@@ -58,7 +58,7 @@ impl WriterTask for ReplyOrderProbe {
 
 #[tokio::test]
 async fn production_actor_reply_is_published_after_maintenance_release() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("actor.db")

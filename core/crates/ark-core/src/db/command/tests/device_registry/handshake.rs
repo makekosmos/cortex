@@ -5,7 +5,7 @@ use ark_domain::device_registry::{
 
 #[tokio::test]
 async fn production_storage_signs_and_verifies_only_active_registry_identities() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-handshake.db")

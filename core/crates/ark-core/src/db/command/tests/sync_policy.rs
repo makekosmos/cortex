@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn sync_progress_write_commits_through_store_owned_actor_transaction() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("sync-progress.db");
     let (handle, mut owner) = DbHandle::open(
         database_path.to_string_lossy().into_owned(),
@@ -47,7 +47,7 @@ fn profile_rule(resource_id: String) -> ark_application::sync_policy::SyncProfil
 
 #[tokio::test]
 async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("accepted-peer-policy.db");
     let (handle, mut owner) = DbHandle::open(
         database_path.to_string_lossy().into_owned(),
@@ -105,7 +105,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
 
 #[tokio::test]
 async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("sync-policy.db");
     let (handle, mut owner) = DbHandle::open(
         database_path.to_string_lossy().into_owned(),

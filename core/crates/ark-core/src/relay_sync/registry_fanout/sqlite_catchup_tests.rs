@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admission() {
-    let directory = tempfile::tempdir().expect("temporary database directory");
+    let directory = crate::test_support::temp_dir();
     let path_a = directory.path().join("device-a.sqlite");
     let path_b = directory.path().join("device-b.sqlite");
     let mut peer_a = open_peer(&path_a, "device-A").await;

@@ -7,7 +7,7 @@ async fn registry_event_batch_rolls_back_prior_events_after_sequence_conflict() 
     };
     use ed25519_dalek::SigningKey;
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-batch-rollback.db")

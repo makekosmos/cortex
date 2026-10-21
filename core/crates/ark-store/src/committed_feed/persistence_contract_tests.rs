@@ -25,7 +25,7 @@ mod tests {
 
     #[test]
     fn production_database_open_uses_full_wal_durability() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = crate::open::open_db(path.to_str().unwrap()).unwrap();
         let synchronous: i64 = conn
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn feed_commit_rolls_back_with_object_transaction_and_survives_commit_before_notify() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn committed_feed_watermark_survives_pruning_and_reopen() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn initial_snapshot_watermark_survives_restart_and_only_advances_after_completion() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("initial-snapshot.db");
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn snapshot_completion_rejects_the_identity_from_an_older_accepted_policy() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("policy-bound-snapshot.db");
         let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn policy_change_after_pinned_feed_page_prevents_sending_that_page() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = crate::test_support::test_temp_dir().unwrap();
         let path = directory.path().join("policy-bound-feed-page.db");
         let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();

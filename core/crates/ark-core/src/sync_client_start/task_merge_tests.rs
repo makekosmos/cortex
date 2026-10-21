@@ -84,7 +84,7 @@ fn bootstrap() -> TaskMergeBootstrap {
 
 #[tokio::test]
 async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let mut sender = open_peer(&directory.path().join("sender.sqlite"), "merge-sender").await;
     let mut receiver = open_peer(&directory.path().join("receiver.sqlite"), "merge-receiver").await;
     sender

@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn reads_share_one_snapshot_while_a_writer_commits() {
-        let directory = tempfile::tempdir().expect("temporary directory creates");
+        let directory = crate::test_support::test_temp_dir().expect("temporary directory creates");
         let path = directory.path().join("ark.db");
         let path = path.to_str().expect("temporary path is UTF-8");
         let connection = crate::open::open_db(path).expect("database opens");
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn operation_failure_is_preserved_as_the_operation_stage() {
-        let directory = tempfile::tempdir().expect("temporary directory creates");
+        let directory = crate::test_support::test_temp_dir().expect("temporary directory creates");
         let path = directory.path().join("ark.db");
         let path = path.to_str().expect("temporary path is UTF-8");
         let connection = crate::open::open_db(path).expect("database opens");

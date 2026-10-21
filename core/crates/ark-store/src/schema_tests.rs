@@ -4,7 +4,7 @@ use crate::schema::CREATE_TABLES;
 
 #[test]
 fn schema_creates_shared_storage_tables_and_can_reopen() {
-    let directory = tempfile::tempdir().expect("temporary directory opens");
+    let directory = crate::test_support::test_temp_dir().expect("temporary directory opens");
     let path = directory.path().join("ark.db");
 
     {

@@ -1,7 +1,7 @@
 use super::*;
 use std::time::Duration;
 
-fn actor_path(directory: &tempfile::TempDir) -> std::path::PathBuf {
+fn actor_path(directory: &crate::test_support::TestTempDir) -> std::path::PathBuf {
     directory.path().join("actor.db")
 }
 
@@ -36,8 +36,13 @@ impl DbCommand for CommitFailure {
     }
 }
 
-async fn open_failure_actor() -> (tempfile::TempDir, std::path::PathBuf, DbHandle, DbOwner) {
-    let directory = tempfile::tempdir().unwrap();
+async fn open_failure_actor() -> (
+    crate::test_support::TestTempDir,
+    std::path::PathBuf,
+    DbHandle,
+    DbOwner,
+) {
+    let directory = crate::test_support::temp_dir();
     let path = actor_path(&directory);
     let path_text = path.to_str().expect("test database path is valid UTF-8");
     let (handle, owner) = DbHandle::open(path_text.to_owned(), "actor-test-device".into())

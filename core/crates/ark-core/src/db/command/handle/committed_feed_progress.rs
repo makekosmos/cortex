@@ -38,7 +38,7 @@ mod tests {
 
     #[tokio::test]
     async fn actor_checks_peer_before_committing_progress() {
-        let directory = tempfile::tempdir().expect("temporary directory opens");
+        let directory = crate::test_support::temp_dir();
         let path = directory.path().join("ark.db");
         let (handle, mut owner) = DbHandle::open(
             path.to_str().expect("database path is UTF-8").to_owned(),

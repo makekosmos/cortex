@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn actor_backed_iroh_sync_respects_task_policy_and_backfills_after_widening() {
-    let directory = tempfile::tempdir().expect("temporary database directory");
+    let directory = crate::test_support::temp_dir();
     let path_a = directory.path().join("policy-device-a.sqlite");
     let path_b = directory.path().join("policy-device-b.sqlite");
     let path_c = directory.path().join("policy-device-c.sqlite");
@@ -342,7 +342,7 @@ async fn wait_for_accepted_note_mode(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn actor_backed_iroh_note_policy_excludes_expands_and_shrinks_without_deleting() {
-    let directory = tempfile::tempdir().expect("temporary database directory");
+    let directory = crate::test_support::temp_dir();
     let path_a = directory.path().join("note-policy-device-a.sqlite");
     let path_b = directory.path().join("note-policy-device-b.sqlite");
     let mut peer_a = open_peer(&path_a, "device-A").await;

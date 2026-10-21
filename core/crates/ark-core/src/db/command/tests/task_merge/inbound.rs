@@ -101,7 +101,7 @@ fn inspect_inbound(
 #[tokio::test]
 async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
     let (_left_dir, _left_path, left, mut left_owner) = open_merge_fixture().await;
-    let right_dir = tempfile::tempdir().unwrap();
+    let right_dir = crate::test_support::temp_dir();
     let right_path = right_dir
         .path()
         .join("task-merge-right.db")

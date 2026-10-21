@@ -4,7 +4,7 @@ use super::*;
 /// made. The resulting current-schema backup remains verifiable and restorable.
 #[test]
 fn startup_migrates_legacy_database_before_verified_backup_and_restore() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::test_support::test_temp_dir().unwrap();
     let db_path = dir.path().join("ark.db");
     let db_str = db_path.to_str().unwrap().to_string();
 

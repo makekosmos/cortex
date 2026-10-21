@@ -3,7 +3,7 @@ use ark_domain::device_registry::{DeviceId, DisplayName, RegistryCommand, Regist
 
 #[tokio::test]
 async fn local_registry_event_and_projection_roll_back_together() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-local-rollback.db")
@@ -63,7 +63,7 @@ async fn local_registry_event_and_projection_roll_back_together() {
 
 #[tokio::test]
 async fn local_registry_changes_are_signed_atomic_and_idempotent() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-local-command.db")
@@ -185,7 +185,7 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
 
 #[tokio::test]
 async fn outbound_sync_admission_closes_after_device_disable() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let db_path = directory
         .path()
         .join("device-registry-outbound-admission.db")

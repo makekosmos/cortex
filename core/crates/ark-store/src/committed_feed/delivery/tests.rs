@@ -9,7 +9,7 @@ use ark_domain::types::ArkObject;
 
 #[test]
 fn projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
-    let directory = tempfile::tempdir().expect("temporary directory opens");
+    let directory = crate::test_support::test_temp_dir().expect("temporary directory opens");
     let path = directory.path().join("feed-snapshot.db");
     let path = path.to_str().expect("temporary path is UTF-8");
     let reader = crate::open::open_db(path).expect("reader opens");

@@ -2,10 +2,54 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::{io::Write, thread};
 
 use rusqlite::Connection;
 use serde::Deserialize;
 use tempfile::TempDir;
+
+/// Temporary database directory whose failed Windows cleanup fails its test.
+/// `TempDir::drop` ignores removal errors, which otherwise lets open SQLite
+/// handles turn into gate-level leftovers without identifying the owner.
+pub struct TestTempDir(Option<TempDir>);
+
+pub fn test_temp_dir() -> Result<TestTempDir, std::io::Error> {
+    let directory = tempfile::tempdir()?;
+    if let Some(name) = thread::current().name() {
+        let marker = directory.path().join("LEAK_OWNER");
+        if let Ok(mut file) = std::fs::File::create(marker) {
+            let _ = writeln!(file, "{name}");
+        }
+    }
+    Ok(TestTempDir(Some(directory)))
+}
+
+impl TestTempDir {
+    pub fn path(&self) -> &Path {
+        self.0.as_ref().expect("test temp dir is open").path()
+    }
+}
+
+impl Drop for TestTempDir {
+    #[allow(clippy::panic)]
+    fn drop(&mut self) {
+        let Some(directory) = self.0.take() else {
+            return;
+        };
+        let path = directory.path().to_path_buf();
+        if let Err(error) = directory.close() {
+            if !thread::panicking() {
+                let owner = std::fs::read_to_string(path.join("LEAK_OWNER"))
+                    .unwrap_or_else(|_| "(unknown test)".into());
+                panic!(
+                    "test temp dir {} (test {}): file still open: {error}",
+                    path.display(),
+                    owner.trim()
+                );
+            }
+        }
+    }
+}
 
 mod actor_capabilities;
 mod actor_log;
@@ -85,7 +129,7 @@ pub use usage_rollback::{UsageRollbackFixture, UsageRollbackState};
 /// open a separate connection for setup or read-only assertions, but should
 /// route writes through the actor once it is running.
 pub struct TestDatabase {
-    directory: TempDir,
+    directory: TestTempDir,
     path: PathBuf,
 }
 
@@ -231,7 +275,7 @@ fn database_path_with_suffix(database: &TestDatabase, suffix: &str) -> PathBuf {
 
 impl TestDatabase {
     pub fn create() -> Result<Self, String> {
-        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let directory = test_temp_dir().map_err(|error| error.to_string())?;
         let path = directory.path().join("ark.db");
         let path_text = path
             .to_str()

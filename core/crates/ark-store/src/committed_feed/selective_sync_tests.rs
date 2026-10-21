@@ -35,7 +35,7 @@ fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
 
 #[test]
 fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::test_temp_dir().unwrap();
     let source_path = directory.path().join("policy-source.db");
     let receiver_path = directory.path().join("policy-receiver.db");
     let mut source = crate::open::open_db(source_path.to_str().unwrap()).unwrap();

@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn page_selection_uses_the_snapshot_that_passed_retention_checks() {
-        let directory = tempfile::tempdir().expect("temporary directory opens");
+        let directory = crate::test_support::test_temp_dir().expect("temporary directory opens");
         let path = directory.path().join("feed-log-snapshot.db");
         let path = path.to_str().expect("temporary path is UTF-8");
         let reader = crate::open::open_db(path).expect("reader opens");

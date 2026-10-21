@@ -253,14 +253,14 @@ pub(in crate::db::command::tests) fn actor_test_limits() -> executor::AdmissionL
 }
 
 pub(in crate::db::command::tests) async fn open_actor_fixture(
-) -> (tempfile::TempDir, DbHandle, DbOwner) {
+) -> (crate::test_support::TestTempDir, DbHandle, DbOwner) {
     open_actor_fixture_with_limits(actor_test_limits()).await
 }
 
 pub(in crate::db::command::tests) async fn open_actor_fixture_with_limits(
     limits: executor::AdmissionLimits,
-) -> (tempfile::TempDir, DbHandle, DbOwner) {
-    let directory = tempfile::tempdir().unwrap();
+) -> (crate::test_support::TestTempDir, DbHandle, DbOwner) {
+    let directory = crate::test_support::temp_dir();
     let db_path = actor_database_path(&directory)
         .to_string_lossy()
         .into_owned();
@@ -271,7 +271,7 @@ pub(in crate::db::command::tests) async fn open_actor_fixture_with_limits(
 }
 
 pub(in crate::db::command::tests) fn actor_database_path(
-    directory: &tempfile::TempDir,
+    directory: &crate::test_support::TestTempDir,
 ) -> std::path::PathBuf {
     directory.path().join("actor.db")
 }

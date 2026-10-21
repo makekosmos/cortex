@@ -136,7 +136,7 @@ async fn authenticated_core_task_commit_failure_is_reported_and_fails_closed() {
 
 #[tokio::test]
 async fn durable_inbox_receipt_replays_after_writer_restart() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let path = directory.path().join("feed-restart.db");
     let entity = full_core_task_entity(
         "feed-restart-task",
