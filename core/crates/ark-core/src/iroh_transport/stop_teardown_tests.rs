@@ -120,6 +120,15 @@ async fn stop_joins_connection_tasks_and_releases_authorizer() {
         "a transport task still holds device B's storage backend"
     );
 
+    backend_a
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+    backend_b
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+
     drop(backend_a);
     drop(backend_b);
     drop(database_a);

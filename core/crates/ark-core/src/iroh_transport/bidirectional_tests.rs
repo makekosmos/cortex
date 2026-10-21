@@ -207,7 +207,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .set_outbound_authorizer(Arc::new(
             ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
                 Arc::new(TestStorage {
-                    inner: backend,
+                    inner: backend.clone(),
                     first_check: Some(first_check.clone()),
                     release_first: Some(release_first.clone()),
                 }),
@@ -280,4 +280,8 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
     assert!(error.contains("recipient"));
     transport_a.stop().await;
     transport_b.stop().await;
+    backend
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }

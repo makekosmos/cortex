@@ -312,6 +312,14 @@ mod tests {
         );
         relay_a.stop().await;
         relay_b.stop().await;
+        storage_a
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
+        storage_b
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_legacy_peers_before_live_data() {
@@ -340,6 +348,14 @@ mod tests {
         );
         relay_a.stop().await;
         relay_b.stop().await;
+        storage_a
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
+        storage_b
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_wrong_hmac_secret() {
@@ -379,6 +395,14 @@ mod tests {
         );
         relay_a.stop().await;
         relay_b.stop().await;
+        storage_a
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
+        storage_b
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -446,5 +470,9 @@ mod tests {
         for candidate in &cases {
             assert!(!persisted.iter().any(|entity| entity.id == candidate.id));
         }
+        backend
+            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+            .await
+            .unwrap();
     }
 }

@@ -350,4 +350,16 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
 
     observer.stop_and_join().await;
     sync_server.stop().await;
+    server_storage
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+    client_storage
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
+    observer_storage
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }

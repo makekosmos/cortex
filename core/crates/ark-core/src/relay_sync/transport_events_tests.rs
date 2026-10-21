@@ -111,6 +111,7 @@ impl PeerSessionControl for StubTransport {
 
 async fn relay_with_stub() -> (
     Arc<RelaySync>,
+    Arc<SqliteStorageBackend>,
     mpsc::UnboundedSender<TransportEvent>,
     String,
     ark_store::test_support::TestDatabase,
@@ -132,7 +133,7 @@ async fn relay_with_stub() -> (
         event_tx: StdMutex::new(None),
     });
     let relay = RelaySync::with_iroh_transport(
-        backend as Arc<dyn SyncRuntimeStorage>,
+        backend.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,
@@ -152,7 +153,7 @@ async fn relay_with_stub() -> (
         .unwrap()
         .clone()
         .expect("event_tx installed");
-    (relay, tx, peer_endpoint, database)
+    (relay, backend, tx, peer_endpoint, database)
 }
 
 /// Generous hang guard for event waits — the peer list state is the real
@@ -205,7 +206,7 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transport_dropped_evicts_all_peers() {
-    let (relay, tx, peer_endpoint, database) = relay_with_stub().await;
+    let (relay, backend, tx, peer_endpoint, database) = relay_with_stub().await;
     send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
     assert_eq!(
@@ -228,12 +229,16 @@ async fn transport_dropped_evicts_all_peers() {
     wait_for_no_peers(&relay).await;
     relay.stop().await;
     drop(relay);
+    backend
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
     drop(database);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_with_own_device_id_is_ignored() {
-    let (relay, tx, peer_endpoint, database) = relay_with_stub().await;
+    let (relay, backend, tx, peer_endpoint, database) = relay_with_stub().await;
     send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
 
@@ -255,5 +260,9 @@ async fn disconnect_with_own_device_id_is_ignored() {
     );
     relay.stop().await;
     drop(relay);
+    backend
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
     drop(database);
 }

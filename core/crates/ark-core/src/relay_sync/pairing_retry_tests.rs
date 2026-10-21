@@ -264,6 +264,10 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         .await
         .unwrap();
     assert!(transport.data_ready.load(Ordering::SeqCst));
+    storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -325,6 +329,10 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         transport.registry_ready_digest.lock().unwrap().as_deref(),
         None
     );
+    storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -341,7 +349,7 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
         registry_ready_digest: Mutex::new(None),
     });
     let relay = RelaySync::with_iroh_transport(
-        storage as Arc<dyn SyncRuntimeStorage>,
+        storage.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,
@@ -390,4 +398,8 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
 
     assert_eq!(result.unwrap_err(), "injected fanout failure");
     assert_eq!(*observed_events.lock().unwrap(), vec![event]);
+    storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

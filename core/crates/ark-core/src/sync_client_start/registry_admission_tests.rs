@@ -141,6 +141,10 @@ async fn direct_server_sends_no_data_or_ack_before_registry_admission() {
 
     socket.close(None).await.expect("close websocket");
     sync_server.stop().await;
+    server_storage
+        .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 async fn assert_no_data_frame(
