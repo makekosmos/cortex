@@ -3,7 +3,8 @@ use std::path::Path;
 use crate::writer::SqliteWriter;
 use ark_application::integration_admin::{IntegrationAdminWrite, RefreshLeaseAcquire};
 use ark_domain::integration_replication::{
-    AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
+    AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
+    IntegrationRefreshLease, NodeStatus,
 };
 
 #[derive(Debug, Clone)]
@@ -22,12 +23,12 @@ pub struct RefreshLeaseAcquireFixture {
 pub fn acquire_refresh_lease(
     path: &Path,
     request: RefreshLeaseAcquireFixture,
-) -> Result<(), String> {
+) -> Result<IntegrationRefreshLease, String> {
     let path = path
         .to_str()
         .ok_or_else(|| "integration fixture path is not valid UTF-8".to_string())?;
     let mut writer = SqliteWriter::open(path)?;
-    writer
+    let output = writer
         .apply_integration_admin(IntegrationAdminWrite::AcquireRefreshLease(
             RefreshLeaseAcquire {
                 integration_id: request.integration_id,
@@ -39,8 +40,13 @@ pub fn acquire_refresh_lease(
                 device_id: request.device_id,
             },
         ))
-        .map(|_| ())
-        .map_err(|error| format!("integration fixture lease acquisition failed: {error:?}"))
+        .map_err(|error| format!("integration fixture lease acquisition failed: {error:?}"))?;
+    match output {
+        ark_application::integration_admin::IntegrationAdminOutput::Lease(lease) => Ok(lease),
+        ark_application::integration_admin::IntegrationAdminOutput::Complete => {
+            Err("integration fixture lease acquisition returned no lease".into())
+        }
+    }
 }
 
 pub struct IntegrationReplicationTestFixture;
@@ -192,11 +198,14 @@ fn integration_grant(node_id: &str, encryption_key: &str) -> IntegrationNodeGran
 
 #[cfg(test)]
 mod tests {
-    use super::IntegrationReplicationTestFixture;
+    use super::{
+        acquire_refresh_lease, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
+    };
     use crate::test_support::TestDatabase;
     use ark_domain::integration_replication::{
         AuthorizedNode, GrantStatus, IntegrationNodeGrant, NodeStatus,
     };
+    use std::sync::{Arc, Barrier};
 
     #[test]
     fn outbound_frame_authorization_tracks_persisted_grants() {
@@ -253,5 +262,57 @@ mod tests {
             &node.node_id
         )
         .expect("revoked grant blocks frame authorization"));
+    }
+
+    #[test]
+    fn concurrent_refresh_acquire_has_one_fence_winner() {
+        let database = TestDatabase::create().expect("test database initializes");
+        IntegrationReplicationTestFixture::seed_authorized_pair(
+            database.path(),
+            "node-a-signing",
+            "node-b-signing",
+            None,
+            None,
+        )
+        .expect("authorized pair seeds");
+
+        let barrier = Arc::new(Barrier::new(3));
+        let handles = (0..2)
+            .map(|_| {
+                let barrier = barrier.clone();
+                let path = database.path().to_path_buf();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    acquire_refresh_lease(
+                        &path,
+                        RefreshLeaseAcquireFixture {
+                            integration_id: "integration-a".into(),
+                            holder_node_id: "node-a".into(),
+                            credential_generation: 3,
+                            now_ms: 10,
+                            ttl_ms: 10,
+                            expected_fencing_token: 0,
+                            device_id: "node-a".into(),
+                        },
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        barrier.wait();
+
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("lease worker completes"))
+            .collect::<Vec<_>>();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .find_map(|result| result.as_ref().ok())
+                .expect("one acquisition succeeds")
+                .fencing_token,
+            1
+        );
     }
 }
