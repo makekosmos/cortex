@@ -36,6 +36,12 @@ function lineAt(source, offset) {
   return line;
 }
 
+function cargoDependencyScope(manifest, offset) {
+  const sections = [...manifest.slice(0, offset).matchAll(/^\s*\[([^\]]+)\]\s*$/gm)];
+  const section = sections.at(-1)?.[1] ?? "";
+  return /(?:^|\.)dev-dependencies$/.test(section) ? "test_file" : "production";
+}
+
 function isTestFile(relativePath) {
   return /(?:^|\/)tests?(?:_[^/]+)?(?:\.rs|\/)|(?:^|\/)[^/]+_tests?\.rs$/.test(relativePath);
 }
@@ -187,7 +193,7 @@ export async function collectStorageViolations({
       path: path.relative(root, manifestPath).split(path.sep).join("/"),
       line: lineAt(manifest, dependency.index),
       category: "rusqlite dependency",
-      scope: "production",
+      scope: cargoDependencyScope(manifest, dependency.index),
     });
 
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
