@@ -7,13 +7,14 @@ ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust libr
 The Rust workspace lives in `core/`. Its main crate boundaries are:
 
 - `ark-core` exposes `ArkService` and composes runtime, storage, sync, and
-  network components. Some database and direct-session orchestration remains
-  here while the extraction proceeds.
-- `ark-store` owns SQLite opening, the writer actor, snapshots, and extracted
-  SQL adapters.
+  network components. It owns request admission and the database actor
+  lifecycle while preserving the Engine JSON contract.
+- `ark-store` owns SQLite connections, schema and SQL adapters, the single
+  writer, transaction execution, snapshots, and restore.
 - `ark-application` defines the capabilities shared between Core, sync, and
   storage.
-- `ark-sync` owns extracted sync policy and session decisions.
+- `ark-sync` owns sync policy, protocol state, and connected-session
+  orchestration.
 - `ark-net` owns concrete network transports.
 - `ark-domain` contains shared domain types.
 
@@ -21,7 +22,9 @@ The Rust workspace lives in `core/`. Its main crate boundaries are:
 
 ```powershell
 cargo nextest run -p ark-core
-bun run ark:smoke
+pnpm run test:ark-core-storage-boundary
+node scripts/check-ark-dependency-graph.mjs --profile desktop --target x86_64-pc-windows-msvc
+node scripts/check-ark-dependency-graph.mjs --profile mobile --target aarch64-linux-android
 ```
 
 ## Service Contract
