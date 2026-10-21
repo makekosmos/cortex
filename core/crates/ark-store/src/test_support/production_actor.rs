@@ -32,6 +32,56 @@ impl CompetingWriter {
 }
 
 impl ProductionActorFailureProbe {
+    pub fn install_deferred_object_commit_failure(connection: &Connection) -> Result<()> {
+        connection.execute_batch(
+            "CREATE TABLE deferred_core_task_probe (
+                 parent_id TEXT REFERENCES objects(id) DEFERRABLE INITIALLY DEFERRED
+             );
+             CREATE TRIGGER fail_core_task_commit AFTER INSERT ON objects
+             BEGIN
+                 INSERT INTO deferred_core_task_probe(parent_id) VALUES ('missing-parent');
+             END;",
+        )
+    }
+
+    pub fn remove_deferred_object_commit_failure(connection: &Connection) -> Result<()> {
+        connection.execute_batch(
+            "DROP TRIGGER fail_core_task_commit;
+             DROP TABLE deferred_core_task_probe;",
+        )
+    }
+
+    pub fn install_deferred_feed_commit_failure(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "database path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        connection
+            .execute_batch(
+                "CREATE TABLE deferred_feed_probe (
+                     parent_id TEXT REFERENCES objects(id) DEFERRABLE INITIALLY DEFERRED
+                 );
+                 CREATE TRIGGER fail_feed_commit AFTER INSERT ON objects
+                 BEGIN
+                     INSERT INTO deferred_feed_probe(parent_id) VALUES ('missing-parent');
+                 END;",
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn remove_deferred_feed_commit_failure(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "database path is not valid UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        connection
+            .execute_batch(
+                "DROP TRIGGER fail_feed_commit;
+                 DROP TABLE deferred_feed_probe;",
+            )
+            .map_err(|error| error.to_string())
+    }
+
     pub fn create_restore_snapshot_fixture(
         path: &Path,
         snapshot_path: &Path,

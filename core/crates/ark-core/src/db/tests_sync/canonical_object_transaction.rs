@@ -96,17 +96,11 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
 #[tokio::test]
 async fn authenticated_core_task_commit_failure_is_reported_and_can_be_retried() {
     let conn = setup_db();
-    conn.execute_batch(
-        "CREATE TABLE deferred_core_task_probe (
-             parent_id TEXT REFERENCES objects(id) DEFERRABLE INITIALLY DEFERRED
-         );
-         CREATE TRIGGER fail_core_task_commit AFTER INSERT ON objects
-         BEGIN
-             INSERT INTO deferred_core_task_probe(parent_id) VALUES ('missing-parent');
-         END;",
+    let shared = Arc::new(Mutex::new(conn));
+    ark_store::test_support::ProductionActorFailureProbe::install_deferred_object_commit_failure(
+        &shared.lock().unwrap(),
     )
     .unwrap();
-    let shared = Arc::new(Mutex::new(conn));
     let backend = SqliteStorageBackend::for_test(shared.clone());
     admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
@@ -120,11 +114,10 @@ async fn authenticated_core_task_commit_failure_is_reported_and_can_be_retried()
         .await
         .unwrap_err();
     assert!(!error.is_empty());
-    shared
-        .lock()
-        .unwrap()
-        .execute_batch("DROP TRIGGER fail_core_task_commit")
-        .unwrap();
+    ark_store::test_support::ProductionActorFailureProbe::remove_deferred_object_commit_failure(
+        &shared.lock().unwrap(),
+    )
+    .unwrap();
 
     let next = full_core_task_entity(
         "after-core-task-commit-failure",
@@ -152,18 +145,10 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
             .unwrap();
     let backend = SqliteStorageBackend::with_db_handle(handle);
     admit_test_registry_peer(&backend, "device-a").await;
-    let failpoint = rusqlite::Connection::open(&path).unwrap();
-    failpoint
-        .execute_batch(
-            "CREATE TABLE deferred_feed_probe (
-             parent_id TEXT REFERENCES objects(id) DEFERRABLE INITIALLY DEFERRED
-         );
-         CREATE TRIGGER fail_feed_commit AFTER INSERT ON objects
-         BEGIN
-             INSERT INTO deferred_feed_probe(parent_id) VALUES ('missing-parent');
-         END;",
-        )
-        .unwrap();
+    ark_store::test_support::ProductionActorFailureProbe::install_deferred_feed_commit_failure(
+        &path,
+    )
+    .unwrap();
     assert!(backend
         .apply_authenticated_entity(&entity, "device-a")
         .await
@@ -173,11 +158,10 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
         .await
         .unwrap();
 
-    let check = rusqlite::Connection::open(&path).unwrap();
-    check
-        .execute_batch("DROP TRIGGER fail_feed_commit")
-        .unwrap();
-    drop(check);
+    ark_store::test_support::ProductionActorFailureProbe::remove_deferred_feed_commit_failure(
+        &path,
+    )
+    .unwrap();
 
     let (handle, mut owner) =
         crate::db::DbHandle::open(path.to_string_lossy().into_owned(), "device-local".into())
