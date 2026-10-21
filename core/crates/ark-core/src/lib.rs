@@ -7,7 +7,7 @@
 #[cfg(test)]
 extern crate self as ark_core;
 
-pub mod application;
+pub(crate) mod application;
 pub mod canonical_types;
 pub(crate) mod db;
 pub mod delphi;
