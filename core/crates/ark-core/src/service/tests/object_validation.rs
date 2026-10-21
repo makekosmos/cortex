@@ -29,6 +29,7 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
                 deleted_at: None,
             },
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
@@ -94,6 +95,7 @@ async fn upsert_object_with_invalid_type_id_is_err() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
@@ -143,38 +145,19 @@ async fn failed_upsert_object_persists_nothing() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
     .await;
 
-    let shared = get_shared_conn(&state).unwrap();
-    let guard = shared.lock().unwrap();
-
-    // Объект не должен быть в таблице objects
-    let obj_count: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM objects WHERE id = ?1",
-            rusqlite::params!["obj-ghost"],
-            |row| row.get(0),
-        )
-        .unwrap();
+    let persisted =
+        ark_store::test_support::ObjectValidationFixture::inspect(&db_path, "obj-ghost").unwrap();
     assert_eq!(
-        obj_count, 0,
-        "objects не должны содержать строку для obj-ghost после провального upsert"
+        persisted,
+        ark_store::test_support::ObjectValidationState {
+            object_exists: false,
+            version_vector_contains_object: false,
+        }
     );
-
-    // Version-vector не должен содержать запись для этого id
-    let vv_raw = db::get_sync_kv(&guard, "lan_sync.version_vector").unwrap();
-    if let Some(raw) = vv_raw {
-        let vector: std::collections::HashMap<String, serde_json::Value> =
-            serde_json::from_str(&raw).unwrap_or_default();
-        assert!(
-            !vector.contains_key("obj-ghost"),
-            "version_vector не должен содержать запись для obj-ghost после провального upsert; \
-                 vector: {:?}",
-            vector
-        );
-    }
-    // Если vv_raw == None — version_vector ещё не создавался, тест проходит
 }

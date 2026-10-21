@@ -1,16 +1,15 @@
 //! Deterministic, plaintext-free Core fixture for the integration replication tests.
 //!
 //! The caller owns the Core child lifecycle. This module only creates isolated
-//! databases and seeds them through `ark-core`'s public database API before
+//! databases and seeds them through Store adapters before
 //! `ArkHost::spawn` is called.
 #![allow(dead_code, unused_imports)]
 
-use ark_core::db::{
-    init_schema, try_acquire_integration_refresh_lease, upsert_authorized_node,
-    upsert_integration_configuration, upsert_integration_node_grant,
-};
 use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
+};
+use ark_store::integration_replication::{
+    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use engine::package_service::credential_envelope::load_or_create_identity;
@@ -79,14 +78,13 @@ pub fn new_setup_named(integration_id: &str) -> Result<IntegrationReplicationSet
         integration_id,
     )?;
     seed_recipient_baseline_named(&recipient_db, &origin, integration_id)?;
-    let conn = Connection::open(&origin_db).map_err(|error| error.to_string())?;
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis() as u64;
-    try_acquire_integration_refresh_lease(
-        &conn,
-        &ark_core::db::RefreshLeaseAcquireParams {
+    ark_store::test_support::acquire_refresh_lease(
+        &origin_db,
+        ark_store::test_support::RefreshLeaseAcquireFixture {
             integration_id: integration_id.into(),
             holder_node_id: origin.node_id.clone(),
             credential_generation: 1,
@@ -139,7 +137,7 @@ pub fn seed_database_named(
     integration_id: &str,
 ) -> Result<(), String> {
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
-    init_schema(&conn)?;
+    ark_store::open::init_schema(&conn)?;
     if seed_configuration {
         let config = IntegrationConfiguration {
             integration_id: integration_id.into(),
@@ -183,7 +181,10 @@ pub async fn wait_for_recipient_state_named(
     loop {
         if let Ok(conn) = Connection::open(path) {
             if let Ok(Some(lease)) =
-                ark_core::db::load_integration_refresh_lease(&conn, integration_id)
+                ark_store::integration_replication::load_integration_refresh_lease(
+                    &conn,
+                    integration_id,
+                )
             {
                 last_seen = Some(format!(
                     "holder={}, generation={}, fence={}",

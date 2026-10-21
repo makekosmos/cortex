@@ -1,4 +1,7 @@
-fn package_disclosure(manifest: &VersionedManifest) -> PackageDisclosure {
+fn package_disclosure(
+    manifest: &VersionedManifest,
+    registry: &RegistrySnapshot,
+) -> PackageDisclosure {
     let (data, mappings) = match manifest {
         VersionedManifest::V2(manifest) => (
             manifest
@@ -34,6 +37,45 @@ fn package_disclosure(manifest: &VersionedManifest) -> PackageDisclosure {
         ),
         VersionedManifest::V1(_) => (Vec::new(), Vec::new()),
     };
+    let volume_scopes = match manifest {
+        VersionedManifest::V2(manifest) => manifest_digest(manifest)
+            .ok()
+            .and_then(|digest| compile_manifest_v2(manifest, registry, &digest).ok())
+            .map(|grant| {
+                let mut scopes = BTreeMap::<(String, String), BTreeSet<String>>::new();
+                for rule in grant
+                    .rules
+                    .iter()
+                    .filter(|rule| rule.actions.contains("read"))
+                {
+                    for registered in registry.types.iter().filter(|registered| {
+                        registered.type_id == rule.type_id
+                            && rule.versions.iter().any(|requirement| {
+                                Version::parse(&registered.version)
+                                    .ok()
+                                    .zip(VersionReq::parse(requirement).ok())
+                                    .is_some_and(|(version, requirement)| {
+                                        requirement.matches(&version)
+                                    })
+                            })
+                    }) {
+                        scopes
+                            .entry((registered.type_id.clone(), registered.version.clone()))
+                            .or_default()
+                            .extend(rule.fields_read.iter().cloned());
+                    }
+                }
+                scopes
+                    .into_iter()
+                    .map(|((type_id, type_version), fields)| DisclosureVolumeScope {
+                        type_id,
+                        type_version,
+                        fields: fields.into_iter().collect(),
+                    })
+                    .collect()
+            }),
+        VersionedManifest::V1(_) => Some(Vec::new()),
+    };
     PackageDisclosure {
         id: manifest.id().to_owned(),
         name: manifest.name().to_owned(),
@@ -43,5 +85,6 @@ fn package_disclosure(manifest: &VersionedManifest) -> PackageDisclosure {
         capabilities: manifest.permissions().to_vec(),
         data,
         mappings,
+        volume_scopes,
     }
 }

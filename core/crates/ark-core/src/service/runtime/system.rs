@@ -1,11 +1,179 @@
 use super::*;
-use crate::data_platform::ExternalRefUpsert;
+use ark_application::external_ref::ExternalRefUpsert;
+
+async fn publish_registry_event(
+    state: &Arc<ServiceState>,
+    event: &ark_domain::device_registry::RegistryEvent,
+) {
+    let sync = state.sync.lock().await;
+    let Some(sync) = sync.as_ref() else {
+        return;
+    };
+    sync.server.broadcast_registry_event(event.clone()).await;
+    let clients = sync.clients.lock().await;
+    for client in clients.values() {
+        client.broadcast_registry_event(event.clone()).await;
+    }
+    if let Some(relay) = &sync.relay {
+        if let Err(error) = relay.publish_registry_event(event.clone()).await {
+            eprintln!("[sync] relay registry event publish failed: {error}");
+        }
+    }
+}
+
+pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let snapshot = get_db_handle(state)?
+        .query_with_store(db::CommandContext::engine(), db::LoadDeviceRegistryQuery)
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(snapshot).map_err(|error| error.to_string())
+}
+
+pub(super) async fn sync_policy_get(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let device_id = local_registry_device_id(state).await?;
+    let profile = get_db_handle(state)?
+        .query_with_store(
+            db::CommandContext::engine(),
+            db::LoadActiveLocalSyncProfileQuery::new(device_id),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(profile
+        .map(sync_profile_json)
+        .transpose()?
+        .unwrap_or(Value::Null))
+}
+
+pub(super) async fn sync_policy_set(
+    state: &Arc<ServiceState>,
+    profile_id: String,
+    name: String,
+    active: bool,
+    expected_revision: Option<i64>,
+    rules: Vec<SyncPolicyRuleInput>,
+) -> Result<Value, String> {
+    if rules.len() > 256 {
+        return Err("too many sync profile rules".into());
+    }
+    let rules = rules
+        .into_iter()
+        .map(|rule| {
+            let filter_json =
+                serde_json::to_string(&rule.filter).map_err(|error| error.to_string())?;
+            Ok(ark_application::sync_policy::SyncProfileRule {
+                resource_kind: rule.resource_kind,
+                resource_id: rule.resource_id,
+                mode: rule.mode,
+                filter: ark_domain::selective_sync::FilterV1::parse(&filter_json)?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let device_id = local_registry_device_id(state).await?;
+    let profile = get_db_handle(state)?
+        .save_local_sync_profile(
+            db::CommandContext::engine(),
+            db::SaveLocalSyncProfileCommand::new(
+                device_id,
+                profile_id,
+                name,
+                active,
+                expected_revision,
+                rules,
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    sync_profile_json(profile)
+}
+
+fn sync_profile_json(profile: ark_application::sync_policy::SyncProfile) -> Result<Value, String> {
+    let digest = profile.digest();
+    let rules = profile
+        .rules
+        .into_iter()
+        .map(|rule| {
+            Ok(json!({
+                "resourceKind": rule.resource_kind,
+                "resourceId": rule.resource_id,
+                "mode": rule.mode,
+                "filter": serde_json::from_str::<Value>(rule.filter.canonical_json())
+                    .map_err(|error| error.to_string())?,
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "profileId": profile.profile_id,
+        "deviceId": profile.device_id,
+        "revision": profile.revision,
+        "name": profile.name,
+        "active": profile.active,
+        "digest": digest,
+        "rules": rules,
+    }))
+}
+
+async fn local_registry_device_id(state: &Arc<ServiceState>) -> Result<String, String> {
+    get_sync_kv(state, db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.to_owned())
+        .await?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| "device_registry_local_identity_missing".to_owned())
+}
+
+pub(super) async fn device_registry_rename(
+    state: &Arc<ServiceState>,
+    target_device_id: ark_domain::device_registry::DeviceId,
+    display_name: ark_domain::device_registry::DisplayName,
+) -> Result<Value, String> {
+    let local_device_id = local_registry_device_id(state).await?;
+    let event = get_db_handle(state)?
+        .append_local_registry_event(
+            db::CommandContext::engine(),
+            db::AppendLocalRegistryEventCommand::new(
+                local_device_id,
+                ark_domain::device_registry::RegistryCommand::Rename {
+                    target_device_id,
+                    display_name,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    if let Some(event) = event.as_ref() {
+        publish_registry_event(state, event).await;
+    }
+    serde_json::to_value(event).map_err(|error| error.to_string())
+}
+
+pub(super) async fn device_registry_disable(
+    state: &Arc<ServiceState>,
+    target_device_id: ark_domain::device_registry::DeviceId,
+) -> Result<Value, String> {
+    let local_device_id = local_registry_device_id(state).await?;
+    let event = get_db_handle(state)?
+        .append_local_registry_event(
+            db::CommandContext::engine(),
+            db::AppendLocalRegistryEventCommand::new(
+                local_device_id,
+                ark_domain::device_registry::RegistryCommand::Disable { target_device_id },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    if let Some(event) = event.as_ref() {
+        publish_registry_event(state, event).await;
+    }
+    serde_json::to_value(event).map_err(|error| error.to_string())
+}
 
 pub(super) async fn get_sync_kv(state: &Arc<ServiceState>, key: String) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let value = db::get_sync_kv(conn, &key)?;
-        Ok(json!(value))
-    })
+    get_db_handle(state)?
+        .query_with_store(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::SyncKeyValue(key),
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn set_sync_kv(
@@ -13,35 +181,38 @@ pub(super) async fn set_sync_kv(
     key: String,
     value: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        db::set_sync_kv(conn, &key, &value)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .set_local_sync_key_value(db::CommandContext::engine(), key, value)
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn external_refs_upsert(
     state: &Arc<ServiceState>,
     params: ExternalRefUpsert,
 ) -> Result<Value, String> {
-    with_write_tx(state, |conn| {
-        crate::data_platform::ensure_schema(conn)?;
-        crate::data_platform::upsert_external_ref(conn, &params)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .submit_external_ref_upsert(db::CommandContext::engine(), params)
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        db::clear_all(conn)?;
-        Ok(json!(null))
-    })
+    get_db_handle(state)?
+        .submit_clear_all(db::CommandContext::engine_maintenance())
+        .await
+        .map(|()| json!(null))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn delete_trashed(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let count = db::delete_trashed(conn, &local_write_device_id(None))?;
-        Ok(json!(count))
-    })
+    get_db_handle(state)?
+        .submit_delete_trashed(db::CommandContext::engine(), local_write_device_id(None))
+        .await
+        .map(|count| json!(count))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn db_backup(
@@ -64,11 +235,13 @@ pub(super) async fn db_backup(
         .name("ark-db-backup".to_string())
         .spawn(move || {
             let _bg = background_priority::BackgroundThreadGuard::enter();
-            let _gate = state_for_thread
-                .backup_gate
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            let result = db::backup_to_file_chunked(&src_path, &dest_for_thread, pages, pause);
+            let _gate = state_for_thread.backup_gate.blocking_lock();
+            let result = ark_store::snapshot::backup_to_file_chunked_verified(
+                &src_path,
+                &dest_for_thread,
+                pages,
+                pause,
+            );
             let event = match &result {
                 Ok(()) => json!({
                     "event": "db_backup_result",
@@ -92,7 +265,7 @@ pub(super) async fn db_backup(
 // BACKUP_GATE не нужен (не мутируют ничего).
 pub(super) async fn db_backup_list(state: &Arc<ServiceState>) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    let backups = db::list_snapshots(&db_path)?;
+    let backups = ark_store::snapshot::list_snapshots(&db_path)?;
     Ok(json!({ "backups": backups }))
 }
 
@@ -101,14 +274,17 @@ pub(super) async fn db_backup_validate(
     backup_id: String,
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    with_conn(state, |conn| {
-        let validation = db::validate_snapshot(conn, &db_path, &backup_id)?;
-        serde_json::to_value(validation).map_err(|e| e.to_string())
-    })
+    get_db_handle(state)?
+        .query_with_store(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::ValidateSnapshot { db_path, backup_id },
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
-// KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB mutex
-// (with_conn_mut). Restore держит оба на всю операцию — ни backup, ни
+// KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB handle.
+// Restore держит оба на всю операцию — ни backup, ни
 // обычные ARK ops не выполняются параллельно, момента с отсутствующей
 // или частично заменённой primary DB нет (Online Backup API пишет
 // destination транзакционно).
@@ -117,11 +293,70 @@ pub(super) async fn db_backup_restore(
     backup_id: String,
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    let _gate = state.backup_gate.lock().unwrap_or_else(|e| e.into_inner());
-    with_conn_mut(state, |conn| {
-        let report = db::restore_snapshot(conn, &db_path, &backup_id)?;
-        serde_json::to_value(report).map_err(|e| e.to_string())
-    })
+    let _gate = state.backup_gate.lock().await;
+    let db_handle = get_db_handle(state)?;
+    let validation = db_handle
+        .query_with_store(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::ValidateSnapshot {
+                db_path: db_path.clone(),
+                backup_id: backup_id.clone(),
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    if validation["valid"] != json!(true) {
+        return Err(validation["error"]
+            .as_str()
+            .unwrap_or("snapshot is not valid for this ARK database")
+            .to_string());
+    }
+
+    let restart_params = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .map(|runtime| runtime.start_params.clone());
+    if restart_params.is_some() {
+        handle_stop_sync(state).await;
+    }
+
+    let restore_result = db_handle
+        .submit_maintenance(
+            db::CommandContext::engine_maintenance(),
+            db::RestoreSnapshotCommand::new(db_path, backup_id),
+        )
+        .await;
+
+    let report = match (restore_result, restart_params) {
+        (Ok(report), Some(params)) => {
+            handle_start_sync_with_params(state, params)
+                .await
+                .map_err(|error| {
+                    format!("restore succeeded but sync could not restart: {error}")
+                })?;
+            report
+        }
+        (Ok(report), None) => report,
+        (Err(db::DbError::RestoreRefused(reason)), Some(params)) => {
+            handle_start_sync_with_params(state, params)
+                .await
+                .map_err(|error| {
+                    format!("restore was safely refused, but sync could not restart: {error}")
+                })?;
+            return Err(format!(
+                "restore refused without changing the live database: {reason}"
+            ));
+        }
+        (Err(error), Some(_)) => {
+            return Err(format!(
+                "restore failed; sync stays stopped because database state is uncertain: {error}"
+            ));
+        }
+        (Err(error), None) => return Err(error.to_string()),
+    };
+    serde_json::to_value(report).map_err(|error| error.to_string())
 }
 
 pub(super) async fn start_sync(

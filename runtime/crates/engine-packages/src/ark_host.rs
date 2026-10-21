@@ -25,6 +25,9 @@ impl From<ark_core::service::ArkServiceError> for ArkHostError {
     fn from(error: ark_core::service::ArkServiceError) -> Self {
         match error {
             ark_core::service::ArkServiceError::Request(message) => Self::RpcError(message),
+            ark_core::service::ArkServiceError::Busy(message) => {
+                Self::RpcError(format!("ark service busy: {message}"))
+            }
             other => Self::Unavailable(other.to_string()),
         }
     }
@@ -47,14 +50,16 @@ pub struct ArkResponse {
 /// unchanged). Events arrive from the service's broadcast bus and are
 /// re-published on `events_tx` together with engine-side `emit_event`s.
 pub struct ArkHost {
-    service: ArkService,
+    service: Option<ArkService>,
     events_tx: broadcast::Sender<(String, serde_json::Value)>,
-    events_task: tokio::task::JoinHandle<()>,
+    events_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl Drop for ArkHost {
     fn drop(&mut self) {
-        self.events_task.abort();
+        if let Some(events_task) = self.events_task.take() {
+            events_task.abort();
+        }
     }
 }
 
@@ -142,9 +147,9 @@ impl ArkHost {
             }
         });
         Ok(Self {
-            service,
+            service: Some(service),
             events_tx,
-            events_task,
+            events_task: Some(events_task),
         })
     }
 
@@ -157,7 +162,11 @@ impl ArkHost {
         operation: &str,
         params: serde_json::Value,
     ) -> ArkResult<ArkResponse> {
-        match self.service.call(operation, params).await {
+        let service = self
+            .service
+            .as_ref()
+            .expect("ArkHost service is present until shutdown");
+        match service.call(operation, params).await {
             Ok(data) => Ok(ArkResponse {
                 ok: true,
                 data,
@@ -167,6 +176,11 @@ impl ArkHost {
                 ok: false,
                 data: serde_json::Value::Null,
                 error: Some(error),
+            }),
+            Err(ark_core::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
+                ok: false,
+                data: serde_json::Value::Null,
+                error: Some(format!("ark service busy: {error}")),
             }),
             Err(error) => Err(ArkHostError::Unavailable(error.to_string())),
         }
@@ -187,7 +201,25 @@ impl ArkHost {
     /// Diagnostics: number of ARK handler panics the service worker caught
     /// (each followed by a DB reopen).
     pub fn panic_count(&self) -> u64 {
-        self.service.panic_count()
+        self.service
+            .as_ref()
+            .expect("ArkHost service is present until shutdown")
+            .panic_count()
+    }
+
+    /// Stop accepting work and wait for the ARK worker to close its database
+    /// owner before returning. Call this during orderly Engine shutdown and
+    /// before removing a database directory in tests.
+    pub async fn shutdown(mut self, deadline: std::time::Instant) -> ArkResult<()> {
+        if let Some(events_task) = self.events_task.take() {
+            events_task.abort();
+            let _ = events_task.await;
+        }
+        let service = self
+            .service
+            .take()
+            .expect("ArkHost service is present until shutdown");
+        service.shutdown(deadline).await.map_err(Into::into)
     }
 }
 
@@ -241,6 +273,12 @@ fn system_windows_dir() -> Option<&'static str> {
 mod tests {
     use super::*;
 
+    async fn shutdown(host: ArkHost) {
+        host.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .unwrap();
+    }
+
     /// Envelope coverage moved here from the sidecar tests: an ok:true
     /// response carries data, an ok:false carries the handler error, and an
     /// unavailable service maps to `Unavailable`.
@@ -272,6 +310,59 @@ mod tests {
             .unwrap();
         assert!(!malformed.ok);
         assert!(malformed.error.is_some());
+        shutdown(host).await;
+    }
+
+    #[tokio::test]
+    async fn saturated_request_uses_the_existing_error_envelope() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+            .await
+            .unwrap();
+
+        let response = host
+            .request(
+                "test.oversized",
+                serde_json::json!({ "payload": "x".repeat(9 * 1024 * 1024) }),
+            )
+            .await
+            .expect("admission errors remain ArkResponse values");
+        assert!(!response.ok);
+        assert!(response.error.unwrap().contains("admission size limits"));
+        shutdown(host).await;
+    }
+
+    #[tokio::test]
+    async fn request_response_bytes_match_ark_api_v1_fixtures() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            operation: String,
+            params: serde_json::Value,
+            response: String,
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+            .await
+            .unwrap();
+        let fixtures = include_str!("../tests/fixtures/ark-api-v1/responses.jsonl");
+        let mut count = 0;
+        for line in fixtures.lines() {
+            let fixture: Fixture = serde_json::from_str(line).unwrap();
+            let response = host
+                .request(&fixture.operation, fixture.params)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::to_string(&response).unwrap(),
+                fixture.response,
+                "response bytes changed for {}",
+                fixture.operation
+            );
+            count += 1;
+        }
+        assert_eq!(count, 2, "ArkResponse golden corpus is incomplete");
+        shutdown(host).await;
     }
 
     #[tokio::test]
@@ -287,6 +378,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(name, "ark_host_test_event");
+        shutdown(host).await;
     }
 
     /// KOS-287: the real %SystemRoot% is resolved at ArkHost::open and fed to
@@ -356,5 +448,6 @@ mod tests {
             .find(|r| r["processName"] == "explorer.exe")
             .expect("explorer row present");
         assert_eq!(explorer["isSystem"], true);
+        shutdown(host).await;
     }
 }

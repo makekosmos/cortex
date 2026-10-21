@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-include!("phase3_compatibility/part01.rs");
-include!("phase3_compatibility/part02.rs");
-include!("phase3_compatibility/part03.rs");
-include!("phase3_compatibility/part04.rs");
+include!("phase3_compatibility/mapping.rs");
+include!("phase3_compatibility/contracts_and_relations.rs");
+include!("phase3_compatibility/contextual_mappings.rs");
+include!("phase3_compatibility/corpus.rs");

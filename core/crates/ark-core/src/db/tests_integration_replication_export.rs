@@ -10,7 +10,7 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     upsert_authorized_node(&conn, &node_a, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant_a, "device-a").unwrap();
     acquire_integration_test_lease(&conn, "node-a");
-    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
+    publish_test_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
 
     let node_b = AuthorizedNode {
         node_id: "node-b".into(),
@@ -27,7 +27,10 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     upsert_authorized_node(&conn, &node_b, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant_b, "device-a").unwrap();
 
-    let changes = export_integration_replication(&conn, "integration-a", "node-a").unwrap();
+    let changes = with_integration_replication_read(&conn, |read| {
+        export_integration_replication(read, "integration-a", "node-a")
+    })
+    .unwrap();
     assert!(changes
         .windows(2)
         .all(|pair| rank(&pair[0].entity) <= rank(&pair[1].entity)));
@@ -50,6 +53,22 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
         IntegrationReplicationEntity::IntegrationNodeGrant(_)
     )));
     assert!(changes.iter().all(|change| !change.vector_hlc.is_empty()));
+
+    let prepared = with_integration_replication_read(&conn, |read| {
+        crate::integration_replication::prepare_signed_sync(
+            read,
+            "space-a",
+            "node-b",
+            "integration-a",
+            "node-a",
+            "message-a",
+        )
+    })
+    .unwrap();
+    assert_eq!(prepared.envelope.origin_node_id, "node-b");
+    assert_eq!(prepared.envelope.recipient_node_id, "node-a");
+    assert_eq!(prepared.envelope.payload.len(), changes.len());
+    assert!(!prepared.canonical_signing_bytes_hex.is_empty());
 }
 
 fn rank(entity: &IntegrationReplicationEntity) -> u8 {
@@ -72,10 +91,13 @@ fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
     upsert_authorized_node(&conn, &node, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant, "device-a").unwrap();
     acquire_integration_test_lease(&conn, "node-a");
-    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
+    publish_test_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
     let revoked = node.revoke(3, "2026-08-30T01:00:00Z").unwrap();
     upsert_authorized_node(&conn, &revoked, "device-a").unwrap();
-    let changes = export_integration_replication(&conn, "integration-a", "node-a").unwrap();
+    let changes = with_integration_replication_read(&conn, |read| {
+        export_integration_replication(read, "integration-a", "node-a")
+    })
+    .unwrap();
     assert!(!changes.iter().any(|change| matches!(
         change.entity,
         IntegrationReplicationEntity::IntegrationCredentialEnvelope(_)

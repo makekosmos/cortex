@@ -1,7 +1,4 @@
-include!("tests_sync/part1.rs");
-include!("tests_sync/part2.rs");
-include!("tests_sync/part3.rs");
-include!("tests_sync/part4.rs");
-include!("tests_sync/part5.rs");
-include!("tests_sync/part6.rs");
-include!("tests_sync/part7.rs");
+include!("tests_sync/storage_backend_roundtrips.rs");
+include!("tests_sync/storage_backend_tombstones_and_vectors.rs");
+include!("tests_sync/canonical_object_transaction.rs");
+include!("tests_sync/pull_vector.rs");

@@ -5,16 +5,16 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::hlc::HLC;
-use crate::protocol::*;
-use crate::relay_transport::{RelayConfig, RelayTransport};
+use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{
-    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry, StorageBackend,
+    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
 };
-use crate::sync_transport::{SyncTransport, TransportEvent};
+use crate::sync_transport::{SyncTransport, SyncTransportHandle, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
+use ark_net::relay::{RelayConfig, RelayTransport};
+use ark_sync::protocol::*;
 
 const TAG: &str = "[RelaySync]";
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
@@ -34,6 +34,7 @@ struct RelayPeerState {
     platform: Option<String>,
     app_version: Option<String>,
     authenticated: bool,
+    negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
 }
 
 struct IncomingSyncState {
@@ -54,17 +55,11 @@ struct PendingPairingRequest {
     hello: LanSyncMessage,
 }
 
-/// Our own outbound pairing attempt (this device entered a code). The
-/// endpoint id ties consent to the ticketed device — its Hello is
-/// pre-consented by the user's own «Подключить».
 #[derive(Clone)]
 struct OutgoingPairing {
     endpoint: String,
     started_at: Instant,
     declined: bool,
-    /// The responder actually consented: it sent a second Hello (the accept
-    /// broadcast) or data. The conn-setup Hello alone proves nothing —
-    /// listeners inject it before a human decides.
     accepted: bool,
 }
 
@@ -79,10 +74,13 @@ const PAIRING_DECISION_TIMEOUT: Duration = Duration::from_secs(120);
 const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
 
 pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
+pub type OnRegistryEventsCallback =
+    Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 pub struct RelaySync {
-    storage: Arc<dyn StorageBackend>,
-    transport: Arc<dyn SyncTransport>,
+    storage: Arc<dyn SyncRuntimeStorage>,
+    transport: SyncTransportHandle,
+    registry: Option<ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
@@ -90,6 +88,7 @@ pub struct RelaySync {
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.
     pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,
+    pending_responder_hellos: Mutex<HashMap<String, LanSyncMessage>>,
     /// Recently declined device ids — their Hellos are dropped without
     /// re-prompting until the suppression lapses.
     declined_pairing: Mutex<HashMap<String, Instant>>,
@@ -101,6 +100,7 @@ pub struct RelaySync {
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
     on_pairing_changed: Arc<Mutex<Option<OnPairingChangedCallback>>>,
+    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     /// Background tasks spawned by `start()` — aborted and joined by
     /// `stop()` so a task holding `storage` (the shared db connection)
     /// cannot outlive teardown (KOS-270).

@@ -45,13 +45,22 @@ impl PackageService {
             return Err(PackageError::Invalid);
         }
         let mut state = Self::lock(&self.state);
-        if let Ok(entry) = Self::current_entry(&mut state, id, version) {
-            return Ok(package_disclosure(&entry.manifest));
-        }
+        let catalog_manifest = Self::current_entry(&mut state, id, version)
+            .ok()
+            .map(|entry| entry.manifest.clone());
         drop(state);
+        if let Some(manifest) = catalog_manifest {
+            return Ok(package_disclosure(
+                &manifest,
+                &Self::lock(&self.typed_registry),
+            ));
+        }
         if let Ok(package) = self.store.installed(id, version) {
             if !package.revoked {
-                return Ok(package_disclosure(&package.manifest));
+                return Ok(package_disclosure(
+                    &package.manifest,
+                    &Self::lock(&self.typed_registry),
+                ));
             }
         }
         Err(PackageError::Invalid)

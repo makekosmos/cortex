@@ -159,7 +159,7 @@ pub fn catalog(origin: &str, size: u64, hash: &str) -> Vec<u8> {
     serde_json::to_vec(&document).unwrap()
 }
 
-pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<&str>) {
+pub async fn start_sync(host: &ArkHost, device: &str, port: u16) {
     let response = host
         .request(
             "start_sync",
@@ -170,7 +170,7 @@ pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<
                 "port": port,
                 "auth_secret": "hpke-replication-auth",
                 "use_iroh": true,
-                "iroh_peer_ticket": ticket,
+                "iroh_peer_ticket": null,
                 "discovery_enabled": false,
                 "bind": "loopback",
             }),
@@ -195,7 +195,7 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
     let recipient_host = ArkHost::open(setup.recipient_db.to_str().unwrap())
         .await
         .unwrap();
-    start_sync(&origin_host, &setup.origin.node_id, free_port(), None).await;
+    start_sync(&origin_host, &setup.origin.node_id, free_port()).await;
     let origin_ticket = origin_host
         .request("get_own_iroh_ticket", json!({}))
         .await
@@ -204,44 +204,8 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .as_str()
         .unwrap()
         .to_owned();
-    start_sync(
-        &recipient_host,
-        &setup.recipient.node_id,
-        free_port(),
-        Some(&origin_ticket),
-    )
-    .await;
+    start_sync(&recipient_host, &setup.recipient.node_id, free_port()).await;
     let recipient_ticket = recipient_host
-        .request("get_own_iroh_ticket", json!({}))
-        .await
-        .unwrap()
-        .data
-        .as_str()
-        .unwrap()
-        .to_owned();
-    start_sync(
-        &origin_host,
-        &setup.origin.node_id,
-        free_port(),
-        Some(&recipient_ticket),
-    )
-    .await;
-    let restarted_origin_ticket = origin_host
-        .request("get_own_iroh_ticket", json!({}))
-        .await
-        .unwrap()
-        .data
-        .as_str()
-        .unwrap()
-        .to_owned();
-    start_sync(
-        &recipient_host,
-        &setup.recipient.node_id,
-        free_port(),
-        Some(&restarted_origin_ticket),
-    )
-    .await;
-    let restarted_recipient_ticket = recipient_host
         .request("get_own_iroh_ticket", json!({}))
         .await
         .unwrap()
@@ -251,11 +215,24 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .to_owned();
     support::refresh_transport_public_keys_named(
         setup,
-        &restarted_origin_ticket,
-        &restarted_recipient_ticket,
+        &origin_ticket,
+        &recipient_ticket,
         PACKAGE_ID,
     )
     .unwrap();
+    let connect = recipient_host
+        .request(
+            "connect_with_pairing_code",
+            json!({"pairing_code": origin_ticket}),
+        )
+        .await
+        .unwrap();
+    assert!(connect.ok, "pairing connect failed: {:?}", connect.error);
+
+    // The refreshed integration-replication key already binds the recipient,
+    // so the origin admits its Hello without a consent request. Wait for the
+    // admitted link, which is the state the signed send needs.
+    offline::wait_for_peer(&origin_host, &setup.recipient.node_id).await;
     offline::wait_for_peer(&recipient_host, &setup.origin.node_id).await;
     (origin_host, recipient_host)
 }

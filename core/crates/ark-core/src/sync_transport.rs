@@ -1,109 +1,86 @@
-//! Transport-neutral sync abstraction.
-//!
-//! `RelaySync` orchestration (CRDT version-vector exchange) is independent of
-//! the underlying wire transport. This module defines the shared event enum
-//! (`TransportEvent`) and the object-safe trait (`SyncTransport`) that both
-//! `relay_transport::RelayTransport` and `iroh_transport::IrohTransport`
-//! implement, so `RelaySync` can drive either
-//! one via `Arc<dyn SyncTransport>`.
+pub use ark_sync::transport::*;
 
 use std::sync::Arc;
-use tokio::sync::mpsc;
 
-use crate::protocol::LanSyncMessage;
-use crate::sync_server::StorageBackend;
-
-/// Lifecycle/message events emitted by a sync transport into the orchestration
-/// layer. Structurally identical across transports.
-#[derive(Debug)]
-pub enum TransportEvent {
-    Connected {
-        device_id: String,
-    },
-    /// A single remote peer disconnected. `device_id` is the REMOTE peer.
-    Disconnected {
-        device_id: String,
-    },
-    /// The whole transport connection dropped (e.g. the relay WebSocket was
-    /// lost). Every remote peer reached through it is now unreachable; no
-    /// single peer identity applies.
-    TransportDropped,
-    MessageReceived {
-        from_device_id: String,
-        msg: LanSyncMessage,
-    },
-    MessageReceivedFromTransport {
-        from_device_id: String,
-        transport_public_key: String,
-        msg: LanSyncMessage,
+/// The selected transport family and the capabilities guaranteed by it.
+///
+/// Relay has only shared lifecycle/broadcast operations. Iroh carries the
+/// complete peer-session contract. Transport-specific callers must match the
+/// variant before invoking peer-session operations.
+#[derive(Clone)]
+pub enum SyncTransportHandle {
+    Relay(Arc<dyn SyncTransport>),
+    Iroh {
+        transport: Arc<dyn IrohSessionTransport>,
+        peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl>,
     },
 }
 
-/// Object-safe transport abstraction consumed by `RelaySync`.
-///
-/// Uses `async_trait` to match the crate's established async-trait pattern
-/// (`StorageBackend` in `sync_server.rs`), keeping the trait usable behind
-/// `Arc<dyn SyncTransport>`.
-#[async_trait::async_trait]
-pub trait SyncTransport: Send + Sync {
-    /// Start the transport. Returns immediately; background tasks drive the
-    /// connection and forward events through `event_tx`.
-    async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String>;
-
-    /// Enqueue a message for sending.
-    fn send(&self, msg: LanSyncMessage) -> Result<(), String>;
-
-    async fn send_to(&self, _device_id: &str, _msg: LanSyncMessage) -> Result<(), String> {
-        Err("addressed transport is not supported".into())
+impl SyncTransportHandle {
+    pub fn iroh_with_peer_control(
+        transport: Arc<dyn IrohSessionTransport>,
+        peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl>,
+    ) -> Self {
+        Self::Iroh {
+            transport,
+            peer_control,
+        }
     }
 
-    fn set_outbound_storage(
+    pub fn relay(transport: Arc<dyn SyncTransport>) -> Self {
+        Self::Relay(transport)
+    }
+
+    pub fn peer_control(&self) -> Option<Arc<dyn ark_sync::relay_registry::PeerSessionControl>> {
+        match self {
+            Self::Relay(_) => None,
+            Self::Iroh { peer_control, .. } => Some(peer_control.clone()),
+        }
+    }
+
+    pub fn session(&self) -> Option<Arc<dyn IrohSessionTransport>> {
+        match self {
+            Self::Relay(_) => None,
+            Self::Iroh { transport, .. } => Some(transport.clone()),
+        }
+    }
+
+    pub async fn start(
         &self,
-        _storage: Arc<dyn StorageBackend>,
-        _space_id: &str,
-        _origin_node_id: &str,
+        events: tokio::sync::mpsc::UnboundedSender<TransportEvent>,
     ) -> Result<(), String> {
-        Err("outbound authorization is not supported".into())
+        match self {
+            Self::Relay(transport) => transport.start(events).await,
+            Self::Iroh { transport, .. } => transport.start(events).await,
+        }
     }
 
-    fn bind_authenticated_peer(
-        &self,
-        _device_id: &str,
-        _transport_public_key: &str,
-    ) -> Result<(), String> {
-        Err("authenticated transport binding is not supported".into())
+    pub fn send(&self, message: ark_sync::protocol::LanSyncMessage) -> Result<(), String> {
+        match self {
+            Self::Relay(transport) => transport.send(message),
+            Self::Iroh { transport, .. } => transport.send(message),
+        }
     }
 
-    /// Drop a binding made by `bind_authenticated_peer` when the handshake
-    /// it enabled fails afterwards (HMAC/protocol/removed-peer rejection).
-    fn unbind_authenticated_peer(&self, _device_id: &str) -> Result<(), String> {
-        Err("authenticated transport binding is not supported".into())
+    pub async fn stop(&self) {
+        match self {
+            Self::Relay(transport) => transport.stop().await,
+            Self::Iroh { transport, .. } => transport.stop().await,
+        }
     }
+}
 
-    /// Addressed send to a connection identified by its transport key —
-    /// before authentication, for handshake-level replies only
-    /// (`PairingRejected`; `bind_authenticated_peer` has not run yet, so
-    /// `send_to`'s authenticated lookup cannot reach the peer).
-    async fn send_to_transport_peer(
-        &self,
-        _transport_public_key: &str,
-        _msg: LanSyncMessage,
-    ) -> Result<(), String> {
-        Err("transport-key addressed send is not supported".into())
+impl<T> From<Arc<T>> for SyncTransportHandle
+where
+    T: SyncTransport + 'static,
+{
+    fn from(transport: Arc<T>) -> Self {
+        Self::Relay(transport)
     }
+}
 
-    fn disconnect_peer(&self, _device_id: &str) -> Result<(), String> {
-        Err("addressed peer disconnect is not supported".into())
+impl From<Arc<dyn SyncTransport>> for SyncTransportHandle {
+    fn from(transport: Arc<dyn SyncTransport>) -> Self {
+        Self::Relay(transport)
     }
-
-    fn disconnect_transport_peer(&self, _transport_public_key: &str) -> Result<(), String> {
-        Err("transport peer disconnect is not supported".into())
-    }
-
-    /// Stop the transport and join its background tasks. Must not return
-    /// while a spawned task is still running: tasks hold `outbound_storage`
-    /// (the open `ark.db` connection), and a task that outlives `stop()`
-    /// keeps the database file open past teardown — on Windows the
-    /// containing directory then cannot be deleted (KOS-369).
-    async fn stop(&self);
 }

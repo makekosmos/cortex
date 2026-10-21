@@ -1,11 +1,8 @@
 //! KOS-397 cutover: legacy task props map to core.task, a legacy task write is
 //! refused, and a start moves the stored rows over once.
-use super::compatibility::{map_legacy_with_context, LegacyRecord, LegacySource, MappingContext};
-use super::core_task_rewrite_tests::{insert_legacy, legacy_props};
-use crate::canonical_types::ingress::prepare_object;
-use crate::db::init_schema;
-use crate::types::ArkObjectWrite;
-use rusqlite::Connection;
+use ark_application::canonical_compatibility::{
+    map_legacy_with_context, LegacyRecord, LegacySource, MappingContext,
+};
 use serde_json::{json, Value};
 
 fn map_flat(props: Value) -> Result<serde_json::Value, String> {
@@ -110,40 +107,11 @@ fn completion_keeps_its_stamp_and_a_stray_stamp_is_refused() {
     assert!(stray.is_err());
 }
 
-#[test]
-fn engine_refuses_a_new_write_of_the_legacy_task_type() {
-    let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
-    let write = ArkObjectWrite {
-        id: "new-legacy-task".into(),
-        type_id: "com.kosmos.task".into(),
-        type_version: Some("1.1.0".into()),
-        title: "Old writer".into(),
-        content_json: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-        props_json: json!({"status":"todo"}),
-        created_at: "2026-10-13T00:00:00.000Z".into(),
-        updated_at: "2026-10-13T00:00:00.000Z".into(),
-        deleted_at: None,
-    };
-    let error = prepare_object(&conn, write).unwrap_err().to_string();
-    assert!(error.contains("legacy_task_type_retired"), "{error}");
-}
-
 #[tokio::test]
 async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     let dir = crate::test_support::temp_dir();
     let path = dir.path().join("ark.db");
-    {
-        let conn = Connection::open(&path).unwrap();
-        init_schema(&conn).unwrap();
-        insert_legacy(
-            &conn,
-            "legacy-task",
-            &legacy_props("todo", true, false, false, false, false, None),
-            false,
-        )
-        .unwrap();
-    }
+    ark_store::test_support::LegacyTaskCutoverFixture::seed(&path).unwrap();
     let service = crate::service::ArkService::open(path.to_str().unwrap())
         .await
         .unwrap();
@@ -154,7 +122,10 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     assert_eq!(stored["typeId"], "core.task");
     assert_eq!(stored["typeVersion"], "0.1.0");
     assert_eq!(stored["propsJson"]["planning"]["kind"], "today");
-    drop(service);
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
     assert!(dir.path().join("ark.db.pre-core-task.bak").exists());
 
     // A second start finds nothing left to move and keeps the object as it is.
@@ -166,4 +137,8 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
         .await
         .unwrap();
     assert_eq!(again["typeVersion"], "0.1.0");
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }

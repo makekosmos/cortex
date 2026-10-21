@@ -80,6 +80,10 @@ async function collect(dir, files = []) {
   return files;
 }
 
+function partNumberedName(relative) {
+  return relative.split("/").some((segment) => /(?:^|[._-])part[_-]?\d/i.test(segment));
+}
+
 function lineCount(text) {
   const lines = text.split(/\r?\n/);
   return lines.at(-1) === "" ? lines.length - 1 : lines.length;
@@ -88,9 +92,15 @@ function lineCount(text) {
 const violations = [];
 const warnings = [];
 const debt = [];
+const partViolations = [];
 for (const file of await collect(ROOT)) {
   const lines = lineCount(await readFile(file, "utf8"));
   const relative = path.relative(ROOT, file).replaceAll("\\", "/");
+  if (partNumberedName(relative)) {
+    partViolations.push(
+      `${relative}: mechanical part-numbered source filename; move it into a semantic module (for example, db/load.rs or db/load/records.rs)`,
+    );
+  }
   if (lines > FAIL_LIMIT) {
     if (GRANDFATHERED.has(relative)) debt.push(`${relative}: ${lines} lines`);
     else violations.push(`${relative}: ${lines} lines (max ${FAIL_LIMIT})`);
@@ -99,9 +109,13 @@ for (const file of await collect(ROOT)) {
   }
 }
 
-if (violations.length) {
-  console.error(`source size check failed (${violations.length} file(s))`);
-  console.error(violations.sort().join("\n"));
+if (violations.length || partViolations.length) {
+  if (violations.length) console.error(`source size check failed (${violations.length} file(s))`);
+  if (violations.length) console.error(violations.sort().join("\n"));
+  if (partViolations.length) {
+    console.error(`part-numbered source check failed (${partViolations.length} file(s))`);
+    console.error(partViolations.sort().join("\n"));
+  }
   process.exit(1);
 }
 

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 
 const extensions = /\.(c|m)?(js|ts)x?$|\.vue$|\.json$|\.ya?ml$/;
@@ -10,6 +11,7 @@ const bomExtensions = /\.(rs|mjs|cjs|ts|tsx|mts|cts|toml|json|md)$/;
 // an expression leaves the whole enclosing function unformatted); the only
 // reliable stable signal is the line length itself.
 const RUST_MAX_LINE = 100;
+const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
 const base = process.env.FORMAT_BASE;
 const staged = process.argv.includes("--staged");
 const args = base
@@ -196,8 +198,9 @@ if (changedRs.length && existsSync("Cargo.toml")) {
 
 if (files.length === 0) process.exit(failed ? 1 : 0);
 
-const result = spawnSync("oxfmt", ["--check", ...files], {
+const manifest = requireFromRoot.resolve("oxfmt/package.json");
+const oxfmt = join(dirname(manifest), JSON.parse(readFileSync(manifest, "utf8")).bin.oxfmt);
+const result = spawnSync(process.execPath, [oxfmt, "--check", ...files], {
   stdio: "inherit",
-  shell: process.platform === "win32",
 });
-process.exit(result.status !== 0 || failed ? 1 : 0);
+process.exit(result.error || result.status !== 0 || failed ? 1 : 0);

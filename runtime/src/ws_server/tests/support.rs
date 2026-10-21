@@ -1,5 +1,6 @@
 use super::*;
-pub(super) async fn production_ws_fixture() -> (tempfile::TempDir, WsServer) {
+pub(super) async fn production_ws_fixture(
+) -> (tempfile::TempDir, Arc<crate::ark_host::ArkHost>, WsServer) {
     let dir = tempfile::tempdir().unwrap();
 
     let ark = Arc::new(
@@ -8,7 +9,7 @@ pub(super) async fn production_ws_fixture() -> (tempfile::TempDir, WsServer) {
             .unwrap(),
     );
     let ws = WsServer::bind(
-        ark,
+        ark.clone(),
         "test-token".repeat(8),
         dir.path().to_path_buf(),
         Arc::new(crate::app_index::AppIndex::new(dir.path(), dir.path().join("icons")).unwrap()),
@@ -20,7 +21,14 @@ pub(super) async fn production_ws_fixture() -> (tempfile::TempDir, WsServer) {
     )
     .await
     .unwrap();
-    (dir, ws)
+    (dir, ark, ws)
+}
+
+pub(super) async fn shutdown_test_ark(ark: Arc<crate::ark_host::ArkHost>) {
+    let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("test still owns ArkHost handles"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 pub(super) async fn authenticated_socket(

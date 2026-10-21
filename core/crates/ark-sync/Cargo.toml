@@ -1,0 +1,28 @@
+[package]
+name = "ark-sync"
+version = "0.1.0"
+edition.workspace = true
+description = "Transport-neutral replication protocol and direct-session runtime"
+
+[features]
+test-support = []
+
+[dependencies]
+ark-application = { path = "../ark-application" }
+ark-domain = { path = "../ark-domain" }
+async-trait.workspace = true
+chrono.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+ark-store = { path = "../ark-store" }
+ed25519-dalek.workspace = true
+rusqlite.workspace = true
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[lints]
+workspace = true

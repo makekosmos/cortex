@@ -57,6 +57,7 @@ async fn setup(state: &Arc<ServiceState>, db_path: String) {
             Request::UpsertObject {
                 object,
                 expected_snapshot: None,
+                operation_id: None,
                 device_id: device(),
             },
         )
@@ -111,23 +112,19 @@ async fn replace_object_link_moves_task_to_new_project_and_records_sync() {
     assert_eq!(links[0]["id"], json!("link-b"));
     assert_eq!(links[0]["targetObjectId"], json!("project-b"));
 
-    let shared = get_shared_conn(&state).unwrap();
-    let guard = shared.lock().unwrap();
-    let removed_tombstones: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["link-a", "object_link"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(removed_tombstones, 1, "removal of link-a must be recorded");
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
-        .unwrap()
-        .expect("version vector should be stored");
-    let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+    let sync_state =
+        ark_store::test_support::SyncPersistenceFixture::inspect(&fixture.db_path()).unwrap();
+    assert!(
+        sync_state
+            .tombstones
+            .iter()
+            .any(|(id, entity_type)| id == "link-a" && entity_type == "object_link"),
+        "removal of link-a must be recorded"
+    );
     for id in ["link-a", "link-b"] {
         assert!(
-            vector
+            sync_state
+                .version_vector
                 .get(id)
                 .is_some_and(|hlc| hlc.ends_with(":device-local")),
             "{id} should have a local HLC in the version vector",
@@ -168,16 +165,12 @@ async fn replace_object_link_rejects_missing_target_and_changes_nothing() {
     );
     assert_eq!(links[0]["id"], json!("link-a"));
 
-    let shared = get_shared_conn(&state).unwrap();
-    let guard = shared.lock().unwrap();
-    let tombstones: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1",
-            rusqlite::params!["link-a"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(tombstones, 0, "rolled-back delete must leave no tombstone");
+    let sync_state =
+        ark_store::test_support::SyncPersistenceFixture::inspect(&fixture.db_path()).unwrap();
+    assert!(
+        sync_state.tombstones.iter().all(|(id, _)| id != "link-a"),
+        "rolled-back delete must leave no tombstone"
+    );
 }
 
 #[tokio::test]

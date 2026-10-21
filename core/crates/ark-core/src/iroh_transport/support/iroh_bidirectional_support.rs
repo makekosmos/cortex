@@ -1,0 +1,465 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use ed25519_dalek::{Signer, SigningKey};
+use tokio::sync::mpsc;
+
+use ark_application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeBatch,
+    TaskMergeDeliveryPort,
+};
+use ark_core::integration_replication::{
+    encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
+    IntegrationReplicationChange, IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
+};
+use ark_core::iroh_transport::{IrohConfig, IrohTransport};
+use ark_core::sync_bind::SyncBind;
+use ark_core::sync_server::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+};
+use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
+use ark_core::types::SyncEntity;
+use ark_sync::protocol::{generate_id, LanSyncMessage};
+use iroh::RelayMode;
+
+struct TestStorage {
+    inner: Arc<ark_core::SqliteStorageBackend>,
+    first_check: Option<Arc<tokio::sync::Notify>>,
+    release_first: Option<Arc<tokio::sync::Notify>>,
+}
+
+#[path = "iroh_bidirectional_support/storage_entities.rs"]
+mod storage_entities;
+
+#[async_trait::async_trait]
+impl ark_application::sync_storage::PeerSyncPolicyPort for TestStorage {
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
+        self.inner
+            .accepted_policy_identity_for_peer(peer_device_id)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl TaskMergeDeliveryPort for TestStorage {
+    async fn prepare_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        limit: usize,
+    ) -> Result<Option<TaskMergeBatch>, ark_application::sync_storage::TaskMergePrepareError> {
+        self.inner
+            .prepare_task_merge_batch(peer_device_id, expected_identity, limit)
+            .await
+    }
+
+    async fn acknowledge_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, String> {
+        self.inner
+            .acknowledge_task_merge_batch(
+                peer_device_id,
+                expected_identity,
+                batch_id,
+                through_position,
+            )
+            .await
+    }
+
+    async fn apply_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        local_device_id: &str,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        batch: &TaskMergeBatch,
+    ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
+        self.inner
+            .apply_task_merge_batch(peer_device_id, local_device_id, expected_identity, batch)
+            .await
+    }
+}
+#[async_trait::async_trait]
+impl PeerProgressPort for TestStorage {
+    async fn load_version_vector(&self) -> Result<ark_core::VersionVector, String> {
+        self.inner.load_version_vector().await
+    }
+    async fn replace_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
+        self.inner.replace_version_vector(value).await
+    }
+    async fn replace_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &ark_core::VersionVector,
+    ) -> Result<(), String> {
+        self.inner
+            .replace_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .await
+    }
+    async fn merge_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
+        self.inner.merge_version_vector(value).await
+    }
+    async fn merge_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &ark_core::VersionVector,
+    ) -> Result<(), String> {
+        self.inner
+            .merge_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .await
+    }
+    async fn load_known_peers(&self) -> Result<Option<Vec<ark_core::PeerRecord>>, String> {
+        self.inner.load_known_peers().await
+    }
+    async fn store_known_peers(&self, value: &[ark_core::PeerRecord]) -> Result<(), String> {
+        self.inner.store_known_peers(value).await
+    }
+    async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
+        self.inner.load_removed_peer_ids().await
+    }
+    async fn store_removed_peer_ids(&self, value: &[String]) -> Result<(), String> {
+        self.inner.store_removed_peer_ids(value).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
+    fn selective_sync_policy_generation(&self) -> i64 {
+        self.inner.selective_sync_policy_generation()
+    }
+
+    async fn selective_sync_policy_generation_for_peer(&self, peer: &str) -> Result<i64, String> {
+        self.inner
+            .selective_sync_policy_generation_for_peer(peer)
+            .await
+    }
+
+    async fn committed_feed_snapshot(
+        &self,
+    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+        self.inner.committed_feed_snapshot().await
+    }
+
+    async fn committed_feed_page(
+        &self,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
+        self.inner
+            .committed_feed_page(after_position, high_watermark, limit)
+            .await
+    }
+
+    async fn committed_feed_delivery_page(
+        &self,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
+        self.inner
+            .committed_feed_delivery_page(after_position, high_watermark, limit)
+            .await
+    }
+
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundFeedPage,
+        ark_application::sync_storage::PolicyBoundFeedReadError,
+    > {
+        self.inner
+            .committed_feed_delivery_page_for_peer(
+                peer,
+                identity,
+                after_position,
+                high_watermark,
+                limit,
+            )
+            .await
+    }
+
+    async fn begin_outbound_policy(
+        &self,
+        peer: &str,
+        generation: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner.begin_outbound_policy(peer, generation).await
+    }
+    async fn complete_outbound_snapshot(
+        &self,
+        peer: &str,
+        generation: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .complete_outbound_snapshot(peer, generation)
+            .await
+    }
+    async fn begin_outbound_policy_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .begin_outbound_policy_identity(peer, identity)
+            .await
+    }
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .complete_outbound_snapshot_identity(peer, identity)
+            .await
+    }
+    async fn record_outbound_scan(
+        &self,
+        peer: &str,
+        generation: i64,
+        through: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .record_outbound_scan(peer, generation, through)
+            .await
+    }
+    async fn record_outbound_scan_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        through: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .record_outbound_scan_identity(peer, identity, through)
+            .await
+    }
+    async fn acknowledge_outbound(
+        &self,
+        peer: &str,
+        generation: i64,
+        position: i64,
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .acknowledge_outbound(peer, generation, position, ack)
+            .await
+    }
+    async fn acknowledge_outbound_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        position: i64,
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .acknowledge_outbound_identity(peer, identity, position, ack)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl IntegrationReplicationBackend for TestStorage {
+    async fn validate_outbound_signed_integration_frame(
+        &self,
+        _frame: &SignedSyncEnvelope,
+        _space: &str,
+        _origin: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .validate_outbound_signed_integration_frame(_frame, _space, _origin)
+            .await?;
+        if let (Some(first), Some(release)) = (&self.first_check, &self.release_first) {
+            first.notify_one();
+            release.notified().await;
+        }
+        Ok(())
+    }
+    async fn validate_outbound_signed_integration_frame_with_transport(
+        &self,
+        frame: &SignedSyncEnvelope,
+        space: &str,
+        origin: &str,
+        transport: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .validate_outbound_signed_integration_frame_with_transport(
+                frame, space, origin, transport,
+            )
+            .await?;
+        if let (Some(first), Some(release)) = (&self.first_check, &self.release_first) {
+            first.notify_one();
+            release.notified().await;
+        }
+        Ok(())
+    }
+
+    async fn apply_signed_integration_frame(
+        &self,
+        frame: &SignedSyncEnvelope,
+        space: &str,
+        peer: &str,
+        recipient: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .apply_signed_integration_frame(frame, space, peer, recipient)
+            .await
+    }
+}
+
+async fn authorized_storage() -> (
+    Arc<ark_core::SqliteStorageBackend>,
+    ark_store::test_support::TestDatabase,
+) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let signing_public_key =
+        encode_hex(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes());
+    let origin = authorized_node("device-B", "fp-b", &signing_public_key, "enc-b", None, 1);
+    let recipient = authorized_node("device-A", "fp-a", "00", "enc-a", None, 1);
+    seed_authorization(&database, &[origin, recipient]);
+    let backend = ark_core::SqliteStorageBackend::open_for_test(
+        database.path().to_str().unwrap().to_owned(),
+        "device-B",
+    )
+    .await
+    .unwrap();
+    (Arc::new(backend), database)
+}
+
+fn authorized_node(
+    node_id: &str,
+    fingerprint: &str,
+    signing_key: &str,
+    encryption_key: &str,
+    transport_key: Option<&str>,
+    epoch: u64,
+) -> AuthorizedNode {
+    AuthorizedNode {
+        node_id: node_id.into(),
+        key_fingerprint: fingerprint.into(),
+        signing_public_key: signing_key.into(),
+        encryption_public_key: encryption_key.into(),
+        transport_public_key: transport_key.map(str::to_owned),
+        grant_epoch: epoch,
+        status: NodeStatus::Active,
+        authorized_at: "2026-08-31T00:00:00Z".into(),
+        revoked_at: None,
+        revocation_epoch: None,
+        revision: 1,
+        hlc: format!("2026-08-31T00:00:00.000Z:000001:{node_id}"),
+    }
+}
+
+fn seed_authorization(database: &ark_store::test_support::TestDatabase, nodes: &[AuthorizedNode]) {
+    let grants: Vec<_> = nodes.iter().map(integration_grant_for_node).collect();
+    seed_authorization_records(database, nodes, &grants);
+}
+
+fn integration_grant_for_node(node: &AuthorizedNode) -> IntegrationNodeGrant {
+    IntegrationNodeGrant {
+        integration_id: "integration".into(),
+        node_id: node.node_id.clone(),
+        node_encryption_key: node.encryption_public_key.clone(),
+        grant_epoch: node.grant_epoch,
+        status: if node.status == NodeStatus::Active {
+            GrantStatus::Active
+        } else {
+            GrantStatus::Revoked
+        },
+        authorized_at: node.authorized_at.clone(),
+        revoked_at: node.revoked_at.clone(),
+        revision: node.revision,
+        hlc: node.hlc.clone(),
+    }
+}
+
+fn seed_authorization_records(
+    database: &ark_store::test_support::TestDatabase,
+    nodes: &[AuthorizedNode],
+    grants: &[IntegrationNodeGrant],
+) {
+    ark_store::test_support::IntegrationReplicationTestFixture::seed_authorization(
+        database.path(),
+        nodes,
+        grants,
+        "device-B",
+    )
+    .unwrap();
+}
+
+fn signed_frame() -> SignedSyncEnvelope {
+    let mut frame = SignedSyncEnvelope::new(
+        "test-space-iroh-bidirectional",
+        "device-B",
+        "device-A",
+        1,
+        "addressed-1",
+        vec![IntegrationReplicationChange {
+            entity: IntegrationReplicationEntity::IntegrationConfiguration(
+                IntegrationConfiguration {
+                    integration_id: "integration".into(),
+                    provider: "fatsecret".into(),
+                    account_subject: "account".into(),
+                    public_scopes: vec![],
+                    public_settings: serde_json::json!({}),
+                    enabled: true,
+                    sync_cursor: None,
+                    revision: 1,
+                    hlc: "2026-08-31T00:00:00.000Z:000001:device-B".into(),
+                },
+            ),
+            vector_hlc: "2026-08-31T00:00:00.000Z:000001:device-B".into(),
+        }],
+        "",
+    );
+    let key = SigningKey::from_bytes(&[7; 32]);
+    frame.signature = encode_hex(
+        &key.sign(&frame.canonical_signing_bytes().unwrap())
+            .to_bytes(),
+    );
+    frame
+}
+
+fn set_recipient_transport_key(
+    database: &ark_store::test_support::TestDatabase,
+    transport_key: &str,
+    status: NodeStatus,
+    epoch: u64,
+) {
+    let mut recipient = authorized_node(
+        "device-A",
+        "fp-a",
+        "00",
+        "enc-a",
+        Some(transport_key),
+        epoch,
+    );
+    if status == NodeStatus::Revoked {
+        recipient.status = status;
+        recipient.revoked_at = Some("2026-08-31T00:01:00Z".into());
+        recipient.revocation_epoch = Some(epoch);
+    }
+    seed_authorization(database, &[recipient]);
+}
+
+#[path = "iroh_bidirectional_support/event_helpers.rs"]
+mod event_helpers;
+pub(super) use event_helpers::{find_message, EVENT_GUARD};
+
+#[path = "iroh_bidirectional_support/peer_identity_backend.rs"]
+mod peer_identity_backend;
+
+#[path = "iroh_bidirectional_support/authenticated_entity_backend.rs"]
+mod authenticated_entity_backend;

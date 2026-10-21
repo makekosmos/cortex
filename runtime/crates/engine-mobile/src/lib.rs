@@ -56,6 +56,9 @@ fn call_json(service: &ArkService, op: &str, params: Value) -> Result<String, En
         Err(ArkServiceError::Request(error)) => {
             json!({"ok": false, "data": Value::Null, "error": error})
         }
+        Err(ArkServiceError::Busy(error)) => {
+            json!({"ok": false, "data": Value::Null, "error": format!("ark service busy: {error}")})
+        }
         Err(error) => return Err(EngineError::Unavailable(error.to_string())),
     };
     Ok(response.to_string())

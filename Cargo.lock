@@ -137,21 +137,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-application"
+version = "0.1.0"
+dependencies = [
+ "ark-domain",
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "ark-core"
 version = "0.1.0"
 dependencies = [
+ "ark-application",
+ "ark-domain",
+ "ark-net",
+ "ark-store",
+ "ark-sync",
  "async-trait",
  "chrono",
  "criterion",
  "ed25519-dalek",
  "futures-util",
- "hostname",
- "if-addrs",
  "iroh",
- "iroh-tickets",
  "proptest",
  "rand 0.8.7",
- "rusqlite",
  "semver",
  "serde",
  "serde_json",
@@ -162,6 +175,81 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "ark-domain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "ark-net"
+version = "0.1.0"
+dependencies = [
+ "ark-domain",
+ "ark-net-policy",
+ "ark-sync",
+ "async-trait",
+ "ed25519-dalek",
+ "futures-util",
+ "hostname",
+ "if-addrs",
+ "iroh",
+ "iroh-tickets",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+]
+
+[[package]]
+name = "ark-net-policy"
+version = "0.1.0"
+
+[[package]]
+name = "ark-store"
+version = "0.1.0"
+dependencies = [
+ "ark-application",
+ "ark-domain",
+ "chrono",
+ "ed25519-dalek",
+ "proptest",
+ "rand 0.8.7",
+ "rusqlite",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows",
+]
+
+[[package]]
+name = "ark-sync"
+version = "0.1.0"
+dependencies = [
+ "ark-application",
+ "ark-domain",
+ "ark-store",
+ "async-trait",
+ "chrono",
+ "ed25519-dalek",
+ "rand 0.8.7",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
 ]
 
 [[package]]
@@ -1196,6 +1284,8 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "ark-core",
+ "ark-domain",
+ "ark-store",
  "async-trait",
  "base64 0.22.1",
  "bytes",

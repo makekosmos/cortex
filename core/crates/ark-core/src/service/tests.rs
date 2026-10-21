@@ -2,8 +2,9 @@
 // `handle_request` against a per-test `ServiceState` (no process-wide
 // statics, so tests run in parallel without mutexes).
 
-use super::runtime::{get_shared_conn, with_conn, with_write_tx};
+use super::runtime::get_db_handle;
 use super::*;
+use ark_application::sync_storage::SyncEntityMutationPort;
 
 /// Fresh per-test service state — replaces the old global `DB`/`SYNC`
 /// statics and the `TEST_DB_MUTEX` serialization they forced.
@@ -29,9 +30,46 @@ pub(super) fn service_fixture() -> ServiceFixture {
     }
 }
 
+pub(super) fn received_upsert_for(
+    receiver: &mut tokio::sync::broadcast::Receiver<serde_json::Value>,
+    object_id: &str,
+) -> bool {
+    loop {
+        match receiver.try_recv() {
+            Ok(event) if event["event"] == "object_upserted" && event["id"] == object_id => {
+                return true;
+            }
+            Ok(_) => {}
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return false,
+            Err(error) => panic!("unexpected event receiver error: {error}"),
+        }
+    }
+}
+
 impl ServiceFixture {
     pub(crate) fn db_path(&self) -> std::path::PathBuf {
         self.dir.path().join("ark.db")
+    }
+
+    pub(crate) async fn shutdown(&self) {
+        shutdown_test_state(&self.state).await;
+    }
+}
+
+pub(super) async fn shutdown_test_state(state: &Arc<ServiceState>) {
+    if let Ok(mut db) = state.db.lock() {
+        *db = None;
+    }
+    let owner = state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take();
+    if let Some(mut owner) = owner {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await
+            .expect("database actor shuts down before fixture directory removal");
     }
 }
 
@@ -44,10 +82,28 @@ impl Drop for ServiceFixture {
         if let Ok(mut guard) = self.state.db.lock() {
             *guard = None;
         }
+        let owner = self
+            .state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        if let Some(owner) = owner {
+            if let Err(error) = owner
+                .shutdown_blocking(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            {
+                if !std::thread::panicking() {
+                    panic!("database actor shuts down before fixture directory removal: {error}");
+                }
+            }
+        }
     }
 }
 
+mod api_wire_compat;
+mod data_volume;
 mod legacy_writes;
+mod load_all_query;
 mod local_writes;
 mod object_revision_compat;
 mod object_validation;
@@ -58,30 +114,35 @@ mod replace_object_link;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
+mod snapshot_restore_identity;
 mod sync_lifecycle;
 mod sync_ticket_pending;
+mod task_merge;
+mod type_mutation_commands;
+mod usage_commands;
+mod usage_read_queries;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.
 /// Возвращает буфер перехваченных сообщений.
 async fn setup_sync_with_capturing_transport(
     state: &Arc<ServiceState>,
-) -> Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> {
+) -> Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>> {
     use crate::relay_sync::{RelaySync, RelaySyncConfig};
-    use crate::sync_server::StorageBackend;
+    use crate::sync_server::SyncRuntimeStorage;
 
-    let captured: Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> =
+    let captured: Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
     let transport = Arc::new(legacy_writes::CapturingTransport {
         sent: captured.clone(),
     });
 
-    let backend = Arc::new(crate::db::SqliteStorageBackend::new(
-        get_shared_conn(state).unwrap(),
+    let backend = Arc::new(crate::db::SqliteStorageBackend::with_db_handle(
+        get_db_handle(state).unwrap(),
     ));
     backend.set_device_id("test-device").unwrap();
 
-    let relay = RelaySync::with_transport(
-        backend.clone() as Arc<dyn StorageBackend>,
+    let relay = RelaySync::with_iroh_transport(
+        backend.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,
@@ -90,12 +151,13 @@ async fn setup_sync_with_capturing_transport(
             device_name: "Test Device".to_string(),
             auth_secret: None,
         },
-        transport as Arc<dyn crate::sync_transport::SyncTransport>,
-    );
+        transport,
+    )
+    .expect("capturing Iroh session is configured before startup");
     relay.start().await.unwrap();
 
     let server = Arc::new(crate::sync_server::SyncServer::new(
-        backend.clone() as Arc<dyn StorageBackend>
+        backend.clone() as Arc<dyn SyncRuntimeStorage>
     ));
 
     let runtime = SyncRuntime {
@@ -103,7 +165,7 @@ async fn setup_sync_with_capturing_transport(
         storage: backend,
         clients: Arc::new(TokioMutex::new(std::collections::HashMap::new())),
         relay: Some(relay),
-        transport_choice: Some(TransportChoice::Relay),
+        transport_choice: Some(TransportChoice::Iroh),
         start_params: SyncStartParams {
             space_id: "test-space".to_string(),
             device_id: "test-device".to_string(),
@@ -113,7 +175,7 @@ async fn setup_sync_with_capturing_transport(
             relay_url: None,
             relay_api_key: None,
             auth_secret: None,
-            use_iroh: false,
+            use_iroh: true,
             iroh_peer_ticket: None,
             iroh_relay_url: None,
             pairing_connect: false,
@@ -165,4 +227,10 @@ fn canonical_task_props() -> Value {
 }
 
 mod canonical_rpc;
+mod device_registry;
+mod external_ref_commands;
 mod integration_rpc;
+mod object_mutation_commands;
+mod operation_receipts;
+mod sync_policy;
+mod system_commands;

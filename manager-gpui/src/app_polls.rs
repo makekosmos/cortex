@@ -36,6 +36,11 @@ impl ManagerApp {
             {
                 self.refresh("sync.snapshot", "get_sync_snapshot", json!({}));
             }
+            if !self.background_slots.contains("sync.registry")
+                && !matches!(self.slots.get("sync.registry"), Some(Slot::Loading))
+            {
+                self.refresh("sync.registry", "device_registry.snapshot", json!({}));
+            }
             if self.view == View::Sync
                 && self.sync_pairing_open
                 && self.data("sync.ticket").is_null()
@@ -106,12 +111,15 @@ mod tests {
             app.view = View::Sync;
             app.slots
                 .insert("sync.snapshot".into(), Slot::Ready(json!({"peers":[]})));
+            app.slots
+                .insert("sync.registry".into(), Slot::Ready(json!({"devices":[]})));
             app.poll_views();
             assert!(matches!(
                 app.slots.get("sync.snapshot"),
                 Some(Slot::Ready(_))
             ));
             assert!(app.background_slots.contains("sync.snapshot"));
+            assert!(app.background_slots.contains("sync.registry"));
             let count = app.background_slots.len();
             app.next_sync_poll = Instant::now();
             app.poll_views();

@@ -1,20 +1,30 @@
 # ARK Core
 
-ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust library backed by SQLite; the Kosmos Engine hosts it in-process via `ark_core::service::ArkService`.
+ARK Core is the canonical local-first data runtime for Kosmos. It composes the Store-backed runtime and exposes it to the Kosmos Engine in-process through `ark_core::service::ArkService`.
 
 ## Source Layout
 
-- `crates/ark-core` - Rust crate `ark-core`
-- `crates/ark-core/src/service.rs` - `ArkService` in-process API
-- `crates/ark-core/src/db.rs` - SQLite schema, CRUD, sync storage adapter
-- `crates/ark-core/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
-- `@makekosmos/ark@0.1.1` - pinned TypeScript SDK package for Electron main/Node callers
+The Rust workspace lives in `core/`. Its main crate boundaries are:
+
+- `ark-core` exposes `ArkService` and composes runtime, storage, sync, and
+  network components. It owns request admission and the database actor
+  lifecycle while preserving the Engine JSON contract.
+- `ark-store` owns SQLite connections, schema and SQL adapters, the single
+  writer, transaction execution, snapshots, and restore.
+- `ark-application` defines the capabilities shared between Core, sync, and
+  storage.
+- `ark-sync` owns sync policy, protocol state, and connected-session
+  orchestration.
+- `ark-net` owns concrete network transports.
+- `ark-domain` contains shared domain types.
 
 ## Build And Test
 
 ```powershell
-cargo test --manifest-path crates/ark-core/Cargo.toml
-bun run ark:smoke
+mbx nextest run -p ark-core
+pnpm run test:ark-core-storage-boundary
+node scripts/check-ark-dependency-graph.mjs --profile desktop --target x86_64-pc-windows-msvc
+node scripts/check-ark-dependency-graph.mjs --profile mobile --target aarch64-linux-android
 ```
 
 ## Service Contract
@@ -44,9 +54,13 @@ Privileged ops over the Core-owned `<db_dir>/backups/` directory:
 
 `backup_id` is a basename only — no paths/traversal. Sources are opened without following symlinks/reparse points, staged into `backups/`, checked with `PRAGMA integrity_check` and a normalized `sqlite_schema` + migration-provenance fingerprint against the live DB before apply. A pre-restore rollback snapshot is kept until post-restore verification passes; verification failure restores the rollback. If the rollback itself fails, the snapshot is preserved as `ark.db.pre-restore-failed-*` (listed by `db_backup_list`, restorable via `db_backup_restore`) and the error reports the preserved id — prior data is never discarded. `db_backup` and `db_backup_restore` are serialized by a shared gate — they never overlap. Callers should reload UI after a successful `db_backup_restore`.
 
+Production backups use `ark.db.backup-v1-*` plus a JSON manifest containing the id, database byte length, SHA-256, and schema fingerprint. The staged SQLite Online Backup is integrity-checked and both files are flushed before publication. The manifest is published first as the visibility marker, then the database name; list/restore ignore a v1 database without a manifest and a manifest without a database. Publication uses same-directory no-clobber links, so a destination collision preserves the existing files. On Unix the containing directory is also synced after publication. On Windows Rust's portable filesystem API does not flush directory metadata here: the files are synced and verified, but sudden power loss can still lose the newly published names. SQLite commit durability is separate: the live connection requests WAL + `synchronous=FULL`; actual power-loss guarantees still depend on the filesystem, device, and their honoring flush requests. The local benchmark in `docs/experiments/2026-10-16-ark-sync-durability.md` compares FULL/NORMAL commit timing on one macOS environment and is not a cross-platform durability or production-latency measurement.
+
 ## TypeScript Integration
 
-Use `@kosmos/ark` from Electron main or another trusted Node process:
+Historical TypeScript callers used `@kosmos/ark` from Electron main or another
+trusted Node process. The sidecar-based example below is retained for migration
+reference and does not describe the current in-process Engine integration.
 
 ```ts
 import { ArkClient } from "@kosmos/ark";
@@ -94,7 +108,7 @@ Runtime query endpoints include:
 
 ## Sync State
 
-Local writes through `ArkService` update `lan_sync.version_vector` and durable delete tombstones. `ark_core::db::bump_sync_version_vector` is the shared Rust helper for direct Rust writers such as `services/usage-tracker`.
+Local writes through `ArkService` update `lan_sync.version_vector` and durable delete tombstones. `ark_store::sync_versions::bump_sync_version_vector` is the shared persistence helper for direct Rust writers such as `services/usage-tracker`; callers keep the version update inside their existing transaction.
 
 Delete propagation depends on durable tombstones in `sync_tombstones`. Apply errors are surfaced as `Result` values instead of being silently ignored.
 

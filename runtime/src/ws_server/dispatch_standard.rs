@@ -163,7 +163,7 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("store.") {
         handle_store_op(rest, params, &package_service).await
     } else if let Some(rest) = operation.strip_prefix("packages.") {
-        handle_package_op(rest, params, &package_service).await
+        handle_package_op_with_ark(rest, params, &package_service, Some(&ark_host)).await
     } else if let Some(rest) = operation.strip_prefix("apps.") {
         handle_apps_op(rest, params, &package_service).await
     } else if matches!(

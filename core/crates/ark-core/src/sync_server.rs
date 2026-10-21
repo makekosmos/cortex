@@ -2,24 +2,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::interval;
-use tokio_tungstenite::accept_async;
+#[cfg(test)]
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
-use crate::protocol::*;
 use crate::types::*;
+use ark_sync::protocol::*;
 
+pub use crate::replication_storage::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+    SyncRuntimeStorage,
+};
+pub use ark_application::sync_storage::SyncReadClass;
+
+#[cfg(test)]
+#[path = "sync_server/sync_round_trip.rs"]
+mod sync_round_trip_tests;
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
-#[path = "sync_server_inbound.rs"]
-mod sync_server_inbound;
-#[path = "sync_server_messages.rs"]
-mod sync_server_messages;
 #[path = "sync_server_peers.rs"]
 mod sync_server_peers;
 #[cfg(test)]
@@ -30,110 +33,9 @@ mod sync_server_reject_tests;
 mod sync_server_route_tests;
 #[cfg(test)]
 #[path = "sync_server_tests.rs"]
-mod sync_server_tests;
+pub(crate) mod sync_server_tests;
 
 const TAG: &str = "[SyncServer]";
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
-pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
-const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
-/// device_id → transport endpoint key for devices paired over an addressed
-/// transport (iroh). Persisted so a returning peer's Hello needs no open
-/// pairing window after a restart, and a changed key is a real mismatch.
-const PEER_TRANSPORT_KEYS_KEY: &str = "sync.peer_transport_keys";
-const SYNC_LOAD_PAGE_SIZE: usize = 100;
-
-// ---------------------------------------------------------------------------
-// StorageBackend trait
-// ---------------------------------------------------------------------------
-
-#[async_trait::async_trait]
-pub trait StorageBackend: Send + Sync {
-    async fn authorized_transport_public_key(&self, _device_id: &str) -> Option<String> {
-        None
-    }
-    async fn validate_outbound_signed_integration_frame(
-        &self,
-        _frame: &SignedSyncEnvelope,
-        _expected_space_id: &str,
-        _expected_origin_node_id: &str,
-    ) -> Result<(), String> {
-        Err("signed integration outbound validation is unsupported by this storage backend".into())
-    }
-    async fn validate_outbound_signed_integration_frame_with_transport(
-        &self,
-        frame: &SignedSyncEnvelope,
-        expected_space_id: &str,
-        expected_origin_node_id: &str,
-        transport_public_key: &str,
-    ) -> Result<(), String> {
-        let _ = (
-            frame,
-            expected_space_id,
-            expected_origin_node_id,
-            transport_public_key,
-        );
-        Err(concat!(
-            "signed integration outbound transport authorization is unsupported by this ",
-            "storage backend"
-        )
-        .into())
-    }
-    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
-    async fn load_entities_page(
-        &self,
-        vector: &VersionVector,
-        offset: usize,
-        limit: usize,
-    ) -> Vec<SyncEntity>;
-    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
-    async fn apply_signed_integration_frame(
-        &self,
-        frame: &SignedSyncEnvelope,
-        expected_space_id: &str,
-        authenticated_peer_id: &str,
-        expected_recipient_node_id: &str,
-    ) -> Result<(), String> {
-        let _ = (
-            frame,
-            expected_space_id,
-            authenticated_peer_id,
-            expected_recipient_node_id,
-        );
-        Err("signed integration replication is unsupported by this storage backend".into())
-    }
-    async fn apply_signed_integration_frame_with_transport(
-        &self,
-        frame: &SignedSyncEnvelope,
-        expected_space_id: &str,
-        authenticated_peer_id: &str,
-        expected_recipient_node_id: &str,
-        authenticated_transport_public_key: Option<&str>,
-    ) -> Result<(), String> {
-        let _ = authenticated_transport_public_key;
-        self.apply_signed_integration_frame(
-            frame,
-            expected_space_id,
-            authenticated_peer_id,
-            expected_recipient_node_id,
-        )
-        .await
-    }
-    async fn get_kv(&self, key: &str) -> Option<String>;
-    async fn set_kv(&self, key: &str, value: &str);
-
-    /// Per usage origin device, the highest seq this node can serve
-    /// completely — sent as `usage_complete_through` on the final sync page
-    /// so the receiver can raise its `@usage:` cursor past compacted holes
-    /// (KOS-302). Backends without a usage journal return an empty map and
-    /// keep contiguous-only cursor advancement.
-    async fn usage_complete_through(&self) -> HashMap<String, u64> {
-        HashMap::new()
-    }
-
-    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
-        Some(entity.clone())
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Callbacks
@@ -143,23 +45,154 @@ pub type OnChangeCallback = Arc<dyn Fn(SyncEntity) + Send + Sync>;
 pub type OnPeerConnectCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type OnPeerDisconnectCallback = Arc<dyn Fn(String, usize) + Send + Sync>;
 pub type OnNewPeerDiscoveredCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
+pub type OnRegistryEventsCallback =
+    Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 // ---------------------------------------------------------------------------
 // Peer state
 // ---------------------------------------------------------------------------
 
 struct PeerState {
+    session: ark_sync::server_session::ServerSessionHandle,
+    tx: PeerMessageSender,
+}
+
+#[cfg(test)]
+pub(crate) fn test_server_session_handle(
+    device_id: &str,
+) -> ark_sync::server_session::ServerSessionHandle {
+    test_server_session_with_keepalive(device_id).0
+}
+
+#[cfg(test)]
+pub(crate) fn test_server_session_with_keepalive(
+    device_id: &str,
+) -> (ark_sync::server_session::ServerSessionHandle, impl Send) {
+    ark_sync::server_session::test_ready_server_session(device_id)
+        .expect("session identity is available")
+}
+
+#[derive(Clone)]
+enum PeerMessageSender {
+    Session(ark_sync::session_io::SessionIoSender),
+    #[cfg(test)]
+    Test(mpsc::UnboundedSender<Message>),
+}
+
+impl PeerMessageSender {
+    fn session(session: ark_sync::session_io::SessionIoSender) -> Self {
+        Self::Session(session)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test(sender: mpsc::UnboundedSender<Message>) -> Self {
+        Self::Test(sender)
+    }
+
+    fn try_send(&self, message: LanSyncMessage) -> Result<(), ()> {
+        match self {
+            Self::Session(session) => session.try_send(message).map_err(|_| ()),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let text = serialize_message(&message);
+                test.send(Message::Text(text.into())).map_err(|_| ())
+            }
+        }
+    }
+
+    fn close(&self) {
+        match self {
+            Self::Session(session) => session.close(),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let _ = test.send(Message::Close(None));
+            }
+        }
+    }
+
+    fn close_after_flush(&self) {
+        match self {
+            Self::Session(session) => session.close_after_flush(),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let _ = test.send(Message::Close(None));
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ReadyPeer {
+    connection_id: usize,
     device_id: String,
-    device_name: String,
-    addresses: Vec<String>,
-    /// OS / product version the peer advertised in its Hello; `None` for
-    /// peers built before those fields existed.
-    platform: Option<String>,
-    app_version: Option<String>,
-    authenticated: bool,
-    sync_complete: bool,
-    queued_live_changes: Vec<SyncEntity>,
-    tx: mpsc::UnboundedSender<Message>,
+    registry_session_id: String,
+}
+
+impl ReadyPeer {
+    fn matches(&self, connection_id: usize, peer: &PeerState) -> bool {
+        let projection = peer.session.projection();
+        self.connection_id == connection_id
+            && peer.session.control() == ark_sync::server_session::ServerSessionControl::Active
+            && projection.readiness == ark_sync::server_session::ServerPeerReadiness::Ready
+            && projection.device_id.as_deref() == Some(self.device_id.as_str())
+            && projection.registry_session_id.as_deref() == Some(self.registry_session_id.as_str())
+    }
+}
+
+impl PeerState {
+    fn is_ready(&self) -> bool {
+        self.session.projection().readiness == ark_sync::server_session::ServerPeerReadiness::Ready
+    }
+}
+
+async fn current_ready_peer(
+    storage: &dyn SyncRuntimeStorage,
+    peers: &Mutex<HashMap<usize, PeerState>>,
+    connection_id: usize,
+) -> Option<ReadyPeer> {
+    let ready = {
+        let peers = peers.lock().await;
+        let peer = peers.get(&connection_id)?;
+        let projection = peer.session.projection();
+        if projection.readiness != ark_sync::server_session::ServerPeerReadiness::Ready {
+            return None;
+        }
+        let ready = ReadyPeer {
+            connection_id,
+            device_id: projection.device_id?,
+            registry_session_id: projection.registry_session_id?,
+        };
+        ready.matches(connection_id, peer).then_some(ready)?
+    };
+    let admitted = match storage.sync_session_is_admitted(&ready.device_id).await {
+        Ok(admitted) => admitted,
+        Err(error) => {
+            eprintln!(
+                "{TAG} direct session admission lookup failed for {}: {error}",
+                ready.device_id
+            );
+            false
+        }
+    };
+    if !admitted {
+        let mut peers = peers.lock().await;
+        if peers.get(&connection_id).is_some_and(|peer| {
+            peer.session.projection().readiness
+                == ark_sync::server_session::ServerPeerReadiness::Ready
+                && peer.session.projection().device_id.as_deref() == Some(ready.device_id.as_str())
+                && peer.session.projection().registry_session_id.as_deref()
+                    == Some(ready.registry_session_id.as_str())
+        }) {
+            if let Some(peer) = peers.get_mut(&connection_id) {
+                peer.session.revoke();
+                peer.tx.close();
+            }
+        }
+        return None;
+    }
+    let peers = peers.lock().await;
+    let peer = peers.get(&connection_id)?;
+    (ready.matches(connection_id, peer)).then_some(ready)
 }
 
 /// One authenticated connection's view of a peer, for `get_connected_peers`
@@ -178,12 +211,13 @@ pub struct PeerEntry {
 // ---------------------------------------------------------------------------
 
 pub struct SyncServer {
-    storage: Arc<dyn StorageBackend>,
+    storage: Arc<dyn SyncRuntimeStorage>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
     own_addresses: Arc<RwLock<Vec<String>>>,
     auth_secret: Arc<RwLock<Option<String>>>,
+    task_merge_bootstrap_v2: bool,
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -191,180 +225,98 @@ pub struct SyncServer {
     /// shared db connection) is released deterministically on shutdown
     /// rather than whenever the task happens to exit (KOS-270).
     accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
-    /// Per-connection reader and writer tasks. They hold `storage` and end
-    /// only when their socket closes, so `stop()` aborts and joins them.
+    /// Per-connection protocol handlers, joined by `stop()`.
     conn_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+    /// WebSocket supervisors are tracked separately so `stop()` can signal
+    /// them through `SessionIo` before joining them, even after handler abort.
+    transport_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
+    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     next_peer_id: Arc<std::sync::atomic::AtomicUsize>,
 }
 
-async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector {
-    match storage.get_kv(VERSION_VECTOR_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => VersionVector::new(),
-    }
+async fn load_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<VersionVector, String> {
+    storage.load_version_vector().await
 }
 
 /// Save a version vector built from a possibly stale snapshot: union it
 /// with the stored vector first so keys written concurrently (local
 /// mutations, integration-replication bumps) are not clobbered.
-async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
-    let mut merged = load_version_vector(storage).await;
-    merge_vector_entries(&mut merged, vector);
-    let json = serde_json::to_string(&merged).unwrap_or_default();
-    storage.set_kv(VERSION_VECTOR_KEY, &json).await;
+async fn save_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    vector: &VersionVector,
+) -> Result<(), String> {
+    storage.merge_version_vector(vector).await
 }
 
-/// Persist the pull-side version vector after a `SyncChanges` batch: merge
-/// the contiguous `@usage:` cursors that `apply_entity` wrote to storage,
-/// then — only on the sender's final page — raise them to its
-/// complete-through claims. Mid-pull claims would leapfrog refs still in
-/// flight, and a lost connection would leave the cursor past entities we
-/// never received; merging stored cursors first keeps the claims a floor,
-/// never a regression.
-pub(crate) async fn persist_pull_vector(
-    storage: &Arc<dyn StorageBackend>,
-    vector: &mut VersionVector,
-    vector_updated: bool,
-    is_last: bool,
-    usage_complete_through: Option<&HashMap<String, u64>>,
-) {
-    if !(vector_updated || (is_last && usage_complete_through.is_some())) {
-        return;
-    }
-    merge_usage_cursors(vector, &load_version_vector(storage).await);
-    if is_last {
-        if let Some(through) = usage_complete_through {
-            apply_usage_complete_through(vector, through);
-        }
-    }
-    save_version_vector(storage, vector).await;
+pub(crate) async fn save_known_peers(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &[PeerRecord],
+) -> Result<(), String> {
+    storage.store_known_peers(peers).await
 }
 
-pub(crate) async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
-    let json = serde_json::to_string(peers).unwrap_or_default();
-    storage.set_kv(KNOWN_PEERS_KEY, &json).await;
+pub(crate) async fn load_known_peer_records(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<Vec<PeerRecord>, String> {
+    Ok(storage.load_known_peers().await?.unwrap_or_default())
 }
 
-pub(crate) async fn load_known_peer_records(storage: &Arc<dyn StorageBackend>) -> Vec<PeerRecord> {
-    match storage.get_kv(KNOWN_PEERS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => Vec::new(),
-    }
-}
-
-pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
-    match storage.get_kv(REMOVED_PEERS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => Vec::new(),
-    }
+pub(crate) async fn load_removed_peer_ids(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<Vec<String>, String> {
+    storage.load_removed_peer_ids().await
 }
 
 /// Re-authorize a device the user previously removed — invoked only when
 /// they re-pair by explicitly entering that endpoint's pairing code.
-pub(crate) async fn unblock_peer_id(storage: &Arc<dyn StorageBackend>, device_id: &str) {
-    let mut removed = load_removed_peer_ids(storage).await;
+pub(crate) async fn unblock_peer_id(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    device_id: &str,
+) -> Result<(), String> {
+    let mut removed = load_removed_peer_ids(storage).await?;
     if removed.iter().any(|id| id == device_id) {
         removed.retain(|id| id != device_id);
-        save_removed_peer_ids(storage, &removed).await;
+        save_removed_peer_ids(storage, &removed).await?;
     }
+    Ok(())
 }
 
 /// Drop a peer record outright — for a declined pairing attempt, where the
 /// device was never consented to and must not linger as an offline row
 /// (distinct from `block_peer`/`removed_peers`, which is a user blacklist).
-pub(crate) async fn remove_peer_record(storage: &Arc<dyn StorageBackend>, device_id: &str) {
-    let mut peers = load_known_peer_records(storage).await;
+pub(crate) async fn remove_peer_record(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    device_id: &str,
+) -> Result<(), String> {
+    let mut peers = load_known_peer_records(storage).await?;
     peers.retain(|peer| peer.device_id != device_id);
-    save_known_peers(storage, &peers).await;
+    save_known_peers(storage, &peers).await
 }
 
 pub(crate) async fn load_peer_transport_keys(
-    storage: &Arc<dyn StorageBackend>,
-) -> HashMap<String, String> {
-    match storage.get_kv(PEER_TRANSPORT_KEYS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => HashMap::new(),
-    }
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<HashMap<String, String>, String> {
+    storage.load_peer_transport_keys().await
 }
 
 pub(crate) async fn save_peer_transport_keys(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     keys: &HashMap<String, String>,
-) {
-    let json = serde_json::to_string(keys).unwrap_or_default();
-    storage.set_kv(PEER_TRANSPORT_KEYS_KEY, &json).await;
+) -> Result<(), String> {
+    storage.store_peer_transport_keys(keys).await
 }
 
-/// Shared mutable state handed to `handle_message`. Every field has a
-/// different owner; the struct only bundles the Arcs the peer reader task
-/// already clones per connection.
-#[derive(Clone)]
-struct MessageContext {
-    peers: Arc<Mutex<HashMap<usize, PeerState>>>,
-    storage: Arc<dyn StorageBackend>,
-    space_id: Arc<RwLock<String>>,
-    device_id: Arc<RwLock<String>>,
-    device_name: Arc<RwLock<String>>,
-    own_addresses: Arc<RwLock<Vec<String>>>,
-    auth_secret: Arc<RwLock<Option<String>>>,
-    known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
-    on_change: Arc<Mutex<Option<OnChangeCallback>>>,
-    on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
-    on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
-}
-
-async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[String]) {
-    let json = serde_json::to_string(peer_ids).unwrap_or_default();
-    storage.set_kv(REMOVED_PEERS_KEY, &json).await;
-}
-
-fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
-    let json = serialize_message(msg);
-    let _ = tx.send(Message::Text(json.into()));
-}
-
-/// Drops a rejected hello's session and closes its socket. A bare return would
-/// leave a phantom unauthenticated peer and a half-open connection the dialer
-/// waits on forever.
-async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
-    if let Some(peer) = peers.lock().await.remove(&peer_id) {
-        let _ = peer.tx.send(Message::Close(None));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Message handler
-// ---------------------------------------------------------------------------
-
-async fn broadcast_to_others(
-    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
-    entity: &SyncEntity,
-    exclude_device_id: Option<&str>,
-) {
-    let change_id = generate_id();
-    let msg = LanSyncMessage::LiveChange {
-        change_id,
-        entity: entity.clone(),
-        origin_device_id: None,
-    };
-    let json = serialize_message(&msg);
-
-    let peers_guard = peers.lock().await;
-    for peer in peers_guard.values() {
-        if !peer.authenticated || !peer.sync_complete {
-            continue;
-        }
-        if let Some(exclude) = exclude_device_id {
-            if peer.device_id == exclude {
-                continue;
-            }
-        }
-        let _ = peer.tx.send(Message::Text(json.clone().into()));
-    }
+async fn save_removed_peer_ids(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_ids: &[String],
+) -> Result<(), String> {
+    storage.store_removed_peer_ids(peer_ids).await
 }
 
 // ---------------------------------------------------------------------------

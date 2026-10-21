@@ -23,39 +23,41 @@
 //!
 //! ## Fault isolation
 //!
-//! `handle_request` is awaited under `catch_unwind`: a panic inside a handler
-//! returns an error for that request, is logged, and the service then reopens
-//! the database (the sync runtime is stopped and the shared connection is
-//! dropped, so SQLite rolls back any transaction the panic left open). The
-//! Engine survives an ARK panic and the next request is served on a fresh
-//! connection — the respawn the sidecar never had. Requires `panic =
-//! "unwind"` (the default; no workspace profile overrides it).
+//! `handle_request` is awaited under `catch_unwind`. A handler panic makes the
+//! active request outcome unknown and stops this service instance. The worker
+//! cancels queued requests, stops sync, and closes the database owner. The
+//! Engine must explicitly open a new service before it can serve requests
+//! again. This requires `panic = "unwind"` (the default; no workspace profile
+//! overrides it).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex};
 
-use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
-use crate::db::{self, SqliteStorageBackend};
+use crate::db::{self, DbHandle, SqliteStorageBackend};
+use crate::direct_client::DirectClient;
 use crate::events::emit_event;
 use crate::hlc::HLC;
-use crate::host::{get_host_device_name, get_own_addresses};
 use crate::integration_replication::{
     AuthorizedNode, IntegrationCredentialEnvelope, IntegrationNodeGrant, SignedSyncEnvelope,
 };
-use crate::net::is_address_routable;
-use crate::protocol::LAN_SYNC_PORT;
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
-use crate::sync_bind::SyncBind;
-use crate::sync_client::SyncClient;
-use crate::sync_server::{PeerEntry, StorageBackend, SyncServer};
-use crate::transport_select::{select_transport, TransportChoice};
+use crate::replication_storage::SyncRuntimeStorage;
+use crate::sync_server::{PeerEntry, SyncServer};
 use crate::types::*;
+use ark_net::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
+use ark_net::host::{get_host_device_name, get_own_addresses};
+use ark_net::net::is_address_routable;
+use ark_net::sync_bind::SyncBind;
+use ark_sync::protocol::LAN_SYNC_PORT;
+use ark_sync::transport_select::{select_transport, TransportChoice};
 
+mod admission;
 mod definitions;
 mod runtime;
 mod sync;
@@ -63,8 +65,10 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
+use self::admission::{AdmissionPermit, RequestAdmission};
 pub(crate) use self::definitions::{
-    ObjectWriteSnapshot, Request, StartSyncParams, SyncRuntime, SyncStartParams,
+    DataVolumeScope, ObjectWriteSnapshot, Request, StartSyncParams, SyncPolicyRuleInput,
+    SyncRuntime, SyncStartParams,
 };
 use self::runtime::handle_request;
 #[cfg(test)]
@@ -77,7 +81,7 @@ use self::sync::{
     handle_accept_pairing, handle_add_seed_peer, handle_broadcast_change, handle_cancel_pairing,
     handle_connect_with_pairing_code, handle_decline_pairing, handle_disconnect_peer,
     handle_get_connected_peers, handle_get_own_iroh_ticket, handle_get_sync_snapshot,
-    handle_show_pairing_code, handle_start_sync, handle_stop_sync,
+    handle_show_pairing_code, handle_start_sync, handle_start_sync_with_params, handle_stop_sync,
 };
 
 /// Per-service state — what used to be the sidecar's process-wide globals
@@ -94,9 +98,10 @@ pub struct ArkHostConfig {
 }
 
 pub(crate) struct ServiceState {
-    /// Shared SQLite connection behind a mutex — the single writer for every
-    /// op executed by this service's worker.
-    db: StdMutex<Option<Arc<StdMutex<rusqlite::Connection>>>>,
+    /// Cloneable producer handle. It never exposes the writer connection.
+    db: StdMutex<Option<DbHandle>>,
+    /// Unique owner of the writer actor; service lifecycle alone shuts it down.
+    db_owner: StdMutex<Option<db::DbOwner>>,
     /// Path to the live ARK DB (set by `init`). `db_backup` opens a separate
     /// read connection so it does not hold the DB mutex for the whole copy.
     db_path: StdMutex<Option<String>>,
@@ -105,7 +110,7 @@ pub(crate) struct ServiceState {
     /// `db_backup_restore` — backup and restore never overlap. Always taken
     /// before the DB mutex (deadlock-safe: the backup thread works on its own
     /// read connection and never takes the DB mutex).
-    backup_gate: StdMutex<()>,
+    backup_gate: TokioMutex<()>,
     /// Host config resolved by the Engine at construction (KOS-287).
     windows_dir: Option<String>,
 }
@@ -114,9 +119,10 @@ impl ServiceState {
     fn new(host_config: ArkHostConfig) -> Self {
         Self {
             db: StdMutex::new(None),
+            db_owner: StdMutex::new(None),
             db_path: StdMutex::new(None),
             sync: TokioMutex::new(None),
-            backup_gate: StdMutex::new(()),
+            backup_gate: TokioMutex::new(()),
             windows_dir: host_config.windows_dir,
         }
     }
@@ -132,21 +138,27 @@ pub enum ArkServiceError {
     /// The request never reached the worker (service dropped or worker dead).
     #[error("ark service unavailable: {0}")]
     Unavailable(String),
+    /// Admission is bounded; callers may retry after pressure subsides.
+    #[error("ark service busy: {0}")]
+    Busy(String),
 }
 
 struct ServiceJob {
     request: Request,
     reply: oneshot::Sender<Result<Value, ArkServiceError>>,
+    _admission: AdmissionPermit,
 }
 
 /// In-process handle to the ARK runtime. Cheap to keep in an `Arc`; dropping
 /// it closes the job channel so the worker finishes its in-flight request,
 /// stops sync, and exits.
 pub struct ArkService {
-    jobs: Option<mpsc::UnboundedSender<ServiceJob>>,
+    jobs: Option<mpsc::Sender<ServiceJob>>,
+    admission: RequestAdmission,
     worker: Option<std::thread::JoinHandle<()>>,
     panic_count: Arc<AtomicU64>,
     db_path: String,
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 }
 
 impl ArkService {
@@ -164,13 +176,20 @@ impl ArkService {
         let db_path = db_path.into();
         let state = Arc::new(ServiceState::new(host_config));
         let panic_count = Arc::new(AtomicU64::new(0));
-        let (jobs, worker) = spawn_worker(state.clone(), db_path.clone(), panic_count.clone())
-            .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
+        let shutdown_deadline = Arc::new(StdMutex::new(None));
+        let (jobs, worker) = spawn_worker(
+            state.clone(),
+            panic_count.clone(),
+            shutdown_deadline.clone(),
+        )
+        .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
         let service = Self {
             jobs: Some(jobs),
+            admission: RequestAdmission::new(),
             worker: Some(worker),
             panic_count,
             db_path,
+            shutdown_deadline,
         };
         service
             .call("init", json!({ "dbPath": service.db_path }))
@@ -180,8 +199,13 @@ impl ArkService {
 
     /// Execute one request — same ops and semantics as the sidecar's
     /// `{"operation": "...", ...params}` envelope, without the JSON framing.
-    /// Requests run strictly sequentially on the worker (FIFO).
+    /// Requests run strictly sequentially on the worker (FIFO). Admission is
+    /// immediate and bounded by both retained request count and estimated size.
     pub async fn call(&self, operation: &str, params: Value) -> Result<Value, ArkServiceError> {
+        let admission = self
+            .admission
+            .try_admit(operation, &params)
+            .map_err(|error| ArkServiceError::Busy(error.to_string()))?;
         let mut envelope = match params {
             Value::Object(map) => map,
             Value::Null => serde_json::Map::new(),
@@ -195,11 +219,24 @@ impl ArkService {
         let request: Request = serde_json::from_value(Value::Object(envelope))
             .map_err(|e| ArkServiceError::Request(e.to_string()))?;
         let (tx, rx) = oneshot::channel();
-        self.jobs
+        let job = ServiceJob {
+            request,
+            reply: tx,
+            _admission: admission,
+        };
+        let jobs = self
+            .jobs
             .as_ref()
-            .ok_or_else(|| ArkServiceError::Unavailable("service shut down".into()))?
-            .send(ServiceJob { request, reply: tx })
-            .map_err(|_| ArkServiceError::Unavailable("worker channel closed".into()))?;
+            .ok_or_else(|| ArkServiceError::Unavailable("service shut down".into()))?;
+        match jobs.try_send(job) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_job)) => {
+                return Err(ArkServiceError::Busy("request queue is full".into()));
+            }
+            Err(mpsc::error::TrySendError::Closed(_job)) => {
+                return Err(ArkServiceError::Unavailable("worker channel closed".into()));
+            }
+        }
         rx.await
             .map_err(|_| ArkServiceError::Unavailable("worker dropped reply".into()))?
     }
@@ -211,33 +248,63 @@ impl ArkService {
         crate::events::subscribe()
     }
 
-    /// Number of handler panics the worker has caught (each followed by a DB
-    /// reopen). Exposed for Engine diagnostics.
+    /// Number of handler panics that stopped this service worker.
+    /// Exposed for Engine diagnostics.
     pub fn panic_count(&self) -> u64 {
         self.panic_count.load(Ordering::SeqCst)
+    }
+
+    /// Stop ingress, finish sync producers, drain accepted DB work, and close
+    /// the unique writer owner before the deadline.
+    pub async fn shutdown(mut self, deadline: Instant) -> Result<(), ArkServiceError> {
+        *self
+            .shutdown_deadline
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(deadline);
+        drop(self.jobs.take());
+        let Some(worker) = self.worker.take() else {
+            return Ok(());
+        };
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match tokio::time::timeout(
+            remaining,
+            tokio::task::spawn_blocking(move || worker.join()),
+        )
+        .await
+        {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(panic))) => Err(ArkServiceError::Unavailable(panic_message(&*panic))),
+            Ok(Err(error)) => Err(ArkServiceError::Unavailable(error.to_string())),
+            Err(_) => Err(ArkServiceError::Unavailable(
+                "service shutdown deadline elapsed".into(),
+            )),
+        }
     }
 }
 
 impl Drop for ArkService {
     fn drop(&mut self) {
+        if self.worker.is_some() {
+            *self
+                .shutdown_deadline
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(Instant::now());
+        }
         // Close the job channel first — the worker drains pending requests,
         // runs stop_sync, and exits; join() would deadlock with it open.
         drop(self.jobs.take());
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        // A dropped service never blocks indefinitely. The worker drains and
+        // closes its DB owner after its current callback and sync producers end.
+        self.worker.take();
     }
 }
 
 fn spawn_worker(
     state: Arc<ServiceState>,
-    db_path: String,
     panic_count: Arc<AtomicU64>,
-) -> std::io::Result<(
-    mpsc::UnboundedSender<ServiceJob>,
-    std::thread::JoinHandle<()>,
-)> {
-    let (tx, rx) = mpsc::unbounded_channel::<ServiceJob>();
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
+) -> std::io::Result<(mpsc::Sender<ServiceJob>, std::thread::JoinHandle<()>)> {
+    let (tx, rx) = mpsc::channel::<ServiceJob>(admission::REQUEST_QUEUE_CAPACITY);
     let worker = std::thread::Builder::new()
         .name("ark-service".to_string())
         .spawn(move || {
@@ -257,16 +324,16 @@ fn spawn_worker(
                     return;
                 }
             };
-            rt.block_on(worker_loop(state, db_path, rx, panic_count));
+            rt.block_on(worker_loop(state, rx, panic_count, shutdown_deadline));
         })?;
     Ok((tx, worker))
 }
 
 async fn worker_loop(
     state: Arc<ServiceState>,
-    db_path: String,
-    mut rx: mpsc::UnboundedReceiver<ServiceJob>,
+    mut rx: mpsc::Receiver<ServiceJob>,
     panic_count: Arc<AtomicU64>,
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 ) {
     use futures_util::FutureExt;
     while let Some(job) = rx.recv().await {
@@ -274,51 +341,50 @@ async fn worker_loop(
             std::panic::AssertUnwindSafe(async { handle_request(&state, job.request).await })
                 .catch_unwind()
                 .await;
-        let reply = match outcome {
-            Ok(result) => result.map_err(ArkServiceError::Request),
+        match outcome {
+            Ok(result) => {
+                let _ = job.reply.send(result.map_err(ArkServiceError::Request));
+            }
             Err(panic) => {
                 let count = panic_count.fetch_add(1, Ordering::SeqCst) + 1;
                 let message = panic_message(&*panic);
                 eprintln!(
-                    "[ark-service] handler panicked: {message}; reopening database (panic #{count})"
+                    "[ark-service] handler panicked: {message}; stopping service (panic #{count})"
                 );
-                // Reopen unconditionally: after a panic inside `with_write_tx`
-                // the shared connection may hold a half-open transaction.
-                let _ = std::panic::AssertUnwindSafe(reopen(&state, &db_path))
-                    .catch_unwind()
-                    .await;
-                Err(ArkServiceError::Request(format!(
-                    "ark handler panicked: {message}"
-                )))
+                let _ = job.reply.send(Err(ArkServiceError::Unavailable(format!(
+                    "request outcome unknown after handler panic; service stopped: {message}"
+                ))));
+                rx.close();
+                while let Ok(queued) = rx.try_recv() {
+                    let _ = queued.reply.send(Err(ArkServiceError::Request(
+                        "request cancelled before start after service handler panic".into(),
+                    )));
+                }
+                break;
             }
-        };
-        let _ = job.reply.send(reply);
+        }
     }
-    // Channel closed — the service was dropped. Stop sync so beacon/relay/
-    // server sockets and client loops die with the worker.
+    // Channel closure or a handler panic stops sync producers before the
+    // writer owner closes.
     let _ = std::panic::AssertUnwindSafe(handle_stop_sync(&state))
         .catch_unwind()
         .await;
-}
-
-/// Re-open the database after a handler panic: stop sync, drop the shared
-/// connection (SQLite rolls back a half-open transaction on drop) and run
-/// `init` again. Best-effort — failures are logged; subsequent requests then
-/// see "Database not initialized".
-async fn reopen(state: &Arc<ServiceState>, db_path: &str) {
-    handle_stop_sync(state).await;
-    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    match handle_request(
-        state,
-        Request::Init {
-            db_path: db_path.to_string(),
-        },
-    )
-    .await
-    {
-        Ok(_) => eprintln!("[ark-service] database reopened after panic"),
-        Err(e) => eprintln!("[ark-service] reopen after panic failed: {e}"),
+    let deadline = shutdown_deadline
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take()
+        .unwrap_or_else(|| Instant::now() + Duration::from_secs(30));
+    let owner = {
+        state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+    };
+    if let Some(mut owner) = owner {
+        if let Err(error) = owner.shutdown(deadline).await {
+            eprintln!("[ark-service] database owner shutdown failed: {error}");
+        }
     }
 }
 

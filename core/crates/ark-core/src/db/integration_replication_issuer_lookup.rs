@@ -1,7 +1,13 @@
+use super::{load_integration_credential_envelope, load_latest_integration_credential_envelope};
+use crate::integration_replication::read_store::IntegrationReplicationReadPort;
+use crate::integration_replication::{
+    encryption_key_id, GrantStatus, IntegrationContractError, NodeStatus,
+};
+
 use crate::integration_replication::{IssuerEncryptionKey, IssuerEncryptionKeyForPublish};
 
-pub fn load_issuer_encryption_key(
-    conn: &Connection,
+pub fn load_issuer_encryption_key<S: IntegrationReplicationReadPort>(
+    conn: &S,
     space_id: &str,
     integration_id: &str,
     recipient_node_id: &str,
@@ -52,19 +58,18 @@ pub fn load_issuer_encryption_key(
         }
         .to_string());
     }
-    let issuer = load_authorized_node(conn, issuer_node_id)?.ok_or_else(|| {
+    let issuer = conn.authorized_node(issuer_node_id)?.ok_or_else(|| {
         IntegrationContractError::Mismatch {
             field: "issuer_authorized_node",
         }
         .to_string()
     })?;
-    let issuer_grant = load_integration_node_grant(conn, integration_id, issuer_node_id)?
-        .ok_or_else(|| {
-            IntegrationContractError::Mismatch {
-                field: "issuer_integration_node_grant",
-            }
-            .to_string()
-        })?;
+    let issuer_grant = conn.grant(integration_id, issuer_node_id)?.ok_or_else(|| {
+        IntegrationContractError::Mismatch {
+            field: "issuer_integration_node_grant",
+        }
+        .to_string()
+    })?;
     if issuer.status != NodeStatus::Active {
         return Err(IntegrationContractError::RevokedNode.to_string());
     }
@@ -120,8 +125,8 @@ pub struct CredentialFenceExpectation<'a> {
 /// lease for this integration — same holder, generation and fencing token.
 /// A lease that moved on (newer fence, different holder, next generation)
 /// means the replicated credential was superseded before it was stored.
-pub fn check_integration_credential_fence(
-    conn: &Connection,
+pub fn check_integration_credential_fence<S: IntegrationReplicationReadPort>(
+    conn: &S,
     expected: &CredentialFenceExpectation<'_>,
 ) -> Result<(), String> {
     let key = load_issuer_encryption_key(
@@ -139,8 +144,9 @@ pub fn check_integration_credential_fence(
         }
         .to_string());
     }
-    let lease =
-        load_integration_refresh_lease(conn, expected.integration_id)?.ok_or_else(|| {
+    let lease = conn
+        .refresh_lease(expected.integration_id)?
+        .ok_or_else(|| {
             IntegrationContractError::Mismatch {
                 field: "refresh_lease",
             }
@@ -158,8 +164,8 @@ pub fn check_integration_credential_fence(
     Ok(())
 }
 
-pub fn load_issuer_encryption_key_for_publish(
-    conn: &Connection,
+pub fn load_issuer_encryption_key_for_publish<S: IntegrationReplicationReadPort>(
+    conn: &S,
     space_id: &str,
     integration_id: &str,
     recipient_node_id: &str,
@@ -177,19 +183,20 @@ pub fn load_issuer_encryption_key_for_publish(
             return Err(IntegrationContractError::EmptyField { field }.to_string());
         }
     }
-    if load_integration_configuration(conn, integration_id)?.is_none() {
+    if conn.configuration(integration_id)?.is_none() {
         return Err(IntegrationContractError::Mismatch {
             field: "integration_configuration",
         }
         .to_string());
     }
-    let recipient = load_authorized_node(conn, recipient_node_id)?.ok_or_else(|| {
+    let recipient = conn.authorized_node(recipient_node_id)?.ok_or_else(|| {
         IntegrationContractError::Mismatch {
             field: "recipient_authorized_node",
         }
         .to_string()
     })?;
-    let recipient_grant = load_integration_node_grant(conn, integration_id, recipient_node_id)?
+    let recipient_grant = conn
+        .grant(integration_id, recipient_node_id)?
         .ok_or_else(|| {
             IntegrationContractError::Mismatch {
                 field: "recipient_integration_node_grant",
@@ -210,19 +217,18 @@ pub fn load_issuer_encryption_key_for_publish(
         }
         .to_string());
     }
-    let issuer = load_authorized_node(conn, issuer_node_id)?.ok_or_else(|| {
+    let issuer = conn.authorized_node(issuer_node_id)?.ok_or_else(|| {
         IntegrationContractError::Mismatch {
             field: "issuer_authorized_node",
         }
         .to_string()
     })?;
-    let issuer_grant = load_integration_node_grant(conn, integration_id, issuer_node_id)?
-        .ok_or_else(|| {
-            IntegrationContractError::Mismatch {
-                field: "issuer_integration_node_grant",
-            }
-            .to_string()
-        })?;
+    let issuer_grant = conn.grant(integration_id, issuer_node_id)?.ok_or_else(|| {
+        IntegrationContractError::Mismatch {
+            field: "issuer_integration_node_grant",
+        }
+        .to_string()
+    })?;
     if issuer.status != NodeStatus::Active {
         return Err(IntegrationContractError::RevokedNode.to_string());
     }

@@ -209,7 +209,11 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
     );
     drop(service);
     drop(dispatcher);
-    drop(ark);
+    let ark = std::sync::Arc::try_unwrap(ark)
+        .unwrap_or_else(|_| panic!("uninstalled package released ArkHost"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .expect("ARK closes before package restart");
     let restarted = PackageService::open_for_test(dir.path()).expect("restart");
     let ark = std::sync::Arc::new(
         crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().expect("db path"))
@@ -241,6 +245,13 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
         .store_installed_listings()
         .expect("listing")
         .is_empty());
+    drop(dispatcher);
+    drop(restarted);
+    let ark = std::sync::Arc::try_unwrap(ark)
+        .unwrap_or_else(|_| panic!("package service released ArkHost"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .expect("ARK closes before package fixture cleanup");
 }
 
 #[tokio::test]
@@ -374,4 +385,9 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
             .all(|registration| registration.type_id != type_id),
         "a failed install must not persist the rejected definition"
     );
+    let ark = std::sync::Arc::try_unwrap(ark)
+        .unwrap_or_else(|_| panic!("package service released ArkHost"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .expect("ARK closes before package fixture cleanup");
 }

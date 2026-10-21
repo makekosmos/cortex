@@ -1,4 +1,4 @@
-//! Mesh coordinator — manages both LAN (SyncServer + SyncClient + Beacon) and
+//! Mesh coordinator — manages both LAN (SyncServer + DirectClient + Beacon) and
 //! optional Relay transport simultaneously, deduplicating incoming changes so
 //! a change arriving on both transports is processed only once.
 //!
@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::hlc::HLC;
-use crate::protocol::LanSyncMessage;
+use ark_sync::protocol::LanSyncMessage;
 
 // ---------------------------------------------------------------------------
 // MeshConfig — companion to FfiSyncConfig for internal use
@@ -119,11 +119,12 @@ impl MeshCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::LanSyncMessage;
     use crate::types::SyncEntity;
+    use ark_sync::protocol::LanSyncMessage;
 
     fn make_live_change(hlc: &str) -> LanSyncMessage {
         LanSyncMessage::LiveChange {
+            policy_identity: None,
             change_id: "cid1".to_string(),
             entity: SyncEntity {
                 id: "entity-1".to_string(),
@@ -155,6 +156,7 @@ mod tests {
     #[test]
     fn dedup_key_returns_none_for_sync_changes() {
         let msg = LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: "b1".to_string(),
             entities: vec![],
             is_last: true,

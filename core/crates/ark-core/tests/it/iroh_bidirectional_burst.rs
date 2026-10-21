@@ -20,16 +20,17 @@
 //! Run with:
 //!   cargo test --test iroh_bidirectional_burst
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::collections::HashSet;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::protocol::{generate_id, LanSyncMessage};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
+use ark_sync::protocol::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
 /// Number of messages each side sends. Must be large enough to reliably
@@ -62,6 +63,7 @@ fn make_burst_message(prefix: &str, i: usize) -> (String, LanSyncMessage) {
         origin_seq: None,
     };
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: change_id.clone(),
         entity,
         origin_device_id: Some(prefix.to_string()),
@@ -234,17 +236,29 @@ async fn iroh_bidirectional_burst_no_desync() {
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a
-        .bind_authenticated_peer(
+        .bind_peer_for_control(
             "device-B-burst",
             &transport_b.endpoint_id().unwrap().to_string(),
         )
         .expect("A binds B");
     transport_b
-        .bind_authenticated_peer(
+        .bind_peer_for_control(
             "device-A-burst",
             &transport_a.endpoint_id().unwrap().to_string(),
         )
         .expect("B binds A");
+    transport_a
+        .mark_peer_data_ready(
+            "device-B-burst",
+            &transport_b.endpoint_id().unwrap().to_string(),
+        )
+        .expect("A admits B for data");
+    transport_b
+        .mark_peer_data_ready(
+            "device-A-burst",
+            &transport_a.endpoint_id().unwrap().to_string(),
+        )
+        .expect("B admits A for data");
 
     // ── 4. Build burst payloads. ───────────────────────────────────────────────
     let mut a_sent_ids = HashSet::new();

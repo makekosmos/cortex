@@ -16,7 +16,11 @@ doctest = false
 
 
 [dependencies]
-rusqlite.workspace = true
+ark-application = { path = "../ark-application" }
+ark-domain = { path = "../ark-domain" }
+ark-sync = { path = "../ark-sync" }
+ark-net = { path = "../ark-net", default-features = false }
+ark-store = { path = "../ark-store" }
 tokio = { version = "1", features = [
   "rt-multi-thread",
   "macros",
@@ -27,33 +31,20 @@ tokio = { version = "1", features = [
   "io-std",
   "signal",
 ] }
-tokio-tungstenite.workspace = true
-futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+futures-util.workspace = true
 ed25519-dalek.workspace = true
 semver.workspace = true
 chrono.workspace = true
 rand.workspace = true
 async-trait.workspace = true
-if-addrs = "0.13"
-hostname.workspace = true
 thiserror.workspace = true
-# iroh p2p QUIC-транспорт — штатный транспорт start_sync (`use_iroh`), не
-# опциональный: release Engine собирается с ним, поэтому гейт тоже (KOS-270 —
-# gate tests exactly what ships). default-features = off + desktop-net:
-# UPnP/NAT-PMP port mapping (igd-next, h2, xml — ~670 KB) and iroh metrics
-# stay on desktop; engine-mobile builds with default-features = false so
-# the Android cdylib keeps only holepunching + relay over ring TLS.
-iroh = { version = "1.0.0", default-features = false, features = ["tls-ring"] }
 # Structured logging facade — host process (the Engine) installs the
 # subscriber; without one the calls are no-ops. Used for relay connectivity
 # transitions so the log keeps one warn per up/down flap (KOS-298).
 tracing.workspace = true
-# Ticket-based pairing (NodeTicket/EndpointTicket) — отдельный крейт,
-# `iroh` 1.0.0 их не реэкспортирует (проверено: нет `Ticket` в src/lib.rs).
-iroh-tickets = "1.0.0"
 
 # DB backup runs на отдельном потоке с пониженным CPU+I/O приоритетом
 # (THREAD_MODE_BACKGROUND_BEGIN), чтобы тяжёлое копирование не насыщало диск.
@@ -65,23 +56,29 @@ windows = { version = "0.62", features = [
 ] }
 
 [dev-dependencies]
+ark-store = { path = "../ark-store", features = ["test-support"] }
+ark-sync = { path = "../ark-sync", features = ["test-support"] }
+iroh = { version = "1.0.0", default-features = false, features = ["tls-ring"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio-tungstenite.workspace = true
 tempfile.workspace = true
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 proptest = "1.5"
 
 [features]
 default = ["desktop-net"]
-# iroh features that desktop Engine ships and mobile drops (see the iroh
-# dep note above). Kept a default so every host crate gets what release
-# Engine tests; only engine-mobile opts out.
-desktop-net = ["iroh/portmapper", "iroh/metrics", "iroh/fast-apple-datapath"]
+# Forward desktop networking features to ark-net; engine-mobile opts out.
+desktop-net = ["ark-net/desktop-net"]
 bench-fixtures = []
 
 [[bench]]
 name = "delphi_filters"
 harness = false
 required-features = ["bench-fixtures"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
 
 [lints]
 workspace = true

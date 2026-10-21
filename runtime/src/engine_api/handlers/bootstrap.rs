@@ -191,15 +191,27 @@ fn event_type_id(payload: &Value) -> Option<&str> {
         })
 }
 
-fn event_allowed(
+fn filter_event_payload(
     name: &str,
     payload: &Value,
     read_types: &[String],
     event_names: &[String],
-) -> bool {
-    event_names.iter().any(|allowed| allowed == name)
-        || event_type_id(payload)
-            .is_some_and(|type_id| read_types.iter().any(|allowed| allowed == type_id))
+) -> Option<Value> {
+    if event_names.iter().any(|allowed| allowed == name) {
+        return Some(payload.clone());
+    }
+    let type_id = event_type_id(payload)?;
+    if !read_types.iter().any(|allowed| allowed == type_id) {
+        return None;
+    }
+    let payload = payload.as_object()?;
+    let mut filtered = serde_json::Map::new();
+    for field in ["event", "id", "type_id", "typeId"] {
+        if let Some(value) = payload.get(field) {
+            filtered.insert(field.to_owned(), value.clone());
+        }
+    }
+    Some(Value::Object(filtered))
 }
 
 /// `GET /v1/apps/launch/<id>/events` — grant-filtered ARK events as SSE.
@@ -285,8 +297,12 @@ fn handle_launch_events(
                     };
                     match received {
                         Ok((name, payload)) => {
-                            if !event_allowed(&name, &payload, &read_types, &event_names) || !live()
-                            {
+                            let Some(payload) =
+                                filter_event_payload(&name, &payload, &read_types, &event_names)
+                            else {
+                                continue;
+                            };
+                            if !live() {
                                 continue;
                             }
                             let frame = hyper::body::Frame::data(Bytes::from(format!(

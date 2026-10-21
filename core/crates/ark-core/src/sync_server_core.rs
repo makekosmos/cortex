@@ -1,8 +1,15 @@
 use super::*;
+
+#[path = "sync_server_core/server_session_cleanup.rs"]
+mod server_session_cleanup;
+#[path = "sync_server_core/server_session_host.rs"]
+mod server_session_host;
+#[path = "sync_server_core/start.rs"]
+mod start;
 use crate::task_set::track_task;
 
 async fn signed_integration_write_is_authorized(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     frame: &SignedSyncEnvelope,
     expected_space_id: &str,
     expected_origin_node_id: &str,
@@ -18,6 +25,58 @@ async fn signed_integration_write_is_authorized(
 }
 
 impl SyncServer {
+    pub async fn broadcast_registry_event(
+        &self,
+        event: ark_domain::device_registry::RegistryEvent,
+    ) -> usize {
+        let target = event.target_device_id().as_str();
+        let revokes_target = matches!(
+            event.operation(),
+            ark_domain::device_registry::RegistryOperation::Disable
+        );
+        let mut peers = self.peers.lock().await;
+        let mut revoked = Vec::new();
+        for (peer_id, peer) in peers.iter_mut() {
+            if !peer.is_ready() {
+                continue;
+            }
+            if peer.session.projection().registry_session_id.is_none() {
+                continue;
+            }
+            if peer
+                .session
+                .try_send(
+                    ark_sync::server_session::ServerSessionIntent::BroadcastRegistryEvent(
+                        event.clone(),
+                    ),
+                )
+                .is_err()
+            {
+                peer.session.revoke();
+                peer.tx.close();
+                continue;
+            }
+            if revokes_target && peer.session.projection().device_id.as_deref() == Some(target) {
+                peer.session.revoke();
+                peer.tx.close();
+                revoked.push(*peer_id);
+            }
+        }
+        for peer_id in &revoked {
+            peers.remove(peer_id);
+        }
+        drop(peers);
+
+        if !revoked.is_empty() {
+            let mut known = self.known_peer_records.lock().await;
+            known.retain(|peer| peer.device_id != target);
+            if let Err(error) = save_known_peers(&self.storage, &known).await {
+                eprintln!("{TAG} failed to persist registry-revoked peer list: {error}");
+            }
+        }
+        revoked.len()
+    }
+
     pub async fn send_signed_integration_frame(
         &self,
         recipient_device_id: &str,
@@ -41,20 +100,21 @@ impl SyncServer {
                 &expected_origin_node_id,
             )
             .await?;
-        let peers = self.peers.lock().await;
-        let Some(peer) = peers
-            .values()
-            .find(|peer| peer.authenticated && peer.device_id == recipient_device_id)
-        else {
-            return Err("target LAN peer is not authenticated".into());
+        let session = {
+            let peers = self.peers.lock().await;
+            let Some(peer) = peers.values().find(|peer| {
+                peer.is_ready()
+                    && peer.session.projection().device_id.as_deref() == Some(recipient_device_id)
+            }) else {
+                return Err("target LAN peer is not authenticated".into());
+            };
+            peer.session.clone()
         };
-        peer.tx
-            .send(Message::Text(
-                serialize_message(&LanSyncMessage::SignedIntegrationFrame { frame }).into(),
-            ))
+        session
+            .try_send(ark_sync::server_session::ServerSessionIntent::SendSignedFrame(frame))
             .map_err(|_| "LAN peer connection is closed".into())
     }
-    pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
+    pub fn new(storage: Arc<dyn SyncRuntimeStorage>) -> Self {
         Self {
             storage,
             space_id: Arc::new(RwLock::new(String::new())),
@@ -62,17 +122,26 @@ impl SyncServer {
             device_name: Arc::new(RwLock::new("ArkSync".to_string())),
             own_addresses: Arc::new(RwLock::new(Vec::new())),
             auth_secret: Arc::new(RwLock::new(None)),
+            task_merge_bootstrap_v2: true,
             peers: Arc::new(Mutex::new(HashMap::new())),
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
             accept_task: Arc::new(Mutex::new(None)),
             conn_tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
+            transport_tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
             on_new_peer_discovered: Arc::new(Mutex::new(None)),
+            on_registry_events: Arc::new(Mutex::new(None)),
             next_peer_id: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_task_merge_bootstrap_v2(mut self) -> Self {
+        self.task_merge_bootstrap_v2 = true;
+        self
     }
 
     pub async fn set_on_change(&self, handler: OnChangeCallback) {
@@ -91,56 +160,59 @@ impl SyncServer {
         *self.on_new_peer_discovered.lock().await = Some(handler);
     }
 
-    pub async fn connected_peer_count(&self) -> usize {
-        let peers = self.peers.lock().await;
-        peers.values().filter(|p| p.authenticated).count()
+    pub async fn set_on_registry_events(&self, handler: OnRegistryEventsCallback) {
+        *self.on_registry_events.lock().await = Some(handler);
     }
 
-    pub async fn get_known_peers(&self) -> Vec<PeerRecord> {
+    pub async fn connected_peer_count(&self) -> usize {
+        let peers = self.peers.lock().await;
+        peers.values().filter(|p| p.is_ready()).count()
+    }
+
+    pub async fn get_known_peers(&self) -> Result<Vec<PeerRecord>, String> {
         // `sync.peers` is written by the transport path (iroh pairing)
         // too — refresh the in-memory copy so a transport-paired peer that
         // goes offline still shows as an offline row instead of vanishing
         // until the next start (KOS-367).
-        self.load_known_peers().await;
-        self.known_peer_records.lock().await.clone()
+        self.load_known_peers().await?;
+        Ok(self.known_peer_records.lock().await.clone())
     }
 
-    pub async fn get_removed_peer_ids(&self) -> Vec<String> {
+    pub async fn get_removed_peer_ids(&self) -> Result<Vec<String>, String> {
         load_removed_peer_ids(&self.storage).await
     }
 
-    pub async fn block_peer(&self, device_id: &str) {
+    pub async fn block_peer(&self, device_id: &str) -> Result<(), String> {
         let device_id = device_id.trim();
         if device_id.is_empty() {
-            return;
+            return Ok(());
         }
-        let mut removed = load_removed_peer_ids(&self.storage).await;
+        let mut removed = load_removed_peer_ids(&self.storage).await?;
         if !removed.iter().any(|id| id == device_id) {
             removed.push(device_id.to_string());
-            save_removed_peer_ids(&self.storage, &removed).await;
+            save_removed_peer_ids(&self.storage, &removed).await?;
         }
         let mut known = self.known_peer_records.lock().await;
         let before = known.len();
         known.retain(|peer| peer.device_id != device_id);
         if known.len() != before {
-            save_known_peers(&self.storage, &known).await;
+            save_known_peers(&self.storage, &known).await?;
         }
+        Ok(())
     }
 
     /// Block a peer and explicitly tear down any live inbound sessions for it.
     /// Returns the number of active sessions that were closed.
-    pub async fn disconnect_peer(&self, device_id: &str) -> usize {
+    pub async fn disconnect_peer(&self, device_id: &str) -> Result<usize, String> {
         let device_id = device_id.trim();
         if device_id.is_empty() {
-            return 0;
+            return Ok(0);
         }
-        self.block_peer(device_id).await;
-
         let mut peers = self.peers.lock().await;
         let peer_ids: Vec<usize> = peers
             .iter()
             .filter_map(|(peer_id, peer)| {
-                if peer.device_id == device_id {
+                if peer.session.projection().device_id.as_deref() == Some(device_id) {
                     Some(*peer_id)
                 } else {
                     None
@@ -151,9 +223,9 @@ impl SyncServer {
         let mut closed = 0usize;
         for peer_id in &peer_ids {
             if let Some(peer) = peers.get_mut(peer_id) {
-                if peer.authenticated {
-                    peer.authenticated = false;
-                    let _ = peer.tx.send(Message::Close(None));
+                if peer.is_ready() {
+                    peer.session.revoke();
+                    peer.tx.close();
                     closed += 1;
                 }
             }
@@ -161,14 +233,22 @@ impl SyncServer {
         for peer_id in peer_ids {
             peers.remove(&peer_id);
         }
-        closed
+        drop(peers);
+
+        // Update local discovery state even if persistence fails. Blocking a
+        // peer is fallible, but must never prevent closing its live sessions.
+        self.known_peer_records
+            .lock()
+            .await
+            .retain(|peer| peer.device_id != device_id);
+        self.block_peer(device_id).await.map(|()| closed)
     }
 
-    pub(super) async fn is_peer_blocked(&self, device_id: &str) -> bool {
-        load_removed_peer_ids(&self.storage)
-            .await
+    pub(super) async fn is_peer_blocked(&self, device_id: &str) -> Result<bool, String> {
+        Ok(load_removed_peer_ids(&self.storage)
+            .await?
             .iter()
-            .any(|id| id == device_id)
+            .any(|id| id == device_id))
     }
 
     /// Dedup connected peers by device_id. Matches the `getConnectedPeerEntries`
@@ -178,30 +258,32 @@ impl SyncServer {
         let mut seen: HashMap<String, usize> = HashMap::new();
         let mut entries: Vec<PeerEntry> = Vec::new();
         for peer in peers.values() {
-            if !peer.authenticated {
+            if !peer.is_ready() {
                 continue;
             }
-            if peer.device_id.is_empty() {
+            let projection = peer.session.projection();
+            let Some(device_id) = projection.device_id else {
                 continue;
-            }
-            match seen.get(&peer.device_id) {
+            };
+            let device_name = projection.device_name.unwrap_or_default();
+            match seen.get(&device_id) {
                 Some(&index) => {
                     let entry = &mut entries[index];
-                    entry.device_name.clone_from(&peer.device_name);
-                    if peer.platform.is_some() {
-                        entry.platform.clone_from(&peer.platform);
+                    entry.device_name.clone_from(&device_name);
+                    if projection.platform.is_some() {
+                        entry.platform.clone_from(&projection.platform);
                     }
-                    if peer.app_version.is_some() {
-                        entry.app_version.clone_from(&peer.app_version);
+                    if projection.app_version.is_some() {
+                        entry.app_version.clone_from(&projection.app_version);
                     }
                 }
                 None => {
-                    seen.insert(peer.device_id.clone(), entries.len());
+                    seen.insert(device_id.clone(), entries.len());
                     entries.push(PeerEntry {
-                        device_id: peer.device_id.clone(),
-                        device_name: peer.device_name.clone(),
-                        platform: peer.platform.clone(),
-                        app_version: peer.app_version.clone(),
+                        device_id,
+                        device_name,
+                        platform: projection.platform,
+                        app_version: projection.app_version,
                     });
                 }
             }
@@ -214,29 +296,29 @@ impl SyncServer {
         let peers = self.peers.lock().await;
         peers
             .values()
-            .any(|p| p.authenticated && p.device_id == device_id)
+            .any(|p| p.is_ready() && p.session.projection().device_id.as_deref() == Some(device_id))
     }
 
-    /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled
+    /// Record an externally-connected peer (e.g. a `DirectClient` we just dialled
     /// out to) so `get_known_peers` reflects the merged set. Mirrors the
     /// TS `registerExternalPeer` helper. `last_seen`/`last_address` are
     /// overwritten here; `platform`/`app_version` pass through from the
     /// caller's record (the client's authenticated Hello, or `None` for a
     /// beacon-discovered peer that hasn't connected yet).
-    pub async fn register_external_peer(&self, record: PeerRecord) {
+    pub async fn register_external_peer(&self, record: PeerRecord) -> Result<(), String> {
         let my_device_id = self.device_id.read().await.clone();
         let my_addresses = self.own_addresses.read().await.clone();
 
         if record.device_id == my_device_id {
-            return;
+            return Ok(());
         }
         if !record.addresses.is_empty() && record.addresses.iter().all(|a| my_addresses.contains(a))
         {
-            return;
+            return Ok(());
         }
 
-        if self.is_peer_blocked(&record.device_id).await {
-            return;
+        if self.is_peer_blocked(&record.device_id).await? {
+            return Ok(());
         }
         let new_record = PeerRecord {
             last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
@@ -245,7 +327,8 @@ impl SyncServer {
         };
         let mut known = self.known_peer_records.lock().await;
         *known = merge_peer_records(&known, &[new_record]);
-        save_known_peers(&self.storage, &known).await;
+        save_known_peers(&self.storage, &known).await?;
+        Ok(())
     }
 
     /// Replace the current own-addresses snapshot. Used when the host network
@@ -266,218 +349,7 @@ impl SyncServer {
     pub async fn get_device_name(&self) -> String {
         self.device_name.read().await.clone()
     }
-
-    /// Start the WS server on an explicit bind address. Used by integration
-    /// tests that need to avoid port conflicts and by embedders that want a
-    /// loopback-only listener.
-    pub async fn start_with_addr(
-        &self,
-        space_id: &str,
-        device_id: &str,
-        device_name: Option<&str>,
-        own_addresses: Option<Vec<String>>,
-        bind_addr: &str,
-    ) -> Result<(), String> {
-        *self.space_id.write().await = space_id.to_string();
-        *self.device_id.write().await = device_id.to_string();
-        if let Some(name) = device_name {
-            *self.device_name.write().await = name.to_string();
-        }
-        if let Some(addrs) = own_addresses {
-            *self.own_addresses.write().await = addrs;
-        }
-
-        // Load known peers and evict stale self-references.
-        self.load_known_peers().await;
-        self.purge_self_peers().await;
-
-        let listener = TcpListener::bind(bind_addr)
-            .await
-            .map_err(|e| format!("Failed to bind {bind_addr}: {e}"))?;
-
-        eprintln!("{TAG} Server listening on {bind_addr}");
-
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        *self.shutdown_tx.lock().await = Some(shutdown_tx);
-
-        let peers = self.peers.clone();
-        let storage = self.storage.clone();
-        let space_id = self.space_id.clone();
-        let device_id = self.device_id.clone();
-        let device_name = self.device_name.clone();
-        let own_addresses = self.own_addresses.clone();
-        let auth_secret = self.auth_secret.clone();
-        let known_peer_records = self.known_peer_records.clone();
-        let on_change = self.on_change.clone();
-        let on_peer_connect = self.on_peer_connect.clone();
-        let on_peer_disconnect = self.on_peer_disconnect.clone();
-        let on_new_peer_discovered = self.on_new_peer_discovered.clone();
-        let next_peer_id = self.next_peer_id.clone();
-        let conn_tasks = self.conn_tasks.clone();
-
-        // Ping ticker shares the accept task: a separate ping task had no
-        // shutdown path and leaked (plus duplicated pings) on every restart.
-        let accept_task = tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
-            loop {
-                tokio::select! {
-                    _ = ticker.tick() => {
-                        let peers_guard = peers.lock().await;
-                        for peer in peers_guard.values() {
-                            if peer.authenticated {
-                                let _ = peer.tx.send(Message::Ping(vec![].into()));
-                            }
-                        }
-                    }
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, _)) => {
-                                let ordering = std::sync::atomic::Ordering::Relaxed;
-                                let peer_id = next_peer_id.fetch_add(1, ordering);
-                                let ws_stream = match accept_async(stream).await {
-                                    Ok(ws) => ws,
-                                    Err(e) => {
-                                        eprintln!("{TAG} WS accept error: {e}");
-                                        continue;
-                                    }
-                                };
-
-                                let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
-                                let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
-
-                                // Writer task. Re-check signed integration authority at the
-                                // actual socket write boundary so a revoke racing after enqueue
-                                // cannot still put an unauthorized frame on the wire.
-                                let storage_writer = storage.clone();
-                                let peers_writer = peers.clone();
-                                let space_id_writer = space_id.clone();
-                                let device_id_writer = device_id.clone();
-                                track_task(&conn_tasks, tokio::spawn(async move {
-                                    while let Some(msg) = rx.recv().await {
-                                        if let Message::Text(text) = &msg {
-                                            if let Some(LanSyncMessage::SignedIntegrationFrame {
-                                                frame,
-                                            }) = deserialize_message(text)
-                                            {
-                                                let peer_is_current = peers_writer
-                                                    .lock()
-                                                    .await
-                                                    .get(&peer_id)
-                                                    .is_some_and(|peer| {
-                                                        peer.authenticated
-                                                            && peer.device_id
-                                                                == frame.recipient_node_id
-                                                    });
-                                                let expected_space_id =
-                                                    space_id_writer.read().await.clone();
-                                                let expected_device_id =
-                                                    device_id_writer.read().await.clone();
-                                                if !peer_is_current
-                                                    || !signed_integration_write_is_authorized(
-                                                        &storage_writer,
-                                                        &frame,
-                                                        &expected_space_id,
-                                                        &expected_device_id,
-                                                    )
-                                                    .await
-                                                {
-                                                    continue;
-                                                }
-                                            }
-                                        }
-                                        if ws_sink.send(msg).await.is_err() {
-                                            break;
-                                        }
-                                    }
-                                }));
-
-                                let peer_state = PeerState {
-                                    device_id: String::new(),
-                                    device_name: String::new(),
-                                    addresses: Vec::new(),
-                                    platform: None,
-                                    app_version: None,
-                                    authenticated: false,
-                                    sync_complete: false,
-                                    queued_live_changes: Vec::new(),
-                                    tx: tx.clone(),
-                                };
-                                peers.lock().await.insert(peer_id, peer_state);
-
-                                // Reader task
-                                let ctx = MessageContext {
-                                    peers: peers.clone(),
-                                    storage: storage.clone(),
-                                    space_id: space_id.clone(),
-                                    device_id: device_id.clone(),
-                                    device_name: device_name.clone(),
-                                    own_addresses: own_addresses.clone(),
-                                    auth_secret: auth_secret.clone(),
-                                    known_peer_records: known_peer_records.clone(),
-                                    on_change: on_change.clone(),
-                                    on_peer_connect: on_peer_connect.clone(),
-                                    on_new_peer_discovered: on_new_peer_discovered.clone(),
-                                };
-                                let peers_reader = peers.clone();
-                                let on_peer_disconnect_reader = on_peer_disconnect.clone();
-
-                                track_task(&conn_tasks, tokio::spawn(async move {
-                                    while let Some(Ok(msg)) = ws_stream_rx.next().await {
-                                        match msg {
-                                            Message::Text(text) => {
-                                                if let Some(sync_msg) = deserialize_message(&text) {
-                                                    sync_server_messages::handle_message(
-                                                        &ctx, peer_id, sync_msg,
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                            Message::Close(_) => break,
-                                            _ => {}
-                                        }
-                                    }
-
-                                    // Peer disconnected
-                                    let mut peers_guard = peers_reader.lock().await;
-                                    if let Some(peer) = peers_guard.remove(&peer_id) {
-                                        if peer.authenticated {
-                                            eprintln!(
-                                                "{TAG} Peer disconnected: {} ({})",
-                                                peer.device_name, peer.device_id
-                                            );
-                                            let remaining = peers_guard
-                                                .values()
-                                                .filter(|p| p.authenticated)
-                                                .count();
-                                            drop(peers_guard);
-                                            let disconnect_reader =
-                                                on_peer_disconnect_reader.lock().await;
-                                            if let Some(handler) = disconnect_reader.as_ref() {
-                                                handler(peer.device_id, remaining);
-                                            }
-                                        }
-                                    }
-                                }));
-                            }
-                            Err(e) => {
-                                eprintln!("{TAG} Accept error: {e}");
-                            }
-                        }
-                    }
-                    _ = shutdown_rx.recv() => {
-                        break;
-                    }
-                }
-            }
-        });
-        *self.accept_task.lock().await = Some(accept_task);
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
-mod writer_tests {
-    use super::*;
-    include!("sync_server_core/writer_tests.rs");
-}
+include!("sync_server_core/writer_tests_module.rs");

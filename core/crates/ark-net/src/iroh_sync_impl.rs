@@ -1,0 +1,461 @@
+#[async_trait::async_trait]
+impl SyncTransport for IrohTransport {
+    /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для
+    /// входящих соединений и (если `config.peer_addr/peer_ticket`) dial-loop
+    /// с экспоненциальным backoff.
+    async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
+        let relay_mode = self.config.relay_mode.clone().unwrap_or(RelayMode::Default);
+
+        let mut builder = Endpoint::builder(presets::Minimal)
+            .relay_mode(relay_mode)
+            .alpns(vec![ARK_SYNC_ALPN.to_vec()]);
+
+        if let Some(secret_key) = self.config.secret_key.clone() {
+            builder = builder.secret_key(secret_key);
+        }
+
+        // The builder comes pre-configured to bind 0.0.0.0 and [::]; in
+        // loopback mode replace both per-family defaults with loopback
+        // sockets so the endpoint never listens on a LAN interface. The
+        // IPv6 bind is not required: hosts without an IPv6 stack must
+        // still start.
+        if self.config.bind == SyncBind::Loopback {
+            let (v4, v6) = self.config.bind.iroh_bind_addrs();
+            builder = builder
+                .bind_addr(v4)
+                .map_err(|e| format!("iroh transport: invalid bind {v4}: {e}"))?
+                .bind_addr_with_opts(v6, BindOpts::default().set_is_required(false))
+                .map_err(|e| format!("iroh transport: invalid bind {v6}: {e}"))?;
+        }
+
+        let endpoint = builder
+            .bind()
+            .await
+            .map_err(|e| format!("iroh transport: endpoint bind failed: {e}"))?;
+
+        let our_endpoint_id = endpoint.id();
+        eprintln!(
+            "[iroh] start: endpoint={our_endpoint_id} device={} role=listening",
+            self.config.device_id
+        );
+
+        *self.endpoint.lock().unwrap_or_else(|e| e.into_inner()) = Some(endpoint.clone());
+
+        // ── Relay connectivity watcher ───────────────────────────────────────
+        // iroh's relay actor retries internally and warns per attempt — the
+        // Engine filters those to error (runtime `init_tracing`), so one WARN
+        // per up→down / down→up transition is the signal that survives.
+        if let Some(watch_task) = spawn_relay_connectivity_watch(
+            &endpoint,
+            self.config.relay_mode.as_ref(),
+            self.stop_rx.clone(),
+        ) {
+            self.track(watch_task);
+        }
+
+        // ── Accept-loop ───────────────────────────────────────────────────────
+        // Каждое входящее соединение порождает `handle_connection(is_dialer=false)`.
+        {
+            let accept_endpoint = endpoint.clone();
+            let accept_event_tx = event_tx.clone();
+            let accept_registry = self.registry.clone();
+            let accept_connections = self.connections.clone();
+            let accept_connection_generation = self.connection_generation.clone();
+            let accept_outbound_authorizer = self.outbound_authorizer.clone();
+            let mut accept_stop = self.stop_rx.clone();
+            let out_tx = self.out_tx.clone();
+            let hello = self.make_hello();
+            let tasks = self.tasks.clone();
+
+            self.track(tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = accept_stop.changed() => {
+                            if *accept_stop.borrow() { return; }
+                        }
+                        incoming = accept_endpoint.accept() => {
+                            let Some(incoming) = incoming else {
+                                // Endpoint закрыт.
+                                return;
+                            };
+                            let event_tx = accept_event_tx.clone();
+                            let registry = accept_registry.clone();
+                            let connections = accept_connections.clone();
+                            let connection_generation = accept_connection_generation.clone();
+                            let outbound_authorizer = accept_outbound_authorizer.clone();
+                            let out_rx = out_tx.subscribe();
+                            let stop_rx = accept_stop.clone();
+                            let hello = hello.clone();
+
+                            let connection_task = tokio::spawn(async move {
+                                let conn = match incoming.await {
+                                    Ok(conn) => conn,
+                                    Err(e) => {
+                                        eprintln!("[iroh] incoming connection failed: {e}");
+                                        return;
+                                    }
+                                };
+                                eprintln!(
+                                    "[iroh] accepted incoming connection remote={}",
+                                    conn.remote_id(),
+                                );
+                                handle_connection(ConnectionParams {
+                                    conn,
+                                    is_dialer: false,
+                                    hello,
+                                    out_rx,
+                                    stop_rx,
+                                    event_tx,
+                                    registry,
+                                    connections,
+                                    connection_generation,
+                                    outbound_authorizer,
+                                })
+                                .await;
+                            });
+                            // Same synchronous stretch as the spawn — see
+                            // `IrohTransport::track`.
+                            tasks
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push(connection_task);
+                        }
+                    }
+                }
+            }));
+        }
+
+        // ── Dial-loop (если задан peer) ───────────────────────────────────────
+        // Подключается к пиру, запускает `handle_connection(is_dialer=true)`,
+        // при разрыве переподключается с экспоненциальным backoff.
+        if self.config.peer_addr.is_some() || self.config.peer_ticket.is_some() {
+            let peer_addr = self.resolve_peer_addr()?;
+            eprintln!(
+                "[iroh] start: dialing peer={} device={}",
+                peer_addr.id, self.config.device_id
+            );
+            let dial_endpoint = endpoint.clone();
+            let dial_event_tx = event_tx.clone();
+            let dial_registry = self.registry.clone();
+            let dial_connections = self.connections.clone();
+            let dial_connection_generation = self.connection_generation.clone();
+            let dial_suppressed = self.suppressed_endpoints.clone();
+            let dial_outbound_authorizer = self.outbound_authorizer.clone();
+            let mut dial_stop = self.stop_rx.clone();
+            let out_tx = self.out_tx.clone();
+            let hello = self.make_hello();
+
+            self.track(tokio::spawn(async move {
+                let mut backoff_secs: u64 = 1;
+
+                loop {
+                    // Проверяем stop до попытки коннекта.
+                    if *dial_stop.borrow() {
+                        return;
+                    }
+                    // A declined/cancelled pairing suppresses the endpoint:
+                    // redialing would just re-trigger the consent prompt.
+                    if dial_suppressed
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .contains(&peer_addr.id)
+                    {
+                        return;
+                    }
+
+                    eprintln!(
+                        "[iroh] dial attempt peer={} (retry_in={backoff_secs}s if fail)",
+                        peer_addr.id
+                    );
+                    match dial_endpoint
+                        .connect(peer_addr.clone(), ARK_SYNC_ALPN)
+                        .await
+                    {
+                        Err(e) => {
+                            eprintln!(
+                                "[iroh] connect to peer={} failed: {e}; retry in {backoff_secs}s",
+                                peer_addr.id
+                            );
+                            tokio::select! {
+                                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+                                _ = dial_stop.changed() => {
+                                    if *dial_stop.borrow() { return; }
+                                }
+                            }
+                            backoff_secs = (backoff_secs * 2).min(60);
+                        }
+                        Ok(conn) => {
+                            eprintln!("[iroh] connected to peer={}", conn.remote_id());
+                            backoff_secs = 1; // сбрасываем backoff при успехе
+                            let out_rx = out_tx.subscribe();
+                            let stop_rx = dial_stop.clone();
+                            handle_connection(ConnectionParams {
+                                conn,
+                                is_dialer: true,
+                                hello: hello.clone(),
+                                out_rx,
+                                stop_rx,
+                                event_tx: dial_event_tx.clone(),
+                                registry: dial_registry.clone(),
+                                connections: dial_connections.clone(),
+                                connection_generation: dial_connection_generation.clone(),
+                                outbound_authorizer: dial_outbound_authorizer.clone(),
+                            })
+                            .await;
+
+                            // handle_connection вернулась — соединение закрыто.
+                            // Переподключаемся с backoff (если не остановлены).
+                            if *dial_stop.borrow() {
+                                return;
+                            }
+                            tokio::select! {
+                                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+                                _ = dial_stop.changed() => {
+                                    if *dial_stop.borrow() { return; }
+                                }
+                            }
+                            backoff_secs = (backoff_secs * 2).min(60);
+                        }
+                    }
+                }
+            }));
+        }
+
+        Ok(())
+    }
+
+    /// Ставит сообщение в broadcast-канал исходящих. Все активные соединения
+    /// получат его через свои `out_rx`. Если подписчиков нет (соединение ещё
+    /// не установлено), сообщение молча дропается: pre-connect live-changes
+    /// будут скомпенсированы VersionVector обменом при (ре)коннекте.
+    fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
+        if matches!(
+            &msg,
+            LanSyncMessage::SignedIntegrationFrame { .. }
+                | LanSyncMessage::SignedIntegrationAck { .. }
+        ) {
+            return Err("iroh broadcast cannot carry addressed integration messages".into());
+        }
+        let _ = self.out_tx.send(OutgoingMessage {
+            target: None,
+            msg,
+            completion: None,
+        });
+        Ok(())
+    }
+
+    /// Останавливает транспорт: сигналит фоновым задачам, закрывает
+    /// `Endpoint` (это будит `accept()` и рвёт чтение в reader-тасках), затем
+    /// abort+join всего зарегистрированного.
+    async fn stop(&self) {
+        let _ = self.stop_tx.send(true);
+        // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
+        let endpoint = self
+            .endpoint
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(ep) = endpoint {
+            ep.close().await;
+        }
+        // Drain in a loop: a task aborted before its first poll never runs,
+        // but an aborted accept iteration could have spawned a connection
+        // task between our drain and its own abort — sweep until empty.
+        loop {
+            let tasks: Vec<tokio::task::JoinHandle<()>> = self
+                .tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .drain(..)
+                .collect();
+            if tasks.is_empty() {
+                break;
+            }
+            for task in &tasks {
+                task.abort();
+            }
+            for task in tasks {
+                let _ = task.await;
+            }
+        }
+        *self.outbound_authorizer.write().await = None;
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_sync::transport::IrohSessionTransport for IrohTransport {
+    async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String> {
+        let target = self
+            .registry
+            .data_ready_endpoint(device_id)
+            .ok_or_else(|| "iroh addressed peer is not data-ready".to_string())?;
+        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
+            if frame.recipient_node_id != device_id {
+                return Err("iroh frame recipient does not match addressed peer".into());
+            }
+        }
+        if !matches!(
+            &msg,
+            LanSyncMessage::SignedIntegrationFrame { .. }
+                | LanSyncMessage::SignedIntegrationAck { .. }
+                | LanSyncMessage::TaskMergeBatch { .. }
+                | LanSyncMessage::TaskMergeBatchAck { .. }
+        ) {
+            return Err("iroh send_to only supports addressed messages".into());
+        }
+        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
+            let authorizer = self
+                .outbound_authorizer
+                .read()
+                .await
+                .clone()
+                .ok_or_else(|| {
+                    "iroh outbound integration authorization is unavailable".to_string()
+                })?;
+            authorizer.authorize(frame, &target.to_string()).await?;
+        }
+        let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+        self.out_tx
+            .send(OutgoingMessage {
+                target: Some(target),
+                msg,
+                completion: Some(Arc::new(std::sync::Mutex::new(Some(completion_tx)))),
+            })
+            .map_err(|_| "iroh addressed peer is not connected".to_string())?;
+        tokio::time::timeout(Duration::from_secs(5), completion_rx)
+            .await
+            .map_err(|_| "iroh addressed writer timed out".to_string())?
+            .map_err(|_| "iroh addressed writer stopped".to_string())?
+    }
+
+    fn set_outbound_authorizer(
+        &self,
+        authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
+        if let Ok(mut guard) = self.outbound_authorizer.try_write() {
+            *guard = Some(authorizer);
+        } else {
+            return Err("iroh outbound authorization context is busy".into());
+        }
+        Ok(())
+    }
+
+    fn bind_peer_for_control(
+        &self,
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        if self
+            .registry
+            .bind_peer_for_control(device_id, transport_public_key)
+        {
+            Ok(())
+        } else {
+            Err("iroh transport identity does not match peer endpoint".into())
+        }
+    }
+
+    fn mark_peer_data_ready(
+        &self,
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        if self
+            .registry
+            .mark_data_ready(device_id, transport_public_key)
+        {
+            Ok(())
+        } else {
+            Err("iroh peer binding is not ready for data admission".into())
+        }
+    }
+
+    async fn send_to_transport_peer(
+        &self,
+        transport_public_key: &str,
+        msg: LanSyncMessage,
+    ) -> Result<ark_sync::transport::AddressedSendOutcome, String> {
+        if !matches!(
+            msg,
+            LanSyncMessage::PairingRejected { .. }
+                | LanSyncMessage::PairingAccepted { .. }
+                | LanSyncMessage::RegistrySyncStart { .. }
+                | LanSyncMessage::RegistryEventsPage { .. }
+                | LanSyncMessage::RegistrySyncReady { .. }
+                | LanSyncMessage::RegistryEventUpdate { .. }
+                | LanSyncMessage::SyncPolicy { .. }
+                | LanSyncMessage::VersionVector { .. }
+        ) {
+            return Err("iroh transport-key send only supports addressed messages".into());
+        }
+        let endpoint_id: EndpointId = transport_public_key
+            .parse()
+            .map_err(|_| "iroh transport key is not an endpoint id".to_string())?;
+        // Await the write: the caller (decline) closes the connection right
+        // after, so a fire-and-forget rejection would be lost.
+        let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+        if self
+            .out_tx
+            .send(OutgoingMessage {
+                target: Some(endpoint_id),
+                msg,
+                completion: Some(Arc::new(std::sync::Mutex::new(Some(completion_tx)))),
+            })
+            .is_err()
+        {
+            return Ok(ark_sync::transport::AddressedSendOutcome::PeerOffline);
+        }
+        tokio::time::timeout(Duration::from_secs(5), completion_rx)
+            .await
+            .map_err(|_| "iroh addressed writer timed out".to_string())?
+            .map_err(|_| "iroh addressed writer stopped".to_string())?
+            .map(|()| ark_sync::transport::AddressedSendOutcome::Sent)
+    }
+
+    fn unbind_peer(&self, device_id: &str) -> Result<(), String> {
+        self.registry.unbind_peer(device_id);
+        Ok(())
+    }
+
+    fn disconnect_peer(
+        &self,
+        device_id: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        let Some(endpoint) = self.registry.endpoint_id_for(device_id) else {
+            return Ok(ark_sync::transport::PeerDisconnectOutcome::AlreadyOffline);
+        };
+        self.disconnect_transport_peer(&endpoint.to_string())
+    }
+
+    fn disconnect_transport_peer(
+        &self,
+        transport_public_key: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        let endpoint_id: EndpointId = transport_public_key
+            .parse()
+            .map_err(|_| "iroh transport key is not an endpoint id".to_string())?;
+        // Deliberate cut: also stop the dial loop from bringing this
+        // endpoint back (declined/cancelled pairing, «Отключить»).
+        self.suppressed_endpoints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(endpoint_id);
+        let conn = self
+            .connections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&endpoint_id)
+            .map(|(_, connection)| connection);
+        match conn {
+            Some(conn) => {
+                conn.close(0u32.into(), b"peer removed");
+                self.registry.remove_endpoint(&endpoint_id);
+                Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+            }
+            None => {
+                self.registry.remove_endpoint(&endpoint_id);
+                Ok(ark_sync::transport::PeerDisconnectOutcome::AlreadyOffline)
+            }
+        }
+    }
+}

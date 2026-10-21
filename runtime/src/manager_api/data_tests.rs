@@ -31,6 +31,13 @@ async fn fixture() -> (
     (dir, ark, state, seed)
 }
 
+async fn shutdown_ark(ark: Arc<ArkHost>) {
+    let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("manager test released ARK handles"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
+}
+
 /// Regression for KOS-288: the page reported zero objects while ark.db
 /// held tasks/notes stored under legacy alias ids.
 #[tokio::test]
@@ -83,13 +90,15 @@ async fn data_page_counts_objects_stored_under_legacy_alias_ids() {
         .clone();
     assert_eq!(task["name"], "Задача");
     assert_eq!(task["count"], 2);
+    drop(seed);
+    shutdown_ark(ark).await;
 }
 
 /// `search_objects` returns `{entryId, line, text}` hits, not object
 /// rows — the page used to discard all of them.
 #[tokio::test]
 async fn data_search_resolves_hits_back_to_objects() {
-    let (_dir, ark, state, _seed) = fixture().await;
+    let (_dir, ark, state, seed) = fixture().await;
     let created = ark
         .request(
             "upsert_object",
@@ -125,6 +134,8 @@ async fn data_search_resolves_hits_back_to_objects() {
         .data_search(&ark, &json!({"query": "   "}))
         .await
         .is_err());
+    drop(seed);
+    shutdown_ark(ark).await;
 }
 
 #[test]
@@ -167,7 +178,11 @@ fn manager_rows_are_bounded_redacted_and_body_free() {
     let task = json!({
         "id": "task-1", "type_id": "task_obj", "type_version": "0.0.0-legacy",
         "title": "Task",
-        "props_json": {"state": {"kind": "done", "at": null}, "api_token": "secret", "local_path": "/private"}
+        "props_json": {
+            "state": {"kind": "done", "at": null},
+            "api_token": "secret",
+            "local_path": "/private"
+        }
     });
     let task_safe = safe_row(&task, None).expect("legacy task stays visible");
     assert_eq!(task_safe["type_id"], "core.task");

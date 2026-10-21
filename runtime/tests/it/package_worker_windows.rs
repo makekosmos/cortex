@@ -46,6 +46,13 @@ static CRASH_TEST_ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
 /// so anything tighter is a timing assertion by another name.
 const HANG_GUARD: Duration = Duration::from_secs(60);
 
+async fn shutdown_ark(ark: Arc<ArkHost>) {
+    let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("package workers released ArkHost"));
+    ark.shutdown(Instant::now() + Duration::from_secs(30))
+        .await
+        .unwrap();
+}
+
 /// Fixture env vars are process-wide and other test modules in this binary set
 /// the same ones, so the env owns the engine's worker test lock while it exists.
 struct FixtureEnv {
@@ -511,6 +518,8 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
     // Drain every supervisor registry so no task keeps a worker child or
     // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
     let _ = supervisor.stop_all().await;
+    drop(supervisor);
+    shutdown_ark(ark).await;
 }
 
 #[tokio::test]
@@ -745,6 +754,9 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
     assert!(object.ok);
     assert_eq!(object.data["title"], "Typed worker note");
     assert_eq!(object.data["typeId"], "com.kosmos.note");
+    ark.shutdown(Instant::now() + Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -932,6 +944,8 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
     // Drain every supervisor registry so no task keeps a worker child or
     // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
     let _ = supervisor.stop_all().await;
+    drop(supervisor);
+    shutdown_ark(ark).await;
 }
 
 #[tokio::test]

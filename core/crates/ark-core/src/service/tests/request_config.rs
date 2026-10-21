@@ -70,14 +70,26 @@ fn request_deserialization_accepts_signed_sync_send() {
     assert!(matches!(request, Request::IntegrationSendSignedSync { .. }));
 }
 
-#[test]
-fn pairing_restart_params_force_iroh_and_replace_ticket() {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::new(Arc::new(
-        StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
-    )));
+async fn test_storage(
+    database: &ark_store::test_support::TestDatabase,
+) -> Arc<crate::db::SqliteStorageBackend> {
+    Arc::new(
+        crate::db::SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+            "device-a",
+        )
+        .await
+        .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn pairing_restart_params_force_iroh_and_replace_ticket() {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),
@@ -121,18 +133,22 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
     // boot must switch to the LAN bind so the iroh endpoint can reach the
     // remote ticket (and the firewall prompt happens now, not at boot).
     assert_eq!(params.bind, SyncBind::AllInterfaces);
+    runtime
+        .storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 /// The sync runtime fixture shared by the bind-escalation tests below:
 /// loopback-bound, relay transport selected, no iroh ticket — the state a
 /// no-privileges boot leaves behind.
-fn loopback_runtime_fixture() -> SyncRuntime {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::new(Arc::new(
-        StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
-    )));
-    SyncRuntime {
+async fn loopback_runtime_fixture() -> (SyncRuntime, ark_store::test_support::TestDatabase) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
+    let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),
@@ -162,48 +178,8 @@ fn loopback_runtime_fixture() -> SyncRuntime {
         device_name: "Device A".to_string(),
         auth_secret: None,
         own_addresses: Arc::new(TokioMutex::new(Vec::new())),
-    }
-}
-
-#[test]
-fn show_pairing_code_params_escalate_loopback_to_lan() {
-    // KOS-269 round 1: showing our own code is the *other* explicit opt-in.
-    // A loopback iroh endpoint advertises only 127.0.0.1, which no remote
-    // device can reach — so `show_pairing_code` must restart sync with the
-    // same all-interfaces/iroh params as entering a code (minus the peer
-    // ticket). The restart itself is covered by the param builder: a real
-    // all-interfaces bind must not happen in tests.
-    let runtime = loopback_runtime_fixture();
-    let params = crate::service::sync::lan_opt_in_params(&runtime, None);
-    assert_eq!(params.bind, SyncBind::AllInterfaces);
-    assert!(params.use_iroh);
-    assert!(params.iroh_peer_ticket.is_none());
-    assert_eq!(params.space_id, "space-a");
-    assert_eq!(params.device_id, "device-a");
-}
-
-#[tokio::test]
-async fn show_pairing_code_returns_existing_ticket_without_restart() {
-    // A LAN-ready runtime must not restart: the request answers with the
-    // ticket it already has.
-    let state = test_state();
-    let mut runtime = loopback_runtime_fixture();
-    runtime.start_params.bind = SyncBind::AllInterfaces;
-    runtime.start_params.use_iroh = true;
-    runtime.transport_choice = Some(TransportChoice::Iroh);
-    runtime.iroh_our_ticket = watch::channel(Some("endpoint-our-ticket".to_string())).1;
-    *state.sync.lock().await = Some(Arc::new(runtime));
-
-    let result = handle_request(&state, Request::ShowPairingCode)
-        .await
-        .expect("show_pairing_code should return the running ticket");
-    assert_eq!(result.as_str(), Some("endpoint-our-ticket"));
-    // Bind untouched — still the all-interfaces runtime we installed.
-    let after = state.sync.lock().await;
-    assert_eq!(
-        after.as_ref().unwrap().start_params.bind,
-        SyncBind::AllInterfaces
-    );
+    };
+    (runtime, database)
 }
 
 #[tokio::test]
@@ -274,6 +250,76 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
         ticket.as_str().is_some_and(|s| !s.is_empty()),
         "expected a non-empty iroh ticket string, got {ticket:?}"
     );
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: fixture.db_path().to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let params = || StartSyncParams {
+        space_id: "retry-space".into(),
+        device_id: "retry-device".into(),
+        device_name: Some("Retry Device".into()),
+        port: Some(port),
+        seed_addresses: None,
+        relay_url: None,
+        relay_api_key: None,
+        auth_secret: None,
+        use_iroh: false,
+        iroh_peer_ticket: None,
+        iroh_relay_url: None,
+        pairing_connect: false,
+        discovery_enabled: false,
+        bind: SyncBind::Loopback,
+        app_version: None,
+    };
+
+    let error = handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect_err("corrupt peer state must fail sync startup");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(state.sync.lock().await.is_none());
+    let probe = std::net::TcpListener::bind(("127.0.0.1", port))
+        .expect("failed startup must not leak the sync listener");
+    drop(probe);
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect("retry on the same port must succeed");
     handle_request(&state, Request::StopSync).await.unwrap();
 }
 
@@ -416,3 +462,6 @@ fn params_struct_variants_keep_their_wire_format() {
     assert_eq!(params.expected_fencing_token, 2);
     assert_eq!(params.device_id, "node");
 }
+
+#[path = "request_config/pairing_shutdown.rs"]
+mod pairing_shutdown;

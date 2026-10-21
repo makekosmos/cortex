@@ -1,4 +1,32 @@
 use super::*;
+use std::path::Path;
+
+#[path = "canonical_rpc/object_hlc.rs"]
+mod object_hlc;
+#[path = "canonical_rpc/task_idempotency.rs"]
+mod task_idempotency;
+
+fn remove_test_database(path: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let file = if suffix.is_empty() {
+            path.to_path_buf()
+        } else {
+            path.with_file_name(format!(
+                "{}{}",
+                path.file_name().unwrap().to_string_lossy(),
+                suffix
+            ))
+        };
+        match std::fs::remove_file(&file) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!(
+                "failed to remove test database file {}: {error}",
+                file.display()
+            ),
+        }
+    }
+}
 
 #[test]
 fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
@@ -42,13 +70,14 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             .as_str()
             .is_some_and(|version| version.starts_with("0.0.0+legacy.")));
         let mut event_rx = crate::events::subscribe();
-        let before = with_conn(&state, |conn| {
-            Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
-                    .map_err(|e| e.to_string())?,
-                db::get_sync_kv(conn, "lan_sync.version_vector")?,
-            ))
-        })
+        let before_objects = handle_request(&state, Request::ListObjects).await.unwrap();
+        let before_versions = handle_request(
+            &state,
+            Request::GetSyncKv {
+                key: "lan_sync.version_vector".into(),
+            },
+        )
+        .await
         .unwrap();
         let unknown_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object",
@@ -60,16 +89,28 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         }))
         .unwrap();
         assert!(handle_request(&state, unknown_request).await.is_err());
-        let after = with_conn(&state, |conn| {
-            Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
-                    .map_err(|e| e.to_string())?,
-                db::get_sync_kv(conn, "lan_sync.version_vector")?,
-            ))
-        })
-        .unwrap();
-        assert_eq!(before, after);
-        assert!(!matches!(event_rx.try_recv(), Ok(event) if event["event"] == "object_upserted"));
+        assert_eq!(
+            handle_request(&state, Request::ListObjects).await.unwrap(),
+            before_objects,
+            "rejected object is not visible through the public list API"
+        );
+        assert_eq!(
+            handle_request(
+                &state,
+                Request::GetSyncKv {
+                    key: "lan_sync.version_vector".into(),
+                },
+            )
+            .await
+            .unwrap(),
+            before_versions,
+            "rejected object does not advance the sync version vector"
+        );
+        let failed_object_event = received_upsert_for(&mut event_rx, "rpc-unknown");
+        assert!(
+            !failed_object_event,
+            "failed object upsert must not emit object_upserted for rpc-unknown"
+        );
         let result = handle_request(
             &state,
             Request::TypesGet {
@@ -99,10 +140,11 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         .await
         .unwrap();
         assert_eq!(versions, json!([]));
+        shutdown_test_state(&state).await;
     });
     drop(runtime);
     drop(state);
-    std::fs::remove_file(&path).expect("db file must be released after teardown");
+    remove_test_database(&path);
 }
 
 #[test]
@@ -139,17 +181,14 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
             .await
             .unwrap();
         }
-        with_conn(&state, |conn| {
-            crate::type_registry::register_alias(
-                conn,
-                &crate::type_registry::AliasRecord {
-                    alias: "rpc.alias".into(),
-                    canonical_type_id: "rpc-a".into(),
-                    created_at: "a".into(),
-                },
-            )
-        })
-        .unwrap();
+        ark_store::test_support::TypeMutationFixture::open(&path)
+            .unwrap()
+            .register_alias(&crate::type_registry::AliasRecord {
+                alias: "rpc.alias".into(),
+                canonical_type_id: "rpc-a".into(),
+                created_at: "a".into(),
+            })
+            .unwrap();
         let list = handle_request(&state, Request::TypesList).await.unwrap();
         let list_ids = list
             .as_array()
@@ -218,10 +257,11 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
         assert!(
             exact_keys.contains(&"summary".into()) && exact_keys.contains(&"definition".into())
         );
+        shutdown_test_state(&state).await;
     });
     drop(runtime);
     drop(state);
-    std::fs::remove_file(&path).expect("db file must be released after teardown");
+    remove_test_database(&path);
 }
 
 #[test]
@@ -258,40 +298,6 @@ fn dotted_type_operations_are_exact_and_underscore_aliases_rejected() {
 }
 
 #[tokio::test]
-async fn canonical_upsert_object_rpc_persists_registered_identity() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-    handle_request(
-        &state,
-        Request::UpsertObject {
-            object: canonical_task_object(Some("0.1.0"), canonical_task_props()),
-            expected_snapshot: None,
-            device_id: Some("device-canonical".to_string()),
-        },
-    )
-    .await
-    .unwrap();
-    let object = with_conn(&state, |conn| {
-        db::get_object(conn, "canonical-task-ingress")
-    })
-    .unwrap()
-    .unwrap();
-    assert_eq!(object.type_id, "core.task");
-    assert_eq!(object.type_version, "0.1.0");
-    assert_eq!(object.props_json["planning"]["kind"], "anytime");
-}
-
-#[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effects() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
@@ -310,6 +316,7 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
         Request::UpsertObject {
             object: canonical_task_object(None, canonical_task_props()),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-canonical".to_string()),
         },
     )
@@ -318,14 +325,12 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
         result.unwrap_err(),
         "canonical_ingress:invalid_request:canonical_version_required"
     );
-    let object_count = with_conn(&state, |conn| {
-        conn.query_row("SELECT COUNT(*) FROM objects", [], |row| {
-            row.get::<_, i64>(0)
-        })
-        .map_err(|error| error.to_string())
-    })
-    .unwrap();
-    assert_eq!(object_count, 0);
+    assert_eq!(
+        handle_request(&state, Request::ListObjects).await.unwrap(),
+        json!([]),
+        "rejected object is not visible through the public list API"
+    );
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -350,6 +355,7 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         Request::UpsertObject {
             object: canonical_task_object(Some("0.1.0"), props),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-canonical".to_string()),
         },
     )
@@ -358,23 +364,24 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         result.unwrap_err(),
         "canonical_ingress:invalid_request:canonical_field:/unexpected"
     );
-    let (objects, versions) = with_conn(&state, |conn| {
-        let objects = conn
-            .query_row("SELECT COUNT(*) FROM objects", [], |row| {
-                row.get::<_, i64>(0)
-            })
-            .map_err(|error| error.to_string())?;
-        let versions = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sync_kv WHERE key = 'lan_sync.version_vector'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((objects, versions))
-    })
-    .unwrap();
-    assert_eq!((objects, versions), (0, 0));
+    assert_eq!(
+        handle_request(&state, Request::ListObjects).await.unwrap(),
+        json!([]),
+        "invalid canonical payload leaves object storage unchanged"
+    );
+    assert_eq!(
+        handle_request(
+            &state,
+            Request::GetSyncKv {
+                key: "lan_sync.version_vector".into(),
+            },
+        )
+        .await
+        .unwrap(),
+        Value::Null,
+        "invalid canonical payload does not create sync state"
+    );
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -399,6 +406,7 @@ async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
@@ -407,4 +415,5 @@ async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
         result.unwrap_err(),
         "canonical_ingress:invalid_request:legacy_alias_new_write"
     );
+    fixture.shutdown().await;
 }

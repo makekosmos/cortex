@@ -1,7 +1,10 @@
 use super::*;
+use ark_application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
+};
 
 #[cfg(test)]
-pub(super) mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex as StdMutex;
 
@@ -9,6 +12,8 @@ pub(super) mod tests {
     pub(crate) struct MemBackend {
         kv: StdMutex<HashMap<String, String>>,
         entities: StdMutex<HashMap<String, SyncEntity>>,
+        peer_transport_keys_error: StdMutex<Option<String>>,
+        newer_version_vector_before_next_merge: StdMutex<Option<VersionVector>>,
     }
 
     impl MemBackend {
@@ -16,39 +21,109 @@ pub(super) mod tests {
             Self {
                 kv: StdMutex::new(HashMap::new()),
                 entities: StdMutex::new(HashMap::new()),
+                peer_transport_keys_error: StdMutex::new(None),
+                newer_version_vector_before_next_merge: StdMutex::new(None),
             }
+        }
+
+        pub(crate) fn fail_peer_transport_keys_read(&self, error: &str) {
+            *self.peer_transport_keys_error.lock().unwrap() = Some(error.to_string());
+        }
+
+        pub(crate) fn set_sync_kv(&self, key: &str, value: &str) {
+            self.kv
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_string());
+        }
+
+        fn race_next_vector_merge_with(&self, vector: VersionVector) {
+            *self.newer_version_vector_before_next_merge.lock().unwrap() = Some(vector);
         }
     }
 
     #[async_trait::async_trait]
-    impl StorageBackend for MemBackend {
-        async fn validate_outbound_signed_integration_frame(
-            &self,
-            _frame: &SignedSyncEnvelope,
-            _expected_space_id: &str,
-            _expected_origin_node_id: &str,
-        ) -> Result<(), String> {
-            Ok(())
+    impl SyncEntityReadPort for MemBackend {
+        async fn load_entities(&self, _vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
+            Ok(self.entities.lock().unwrap().values().cloned().collect())
         }
 
-        async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
-            self.entities.lock().unwrap().values().cloned().collect()
-        }
         async fn load_entities_page(
             &self,
             _vector: &VersionVector,
             offset: usize,
             limit: usize,
-        ) -> Vec<SyncEntity> {
-            self.entities
+        ) -> Result<Vec<SyncEntity>, String> {
+            Ok(self
+                .entities
                 .lock()
                 .unwrap()
                 .values()
                 .skip(offset)
                 .take(limit)
                 .cloned()
-                .collect()
+                .collect())
         }
+        async fn load_entities_page_for_peer(
+            &self,
+            _peer_device_id: &str,
+            _class: ark_application::sync_storage::SyncReadClass,
+            vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+        ) -> Result<Vec<SyncEntity>, String> {
+            self.load_entities_page(vector, offset, limit).await
+        }
+        async fn load_policy_bound_entities_page_for_peer(
+            &self,
+            peer_device_id: &str,
+            class: ark_application::sync_storage::SyncReadClass,
+            vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+            expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        ) -> Result<
+            ark_application::sync_storage::PolicyBoundSnapshotPage,
+            ark_application::sync_storage::PolicyBoundSnapshotReadError,
+        > {
+            let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
+            if expected_identity != &accepted_identity {
+                return Err(
+                    ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy,
+                );
+            }
+            let entities = self
+                .load_entities_page_for_peer(peer_device_id, class, vector, offset, limit)
+                .await
+                .map_err(ark_application::sync_storage::PolicyBoundSnapshotReadError::Storage)?;
+            Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
+                identity: accepted_identity,
+                entities,
+            })
+        }
+        async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String> {
+            Ok(HashMap::new())
+        }
+        async fn usage_complete_through_for_peer(
+            &self,
+            _: &str,
+            _: ark_application::sync_storage::SyncReadClass,
+        ) -> Result<HashMap<String, u64>, String> {
+            Ok(HashMap::new())
+        }
+        fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+            Some(entity.clone())
+        }
+        async fn filter_outgoing_entity_for_peer(
+            &self,
+            _peer_device_id: &str,
+            entity: &SyncEntity,
+        ) -> Result<Option<SyncEntity>, String> {
+            Ok(self.filter_outgoing_entity(entity))
+        }
+    }
+    #[async_trait::async_trait]
+    impl SyncEntityMutationPort for MemBackend {
         async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
             if entity.deleted == Some(true) {
                 self.entities.lock().unwrap().remove(&entity.id);
@@ -60,255 +135,352 @@ pub(super) mod tests {
             }
             Ok(())
         }
-        async fn get_kv(&self, key: &str) -> Option<String> {
-            self.kv.lock().unwrap().get(key).cloned()
+    }
+
+    #[async_trait::async_trait]
+    impl ark_application::sync_storage::PeerSyncPolicyPort for MemBackend {
+        async fn accepted_policy_identity_for_peer(
+            &self,
+            _peer_device_id: &str,
+        ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
+            Ok(Some(
+                ark_application::sync_policy::default_sync_policy_identity(),
+            ))
         }
-        async fn set_kv(&self, key: &str, value: &str) {
+    }
+
+    #[async_trait::async_trait]
+    impl TaskMergeDeliveryPort for MemBackend {
+        async fn prepare_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _limit: usize,
+        ) -> Result<
+            Option<ark_application::sync_storage::TaskMergeBatch>,
+            ark_application::task_merge::TaskMergePrepareError,
+        > {
+            Ok(None)
+        }
+
+        async fn acknowledge_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _batch_id: &str,
+            through_position: i64,
+        ) -> Result<i64, String> {
+            Ok(through_position)
+        }
+
+        async fn apply_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _local_device_id: &str,
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _batch: &ark_application::sync_storage::TaskMergeBatch,
+        ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
+            Err("test_task_merge_receive_unsupported".into())
+        }
+    }
+    #[async_trait::async_trait]
+    impl PeerProgressPort for MemBackend {
+        async fn load_version_vector(&self) -> Result<VersionVector, String> {
             self.kv
                 .lock()
                 .unwrap()
-                .insert(key.to_string(), value.to_string());
+                .get(crate::db::VERSION_VECTOR_KEY)
+                .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
+                .transpose()
+                .map(|vector| vector.unwrap_or_default())
+        }
+        async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::VERSION_VECTOR_KEY.into(),
+                serde_json::to_string(vector).unwrap(),
+            );
+            Ok(())
+        }
+        async fn replace_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.replace_version_vector(vector).await
+        }
+        async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+            if let Some(newer) = self
+                .newer_version_vector_before_next_merge
+                .lock()
+                .unwrap()
+                .take()
+            {
+                self.kv.lock().unwrap().insert(
+                    crate::db::VERSION_VECTOR_KEY.into(),
+                    serde_json::to_string(&newer).unwrap(),
+                );
+            }
+            let mut current = self.load_version_vector().await?;
+            ark_application::sync_storage::merge_version_vector_entries(&mut current, vector);
+            self.kv.lock().unwrap().insert(
+                crate::db::VERSION_VECTOR_KEY.into(),
+                serde_json::to_string(&current).unwrap(),
+            );
+            Ok(())
+        }
+        async fn merge_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.merge_version_vector(vector).await
+        }
+        async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String> {
+            self.kv
+                .lock()
+                .unwrap()
+                .get(crate::db::constants::KNOWN_PEERS_KEY)
+                .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
+                .transpose()
+        }
+        async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::constants::KNOWN_PEERS_KEY.into(),
+                serde_json::to_string(peers).unwrap(),
+            );
+            Ok(())
+        }
+        async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
+            self.kv
+                .lock()
+                .unwrap()
+                .get(crate::db::constants::REMOVED_PEERS_KEY)
+                .map_or_else(
+                    || Ok(Vec::new()),
+                    |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
+                )
+        }
+        async fn store_removed_peer_ids(&self, ids: &[String]) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::constants::REMOVED_PEERS_KEY.into(),
+                serde_json::to_string(ids).unwrap(),
+            );
+            Ok(())
         }
     }
 
-    fn peer_rec(device_id: &str, addrs: &[&str]) -> PeerRecord {
-        PeerRecord {
-            device_id: device_id.to_string(),
-            device_name: format!("{device_id}-name"),
-            addresses: addrs.iter().map(|s| s.to_string()).collect(),
-            last_seen: "2026-04-01T00:00:00.000Z".to_string(),
-            last_address: None,
-            platform: None,
-            app_version: None,
+    #[async_trait::async_trait]
+    impl ark_application::sync_storage::CommittedFeedPort for MemBackend {
+        fn selective_sync_policy_generation(&self) -> i64 {
+            0
+        }
+
+        async fn selective_sync_policy_generation_for_peer(&self, _: &str) -> Result<i64, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_snapshot(
+            &self,
+        ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_page(
+            &self,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_delivery_page(
+            &self,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_delivery_page_for_peer(
+            &self,
+            _: &str,
+            _: &ark_application::sync_storage::PolicyIdentity,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<
+            ark_application::sync_storage::PolicyBoundFeedPage,
+            ark_application::sync_storage::PolicyBoundFeedReadError,
+        > {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn begin_outbound_policy(
+            &self,
+            _: &str,
+            _: i64,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Ok(ark_application::sync_storage::OutboundProgress {
+                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
+                    through: 0,
+                },
+                ..Default::default()
+            })
+        }
+
+        async fn begin_outbound_policy_identity(
+            &self,
+            _: &str,
+            _: &ark_application::sync_storage::PolicyIdentity,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+        async fn complete_outbound_snapshot(
+            &self,
+            _: &str,
+            _: i64,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Ok(ark_application::sync_storage::OutboundProgress {
+                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
+                    through: 0,
+                },
+                ..Default::default()
+            })
+        }
+        async fn complete_outbound_snapshot_identity(
+            &self,
+            _: &str,
+            _: &ark_application::sync_storage::PolicyIdentity,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_policy_identity_completion_observed".into())
+        }
+        async fn record_outbound_scan(
+            &self,
+            _: &str,
+            _: i64,
+            _: i64,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn record_outbound_scan_identity(
+            &self,
+            _: &str,
+            _: &ark_application::sync_storage::PolicyIdentity,
+            _: i64,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+        async fn acknowledge_outbound(
+            &self,
+            _: &str,
+            _: i64,
+            _: i64,
+            _: ark_application::sync_storage::OutboundAck,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn acknowledge_outbound_identity(
+            &self,
+            _: &str,
+            _: &ark_application::sync_storage::PolicyIdentity,
+            _: i64,
+            _: ark_application::sync_storage::OutboundAck,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
         }
     }
 
-    #[tokio::test]
-    async fn purge_self_peers_drops_our_device_id() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.device_id.write().await = "me".to_string();
-        *server.own_addresses.write().await = vec!["192.168.1.10:21531".to_string()];
+    #[async_trait::async_trait]
+    impl IntegrationReplicationBackend for MemBackend {
+        async fn validate_outbound_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _expected_origin_node_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
 
-        *server.known_peer_records.lock().await = vec![
-            peer_rec("me", &["192.168.1.10:21531"]),
-            peer_rec("other", &["192.168.1.20:21531"]),
-        ];
-
-        let removed = server.purge_self_peers().await;
-        assert_eq!(removed, 1);
-        let known = server.get_known_peers().await;
-        assert_eq!(known.len(), 1);
-        assert_eq!(known[0].device_id, "other");
-    }
-
-    #[tokio::test]
-    async fn purge_self_peers_drops_records_with_all_our_addresses() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.device_id.write().await = "me".to_string();
-        *server.own_addresses.write().await = vec![
-            "192.168.1.10:21531".to_string(),
-            "10.0.0.5:21531".to_string(),
-        ];
-
-        *server.known_peer_records.lock().await = vec![
-            // Different device_id, but every address is ours -> phantom self.
-            peer_rec("phantom", &["192.168.1.10:21531", "10.0.0.5:21531"]),
-            // Keep: one of the addresses is not ours.
-            peer_rec("real", &["192.168.1.10:21531", "192.168.1.99:21531"]),
-        ];
-
-        let removed = server.purge_self_peers().await;
-        assert_eq!(removed, 1);
-        let ids: Vec<String> = server
-            .get_known_peers()
-            .await
-            .into_iter()
-            .map(|p| p.device_id)
-            .collect();
-        assert_eq!(ids, vec!["real".to_string()]);
-    }
-
-    fn peer_record(device_id: &str, name: &str, addrs: &[&str]) -> PeerRecord {
-        PeerRecord {
-            device_id: device_id.to_string(),
-            device_name: name.to_string(),
-            addresses: addrs.iter().map(|a| a.to_string()).collect(),
-            last_seen: "2026-04-01T00:00:00.000Z".to_string(),
-            last_address: None,
-            platform: None,
-            app_version: None,
+        async fn apply_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _authenticated_peer_id: &str,
+            _expected_recipient_node_id: &str,
+        ) -> Result<(), String> {
+            Err("signed integration replication unsupported in test backend".into())
         }
     }
 
-    #[tokio::test]
-    async fn register_external_peer_rejects_self() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.device_id.write().await = "me".to_string();
-        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
+    include!("sync_server_tests/peer_identity_backend.rs");
 
-        server
-            .register_external_peer(peer_record("me", "Me", &["10.0.0.1:21531"]))
-            .await;
-        // Also: all-self addresses under a different device_id.
-        server
-            .register_external_peer(peer_record("phantom", "Phantom", &["10.0.0.1:21531"]))
-            .await;
+    include!("sync_server_tests/version_vector_merge.rs");
 
-        assert!(
-            server.get_known_peers().await.is_empty(),
-            "register_external_peer must drop self and all-self-address records",
-        );
+    #[async_trait::async_trait]
+    impl AuthenticatedEntityBackend for MemBackend {
+        async fn receive_authenticated_entity_with_id(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+        ) -> Result<bool, String> {
+            Ok(false)
+        }
+
+        async fn receive_authenticated_entity_with_policy(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+            _: &str,
+            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        ) -> Result<bool, String> {
+            if policy.is_some() {
+                return Err("policy_bound_receipt_unsupported".into());
+            }
+            Ok(false)
+        }
+
+        async fn apply_authenticated_entity(
+            &self,
+            entity: &SyncEntity,
+            _authenticated_peer_id: &str,
+        ) -> Result<(), String> {
+            self.apply_entity(entity).await
+        }
+
+        async fn apply_authenticated_entity_with_id(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            _: &str,
+        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+            let _ = peer;
+            self.apply_entity(entity).await?;
+            Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+        }
+
+        async fn apply_authenticated_entity_with_policy(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            message_id: &str,
+            _: &str,
+            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+            if policy.is_some() {
+                return Err("policy_bound_apply_unsupported".into());
+            }
+            self.apply_authenticated_entity_with_id(entity, peer, message_id)
+                .await
+        }
     }
 
-    #[tokio::test]
-    async fn register_external_peer_stores_routable_peer() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.device_id.write().await = "me".to_string();
-        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
-
-        server
-            .register_external_peer(peer_record("other", "Other", &["192.168.1.20:21531"]))
-            .await;
-
-        let known = server.get_known_peers().await;
-        assert_eq!(known.len(), 1);
-        assert_eq!(known[0].device_id, "other");
-        assert_eq!(known[0].addresses, vec!["192.168.1.20:21531".to_string()]);
-    }
-
-    #[tokio::test]
-    async fn block_peer_persists_removed_peer_and_filters_known_list() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.known_peer_records.lock().await = vec![peer_rec("other", &["192.168.1.20:21531"])];
-
-        server.block_peer("other").await;
-
-        assert!(server.get_known_peers().await.is_empty());
-        assert_eq!(
-            server.get_removed_peer_ids().await,
-            vec!["other".to_string()]
-        );
-        assert!(server.is_peer_blocked("other").await);
-    }
-
-    #[tokio::test]
-    async fn register_external_peer_ignores_blocked_peer() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        *server.device_id.write().await = "me".to_string();
-        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
-        server.block_peer("blocked").await;
-
-        server
-            .register_external_peer(peer_record("blocked", "Blocked", &["192.168.1.21:21531"]))
-            .await;
-
-        assert!(server.get_known_peers().await.is_empty());
-    }
-
-    #[tokio::test]
-    async fn disconnect_peer_closes_matching_sessions_and_persists_blocklist() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-
-        let (tx1, _rx1) = mpsc::unbounded_channel::<Message>();
-        let (tx2, _rx2) = mpsc::unbounded_channel::<Message>();
-        let (tx3, _rx3) = mpsc::unbounded_channel::<Message>();
-
-        server.peers.lock().await.insert(
-            1,
-            PeerState {
-                device_id: "blocked".to_string(),
-                device_name: "Blocked One".to_string(),
-                addresses: vec!["192.168.1.20:21531".to_string()],
-                platform: None,
-                app_version: None,
-                authenticated: true,
-                sync_complete: true,
-                queued_live_changes: vec![],
-                tx: tx1,
-            },
-        );
-        server.peers.lock().await.insert(
-            2,
-            PeerState {
-                device_id: "blocked".to_string(),
-                device_name: "Blocked Two".to_string(),
-                addresses: vec!["192.168.1.21:21531".to_string()],
-                platform: None,
-                app_version: None,
-                authenticated: true,
-                sync_complete: true,
-                queued_live_changes: vec![],
-                tx: tx2,
-            },
-        );
-        server.peers.lock().await.insert(
-            3,
-            PeerState {
-                device_id: "keep".to_string(),
-                device_name: "Keep".to_string(),
-                addresses: vec!["192.168.1.22:21531".to_string()],
-                platform: None,
-                app_version: None,
-                authenticated: true,
-                sync_complete: true,
-                queued_live_changes: vec![],
-                tx: tx3,
-            },
-        );
-
-        let closed = server.disconnect_peer("blocked").await;
-        assert_eq!(closed, 2);
-        assert_eq!(
-            server.get_removed_peer_ids().await,
-            vec!["blocked".to_string()]
-        );
-        assert_eq!(server.connected_peer_count().await, 1);
-        assert_eq!(
-            server.get_connected_peer_entries().await,
-            vec![crate::sync_server::PeerEntry {
-                device_id: "keep".to_string(),
-                device_name: "Keep".to_string(),
-                platform: None,
-                app_version: None,
-            }]
-        );
-        assert_eq!(server.peers.lock().await.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn get_connected_peer_entries_dedup_by_device_id() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
-        let server = SyncServer::new(storage.clone());
-        // Simulate two authenticated sessions from the same device_id (a race
-        // between old + new sessions before eviction settles).
-        let (tx, _rx) = mpsc::unbounded_channel::<Message>();
-        let state = |device_id: &str| PeerState {
-            device_id: device_id.to_string(),
-            device_name: "DupDevice".to_string(),
-            addresses: vec![],
-            platform: None,
-            app_version: None,
-            authenticated: true,
-            sync_complete: true,
-            queued_live_changes: vec![],
-            tx: tx.clone(),
-        };
-        server.peers.lock().await.insert(1, state("dup"));
-        server.peers.lock().await.insert(2, state("dup"));
-
-        let entries = server.get_connected_peer_entries().await;
-        assert_eq!(
-            entries.len(),
-            1,
-            "duplicate device_id sessions should collapse to one entry",
-        );
-        assert_eq!(entries[0].device_id, "dup");
-    }
+    include!("sync_server_tests/peer_management.rs");
 }

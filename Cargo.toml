@@ -9,6 +9,12 @@ members = [
   "runtime/crates/engine-packages",
   "runtime/crates/engine-indexes",
   "runtime/crates/engine-mobile",
+  "core/crates/ark-domain",
+  "core/crates/ark-application",
+  "core/crates/ark-sync",
+  "core/crates/ark-net-policy",
+  "core/crates/ark-net",
+  "core/crates/ark-store",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)

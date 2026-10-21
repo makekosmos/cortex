@@ -15,8 +15,9 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
-    let backend = Arc::new(crate::db::SqliteStorageBackend::new(shared));
+    let backend = Arc::new(crate::db::SqliteStorageBackend::with_db_handle(
+        get_db_handle(&state).unwrap(),
+    ));
     backend.set_device_id("device-local").unwrap();
 
     let peer = PeerRecord {
@@ -28,22 +29,24 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
-        backend.clone() as Arc<dyn crate::sync_server::StorageBackend>,
-        peer,
-        "device-local".to_string(),
-        "Local Device".to_string(),
-        "space-a".to_string(),
-        vec![],
-        None,
+    let client = Arc::new(crate::direct_client::create_direct_client(
+        backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
+        crate::direct_client::DirectClientConfig::new(
+            peer,
+            "device-local".to_string(),
+            "Local Device".to_string(),
+            "space-a".to_string(),
+            vec![],
+            None,
+        ),
     ));
 
-    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> = Arc::new(TokioMutex::new(
+    let clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>> = Arc::new(TokioMutex::new(
         HashMap::from([("peer-123".to_string(), client.clone())]),
     ));
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            backend.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage: backend,
         clients: clients.clone(),
@@ -77,6 +80,41 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     *state.sync.lock().await = Some(Arc::new(runtime));
 
     let mut event_rx = crate::events::subscribe();
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let error = handle_disconnect_peer(&state, "peer-123".to_string())
+        .await
+        .expect_err("failed peer persistence must be reported to the caller");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        client.is_stopped(),
+        "outbound client must stop despite DB failure"
+    );
+    assert!(clients.lock().await.is_empty());
+    assert!(
+        event_rx.try_recv().is_err(),
+        "failed persistence must not emit a success event"
+    );
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
 
     handle_disconnect_peer(&state, "peer-123".to_string())
         .await
@@ -165,6 +203,7 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -176,7 +215,7 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
 
     let msgs = captured.lock().await;
     let live_change = msgs.iter().find(|m| {
-        matches!(m, crate::protocol::LanSyncMessage::LiveChange { entity, .. }
+        matches!(m, ark_sync::protocol::LanSyncMessage::LiveChange { entity, .. }
                 if entity.id == "live-obj-1" && entity.entity_type == "object" &&
                     entity.deleted.is_none())
     });
@@ -243,6 +282,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -256,6 +296,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
         Request::DeleteObject {
             id: "live-obj-del".to_string(),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -266,7 +307,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
 
     let msgs = captured.lock().await;
     let live_change = msgs.iter().find(|m| {
-        matches!(m, crate::protocol::LanSyncMessage::LiveChange { entity, .. }
+        matches!(m, ark_sync::protocol::LanSyncMessage::LiveChange { entity, .. }
                 if entity.id == "live-obj-del"
                     && entity.entity_type == "object"
                     && entity.deleted == Some(true))

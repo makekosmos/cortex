@@ -114,35 +114,159 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
-    let guard = shared.lock().unwrap();
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
-        .unwrap()
-        .expect("version vector should be stored");
-    let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+    let mut canonical_task = canonical_task_object(Some("0.1.0"), canonical_task_props());
+    canonical_task.id = "todo-canonical-cutover".into();
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object: canonical_task,
+            expected_snapshot: None,
+            operation_id: Some("kos423-canonical-upsert".into()),
+            device_id: Some("device-canonical".into()),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(
+        &state,
+        Request::DeleteObject {
+            id: "todo-canonical-cutover".into(),
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("device-canonical".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle_request(
+        &state,
+        Request::UpsertTrackedApp {
+            tracked_app: TrackedApp {
+                id: "tracked-app-legacy".into(),
+                platform: "test".into(),
+                exe_path: "/tmp/app".into(),
+                normalized_exe_path: "/tmp/app".into(),
+                process_name: "app".into(),
+                display_name: Some("App".into()),
+                publisher: None,
+                icon_ref: None,
+                first_seen_at: timestamp.clone(),
+                last_seen_at: timestamp.clone(),
+            },
+            device_id: device.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(
+        &state,
+        Request::DeleteTrackedApp {
+            id: "tracked-app-legacy".into(),
+            device_id: device.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let fixture = ark_store::test_support::LegacyWriteFixture::open(&db_path).unwrap();
+    let snapshot = fixture.inspect_successful_writes().unwrap();
     for id in [
         "project-legacy",
         "tag-legacy",
         "todo-legacy",
         "todo-batch-1",
         "todo-batch-2",
+        "tracked-app-legacy",
     ] {
         assert!(
-            vector
+            snapshot
+                .version_vector
                 .get(id)
                 .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
             "{id} should have a local HLC in the version vector after legacy upsert",
         );
     }
-
-    let todo_tombstone: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["todo-batch-1", "object"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+    assert!(snapshot
+        .version_vector
+        .get("todo-canonical-cutover")
+        .is_some_and(|hlc| hlc.ends_with(":device-canonical")));
+    assert!(snapshot
+        .version_vector
+        .get(&snapshot.task_link_id)
+        .is_some_and(|hlc| hlc.ends_with(":device-legacy")));
+    assert!(
+        snapshot.todo_tombstone_exists,
+        "DeleteTodo writes a tombstone"
+    );
+    assert!(
+        snapshot.tracked_app_tombstone_exists,
+        "tracked-app deletion is synced"
+    );
+    assert!(
+        snapshot.legacy_todo_deleted_at.is_some(),
+        "DeleteTodo keeps a soft-deleted task row"
+    );
+    assert!(
+        !snapshot.canonical_object_exists,
+        "canonical DeleteObject hard-deletes the task row"
+    );
+    assert_eq!(
+        snapshot.canonical_applied_receipt_count, 1,
+        "canonical task upsert keeps its entity receipt"
+    );
+    assert_eq!(
+        snapshot.committed_task_feed_count, 6,
+        "task writes and deletes stay in committed feed"
+    );
+    assert_eq!(
+        snapshot.task_merge_bootstrap_count, 4,
+        "each task enters causal sync in the same transaction as its write"
+    );
+    assert_eq!(
+        snapshot.task_existence_operation_count, 6,
+        "each baseline records existence and both deletion modes append a causal tombstone"
+    );
+    fixture.install_todo_batch_failure().unwrap();
+    let failed = handle_request(
+        &state,
+        Request::BatchUpsertTodos {
+            todos: vec![make_todo("todo-fail-1"), make_todo("todo-fail-2")],
+            device_id: device.clone(),
+        },
+    )
+    .await;
+    assert!(failed.is_err());
+    for id in ["todo-fail-1", "todo-fail-2"] {
+        let state = fixture.inspect_batch_todo(id).unwrap();
+        assert_eq!(
+            state,
+            ark_store::test_support::LegacyBatchRollbackState {
+                object_exists: false,
+                revision_exists: false,
+                links_exist: false,
+            },
+            "failed batch must roll back every write for {id}"
+        );
+    }
+    fixture.install_project_delete_failure().unwrap();
+    let failed_delete = handle_request(
+        &state,
+        Request::DeleteProject {
+            id: "project-legacy".to_string(),
+            device_id: device,
+        },
+    )
+    .await;
+    assert!(failed_delete.is_err());
+    assert_eq!(
+        fixture.inspect_project_delete().unwrap(),
+        ark_store::test_support::LegacyProjectDeleteState {
+            deleted_at: None,
+            tombstone_exists: false,
+        },
+        "failed delete must restore the object and leave no tombstone"
+    );
 }
 
 // -----------------------------------------------------------------------
@@ -151,7 +275,7 @@ async fn legacy_entity_writes_bump_version_vector() {
 
 /// Fake SyncTransport: захватывает все отправленные LanSyncMessage в shared buf.
 pub(super) struct CapturingTransport {
-    pub(super) sent: Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>>,
+    pub(super) sent: Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>>,
 }
 
 #[async_trait::async_trait]
@@ -163,7 +287,7 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
         Ok(())
     }
 
-    fn send(&self, msg: crate::protocol::LanSyncMessage) -> Result<(), String> {
+    fn send(&self, msg: ark_sync::protocol::LanSyncMessage) -> Result<(), String> {
         // `send` — sync, но нам нужен lock на TokioMutex из sync контекста.
         // Используем blocking_lock через spawn_blocking или try_lock; в тестах
         // конкурентности нет, try_lock гарантированно успевает.
@@ -175,4 +299,80 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
     }
 
     async fn stop(&self) {}
+}
+
+#[async_trait::async_trait]
+impl crate::sync_transport::IrohSessionTransport for CapturingTransport {
+    async fn send_to(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<(), String> {
+        crate::sync_transport::SyncTransport::send(self, message)
+    }
+    fn set_outbound_authorizer(
+        &self,
+        _: Arc<dyn ark_sync::transport::OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn bind_peer_for_control(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    async fn send_to_transport_peer(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(crate::sync_transport::AddressedSendOutcome::Sent)
+    }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_sync::relay_registry::PeerSessionControl for CapturingTransport {
+    async fn send_control_to_endpoint(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<ark_sync::relay_registry::PeerControlSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(ark_sync::relay_registry::PeerControlSendOutcome::Sent)
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_endpoint(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
 }

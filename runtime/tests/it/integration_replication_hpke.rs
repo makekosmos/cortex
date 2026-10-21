@@ -221,13 +221,14 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         }
         if tokio::time::Instant::now() >= deadline {
             let conn = rusqlite::Connection::open(&setup.recipient_db).unwrap();
-            let persisted = ark_core::db::load_integration_credential_envelope(
-                &conn,
-                PACKAGE_ID,
-                &setup.recipient.node_id,
-                1,
-            )
-            .unwrap();
+            let persisted =
+                ark_store::integration_replication::load_integration_credential_envelope_record(
+                    &conn,
+                    PACKAGE_ID,
+                    &setup.recipient.node_id,
+                    1,
+                )
+                .unwrap();
             assert!(
                 response.ok && persisted.is_some(),
                 "recipient did not persist the signed HPKE envelope: \
@@ -239,8 +240,6 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    drop(origin_host);
-
     finish::receive_and_validate(
         &marker,
         &setup,
@@ -255,6 +254,14 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
     // tempdir is removed (KOS-270).
     origin_packages
         .set_enabled(PACKAGE_ID, PACKAGE_VERSION, false)
+        .await
+        .unwrap();
+    origin_host
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
+    recipient_host
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
         .await
         .unwrap();
 }

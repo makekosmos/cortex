@@ -1,171 +1,11 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
 impl RelaySync {
-    async fn handle_event(&self, event: TransportEvent) {
-        match event {
-            TransportEvent::MessageReceived {
-                from_device_id,
-                msg,
-            } => {
-                let from = if from_device_id.is_empty() {
-                    message_origin_device_id(&msg).unwrap_or_default()
-                } else {
-                    from_device_id
-                };
-                if from == self.config.device_id {
-                    return;
-                }
-                self.handle_message(from, msg, None).await;
-            }
-            TransportEvent::MessageReceivedFromTransport {
-                from_device_id,
-                transport_public_key,
-                msg,
-            } => {
-                if matches!(&msg, LanSyncMessage::Hello { .. }) {
-                    // A Hello is trusted in exactly two cases. The claimed
-                    // device has a stored endpoint key — persisted from an
-                    // earlier pairing (`sync.peer_transport_keys`) or granted
-                    // through integration replication (`authorized_nodes`) —
-                    // and it matches (a mismatch is the rotation/revocation
-                    // guard). Or it is the endpoint whose code this device
-                    // just entered: the user's own «Подключить» is the
-                    // consent (KOS-369). Anything else is parked as a
-                    // pending request for «Принять / Отклонить» — the
-                    // endpoint stays reachable by id forever, so silent
-                    // acceptance would turn a once-disclosed ticket into a
-                    // permanent key. `auth_secret` HMAC still applies inside
-                    // `handle_message`.
-                    let authorized = self
-                        .storage
-                        .authorized_transport_public_key(&from_device_id)
-                        .await;
-                    let paired_keys =
-                        crate::sync_server::load_peer_transport_keys(&self.storage).await;
-                    let known_key = authorized
-                        .as_deref()
-                        .or_else(|| paired_keys.get(&from_device_id).map(String::as_str));
-                    let outgoing_match = self
-                        .outgoing_pairing
-                        .lock()
-                        .await
-                        .as_ref()
-                        .is_some_and(|o| o.endpoint == transport_public_key);
-                    // A stored integration-replication key never yields to a
-                    // pairing consent — that trust domain owns the binding.
-                    // A stored *pairing* key may rotate under explicit
-                    // re-consent: entering that endpoint's code rebinds it.
-                    let accept = match known_key {
-                        Some(key) if key == transport_public_key => true,
-                        Some(_) => outgoing_match && authorized.is_none(),
-                        None => outgoing_match,
-                    };
-                    if accept {
-                        // Entering a previously removed device's code is
-                        // explicit re-consent — unblock it before
-                        // handle_message's removed-peer check drops the Hello.
-                        if outgoing_match {
-                            crate::sync_server::unblock_peer_id(&self.storage, &from_device_id)
-                                .await;
-                        }
-                        // A repeated Hello on an already-authenticated link
-                        // is the responder's post-accept announcement — the
-                        // consent signal that resolves our attempt.
-                        let already_authenticated =
-                            self.is_authenticated_peer(&from_device_id).await;
-                        self.admit_transport_hello(
-                            from_device_id.clone(),
-                            transport_public_key.clone(),
-                            msg,
-                            paired_keys,
-                        )
-                        .await;
-                        if outgoing_match && already_authenticated {
-                            self.mark_outgoing_accepted(&transport_public_key).await;
-                        }
-                    } else if known_key.is_some() {
-                        eprintln!(
-                            "{TAG} rejecting Hello from {from_device_id}: transport key \
-                             does not match the stored record"
-                        );
-                    } else {
-                        self.record_pairing_request(from_device_id, transport_public_key, msg)
-                            .await;
-                    }
-                } else if let LanSyncMessage::PairingRejected { device_id } = &msg {
-                    // Only the endpoint we are pairing with may decline us —
-                    // a third connection cannot cancel our attempt.
-                    let matches_outgoing = self
-                        .outgoing_pairing
-                        .lock()
-                        .await
-                        .as_ref()
-                        .is_some_and(|o| o.endpoint == transport_public_key);
-                    if matches_outgoing {
-                        self.handle_pairing_rejected(device_id, &transport_public_key)
-                            .await;
-                    }
-                } else if self
-                    .transport_keys
-                    .lock()
-                    .await
-                    .get(&from_device_id)
-                    .is_some_and(|key| key == &transport_public_key)
-                {
-                    // Any data frame from the endpoint we dialed means the
-                    // responder processed our Hello — it consented.
-                    self.mark_outgoing_accepted(&transport_public_key).await;
-                    self.handle_message(from_device_id, msg, Some(transport_public_key))
-                        .await;
-                }
-            }
-            TransportEvent::Connected { .. } => {}
-            TransportEvent::Disconnected { device_id } => {
-                // Transports fall back to our own id when a remote's id can't
-                // be resolved (iroh registry miss) — never evict that.
-                if device_id != self.config.device_id {
-                    self.peers.lock().await.remove(&device_id);
-                    self.transport_keys.lock().await.remove(&device_id);
-                    // An initiator that hung up (cancel, Engine stop) takes
-                    // its unanswered consent request down with it.
-                    if self
-                        .pending_pairing
-                        .lock()
-                        .await
-                        .remove(&device_id)
-                        .is_some()
-                    {
-                        self.notify_pairing_changed().await;
-                    }
-                    if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-                        handler(device_id, self.peers.lock().await.len());
-                    }
-                }
-            }
-            TransportEvent::TransportDropped => {
-                // Whole transport went down — every peer reached through it is
-                // gone. Evict all peer state so reconnect re-announces them.
-                let evicted: Vec<String> = {
-                    let mut peers = self.peers.lock().await;
-                    let evicted = peers.keys().cloned().collect();
-                    peers.clear();
-                    evicted
-                };
-                self.transport_keys.lock().await.clear();
-                if !self.pending_pairing.lock().await.is_empty() {
-                    self.pending_pairing.lock().await.clear();
-                    self.notify_pairing_changed().await;
-                }
-                if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-                    let mut remaining = evicted.len();
-                    for device_id in evicted {
-                        remaining -= 1;
-                        handler(device_id, remaining);
-                    }
-                }
-            }
+    fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
+        if self.transport.session().is_none() {
+            return Err("transport does not support per-device registry admission".into());
         }
-        trim_process_heap();
+        self.transport.send(message)
     }
 
     /// Authenticated peer count over this transport — the WS server has
@@ -205,38 +45,6 @@ impl RelaySync {
         })
     }
 
-    /// Evict a peer the user removed via «Отключить»: without this the
-    /// authenticated entry survives removal, so a transport-paired device
-    /// keeps syncing and stays "online" in the snapshot until the Engine
-    /// restarts. `sync.removed_peers` (written by the caller) blocks
-    /// re-authentication on the next Hello.
-    pub async fn disconnect_peer(&self, device_id: &str) {
-        self.transport_keys.lock().await.remove(device_id);
-        if self
-            .pending_pairing
-            .lock()
-            .await
-            .remove(device_id)
-            .is_some()
-        {
-            self.notify_pairing_changed().await;
-        }
-        // Forget the persisted endpoint key so the device has to pair again
-        // (a stored match would otherwise re-admit it without fresh consent).
-        let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
-        if keys.remove(device_id).is_some() {
-            crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await;
-        }
-        if self.peers.lock().await.remove(device_id).is_none() {
-            return;
-        }
-        let _ = self.transport.disconnect_peer(device_id);
-        if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-            let remaining = self.peers.lock().await.len();
-            handler(device_id.to_string(), remaining);
-        }
-    }
-
     /// Route an addressed integration frame through the configured transport.
     /// Broadcast transports reject this message class; addressed transports
     /// such as Iroh enforce authenticated recipient and writer-time authority.
@@ -253,6 +61,8 @@ impl RelaySync {
             .await?;
         let recipient = frame.recipient_node_id.clone();
         self.transport
+            .session()
+            .ok_or_else(|| "addressed transport is not supported".to_owned())?
             .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
             .await
     }
@@ -278,16 +88,17 @@ impl RelaySync {
                 )
                 .await
                 .is_ok();
-        let _ = self
-            .transport
-            .send_to(
-                &from_device_id,
-                LanSyncMessage::SignedIntegrationAck {
-                    message_id: frame.message_id,
-                    accepted,
-                },
-            )
-            .await;
+        if let Some(session) = self.transport.session() {
+            let _ = session
+                .send_to(
+                    &from_device_id,
+                    LanSyncMessage::SignedIntegrationAck {
+                        message_id: frame.message_id,
+                        accepted,
+                    },
+                )
+                .await;
+        }
     }
 
     fn make_hello(&self) -> LanSyncMessage {
@@ -304,6 +115,24 @@ impl RelaySync {
             }
             None => (None, None),
         };
+        let offer = if self.transport.session().is_some() {
+            ProtocolOffer::current_with_registry_history(true).with_task_merge_bootstrap_v2()
+        } else {
+            ProtocolOffer::current(self.auth_secret.is_some())
+        };
+        let negotiation_hmac =
+            self.auth_secret
+                .as_deref()
+                .zip(auth_nonce.as_deref())
+                .map(|(secret, nonce)| {
+                    compute_negotiation_offer_hmac(
+                        secret,
+                        &self.config.space_id,
+                        &self.config.device_id,
+                        nonce,
+                        &offer,
+                    )
+                });
 
         LanSyncMessage::Hello {
             protocol_version: PROTOCOL_VERSION,
@@ -313,34 +142,65 @@ impl RelaySync {
             addresses: None,
             auth_nonce,
             auth_hmac,
-            platform: Some(crate::host::local_platform()),
-            app_version: crate::host::app_version(),
+            platform: Some(ark_net::host::local_platform()),
+            app_version: ark_net::host::app_version(),
+            supported_protocol_versions: Some(offer.version_ids()),
+            supported_capabilities: Some(offer.capability_ids()),
+            negotiated_capabilities: None,
+            negotiation_hmac,
         }
     }
 
-    async fn send_local_version_vector(&self) {
-        let vector = load_version_vector(&self.storage).await;
-        let _ = self.transport.send(LanSyncMessage::VersionVector {
-            vector,
-            origin_device_id: Some(self.config.device_id.clone()),
-        });
-    }
-
-    async fn send_missing_entities(&self, remote_vector: &VersionVector) {
-        let mut load_vector = load_version_vector(&self.storage).await;
+    async fn send_missing_entities(&self, peer_device_id: &str, remote_vector: &VersionVector) {
+        let mut load_vector = match load_version_vector(&self.storage).await {
+            Ok(vector) => vector,
+            Err(error) => {
+                eprintln!("{TAG} failed to load local sync progress for {peer_device_id}: {error}");
+                return;
+            }
+        };
         merge_usage_cursors(&mut load_vector, remote_vector);
         // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
         // it may itself have compacted refs the next hop still needs a claim
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.
-        let complete_through = self.storage.usage_complete_through().await;
+        let read_class =
+            ark_application::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
+        let complete_through = match self
+            .storage
+            .usage_complete_through_for_peer(peer_device_id, read_class)
+            .await
+        {
+            Ok(through) => through,
+            Err(error) => {
+                eprintln!(
+                    "[RelaySync] outbound usage progress read failed for {peer_device_id}: {error}"
+                );
+                return;
+            }
+        };
         let mut offset = 0;
 
         loop {
-            let entities = self
+            let entities = match self
                 .storage
-                .load_entities_page(&load_vector, offset, SYNC_LOAD_PAGE_SIZE)
-                .await;
+                .load_entities_page_for_peer(
+                    peer_device_id,
+                    read_class,
+                    &load_vector,
+                    offset,
+                    SYNC_LOAD_PAGE_SIZE,
+                )
+                .await
+            {
+                Ok(entities) => entities,
+                Err(error) => {
+                    eprintln!(
+                        "[RelaySync] outbound sync page read failed for {peer_device_id}: {error}"
+                    );
+                    return;
+                }
+            };
             if entities.is_empty() {
                 break;
             }
@@ -354,7 +214,8 @@ impl RelaySync {
             }
 
             for batch in split_into_batches(&to_send) {
-                let _ = self.transport.send(LanSyncMessage::SyncChanges {
+                let _ = self.send_user_data_message(LanSyncMessage::SyncChanges {
+                    policy_identity: None,
                     batch_id: generate_id(),
                     entities: batch,
                     is_last: false,
@@ -364,13 +225,176 @@ impl RelaySync {
             }
         }
 
-        let _ = self.transport.send(LanSyncMessage::SyncChanges {
+        let _ = self.send_user_data_message(LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: generate_id(),
             entities: vec![],
             is_last: true,
             origin_device_id: Some(self.config.device_id.clone()),
             usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         });
+
+        if let Err(error) = self.pump_task_merge_batch(peer_device_id).await {
+            eprintln!("{TAG} task merge backfill failed for {peer_device_id}: {error}");
+        }
+    }
+
+    pub(super) async fn pump_task_merge_batch(&self, peer_device_id: &str) -> Result<(), String> {
+        let (authenticated, supported) = {
+            let peers = self.peers.lock().await;
+            let Some(peer) = peers.get(peer_device_id) else {
+                return Ok(());
+            };
+            (
+                peer.authenticated,
+                peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    protocol
+                        .capabilities
+                        .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                }),
+            )
+        };
+        let registry_ready = self.registry_ready_for_connected_peer(peer_device_id).await;
+        if !authenticated || !registry_ready || !supported {
+            return Ok(());
+        }
+        let Some(batch) = ark_sync::task_merge_delivery::prepare_outbound_batch(
+            self.storage.as_ref(),
+            peer_device_id,
+        )
+        .await?
+        else {
+            return Ok(());
+        };
+        let still_supported = self
+            .peers
+            .lock()
+            .await
+            .get(peer_device_id)
+            .is_some_and(|peer| {
+                peer.authenticated
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+        if still_supported {
+            let Some(session) = self.transport.session() else {
+                return Ok(());
+            };
+            session
+                .send_to(peer_device_id, LanSyncMessage::TaskMergeBatch { batch })
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn apply_task_merge_batch(
+        &self,
+        from_device_id: &str,
+        transport_public_key: Option<&str>,
+        batch: ark_application::sync_storage::TaskMergeBatch,
+    ) -> Result<(), String> {
+        if !self
+            .registry_ready_for_peer(from_device_id, transport_public_key)
+            .await
+        {
+            return Ok(());
+        }
+        let supported = self
+            .peers
+            .lock()
+            .await
+            .get(from_device_id)
+            .is_some_and(|peer| {
+                peer.authenticated
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+        if !supported {
+            return Ok(());
+        }
+        let local_profile = self
+            .storage
+            .load_local_sync_profile(&self.config.device_id)
+            .await?;
+        let identity = ark_sync::protocol::sync_policy_identity(local_profile.as_ref());
+        if batch.identity != identity {
+            return Ok(());
+        }
+        let ack = self
+            .storage
+            .apply_task_merge_batch(from_device_id, &self.config.device_id, &identity, &batch)
+            .await?;
+        self.transport
+            .session()
+            .ok_or_else(|| "addressed transport is not supported".to_owned())?
+            .send_to(
+                from_device_id,
+                LanSyncMessage::TaskMergeBatchAck {
+                    batch_id: ack.batch_id,
+                    through_position: ack.through_position,
+                    policy_identity: identity,
+                },
+            )
+            .await?;
+
+        let peers = self
+            .peers
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, peer)| peer.authenticated)
+            .map(|(device_id, _)| device_id.clone())
+            .collect::<Vec<_>>();
+        for device_id in peers {
+            if let Err(error) = self.pump_task_merge_batch(&device_id).await {
+                eprintln!("{TAG} task merge fanout failed for {device_id}: {error}");
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) async fn acknowledge_task_merge_batch(
+        &self,
+        from_device_id: &str,
+        batch_id: &str,
+        through_position: i64,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<(), String> {
+        let authenticated_supported = {
+            let peers = self.peers.lock().await;
+            let authenticated_supported = peers.get(from_device_id).is_some_and(|peer| {
+                peer.authenticated
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+            authenticated_supported
+        };
+        let registry_ready = self.registry_ready_for_connected_peer(from_device_id).await;
+        let supported = authenticated_supported && registry_ready;
+        if !supported {
+            return Ok(());
+        }
+        if ark_sync::task_merge_delivery::acknowledge_outbound_batch(
+            self.storage.as_ref(),
+            from_device_id,
+            policy_identity,
+            batch_id,
+            through_position,
+        )
+        .await?
+        {
+            self.pump_task_merge_batch(from_device_id).await?;
+        }
+        Ok(())
     }
 
     async fn apply_entities(
@@ -378,11 +402,19 @@ impl RelaySync {
         entities: &[SyncEntity],
         is_last: bool,
         usage_complete_through: Option<&HashMap<String, u64>>,
+        authenticated_peer_id: Option<&str>,
     ) {
         let mut incoming = self.incoming_sync.lock().await;
         if incoming.is_none() {
+            let vector = match load_version_vector(&self.storage).await {
+                Ok(vector) => vector,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load inbound sync progress: {error}");
+                    return;
+                }
+            };
             *incoming = Some(IncomingSyncState {
-                vector: load_version_vector(&self.storage).await,
+                vector,
                 changed: false,
                 last_update: Instant::now(),
             });
@@ -400,7 +432,7 @@ impl RelaySync {
                 continue;
             }
 
-            match self.storage.apply_entity(entity).await {
+            match apply_relay_entity(&self.storage, entity, authenticated_peer_id).await {
                 Ok(()) => {
                     state.changed |= observe_non_usage_entity(&mut state.vector, entity);
                     if let Some(handler) = self.on_change.lock().await.as_ref() {
@@ -417,14 +449,18 @@ impl RelaySync {
         }
 
         if is_last {
-            crate::sync_server::persist_pull_vector(
-                &self.storage,
+            if let Err(error) = ark_sync::inbound_snapshot::persist_pull_vector(
+                self.storage.as_ref(),
                 &mut state.vector,
                 state.changed,
                 true,
                 usage_complete_through,
             )
-            .await;
+            .await
+            {
+                eprintln!("{TAG} failed to persist relay sync progress: {error}");
+                return;
+            }
             *incoming = None;
             drop(incoming);
             trim_process_heap();

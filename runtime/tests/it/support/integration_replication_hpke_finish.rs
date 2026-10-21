@@ -110,7 +110,7 @@ pub async fn receive_and_validate(
 
     let conn = rusqlite::Connection::open(&setup.recipient_db).unwrap();
     let mut revoked_node = serde_json::to_value(
-        ark_core::db::load_authorized_node(&conn, &setup.recipient.node_id)
+        ark_store::integration_replication::load_authorized_node(&conn, &setup.recipient.node_id)
             .unwrap()
             .unwrap(),
     )
@@ -122,9 +122,13 @@ pub async fn receive_and_validate(
     revoked_node["revision"] = json!(3);
     revoked_node["hlc"] = json!("2026-09-07T00:00:01.000Z:000001:recipient-node");
     let mut revoked_grant = serde_json::to_value(
-        ark_core::db::load_integration_node_grant(&conn, PACKAGE_ID, &setup.recipient.node_id)
-            .unwrap()
-            .unwrap(),
+        ark_store::integration_replication::load_integration_node_grant(
+            &conn,
+            PACKAGE_ID,
+            &setup.recipient.node_id,
+        )
+        .unwrap()
+        .unwrap(),
     )
     .unwrap();
     revoked_grant["grant_epoch"] = json!(3);

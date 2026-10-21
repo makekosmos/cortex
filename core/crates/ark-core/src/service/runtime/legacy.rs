@@ -1,27 +1,40 @@
 use super::*;
 
 pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<Value, String> {
-    let conn = db::open_db(&db_path)?;
-    db::init_schema(&conn)?;
-    // KOS-397: the one-off move of com.kosmos.task 1.1.0 to core.task 0.1.0.
-    // It backs up the legacy rows first and fails the start if a row cannot
-    // be carried over, so no task is left behind. A later start finds none.
-    let backup = format!("{db_path}.pre-core-task.bak");
-    crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
-        &conn,
-        &backup,
-        &local_write_device_id(None),
-    )?;
-    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
+    // Re-initialization closes the current owner before opening another one;
+    // two actor writer connections must never overlap for the live database.
+    handle_stop_sync(state).await;
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    let previous_owner = {
+        state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+    };
+    if let Some(mut owner) = previous_owner {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .map_err(|error| format!("database owner shutdown failed: {error}"))?;
+    }
+    let (db, owner) = db::DbHandle::open(db_path.clone(), local_write_device_id(None))
+        .await
+        .map_err(|error| error.to_string())?;
+    *state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(owner);
+    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
     *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
     Ok(json!(true))
 }
 
 pub(super) async fn load_all(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let data = db::load_all(conn)?;
-        serde_json::to_value(data).map_err(|e| e.to_string())
-    })
+    get_db_handle(state)?
+        .query_with_store(db::CommandContext::engine(), db::ObjectReadQuery::LoadAll)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 // Legacy entity write handlers: до 2026-05-18 они не вызывали
@@ -54,7 +67,18 @@ pub(super) async fn upsert_todo(
         &todo.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .write_legacy_graph(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -64,9 +88,17 @@ pub(super) async fn delete_todo(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        tombstone_legacy(conn, &id, "core.task", device_id)
-    })?;
+    let entity = get_db_handle(state)?
+        .delete_legacy_object(
+            db::CommandContext::engine(),
+            db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
+                id,
+                kind: crate::application::legacy_mutation::LegacyObjectKind::Task,
+                device_id,
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -76,9 +108,17 @@ pub(super) async fn delete_project(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        tombstone_legacy(conn, &id, "com.kosmos.project", device_id)
-    })?;
+    let entity = get_db_handle(state)?
+        .delete_legacy_object(
+            db::CommandContext::engine(),
+            db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
+                id,
+                kind: crate::application::legacy_mutation::LegacyObjectKind::Project,
+                device_id,
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -111,7 +151,15 @@ pub(super) async fn batch_upsert_todos(
             )
         })
         .collect::<Vec<_>>();
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &records, device_id))?;
+    let entities = get_db_handle(state)?
+        .write_legacy_graph(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite { records, device_id },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -134,7 +182,18 @@ pub(super) async fn upsert_project(
         &project.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .write_legacy_graph(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -152,7 +211,18 @@ pub(super) async fn upsert_tag(
         &tag.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .write_legacy_graph(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -162,17 +232,18 @@ pub(super) async fn upsert_tracked_app(
     tracked_app: TrackedApp,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::upsert_tracked_app(conn, &tracked_app)?;
-        let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
-        Ok(make_sync_entity(
-            "tracked_app",
-            &tracked_app.id,
-            serde_json::to_value(&tracked_app).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
+    use ark_application::tracked_app_mutation::{TrackedAppMutation, TrackedAppUpsert};
+
+    let entity = get_db_handle(state)?
+        .submit_tracked_app_mutation(
+            db::CommandContext::engine(),
+            TrackedAppMutation::Upsert(Box::new(TrackedAppUpsert {
+                tracked_app,
+                device_id: local_write_device_id(device_id),
+            })),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -182,17 +253,18 @@ pub(super) async fn delete_tracked_app(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::delete_tracked_app(conn, &id)?;
-        let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
-        Ok(make_sync_entity(
-            "tracked_app",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
+    use ark_application::tracked_app_mutation::{TrackedAppDelete, TrackedAppMutation};
+
+    let entity = get_db_handle(state)?
+        .submit_tracked_app_mutation(
+            db::CommandContext::engine(),
+            TrackedAppMutation::Delete(TrackedAppDelete {
+                id,
+                device_id: local_write_device_id(device_id),
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }

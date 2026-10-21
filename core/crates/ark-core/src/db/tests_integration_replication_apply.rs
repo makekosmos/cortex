@@ -112,7 +112,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     upsert_integration_node_grant(&source, &origin_grant, "node-a").unwrap();
     upsert_integration_node_grant(&source, &grant, "node-a").unwrap();
     acquire_integration_test_lease(&source, "node-a");
-    publish_integration_credential_envelope(&source, &envelope, "node-a", 15).unwrap();
+    publish_test_envelope(&source, &envelope, "node-a", 15).unwrap();
     upsert_authorized_node(&target, &origin, "bootstrap").unwrap();
     upsert_authorized_node(&target, &recipient, "bootstrap").unwrap();
     upsert_integration_node_grant(&target, &origin_grant, "bootstrap").unwrap();
@@ -127,14 +127,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
             "2000-01-01T00:00:00.000Z:000001:bootstrap".into(),
         ),
     ]);
-    set_sync_kv(
-        &target,
-        VERSION_VECTOR_KEY,
-        &serde_json::to_string(&target_vector).unwrap(),
-    )
-    .unwrap();
+    replace_version_vector_for_test(&target, &target_vector);
 
-    let changes = export_integration_replication(&source, "integration-a", "node-b").unwrap();
+    let changes = with_integration_replication_read(&source, |read| {
+        export_integration_replication(read, "integration-a", "node-b")
+    })
+    .unwrap();
     let expected_vectors = changes
         .iter()
         .map(|change| (change.vector_key(), change.vector_hlc.clone()))
@@ -142,14 +140,18 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let vector_repair_changes = changes.clone();
     let frame = sign_replication_batch(&origin_key, 2, "message-two-db", changes);
     drop(source);
-    apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15).unwrap();
+    target.fixture.admit_peer_for_test("node-a").unwrap();
+    apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15)
+        .unwrap();
 
+    let loaded = integration_read_snapshot(&target)
+        .configuration("integration-a")
+        .unwrap();
+    assert_eq!(loaded, Some(config.clone()));
     assert_eq!(
-        load_integration_configuration(&target, "integration-a").unwrap(),
-        Some(config.clone())
-    );
-    assert_eq!(
-        load_authorized_node(&target, "node-b").unwrap(),
+        integration_read_snapshot(&target)
+            .authorized_node("node-b")
+            .unwrap(),
         Some(recipient)
     );
     assert_eq!(
@@ -157,11 +159,13 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         Some(grant)
     );
     assert_eq!(
-        load_integration_credential_envelope(&target, "integration-a", "node-b", 3).unwrap(),
+        with_integration_replication_read(&target, |read| {
+            load_integration_credential_envelope(read, "integration-a", "node-b", 3)
+        })
+        .unwrap(),
         Some(envelope)
     );
-    let target_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
+    let target_vector = current_version_vector(&target);
     for (key, hlc) in &expected_vectors {
         let merged = target_vector.get(key).expect("missing merged typed vector");
         assert!(
@@ -173,42 +177,34 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let (missing_key, expected_hlc) = expected_vectors.last().unwrap();
     let mut missing_vector = target_vector;
     missing_vector.remove(missing_key);
-    set_sync_kv(
-        &target,
-        VERSION_VECTOR_KEY,
-        &serde_json::to_string(&missing_vector).unwrap(),
-    )
-    .unwrap();
+    replace_version_vector_for_test(&target, &missing_vector);
     let repair_frame = sign_replication_batch(
         &origin_key,
         2,
         "message-vector-repair",
         vector_repair_changes,
     );
-    apply_signed_integration_changes(&target, &repair_frame, "space-a", "node-b", None, 16)
-        .unwrap();
-    let repaired_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
-    assert_eq!(repaired_vector.get(missing_key), Some(expected_hlc));
-
-    let consumed = load_integration_credential_envelope(&target, "integration-a", "node-b", 3)
-        .unwrap()
-        .expect("recipient must retain its addressed opaque envelope after source shutdown");
-    assert_eq!(consumed.ciphertext, "opaque-ciphertext-only");
-
-    let successor_lease = try_acquire_integration_refresh_lease(
-        &target,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-b".into(),
-            credential_generation: 4,
-            now_ms: 20,
-            ttl_ms: 10,
-            expected_fencing_token: 1,
-            device_id: "node-b".into(),
-        },
+    target.fixture.admit_peer_for_test("node-a").unwrap();
+    apply_signed_integration_changes(
+        &target.fixture,
+        &repair_frame,
+        "space-a",
+        "node-b",
+        None,
+        16,
     )
     .unwrap();
+    let repaired_vector = current_version_vector(&target);
+    assert_eq!(repaired_vector.get(missing_key), Some(expected_hlc));
+
+    let consumed = with_integration_replication_read(&target, |read| {
+        load_integration_credential_envelope(read, "integration-a", "node-b", 3)
+    })
+    .unwrap()
+    .expect("recipient must retain its addressed opaque envelope after source shutdown");
+    assert_eq!(consumed.ciphertext, "opaque-ciphertext-only");
+
+    let successor_lease = acquire_test_lease(&target, "node-b", 4, 20, 10, 1, "node-b");
     assert_eq!(successor_lease.fencing_token, 2);
     let refreshed = IntegrationCredentialEnvelope {
         integration_id: "integration-a".into(),
@@ -226,9 +222,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         revision: 4,
         hlc: "2026-08-31T00:00:01.000Z:000004:node-b".into(),
     };
-    publish_integration_credential_envelope(&target, &refreshed, "node-b", 21).unwrap();
+    publish_test_envelope(&target, &refreshed, "node-b", 21).unwrap();
     assert_eq!(
-        load_integration_credential_envelope(&target, "integration-a", "node-b", 4).unwrap(),
+        with_integration_replication_read(&target, |read| {
+            load_integration_credential_envelope(read, "integration-a", "node-b", 4)
+        })
+        .unwrap(),
         Some(refreshed)
     );
     let mut continued_config = config;
@@ -237,14 +236,14 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     continued_config.hlc = "2026-08-31T00:00:02.000Z:000001:node-b".into();
     upsert_integration_configuration(&target, &continued_config, "node-b").unwrap();
     assert_eq!(
-        load_integration_configuration(&target, "integration-a")
+        integration_read_snapshot(&target)
+            .configuration("integration-a")
             .unwrap()
             .unwrap()
             .sync_cursor,
         Some(4)
     );
-    let target_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
+    let target_vector = current_version_vector(&target);
     let configuration_vector = target_vector
         .get("integration_configuration:integration-a")
         .expect("local configuration write must advance its typed vector");
@@ -258,8 +257,9 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         envelope_entity_id("integration-a", "node-b", 4)
     )));
 
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 16),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 16),
         Err(SignedSyncError::Replay)
     ));
 }

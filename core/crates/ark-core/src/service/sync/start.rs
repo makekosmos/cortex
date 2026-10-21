@@ -1,5 +1,6 @@
 use super::*;
-use crate::service::runtime::get_shared_conn;
+use crate::db::CommandContext;
+use crate::service::runtime::get_db_handle;
 
 pub(crate) async fn handle_start_sync(
     state: &Arc<ServiceState>,
@@ -24,7 +25,7 @@ pub(crate) async fn handle_start_sync(
     } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
-    crate::host::set_app_version(app_version.clone());
+    ark_net::host::set_app_version(app_version.clone());
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
     // Port 0 would bind an ephemeral port while advertising ":0" to peers.
@@ -34,11 +35,25 @@ pub(crate) async fn handle_start_sync(
         None => LAN_SYNC_PORT,
     };
 
-    let shared_conn = get_shared_conn(state)?;
-    let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
+    let db_handle = get_db_handle(state)?;
+    db_handle
+        .ensure_usage_sequence_migrated(CommandContext::engine(), device_id.clone())
+        .await
+        .map_err(|error| error.to_string())?;
+    db_handle
+        .set_local_sync_key_value(
+            CommandContext::engine(),
+            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+            device_id.clone(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let storage = Arc::new(SqliteStorageBackend::with_db_handle(db_handle.clone()));
     storage.set_device_id(&device_id)?;
 
-    let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
+    let server = Arc::new(SyncServer::new(
+        storage.clone() as Arc<dyn SyncRuntimeStorage>
+    ));
     server.set_auth_secret(auth_secret.clone()).await;
 
     // Wire server callbacks -> event stream
@@ -81,6 +96,11 @@ pub(crate) async fn handle_start_sync(
     let own_addresses: Vec<String> = bind.own_addresses(ws_port);
     let own_addresses_shared = Arc::new(TokioMutex::new(own_addresses.clone()));
 
+    // Fail before opening listeners or starting transport tasks if persisted
+    // peer state is corrupt or unavailable. This keeps a failed start retryable.
+    let known_peers = server.get_known_peers().await?;
+    let removed_peer_ids = server.get_removed_peer_ids().await?;
+
     server
         .start_with_addr(
             &space_id,
@@ -117,10 +137,12 @@ pub(crate) async fn handle_start_sync(
         bind,
         app_version,
     };
+    let clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>> =
+        Arc::new(TokioMutex::new(HashMap::new()));
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
         let transport: Arc<dyn crate::sync_transport::SyncTransport> = Arc::new(
-            crate::relay_transport::RelayTransport::new(crate::relay_transport::RelayConfig {
+            ark_net::relay::RelayTransport::new(ark_net::relay::RelayConfig {
                 url: relay_url.clone(),
                 space_id: space_id.clone(),
                 device_id: device_id.clone(),
@@ -130,7 +152,7 @@ pub(crate) async fn handle_start_sync(
             }),
         );
         let relay_sync = RelaySync::with_transport(
-            storage.clone() as Arc<dyn StorageBackend>,
+            storage.clone() as Arc<dyn SyncRuntimeStorage>,
             RelaySyncConfig {
                 relay_url,
                 relay_api_key: relay_api_key.clone(),
@@ -145,13 +167,11 @@ pub(crate) async fn handle_start_sync(
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
-        let secret_key = {
-            let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
-            crate::iroh_transport::load_or_generate_secret_key(&conn)
-                .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
-        };
+        let secret_key = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db_handle)
+            .await
+            .map_err(|error| format!("iroh transport: failed to load identity: {error}"))?;
         let peer_addr = match iroh_peer_ticket.as_deref() {
-            Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
+            Some(ticket) => Some(ark_net::iroh::from_ticket(ticket)?),
             None => None,
         };
         let peer_endpoint = peer_addr.as_ref().map(|addr| addr.id.to_string());
@@ -162,21 +182,21 @@ pub(crate) async fn handle_start_sync(
         // relays, and tests that need an unreachable relay.
         let iroh_relay_mode = match &iroh_relay_url {
             Some(url) => {
-                let relay_url: iroh::RelayUrl = url
+                let relay_url: ark_net::iroh::RelayUrl = url
                     .parse()
                     .map_err(|e| format!("invalid iroh_relay_url {url:?}: {e}"))?;
-                Some(iroh::RelayMode::custom([relay_url]))
+                Some(ark_net::iroh::RelayMode::custom([relay_url]))
             }
             None => match bind {
-                SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                SyncBind::Loopback => Some(ark_net::iroh::RelayMode::Disabled),
                 SyncBind::AllInterfaces => None,
             },
         };
         // `our_ticket()` only waits on the network while homing on a
         // relay; with relays disabled it resolves from local addresses.
-        let ticket_is_offline = matches!(iroh_relay_mode, Some(iroh::RelayMode::Disabled));
-        let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
-            crate::iroh_transport::IrohConfig {
+        let ticket_is_offline = matches!(iroh_relay_mode, Some(ark_net::iroh::RelayMode::Disabled));
+        let iroh_transport = Arc::new(ark_net::iroh::IrohTransport::new(
+            ark_net::iroh::IrohConfig {
                 device_id: device_id.clone(),
                 device_name: device_name.clone(),
                 space_id: space_id.clone(),
@@ -191,8 +211,8 @@ pub(crate) async fn handle_start_sync(
         // RelaySyncConfig.relay_url is unused by `with_transport` (only
         // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
         // empty string rather than widening the struct for one unused field.
-        let relay_sync = RelaySync::with_transport(
-            storage.clone() as Arc<dyn StorageBackend>,
+        let relay_sync = RelaySync::with_iroh_transport(
+            storage.clone() as Arc<dyn SyncRuntimeStorage>,
             RelaySyncConfig {
                 relay_url: String::new(),
                 relay_api_key: None,
@@ -201,8 +221,8 @@ pub(crate) async fn handle_start_sync(
                 device_name: device_name.clone(),
                 auth_secret: auth_secret.clone(),
             },
-            iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
-        );
+            iroh_transport.clone(),
+        )?;
         wire_relay_sync_events(&relay_sync).await;
         // Only a `connect_with_pairing_code` start is a pairing intent
         // (`pairing_connect`); boot restores replay the stored ticket for an
@@ -260,12 +280,12 @@ pub(crate) async fn handle_start_sync(
     } else {
         None
     };
+    if let Some(relay_sync) = relay.as_ref() {
+        wire_relay_registry_fanout(relay_sync, &server, &clients).await;
+    }
+    wire_server_registry_fanout(&server, &clients, relay.as_ref()).await;
 
-    // Start SyncClient connections for every known peer.
-    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
-        Arc::new(TokioMutex::new(HashMap::new()));
-    let known_peers = server.get_known_peers().await;
-    let removed_peer_ids = server.get_removed_peer_ids().await;
+    // Start DirectClient connections for every known peer.
     let client_env = ClientEnv {
         server: server.clone(),
         storage: storage.clone(),
@@ -275,6 +295,7 @@ pub(crate) async fn handle_start_sync(
         space_id: space_id.clone(),
         own_addresses: own_addresses.clone(),
         auth_secret: auth_secret.clone(),
+        relay: relay.clone(),
     };
     for peer in known_peers {
         if peer.device_id == device_id || removed_peer_ids.iter().any(|id| id == &peer.device_id) {
@@ -318,6 +339,7 @@ pub(crate) async fn handle_start_sync(
         let space_id_for_beacon = space_id.clone();
         let own_addresses_for_beacon = own_addresses.clone();
         let auth_secret_for_beacon = auth_secret.clone();
+        let relay_for_beacon = relay.clone();
         beacon
             .set_on_peer_discovered(Arc::new(move |peer: BeaconPeer| {
                 // Callbacks from UDP recv run on tokio tasks — but this one is
@@ -331,6 +353,7 @@ pub(crate) async fn handle_start_sync(
                 let space_id = space_id_for_beacon.clone();
                 let own = own_addresses_for_beacon.clone();
                 let auth_secret = auth_secret_for_beacon.clone();
+                let relay = relay_for_beacon.clone();
                 tokio::spawn(async move {
                     let addrs: Vec<String> = if peer.addresses.is_empty() {
                         vec![peer.address.clone()]
@@ -344,15 +367,19 @@ pub(crate) async fn handle_start_sync(
                     if reachable.is_empty() {
                         return;
                     }
-                    if server
-                        .get_removed_peer_ids()
-                        .await
-                        .iter()
-                        .any(|id| id == &peer.device_id)
-                    {
+                    let removed_peer_ids = match server.get_removed_peer_ids().await {
+                        Ok(ids) => ids,
+                        Err(error) => {
+                            eprintln!(
+                                "[handle_start_sync] failed to load blocked peer list: {error}"
+                            );
+                            return;
+                        }
+                    };
+                    if removed_peer_ids.iter().any(|id| id == &peer.device_id) {
                         return;
                     }
-                    server
+                    if let Err(error) = server
                         .register_external_peer(PeerRecord {
                             device_id: peer.device_id.clone(),
                             device_name: peer.device_name.clone(),
@@ -363,7 +390,13 @@ pub(crate) async fn handle_start_sync(
                             platform: None,
                             app_version: None,
                         })
-                        .await;
+                        .await
+                    {
+                        eprintln!(
+                            "[handle_start_sync] failed to register discovered peer: {error}"
+                        );
+                        return;
+                    }
                     emit_event(json!({
                         "event": "peer_list_updated",
                         "peers": server.get_connected_peer_entries().await.iter().map(|entry| {
@@ -417,6 +450,7 @@ pub(crate) async fn handle_start_sync(
                             space_id,
                             own_addresses: own,
                             auth_secret,
+                            relay,
                         },
                         peer_rec,
                     )

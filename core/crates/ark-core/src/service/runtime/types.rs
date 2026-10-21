@@ -1,22 +1,26 @@
 use super::*;
 
+async fn type_read(state: &ServiceState, query: db::TypeReadQuery) -> Result<Value, String> {
+    get_db_handle(state)?
+        .query_with_store(db::CommandContext::engine(), query)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 pub(super) async fn types_list(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        serde_json::to_value(crate::type_registry::list_type_summaries(conn)?)
-            .map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::ListSummaries).await
 }
 
 pub(super) async fn types_register_package_definitions(
     state: &Arc<ServiceState>,
     registrations: Vec<crate::type_registry::TypeRegistration>,
 ) -> Result<Value, String> {
-    with_write_tx(state, |conn| {
-        for registration in &registrations {
-            crate::type_registry::register_type(conn, registration)?;
-        }
-        Ok(json!(true))
-    })
+    let replay_notices = get_db_handle(state)?
+        .submit_register_package_types(db::CommandContext::engine(), registrations)
+        .await
+        .map_err(|error| error.to_string())?;
+    emit_replay_notices(replay_notices);
+    Ok(json!(true))
 }
 
 pub(super) async fn types_get(
@@ -24,54 +28,32 @@ pub(super) async fn types_get(
     type_id: String,
     version: Option<String>,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        serde_json::to_value(crate::type_registry::get_type(
-            conn,
-            &type_id,
-            version.as_deref(),
-        )?)
-        .map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::Get { type_id, version }).await
 }
 
 pub(super) async fn types_list_versions(
     state: &Arc<ServiceState>,
     type_id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let Some(canonical) = crate::type_registry::resolve_type_id(conn, &type_id)? else {
-            return Ok(json!([]));
-        };
-        serde_json::to_value(crate::type_registry::list_type_versions(conn, &canonical)?)
-            .map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::ListVersions(type_id)).await
 }
 
 pub(super) async fn types_resolve_alias(
     state: &Arc<ServiceState>,
     alias: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        serde_json::to_value(crate::type_registry::resolve_alias(conn, &alias)?)
-            .map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::ResolveAlias(alias)).await
 }
 
 pub(super) async fn list_object_types(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let object_types = db::list_object_types(conn)?;
-        serde_json::to_value(object_types).map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::ListObjectTypes).await
 }
 
 pub(super) async fn get_object_type(
     state: &Arc<ServiceState>,
     id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let object_type = db::get_object_type(conn, &id)?;
-        serde_json::to_value(object_type).map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::GetObjectType(id)).await
 }
 
 pub(super) async fn upsert_object_type(
@@ -79,21 +61,12 @@ pub(super) async fn upsert_object_type(
     object_type: ObjectType,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    // replay_pending_for_type теперь использует SAVEPOINT ark_replay_pending
-    // вместо BEGIN IMMEDIATE, поэтому вкладывается в транзакцию из with_write_tx.
-    // entity-строка + sync-meta записываются атомарно.
-    let entity = with_write_tx(state, |conn| {
-        db::upsert_object_type(conn, &object_type)?;
-        let hlc = record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
-        Ok(make_sync_entity(
-            "object_type",
-            &object_type.id,
-            serde_json::to_value(&object_type).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let commit = get_db_handle(state)?
+        .submit_upsert_object_type(db::CommandContext::engine(), object_type, device_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    emit_replay_notices(commit.replay_notices);
+    maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
 
@@ -102,26 +75,16 @@ pub(super) async fn delete_object_type(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::delete_object_type(conn, &id)?;
-        let hlc = record_local_delete(conn, "object_type", &id, device_id)?;
-        Ok(make_sync_entity(
-            "object_type",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let commit = get_db_handle(state)?
+        .submit_delete_object_type(db::CommandContext::engine(), id, device_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
 
 pub(super) async fn list_object_links(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let object_links = db::list_object_links(conn)?;
-        serde_json::to_value(object_links).map_err(|e| e.to_string())
-    })
+    type_read(state, db::TypeReadQuery::ListObjectLinks).await
 }
 
 pub(super) async fn upsert_object_link(
@@ -129,18 +92,11 @@ pub(super) async fn upsert_object_link(
     object_link: ObjectLink,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::upsert_object_link(conn, &object_link)?;
-        let hlc = record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
-        Ok(make_sync_entity(
-            "object_link",
-            &object_link.id,
-            serde_json::to_value(&object_link).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let commit = get_db_handle(state)?
+        .submit_upsert_object_link(db::CommandContext::engine(), object_link, device_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
 
@@ -149,24 +105,17 @@ pub(super) async fn delete_object_link(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::delete_object_link(conn, &id)?;
-        let hlc = record_local_delete(conn, "object_link", &id, device_id)?;
-        Ok(make_sync_entity(
-            "object_link",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let commit = get_db_handle(state)?
+        .submit_delete_object_link(db::CommandContext::engine(), id, device_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
 
 /// Single-link replace (e.g. a task's one `project` link). Removes every
 /// other link with the same source and link_type, then upserts the new one,
-/// all in one `with_write_tx`. The deletes come first so the UNIQUE
+/// all in one database command. The deletes come first so the UNIQUE
 /// (source, target, link_type) constraint is free for the new row. A rejected
 /// upsert (missing source/target, via the foreign keys) rolls the deletes back.
 pub(super) async fn replace_object_link(
@@ -174,35 +123,10 @@ pub(super) async fn replace_object_link(
     object_link: ObjectLink,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entities = with_write_tx(state, |conn| {
-        let mut entities = Vec::new();
-        for id in db::list_other_object_link_ids(
-            conn,
-            &object_link.source_object_id,
-            &object_link.link_type,
-            &object_link.id,
-        )? {
-            db::delete_object_link(conn, &id)?;
-            let hlc = record_local_delete(conn, "object_link", &id, device_id.clone())?;
-            entities.push(make_sync_entity(
-                "object_link",
-                &id,
-                json!({}),
-                hlc,
-                Some(true),
-            ));
-        }
-        db::upsert_object_link(conn, &object_link)?;
-        let hlc = record_local_upsert(conn, "object_link", &object_link.id, device_id.clone())?;
-        entities.push(make_sync_entity(
-            "object_link",
-            &object_link.id,
-            serde_json::to_value(&object_link).unwrap_or(json!({})),
-            hlc,
-            None,
-        ));
-        Ok(entities)
-    })?;
-    maybe_broadcast_local_changes(state, entities).await;
-    serde_json::to_value(&object_link).map_err(|e| e.to_string())
+    let commit = get_db_handle(state)?
+        .submit_replace_object_link(db::CommandContext::engine(), object_link, device_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_changes(state, commit.mutation.entities).await;
+    serde_json::to_value(&commit.object_link).map_err(|e| e.to_string())
 }

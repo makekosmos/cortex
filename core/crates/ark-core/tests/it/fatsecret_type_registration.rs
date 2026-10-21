@@ -1,5 +1,5 @@
-use ark_core::type_registry::{get_type, register_type, TypeRegistration};
-use rusqlite::Connection;
+use ark_domain::canonical_type::TypeRegistration;
+use ark_store::test_support::{TestDatabase, TypeMutationFixture};
 
 fn registration() -> TypeRegistration {
     serde_json::from_str(include_str!(
@@ -10,12 +10,17 @@ fn registration() -> TypeRegistration {
 
 #[test]
 fn fatsecret_registration_is_idempotent_and_keeps_package_identity() {
-    let conn = Connection::open_in_memory().expect("open fixture database");
-    ark_core::db::init_schema(&conn).expect("initialize schema");
+    let database = TestDatabase::create().expect("initialize fixture database");
+    let fixture = TypeMutationFixture::open(database.path()).expect("open typed fixture");
     let registration = registration();
-    register_type(&conn, &registration).expect("register package type");
-    register_type(&conn, &registration).expect("repeat package registration");
-    let stored = get_type(&conn, "nutrition_entry_obj", Some("1.0.0"))
+    fixture
+        .register_type(&registration)
+        .expect("register package type");
+    fixture
+        .register_type(&registration)
+        .expect("repeat package registration");
+    let stored = fixture
+        .load_registered_type("nutrition_entry_obj", "1.0.0")
         .expect("load registered type")
         .expect("type exists");
     assert_eq!(stored.summary.owner_kind, "package");

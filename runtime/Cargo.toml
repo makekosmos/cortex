@@ -49,6 +49,7 @@ required-features = ["markdown-bridge-fixture"]
 
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
+ark-domain = { path = "../core/crates/ark-domain" }
 package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }
@@ -149,6 +150,7 @@ httpmock.workspace = true
 # catalog path carries no Ed25519 code. Pinned to the same release as
 # ark-core so tests do not pull a second ed25519/curve25519 stack.
 ed25519-dalek.workspace = true
+ark-store = { path = "../core/crates/ark-store", features = ["test-support"] }
 
 [lints]
 workspace = true

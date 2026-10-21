@@ -3,57 +3,22 @@ use crate::integration_replication::{
 };
 use chrono::{Duration, Utc};
 
-#[test]
-fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(
-        "CREATE TABLE integration_configurations (
-           integration_id TEXT PRIMARY KEY, provider TEXT NOT NULL, account_subject TEXT NOT \
-           NULL,
-           public_scopes_json TEXT NOT NULL, public_settings_json TEXT NOT NULL, enabled \
-           INTEGER NOT NULL,
-           sync_cursor TEXT, revision INTEGER NOT NULL, hlc TEXT NOT NULL
-         );
-         INSERT INTO integration_configurations VALUES
-           ('opaque', 'fatsecret', 'a', '[]', '{}', 1, 'bearer-token', 1, \
-           '2026-08-30T00:00:00.000Z:000001:node-a'),
-           ('numeric', 'fatsecret', 'b', '[]', '{}', 1, '42', 1, \
-           '2026-08-30T00:00:00.000Z:000001:node-a');",
-    )
-    .unwrap();
-    assert_eq!(
-        load_integration_configuration(&conn, "opaque")
-            .unwrap()
-            .unwrap()
-            .sync_cursor,
-        None
-    );
-    let persisted: Option<String> = conn
-        .query_row(
-            concat!(
-                "SELECT sync_cursor FROM integration_configurations WHERE integration_id = ",
-                "'opaque'"
-            ),
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(persisted, None);
-    assert_eq!(
-        load_integration_configuration(&conn, "numeric")
-            .unwrap()
-            .unwrap()
-            .sync_cursor,
-        Some(42)
-    );
+fn trusted_target(seed: u8) -> (IntegrationTestDatabase, SigningKey) {
+    trusted_target_with_transport(seed, None, None)
 }
 
-fn trusted_target(seed: u8) -> (rusqlite::Connection, SigningKey) {
+fn trusted_target_with_transport(
+    seed: u8,
+    origin_transport_key: Option<&str>,
+    recipient_transport_key: Option<&str>,
+) -> (IntegrationTestDatabase, SigningKey) {
     let target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[seed; 32]);
     let recipient_key = SigningKey::from_bytes(&[seed + 1; 32]);
-    let origin = replication_node("node-a", &origin_key, "enc-a", "node-a");
-    let recipient = replication_node("node-b", &recipient_key, "enc-b", "node-a");
+    let mut origin = replication_node("node-a", &origin_key, "enc-a", "node-a");
+    origin.transport_public_key = origin_transport_key.map(str::to_owned);
+    let mut recipient = replication_node("node-b", &recipient_key, "enc-b", "node-a");
+    recipient.transport_public_key = recipient_transport_key.map(str::to_owned);
     upsert_authorized_node(&target, &origin, "bootstrap").unwrap();
     upsert_authorized_node(&target, &recipient, "bootstrap").unwrap();
     upsert_integration_node_grant(
@@ -114,11 +79,13 @@ fn signed_apply_rejects_payload_authorization_without_preexisting_local_trust() 
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing integration grant")
     ));
-    assert!(load_integration_configuration(&target, "integration-a")
+    assert!(integration_read_snapshot(&target)
+        .configuration("integration-a")
         .unwrap()
         .is_none());
 }
@@ -148,11 +115,15 @@ fn signed_apply_rejects_new_node_authorization_without_local_trust() {
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing authorization")
     ));
-    assert!(load_authorized_node(&target, "node-c").unwrap().is_none());
+    assert!(integration_read_snapshot(&target)
+        .authorized_node("node-c")
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -194,8 +165,9 @@ fn signed_apply_cannot_use_trust_from_another_integration() {
             },
         ],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing integration grant")
     ));
     assert!(
@@ -219,8 +191,9 @@ fn signed_apply_rejects_hlcs_not_owned_by_the_signer_or_too_far_in_the_future() 
             vector_hlc: "2026-08-31T00:00:00.000Z:000002:node-a".into(),
         }],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("does not match signed origin")
     ));
     let future = (Utc::now() + Duration::hours(1))
@@ -237,8 +210,9 @@ fn signed_apply_rejects_hlcs_not_owned_by_the_signer_or_too_far_in_the_future() 
             vector_hlc: format!("{future}:000002:node-a"),
         }],
     );
+    target.fixture.admit_peer_for_test("node-a").unwrap();
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 16),
+        apply_signed_integration_changes(&target.fixture, &frame, "space-a", "node-b", None, 16),
         Err(SignedSyncError::Apply(error)) if error.contains("too far in the future")
     ));
 }

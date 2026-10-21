@@ -1,0 +1,17 @@
+[package]
+name = "ark-domain"
+version = "0.1.0"
+edition.workspace = true
+description = "Pure domain contracts for the ARK exocortex"
+
+[dependencies]
+chrono.workspace = true
+ed25519-dalek.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

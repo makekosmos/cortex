@@ -15,14 +15,15 @@
 //!
 //! См. spec: `.agent/tasks/2026-06-16-iroh-transport/spec.md` §6.
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use ark_sync::protocol::LanSyncMessage;
 use iroh::RelayMode;
 
 /// Generous hang guard for event drains — the awaited message is the real
@@ -137,11 +138,17 @@ async fn iroh_round_trip() {
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a
-        .bind_authenticated_peer("device-B", &transport_b.endpoint_id().unwrap().to_string())
+        .bind_peer_for_control("device-B", &transport_b.endpoint_id().unwrap().to_string())
         .expect("A binds B");
     transport_b
-        .bind_authenticated_peer("device-A", &transport_a.endpoint_id().unwrap().to_string())
+        .bind_peer_for_control("device-A", &transport_a.endpoint_id().unwrap().to_string())
         .expect("B binds A");
+    transport_a
+        .mark_peer_data_ready("device-B", &transport_b.endpoint_id().unwrap().to_string())
+        .expect("A admits B for data");
+    transport_b
+        .mark_peer_data_ready("device-A", &transport_a.endpoint_id().unwrap().to_string())
+        .expect("B admits A for data");
 
     // 4. A отправляет live_change с тестовой entity.
     let test_entity = ark_core::types::SyncEntity {
@@ -162,6 +169,7 @@ async fn iroh_round_trip() {
     };
 
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: "change-iroh-test-001".to_string(),
         entity: test_entity.clone(),
         origin_device_id: Some("device-A".to_string()),

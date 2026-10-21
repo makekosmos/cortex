@@ -5,8 +5,8 @@
 // forgotten RC pin only surfaces when it breaks a release build.
 //
 // New pins fail this check. To land one deliberately, add it to ALLOWED below
-// with a comment naming the upstream constraint that forces it — matching how
-// deny.toml documents its skip list.
+// with a comment naming the upstream or experiment constraint that requires it
+// — matching how deny.toml documents its skip list.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -33,6 +33,13 @@ const ALLOWED = new Map([
   ["manager-gpui/Cargo.toml::gpui", "=0.7.1"],
   ["manager-gpui/Cargo.toml::gpui-component", "=0.7.1"],
   ["manager-gpui/Cargo.toml::gpui-base", "=0.7.1"],
+  // KOS-423 is a reproducible comparison of Automerge, Loro, and Yrs merge
+  // behavior and encoded sizes. Pin all inputs, including JSON serialization,
+  // so regenerating its standalone lockfile cannot silently change results.
+  ["experiments/kos423-merge-harness/Cargo.toml::automerge", "=0.12.0"],
+  ["experiments/kos423-merge-harness/Cargo.toml::loro", "=1.16.2"],
+  ["experiments/kos423-merge-harness/Cargo.toml::yrs", "=0.28.0"],
+  ["experiments/kos423-merge-harness/Cargo.toml::serde_json", "=1.0.145"],
 ]);
 
 // Vendored/upstream trees and generated dirs are not our pins to police.
@@ -43,7 +50,7 @@ function* cargoTomls(dir) {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
     if (entry === "Cargo.toml") yield path;
-    else if (statSync(path).isDirectory() && !SKIP_DIRS.has(entry)) yield* cargoTomls(path);
+    else if (!SKIP_DIRS.has(entry) && statSync(path).isDirectory()) yield* cargoTomls(path);
   }
 }
 
@@ -90,7 +97,7 @@ if (isMain) {
     console.error("New exact or pre-release dependency pins found:");
     for (const v of violations) console.error(`  ${v}`);
     console.error(
-      "Document the upstream constraint in ALLOWED in scripts/check-dep-pins.mjs, or relax the pin.",
+      "Document the constraint in ALLOWED in scripts/check-dep-pins.mjs, or relax the pin.",
     );
     process.exit(1);
   }

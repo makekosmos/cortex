@@ -3,11 +3,16 @@
 // ---------------------------------------------------------------------------
 
 use super::*;
+use ark_application::sync_storage::SyncEntityMutationPort;
 
+mod disconnect;
 mod events;
 mod pairing;
 mod start;
-use self::events::wire_relay_sync_events;
+pub(crate) use self::disconnect::handle_disconnect_peer;
+use self::events::{
+    wire_relay_registry_fanout, wire_relay_sync_events, wire_server_registry_fanout,
+};
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
 // The pairing handlers; the param builders are exercised by tests only.
@@ -18,18 +23,17 @@ pub(crate) use self::pairing::{
     handle_decline_pairing, handle_show_pairing_code,
 };
 
-/// Everything a spawned SyncClient needs: the shared server-side handles
-/// plus this node's identity material.
 #[derive(Clone)]
 struct ClientEnv {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
-    clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
     device_id: String,
     device_name: String,
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
+    relay: Option<Arc<RelaySync>>,
 }
 
 async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
@@ -42,19 +46,26 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         space_id,
         own_addresses,
         auth_secret,
+        relay,
     } = env;
     if peer.device_id == *device_id {
         return;
     }
 
-    let client = Arc::new(SyncClient::new(
-        storage.clone() as Arc<dyn StorageBackend>,
-        peer.clone(),
-        device_id.clone(),
-        device_name.clone(),
-        space_id.clone(),
-        own_addresses.clone(),
-        auth_secret.clone(),
+    let client = Arc::new(crate::direct_client::create_direct_client(
+        storage.clone() as Arc<dyn SyncRuntimeStorage>,
+        crate::direct_client::DirectClientConfig::new(
+            peer.clone(),
+            device_id.clone(),
+            device_name.clone(),
+            space_id.clone(),
+            own_addresses.clone(),
+            auth_secret.clone(),
+        )
+        .with_platform(
+            Some(ark_net::host::local_platform()),
+            ark_net::host::app_version(),
+        ),
     ));
 
     client
@@ -66,8 +77,42 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         }))
         .await;
 
-    // Callback tasks hold `server`; `stop_and_join` waits for them.
-    let registry = client.callback_registry();
+    let registry = client.callback_task_registry();
+    let server_for_registry = Arc::downgrade(server);
+    let clients_for_registry = Arc::downgrade(clients);
+    let relay_for_registry = relay.as_ref().map(Arc::downgrade);
+    let registry_tasks = registry.clone();
+    client
+        .set_on_registry_events(Arc::new(move |events| {
+            let server = server_for_registry.clone();
+            let clients = clients_for_registry.clone();
+            let relay = relay_for_registry.clone();
+            registry_tasks.track(tokio::spawn(async move {
+                if let Some(server) = server.upgrade() {
+                    for event in &events {
+                        server.broadcast_registry_event(event.clone()).await;
+                    }
+                }
+                let Some(clients) = clients.upgrade() else {
+                    return;
+                };
+                let peers = clients.lock().await.values().cloned().collect::<Vec<_>>();
+                for client in peers {
+                    for event in &events {
+                        client.broadcast_registry_event(event.clone()).await;
+                    }
+                }
+                if let Some(relay) = relay.and_then(|relay| relay.upgrade()) {
+                    for event in &events {
+                        if let Err(error) = relay.publish_registry_event(event.clone()).await {
+                            eprintln!("sync failed to fan out registry event over Iroh: {error}");
+                        }
+                    }
+                }
+            }));
+        }))
+        .await;
+
     let server_for_connect = server.clone();
     let peer_addrs = peer.addresses.clone();
     let registry_for_connect = registry.clone();
@@ -76,17 +121,17 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             let server = server_for_connect.clone();
             let addrs = peer_addrs.clone();
             let record = connected.clone();
-            crate::task_set::track_task(
-                &registry_for_connect,
-                tokio::spawn(async move {
-                    server
-                        .register_external_peer(PeerRecord {
-                            addresses: addrs,
-                            ..record
-                        })
-                        .await;
-                }),
-            );
+            registry_for_connect.track(tokio::spawn(async move {
+                if let Err(error) = server
+                    .register_external_peer(PeerRecord {
+                        addresses: addrs,
+                        ..record
+                    })
+                    .await
+                {
+                    eprintln!("sync failed to register connected peer: {error}");
+                }
+            }));
             emit_event(json!({
                 "event": "peer_connected",
                 "device_id": connected.device_id,
@@ -101,17 +146,14 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         .set_on_disconnected(Arc::new(move |peer_device_id| {
             let server = server_for_disconnect.clone();
             let peer_device_id_clone = peer_device_id.clone();
-            crate::task_set::track_task(
-                &registry_for_disconnect,
-                tokio::spawn(async move {
-                    let remaining = server.connected_peer_count().await;
-                    emit_event(json!({
-                        "event": "peer_disconnected",
-                        "device_id": peer_device_id_clone,
-                        "remaining": remaining,
-                    }));
-                }),
-            );
+            registry_for_disconnect.track(tokio::spawn(async move {
+                let remaining = server.connected_peer_count().await;
+                emit_event(json!({
+                    "event": "peer_disconnected",
+                    "device_id": peer_device_id_clone,
+                    "remaining": remaining,
+                }));
+            }));
         }))
         .await;
 
@@ -151,7 +193,7 @@ pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
         if let Some(relay) = runtime.relay.as_ref() {
             relay.stop().await;
         }
-        let clients: Vec<Arc<SyncClient>> = {
+        let clients: Vec<Arc<DirectClient>> = {
             let clients = runtime.clients.lock().await;
             clients.values().cloned().collect()
         };
@@ -202,25 +244,22 @@ pub(super) async fn handle_broadcast_change(
     };
 
     // Stamp HLC on the outgoing entity.
-    let hlc = runtime.server.update_entity_hlc(&entity.id).await;
+    let hlc = runtime.server.update_entity_hlc(&entity.id).await?;
     entity.hlc = hlc;
 
     // Persist locally so future version-vector exchanges reflect it.
     runtime.storage.apply_entity(&entity).await?;
 
     // Broadcast via the inbound server sessions.
-    runtime
-        .server
-        .broadcast_live_change(entity.clone(), None)
-        .await;
+    runtime.server.broadcast_live_change(None).await;
 
     // Broadcast via outbound clients.
     let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
     for client in clients {
-        client.broadcast_live_change(entity.clone()).await;
+        client.broadcast_live_change().await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
-        relay.broadcast_live_change(entity.clone())?;
+        relay.broadcast_live_change(entity.clone()).await?;
     }
     Ok(json!(true))
 }
@@ -266,7 +305,7 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
         connected.extend(relay.get_connected_peer_entries().await);
         (incoming_pairing_requests, outgoing_pairing) = pairing::snapshot(relay).await;
     }
-    let known = runtime.server.get_known_peers().await;
+    let known = runtime.server.get_known_peers().await?;
     // Fresh Hello metadata wins over the persisted record: a peer that just
     // upgraded keeps its old platform/version in storage until it reconnects.
     let connected_meta: std::collections::HashMap<String, (Option<String>, Option<String>)> =
@@ -342,64 +381,6 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
     }))
 }
 
-pub(super) async fn handle_disconnect_peer(
-    state: &Arc<ServiceState>,
-    device_id: String,
-) -> Result<Value, String> {
-    let guard = state.sync.lock().await;
-    let runtime = match guard.as_ref() {
-        Some(r) => r.clone(),
-        None => return Err("Sync not running".to_string()),
-    };
-    drop(guard);
-    let device_id = device_id.trim();
-    if device_id.is_empty() {
-        return Err("device_id is empty".to_string());
-    }
-
-    let _ = runtime.server.disconnect_peer(device_id).await;
-    // Transport-paired peers (iroh) live in RelaySync's own peer table —
-    // without this eviction they keep syncing and stay "online" after
-    // «Отключить» until the Engine restarts (KOS-367).
-    if let Some(relay) = runtime.relay.as_ref() {
-        relay.disconnect_peer(device_id).await;
-    }
-
-    let client_entries: Vec<(String, Arc<SyncClient>)> = {
-        let clients = runtime.clients.lock().await;
-        clients
-            .iter()
-            .map(|(key, client)| (key.clone(), client.clone()))
-            .collect()
-    };
-    let mut removed_client_ids: Vec<String> = Vec::new();
-    for (client_key, client) in client_entries {
-        let peer = client.current_peer().await;
-        if peer.device_id == device_id {
-            client.disconnect().await;
-            removed_client_ids.push(client_key);
-        }
-    }
-    if !removed_client_ids.is_empty() {
-        let mut clients = runtime.clients.lock().await;
-        for client_id in removed_client_ids {
-            clients.remove(&client_id);
-        }
-    }
-
-    let mut remaining = runtime.server.connected_peer_count().await;
-    if let Some(relay) = runtime.relay.as_ref() {
-        remaining += relay.connected_peer_count().await;
-    }
-    emit_event(json!({
-        "event": "peer_disconnected",
-        "device_id": device_id,
-        "remaining": remaining,
-    }));
-    emit_event(json!({"event": "peer_list_updated"}));
-    Ok(json!(true))
-}
-
 pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Result<Value, String> {
     let runtime = {
         let guard = state.sync.lock().await;
@@ -455,7 +436,6 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
             seen.insert(entry.device_id.clone(), entry);
         }
     }
-
     let list: Vec<Value> = order
         .into_iter()
         .filter_map(|id| {
@@ -471,7 +451,6 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
         .collect();
     Ok(json!(list))
 }
-
 pub(super) async fn handle_add_seed_peer(
     state: &Arc<ServiceState>,
     addresses: Vec<String>,
@@ -492,6 +471,7 @@ pub(super) async fn handle_add_seed_peer(
         space_id: runtime.space_id.clone(),
         own_addresses: runtime.own_addresses.lock().await.clone(),
         auth_secret: runtime.auth_secret.clone(),
+        relay: runtime.relay.clone(),
     };
     start_seed_client(&env, addresses, runtime.start_params.bind).await;
     Ok(json!(true))

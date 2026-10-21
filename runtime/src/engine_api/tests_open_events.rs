@@ -87,9 +87,13 @@
             "event": "object_upserted",
             "id": "o-allowed",
             "type_id": "com.kosmos.note",
+            "title": "private title",
+            "props": {"private": "private note body"},
         }));
         let window = drain_until(&mut stream, "o-allowed", &mut read_buf).await;
         assert!(window.contains("o-allowed"), "{window}");
+        assert!(!window.contains("private title"), "{window}");
+        assert!(!window.contains("private note body"), "{window}");
         assert!(!window.contains("o-denied"), "{window}");
         assert!(!window.contains("com.secret.type"), "{window}");
 

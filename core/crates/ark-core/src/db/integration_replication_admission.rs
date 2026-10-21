@@ -1,14 +1,10 @@
-use std::collections::BTreeSet;
+use super::load_latest_integration_credential_envelope;
+use crate::integration_replication::read_store::IntegrationReplicationReadPort;
 
-use crate::integration_replication::{
-    AuthorizedNode as AdmissionNode, GrantStatus as AdmissionGrantStatus,
-    IntegrationNodeGrant as AdmissionGrant, IntegrationReplicationEntity as AdmissionEntity,
-    IntegrationVerificationStatus, NodeStatus as AdmissionNodeStatus,
-    VerifiedSyncEnvelope as AdmissionEnvelope,
-};
+use crate::integration_replication::IntegrationVerificationStatus;
 
-pub fn integration_verification_status(
-    conn: &Connection,
+pub fn integration_verification_status<S: IntegrationReplicationReadPort>(
+    conn: &S,
     integration_id: &str,
     local_node_id: &str,
     now_ms: u64,
@@ -16,9 +12,9 @@ pub fn integration_verification_status(
     if integration_id.trim().is_empty() || local_node_id.trim().is_empty() {
         return Err("integration and local node ids must not be empty".into());
     }
-    let configuration = load_integration_configuration(conn, integration_id)?;
-    let node = load_authorized_node(conn, local_node_id)?;
-    let grant = load_integration_node_grant(conn, integration_id, local_node_id)?;
+    let configuration = conn.configuration(integration_id)?;
+    let node = conn.authorized_node(local_node_id)?;
+    let grant = conn.grant(integration_id, local_node_id)?;
     let grant_key_matches_node = node
         .as_ref()
         .zip(grant.as_ref())
@@ -27,9 +23,10 @@ pub fn integration_verification_status(
                 && grant.node_encryption_key == node.encryption_public_key
         });
     let access_is_current = node.as_ref().is_some_and(|node| {
-        node.status == AdmissionNodeStatus::Active
+        node.status == crate::integration_replication::NodeStatus::Active
             && grant.as_ref().is_some_and(|grant| {
-                grant.status == AdmissionGrantStatus::Active && grant_key_matches_node
+                grant.status == crate::integration_replication::GrantStatus::Active
+                    && grant_key_matches_node
             })
     });
     let envelope = if access_is_current {
@@ -37,7 +34,7 @@ pub fn integration_verification_status(
     } else {
         None
     };
-    let refresh_lease = load_integration_refresh_lease(conn, integration_id)?;
+    let refresh_lease = conn.refresh_lease(integration_id)?;
     let next_generation = envelope
         .as_ref()
         .and_then(|envelope| envelope.credential_generation.checked_add(1));
@@ -75,160 +72,4 @@ pub fn integration_verification_status(
         ready_for_collection,
         ready_for_refresh: ready_for_collection && lease_allows_refresh,
     })
-}
-
-fn require_verified_integration_access(
-    conn: &Connection,
-    verified: &AdmissionEnvelope,
-    origin: &AdmissionNode,
-    recipient: &AdmissionNode,
-) -> Result<(), String> {
-    let integrations = verified
-        .payload
-        .iter()
-        .filter_map(change_integration_id)
-        .collect::<BTreeSet<_>>();
-    if integrations.is_empty() {
-        return Err("signed integration payload has no integration scope".into());
-    }
-    for integration_id in &integrations {
-        require_existing_grant(conn, integration_id, origin)?;
-        require_existing_grant(conn, integration_id, recipient)?;
-    }
-    require_scoped_node_changes(conn, verified, &integrations)?;
-    require_scoped_grant_changes(conn, verified, &integrations)
-}
-
-fn require_existing_grant(
-    conn: &Connection,
-    integration_id: &str,
-    node: &AdmissionNode,
-) -> Result<(), String> {
-    let grant =
-        load_integration_node_grant(conn, integration_id, &node.node_id)?.ok_or_else(|| {
-            format!(
-                "node {} has no pre-existing integration grant",
-                node.node_id
-            )
-        })?;
-    require_current_grant(&grant, integration_id, node)
-}
-
-fn require_scoped_node_changes(
-    conn: &Connection,
-    verified: &AdmissionEnvelope,
-    integrations: &BTreeSet<&str>,
-) -> Result<(), String> {
-    for change in &verified.payload {
-        let AdmissionEntity::AuthorizedNode(node) = &change.entity else {
-            continue;
-        };
-        require_preexisting_node_trust(conn, integrations, &node.node_id)?;
-        if load_authorized_node(conn, &node.node_id)?.as_ref() == Some(node) {
-            continue;
-        }
-        let expected_status = match node.status {
-            AdmissionNodeStatus::Active => AdmissionGrantStatus::Active,
-            AdmissionNodeStatus::Revoked => AdmissionGrantStatus::Revoked,
-        };
-        let scoped = integrations.iter().any(|integration_id| {
-            payload_grant(verified, integration_id, &node.node_id).is_some_and(|grant| {
-                grant.status == expected_status
-                    && grant.grant_epoch == node.grant_epoch
-                    && grant.node_encryption_key == node.encryption_public_key
-            })
-        });
-        if !scoped {
-            return Err(format!(
-                "authorized node {} has no matching scoped grant",
-                node.node_id
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn require_scoped_grant_changes(
-    conn: &Connection,
-    verified: &AdmissionEnvelope,
-    integrations: &BTreeSet<&str>,
-) -> Result<(), String> {
-    for change in &verified.payload {
-        let AdmissionEntity::IntegrationNodeGrant(grant) = &change.entity else {
-            continue;
-        };
-        if !integrations.contains(grant.integration_id.as_str()) {
-            return Err(format!(
-                "integration grant {} is outside the signed integration scope",
-                grant.integration_id
-            ));
-        }
-        require_preexisting_integration_trust(conn, &grant.integration_id, &grant.node_id)?;
-    }
-    Ok(())
-}
-
-fn require_preexisting_node_trust(
-    conn: &Connection,
-    integrations: &BTreeSet<&str>,
-    node_id: &str,
-) -> Result<AdmissionNode, String> {
-    let node = load_authorized_node(conn, node_id)?
-        .ok_or_else(|| format!("node {node_id} has no pre-existing authorization"))?;
-    for integration_id in integrations {
-        if require_existing_grant(conn, integration_id, &node).is_ok() {
-            return Ok(node);
-        }
-    }
-    Err(format!(
-        "node {node_id} has no pre-existing active integration trust"
-    ))
-}
-
-fn require_preexisting_integration_trust(
-    conn: &Connection,
-    integration_id: &str,
-    node_id: &str,
-) -> Result<AdmissionNode, String> {
-    let node = load_authorized_node(conn, node_id)?
-        .ok_or_else(|| format!("node {node_id} has no pre-existing authorization"))?;
-    require_existing_grant(conn, integration_id, &node)?;
-    Ok(node)
-}
-
-fn payload_grant<'a>(
-    verified: &'a AdmissionEnvelope,
-    integration_id: &str,
-    node_id: &str,
-) -> Option<&'a AdmissionGrant> {
-    verified
-        .payload
-        .iter()
-        .find_map(|change| match &change.entity {
-            AdmissionEntity::IntegrationNodeGrant(grant)
-                if grant.integration_id == integration_id && grant.node_id == node_id =>
-            {
-                Some(grant)
-            }
-            _ => None,
-        })
-}
-fn require_current_grant(
-    grant: &AdmissionGrant,
-    integration_id: &str,
-    node: &AdmissionNode,
-) -> Result<(), String> {
-    grant.validate().map_err(|error| error.to_string())?;
-    if grant.status != AdmissionGrantStatus::Active
-        || grant.integration_id != integration_id
-        || grant.node_id != node.node_id
-        || grant.grant_epoch != node.grant_epoch
-        || grant.node_encryption_key != node.encryption_public_key
-    {
-        return Err(format!(
-            "node {} integration grant is not current",
-            node.node_id
-        ));
-    }
-    Ok(())
 }

@@ -80,6 +80,9 @@ pub(crate) async fn handle_request(
         Request::ListObjectSummariesByType { type_id } => {
             objects::list_object_summaries_by_type(state, type_id).await
         }
+        Request::EstimateDataVolume { scopes } => {
+            objects::estimate_data_volume(state, scopes).await
+        }
         Request::ListRunningTimeEntries { source } => {
             objects::list_running_time_entries(state, source).await
         }
@@ -89,6 +92,13 @@ pub(crate) async fn handle_request(
         Request::GetObjectWriteSnapshot { id } => {
             objects::get_object_write_snapshot(state, id).await
         }
+        Request::TaskMergeConflicts { object_id, unit } => {
+            objects::task_merge_conflicts(state, object_id, unit).await
+        }
+        Request::TaskMergeAppend {
+            merge_operation,
+            expected_conflict_digest,
+        } => objects::task_merge_append(state, merge_operation, expected_conflict_digest).await,
         Request::CanonicalGameList { device_id } => {
             objects::canonical_game_list(state, device_id).await
         }
@@ -121,13 +131,17 @@ pub(crate) async fn handle_request(
         Request::UpsertObject {
             object,
             expected_snapshot,
+            operation_id,
             device_id,
-        } => objects::upsert_object(state, object, expected_snapshot, device_id).await,
+        } => {
+            objects::upsert_object(state, object, expected_snapshot, operation_id, device_id).await
+        }
         Request::DeleteObject {
             id,
             expected_snapshot,
+            operation_id,
             device_id,
-        } => objects::delete_object(state, id, expected_snapshot, device_id).await,
+        } => objects::delete_object(state, id, expected_snapshot, operation_id, device_id).await,
 
         Request::TypesList => types::types_list(state).await,
         Request::TypesRegisterPackageDefinitions { registrations } => {
@@ -174,6 +188,24 @@ pub(crate) async fn handle_request(
         Request::BroadcastChange { entity } => system::broadcast_change(state, entity).await,
         Request::GetConnectedPeers => system::get_connected_peers(state).await,
         Request::GetSyncSnapshot => system::get_sync_snapshot(state).await,
+        Request::SyncPolicyGet => system::sync_policy_get(state).await,
+        Request::SyncPolicySet {
+            profile_id,
+            name,
+            active,
+            expected_revision,
+            rules,
+        } => {
+            system::sync_policy_set(state, profile_id, name, active, expected_revision, rules).await
+        }
+        Request::DeviceRegistrySnapshot => system::device_registry_snapshot(state).await,
+        Request::DeviceRegistryRename {
+            target_device_id,
+            display_name,
+        } => system::device_registry_rename(state, target_device_id, display_name).await,
+        Request::DeviceRegistryDisable { target_device_id } => {
+            system::device_registry_disable(state, target_device_id).await
+        }
         Request::DisconnectPeer { device_id } => system::disconnect_peer(state, device_id).await,
         Request::ConnectWithPairingCode { pairing_code } => {
             system::connect_with_pairing_code(state, pairing_code).await

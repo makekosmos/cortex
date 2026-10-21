@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::panic, clippy::unwrap_used)]
 
 use engine::{
     app_index::AppIndex, ark_host::ArkHost, file_index::FileIndex, package_service::PackageService,
@@ -7,7 +7,7 @@ use engine::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
-use std::{net::SocketAddr, process::Command, sync::Arc};
+use std::{net::SocketAddr, process::Command, sync::Arc, time::Instant};
 use tempfile::TempDir;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -21,12 +21,31 @@ struct Fixture {
     grants: Arc<engine::grant_authority::GrantAuthorityRegistry>,
     snapshots: Arc<engine::package_worker_broker::SnapshotRegistry>,
     server: Option<WsServer>,
-    // Last field: TempDir deletes its directory on drop, which on Windows
-    // fails silently if anything still holds a file inside (the aborted
-    // server task's ArkHost keeps ark.db/protocol.db open until it is fully
-    // reaped). Dropping last plus awaiting the JoinHandle keeps the cleanup
-    // deterministic.
+    ark: Arc<ArkHost>,
     _dir: TempDir,
+}
+
+impl Fixture {
+    async fn cleanup(self) {
+        let Fixture {
+            address: _,
+            authority,
+            grants,
+            snapshots,
+            server,
+            ark,
+            _dir,
+        } = self;
+        drop(server);
+        drop(authority);
+        drop(grants);
+        drop(snapshots);
+        let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("server released ArkHost"));
+        ark.shutdown(Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .unwrap();
+        drop(_dir);
+    }
 }
 
 async fn fixture() -> Fixture {
@@ -42,7 +61,7 @@ async fn fixture() -> Fixture {
     let file_index = Arc::new(FileIndex::new_disabled(&data_dir).unwrap());
     let package_service = Arc::new(PackageService::open(&data_dir).unwrap());
     let server = WsServer::bind(
-        ark,
+        ark.clone(),
         GLOBAL_TOKEN.into(),
         data_dir,
         app_index,
@@ -64,6 +83,7 @@ async fn fixture() -> Fixture {
         grants,
         snapshots,
         server: Some(server),
+        ark,
         _dir: dir,
     }
 }
@@ -155,8 +175,9 @@ async fn real_socket_desktop_authority_requires_exact_pid_credential_and_single_
     fixture.authority.revoke_generation(SESSION, GENERATION);
     fixture.authority.revoke_generation(SESSION, GENERATION);
     assert_eq!(fixture.authority.len(), 0);
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    fixture.cleanup().await;
 }
 
 #[tokio::test]
@@ -182,8 +203,11 @@ async fn real_socket_global_token_and_spoofed_class_cannot_reserve_snapshot() {
     .await;
     assert_eq!(denied["ok"], false);
     assert_eq!(authority.len(), 0);
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    drop(socket);
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    drop(authority);
+    fixture.cleanup().await;
 }
 
 #[tokio::test]
@@ -236,8 +260,10 @@ async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent(
         ),
         Ok(())
     );
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    drop(old);
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    fixture.cleanup().await;
 }
 
 async fn wait_for_empty(fixture: &Fixture) {
@@ -296,8 +322,9 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     let _ = child.kill();
     let _ = child.wait();
     wait_for_empty(&fixture).await;
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    fixture.cleanup().await;
 }
 
 #[tokio::test]
@@ -381,8 +408,9 @@ async fn real_socket_authorized_grant_and_snapshot_are_opaque_and_disconnect_cle
     assert_eq!(fixture.snapshots.len(), 0);
     drop(socket);
     wait_for_empty(&fixture).await;
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    fixture.cleanup().await;
 }
 
 #[tokio::test]
@@ -459,6 +487,7 @@ async fn real_socket_disconnect_cleans_open_snapshot_and_stale_handle_is_denied(
     );
     drop(fresh);
     wait_for_empty(&fixture).await;
-    let _ = shutdown.shutdown().await;
-    let _ = task.await;
+    shutdown.shutdown().await.unwrap();
+    task.await.unwrap().unwrap();
+    fixture.cleanup().await;
 }

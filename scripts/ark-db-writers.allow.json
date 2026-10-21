@@ -1,0 +1,415 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "path": "core/crates/ark-core/src/db/command/commands/system_mutation.rs",
+      "category": "connection lifecycle",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor.rs",
+      "category": "sync blocking adapter",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task/committed_feed_progress.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task/integration_admin.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task/sync_policy_write.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task/usage_compaction.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/handle.rs",
+      "category": "sync blocking adapter",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/operation_receipt.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/service.rs",
+      "category": "sync blocking adapter",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/accepted_peer_policy.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/book_cover.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_game.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations.rs",
+      "category": "connection lifecycle",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/ledger/runs.rs",
+      "category": "SQLite mutation API",
+      "count": 9
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/ledger/schema.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/migration/execute.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/migration/plan.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/object_projection.rs",
+      "category": "SQLite mutation API",
+      "count": 6
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/objects/execute.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/registry/apply.rs",
+      "category": "SQLite mutation API",
+      "count": 6
+    },
+    {
+      "path": "core/crates/ark-store/src/canonical_migrations/registry/preflight.rs",
+      "category": "SQLite mutation API",
+      "count": 7
+    },
+    {
+      "path": "core/crates/ark-store/src/committed_feed.rs",
+      "category": "SQLite mutation API",
+      "count": 8
+    },
+    {
+      "path": "core/crates/ark-store/src/committed_feed/progress.rs",
+      "category": "SQLite mutation API",
+      "count": 7
+    },
+    {
+      "path": "core/crates/ark-store/src/data_platform.rs",
+      "category": "SQLite mutation API",
+      "count": 7
+    },
+    {
+      "path": "core/crates/ark-store/src/device_registry.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/admin.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/configurations.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/credentials.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/grants.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/leases.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/nodes.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/signed_frame.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/legacy_entities/mutations.rs",
+      "category": "SQLite mutation API",
+      "count": 6
+    },
+    {
+      "path": "core/crates/ark-store/src/load_all.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/object_mutation.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/object_types.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/object_write_receipts.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/object_write.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/objects.rs",
+      "category": "SQLite mutation API",
+      "count": 11
+    },
+    {
+      "path": "core/crates/ark-store/src/objects/links.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/objects/state.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/open.rs",
+      "category": "connection lifecycle",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/open.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/operation_receipt.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/pending_objects.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/pending_objects/migrations.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/read_snapshot.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/schema/migrations.rs",
+      "category": "SQLite mutation API",
+      "count": 11
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot/legacy_startup_restore.rs",
+      "category": "connection lifecycle",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot/legacy_startup_restore.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot/recovery.rs",
+      "category": "SQLite mutation API",
+      "count": 6
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot/restore_journal.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/snapshot/restore.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/source_snapshot.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_entities/apply.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_entities/canonical_apply.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_kv.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_tombstones.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_versions.rs",
+      "category": "SQLite mutation API",
+      "count": 5
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_versions/local_revision.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/append.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/bootstrap.rs",
+      "category": "SQLite mutation API",
+      "count": 5
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/inbound.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/local_apply.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/progress.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/projection.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/builtins.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/catalog.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/migrations.rs",
+      "category": "SQLite mutation API",
+      "count": 6
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/registration.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/updates.rs",
+      "category": "SQLite mutation API",
+      "count": 3
+    },
+    {
+      "path": "core/crates/ark-store/src/type_registry/version_storage.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/usage_sync_log.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/usage_sync_log/migration.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/usage.rs",
+      "category": "SQLite mutation API",
+      "count": 8
+    },
+    {
+      "path": "core/crates/ark-store/src/writer.rs",
+      "category": "connection lifecycle",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/writer.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/writer/bootstrap.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/writer/snapshot_restore.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    }
+  ]
+}

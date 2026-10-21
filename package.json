@@ -21,7 +21,7 @@
     "clippy": "cargo clippy --workspace --all-targets --features engine/local-dictation -- -D warnings",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "check:manager-gpui": "cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check && cargo clippy --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path manager-gpui/Cargo.toml",
-    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && pnpm run test:native-build && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs scripts/check-toolchain.test.mjs",
+    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && pnpm run test:native-build && pnpm run test:ark-db-writers && pnpm run test:ark-core-storage-boundary && pnpm run test:ark-core-storage-census && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs scripts/check-toolchain.test.mjs",
     "test": "pnpm run test:static && pnpm run test:backend",
     "check:fast": "pnpm run check:layout && pnpm run check:core-pin && pnpm run check:toolchain && pnpm run check:brand && pnpm run check:test-skips && pnpm run check:source-size && pnpm run lint && pnpm run format:check && pnpm run rustfmt",
     "check": "node scripts/check-plan.mjs --full --run",
@@ -31,9 +31,12 @@
     "test:format": "node --test scripts/check-format.test.mjs",
     "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/release-preflight.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/release-manifest.test.mjs desktop/scripts/release-plan.test.mjs desktop/scripts/release-version.test.mjs desktop/scripts/build-macos-native.test.mjs desktop/scripts/macos-dock-policy.test.mjs desktop/scripts/publish-release.test.mjs desktop/scripts/package-macos-dmg.test.mjs desktop/scripts/macos-codesign.test.mjs desktop/scripts/verify-manifest-retry.test.mjs desktop/scripts/defender-gate.test.mjs",
     "test:backend": "node runtime/scripts/test-lib.mjs",
-    "test:desktop-contracts": "node scripts/check-brand.mjs && node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs desktop/build/installer-script.test.mjs desktop/build/installer-cwd-contract.test.mjs desktop/scripts/engine-distribution.test.mjs desktop/scripts/installer-autostart-migration.test.mjs desktop/scripts/engine-bootstrap-contract.test.mjs desktop/scripts/build-package-components.test.ts",
+    "test:desktop-contracts": "node scripts/check-brand.mjs && node --test desktop/build/installer-shortcut.test.mjs desktop/build/installer-script.test.mjs desktop/build/installer-cwd-contract.test.mjs desktop/scripts/engine-distribution.test.mjs desktop/scripts/installer-autostart-migration.test.mjs desktop/scripts/engine-bootstrap-contract.test.mjs desktop/scripts/build-package-components.test.mjs",
     "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs",
-    "test:desktop-tooling": "node --test desktop/scripts/build-package-components.e2e.test.mjs"
+    "test:desktop-tooling": "node --test desktop/scripts/build-package-components.e2e.test.mjs",
+    "test:ark-db-writers": "node --test scripts/audit-ark-db-writers.test.mjs && node scripts/audit-ark-db-writers.mjs --check",
+    "test:ark-core-storage-boundary": "node --test scripts/check-ark-core-storage-boundary*.test.mjs",
+    "test:ark-core-storage-census": "node --test scripts/audit-ark-core-storage-census.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",
