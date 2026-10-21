@@ -9,8 +9,6 @@ pub enum NodeAuthorizationOperation {
     Rotate,
 }
 
-/// Params of `integration.acquire_refresh_lease`, shared by the request
-/// newtype and its Engine-facing serialized fields.
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct RefreshLeaseAcquireParams {
     pub integration_id: String,
