@@ -53,15 +53,13 @@ async fn production_actor_shutdown_respects_deadline_and_finishes_started_work()
         .await
         .unwrap();
 
-    let committed = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .iter()
-        .filter(|entry| entry.sequence == 26)
-        .count()
-    });
+    let committed = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .iter()
+    .filter(|entry| entry.sequence == 26)
+    .count();
     assert_eq!(committed, 1, "started work must finish before actor closes");
 }

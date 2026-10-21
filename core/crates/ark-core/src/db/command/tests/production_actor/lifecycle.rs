@@ -55,16 +55,14 @@ async fn production_actor_skips_a_queued_command_after_caller_cancellation() {
         follow_up.is_ok(),
         "canceled queued work must release its admission slot"
     );
-    let rows = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Sequence,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let rows = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Sequence,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     assert_eq!(rows, vec![20, 22]);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -75,9 +73,7 @@ async fn production_actor_skips_a_queued_command_after_caller_cancellation() {
 #[tokio::test]
 async fn production_actor_finishes_started_work_after_caller_cancellation() {
     let (_directory, handle, mut owner) = open_actor_fixture().await;
-    handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::create(connection).unwrap();
-    });
+    ark_store::test_support::ActorTestLog::create_at(&actor_database_path(&_directory)).unwrap();
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let command_handle = handle.clone();
@@ -102,9 +98,11 @@ async fn production_actor_finishes_started_work_after_caller_cancellation() {
 
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            let wrote = handle.with_connection(|connection| {
-                ark_store::test_support::ActorTestLog::contains(connection, 23).unwrap()
-            });
+            let wrote = ark_store::test_support::ActorTestLog::contains_at(
+                &actor_database_path(&_directory),
+                23,
+            )
+            .unwrap();
             if wrote {
                 break;
             }
@@ -135,9 +133,10 @@ async fn production_actor_panic_rolls_back_and_fails_closed_until_reopen() {
     })
     .await
     .expect("actor did not fail closed after a command panic");
-    let table_exists = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::panic_probe_exists(connection).unwrap()
-    });
+    let table_exists = ark_store::test_support::ActorTestLog::panic_probe_exists_at(
+        &actor_database_path(&directory),
+    )
+    .unwrap();
     assert!(!table_exists, "uncommitted panic write must be rolled back");
     let rejected = handle
         .submit(
@@ -260,16 +259,14 @@ async fn production_actor_maintenance_rejects_later_writes_and_reads() {
     assert!(matches!(active_write, Err(DbError::Busy)));
     maintenance_release_tx.send(()).unwrap();
     maintenance.await.unwrap().unwrap();
-    let rows = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let rows = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     assert_eq!(rows, vec![30]);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -361,11 +358,8 @@ async fn production_actor_maintenance_waits_for_admitted_reads_before_the_reader
 #[tokio::test]
 async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
     let directory = tempfile::tempdir().unwrap();
-    let db_path = directory
-        .path()
-        .join("restart.db")
-        .to_string_lossy()
-        .into_owned();
+    let database_path = directory.path().join("restart.db");
+    let db_path = database_path.to_string_lossy().into_owned();
     let (handle, mut owner) = DbHandle::open_with_limits(
         db_path.clone(),
         "actor-test-device".into(),
@@ -430,19 +424,17 @@ async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
         Err(DbError::Unavailable)
     ));
 
-    let (reopened, mut reopened_owner) = DbHandle::open(db_path, "actor-test-device".into())
+    let (_reopened, mut reopened_owner) = DbHandle::open(db_path, "actor-test-device".into())
         .await
         .unwrap();
-    let rows = reopened.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let rows = ark_store::test_support::ActorTestLog::entries_at(
+        &database_path,
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     assert_eq!(rows, vec![40, 41]);
     reopened_owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))

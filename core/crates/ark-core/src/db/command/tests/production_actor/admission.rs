@@ -139,9 +139,8 @@ async fn production_reads_and_writes_share_global_admission_capacity() {
     for task in queued {
         task.await.unwrap().unwrap();
     }
-    let row_count = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::count(connection).unwrap()
-    });
+    let row_count =
+        ark_store::test_support::ActorTestLog::count_at(&actor_database_path(&_directory)).unwrap();
     assert_eq!(row_count, 4);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -231,16 +230,14 @@ async fn production_actor_bounds_count_and_keeps_interactive_and_live_reserves()
     interactive.await.unwrap().unwrap();
     live.await.unwrap().unwrap();
 
-    let order = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let order = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     assert_eq!(order.len(), 4);
     assert!(
         order.contains(&1),
@@ -341,16 +338,14 @@ async fn production_actor_bounds_payload_bytes_and_preserves_source_fifo_across_
     live.await.unwrap().unwrap();
     interactive.await.unwrap().unwrap();
 
-    let sequence = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let sequence = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     let backfill_positions =
         [10, 12].map(|value| sequence.iter().position(|item| *item == value).unwrap());
     assert!(
@@ -449,16 +444,14 @@ async fn production_actor_services_live_and_backfill_in_the_documented_weighted_
     for task in queued {
         task.await.unwrap().unwrap();
     }
-    let sequence = handle.with_connection(|connection| {
-        ark_store::test_support::ActorTestLog::entries(
-            connection,
-            ark_store::test_support::ActorLogOrder::Insertion,
-        )
-        .unwrap()
-        .into_iter()
-        .map(|entry| entry.sequence)
-        .collect::<Vec<_>>()
-    });
+    let sequence = ark_store::test_support::ActorTestLog::entries_at(
+        &actor_database_path(&_directory),
+        ark_store::test_support::ActorLogOrder::Insertion,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entry| entry.sequence)
+    .collect::<Vec<_>>();
     let classes: Vec<_> = sequence
         .iter()
         .skip(1)
