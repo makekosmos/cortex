@@ -7,6 +7,8 @@ use super::IntegrationNodeGrant;
 #[cfg(test)]
 use super::{AuthorizedNode, GrantStatus, NodeStatus};
 pub use ark_application::integration_sync::{prepare_signed_sync, SignedSyncPreparation};
+#[cfg(test)]
+use ark_store::integration_replication::{upsert_authorized_node, upsert_integration_node_grant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum NodeAuthorizationOperation {
@@ -39,10 +41,10 @@ fn persist_node_authorization_inner(
     let current = ark_store::integration_replication::load_authorized_node(conn, &node.node_id)?;
     validate_node_transition(operation, current.as_ref(), node, grant)?;
     if current.as_ref() != Some(node) {
-        crate::db::upsert_authorized_node(conn, node, device_id)?;
+        upsert_authorized_node(conn, node, device_id)?;
     }
     if let Some(grant) = grant {
-        crate::db::upsert_integration_node_grant(conn, grant, device_id)?;
+        upsert_integration_node_grant(conn, grant, device_id)?;
     }
     Ok(())
 }
@@ -71,7 +73,7 @@ fn persist_integration_grant_inner(
     {
         return Err("integration grant does not match the node key epoch".into());
     }
-    crate::db::upsert_integration_node_grant(conn, grant, device_id)
+    upsert_integration_node_grant(conn, grant, device_id)
 }
 
 #[cfg(test)]

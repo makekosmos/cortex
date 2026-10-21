@@ -265,7 +265,7 @@ pub(super) async fn db_backup(
 // BACKUP_GATE не нужен (не мутируют ничего).
 pub(super) async fn db_backup_list(state: &Arc<ServiceState>) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    let backups = db::list_snapshots(&db_path)?;
+    let backups = ark_store::snapshot::list_snapshots(&db_path)?;
     Ok(json!({ "backups": backups }))
 }
 

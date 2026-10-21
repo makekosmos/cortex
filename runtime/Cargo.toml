@@ -49,6 +49,7 @@ required-features = ["markdown-bridge-fixture"]
 
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
+ark-domain = { path = "../core/crates/ark-domain" }
 package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }

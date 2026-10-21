@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+pub mod app_identity;
 pub mod canonical_type;
 pub mod device_registry;
 pub mod hlc;

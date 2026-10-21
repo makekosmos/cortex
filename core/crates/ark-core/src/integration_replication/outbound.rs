@@ -4,6 +4,8 @@ pub use ark_application::integration_sync::{
     validate_outbound_signed_sync, validate_outbound_signed_sync_with_transport,
 };
 #[cfg(test)]
+use ark_store::integration_replication::{upsert_authorized_node, upsert_integration_node_grant};
+#[cfg(test)]
 use rusqlite::Connection;
 
 /// A node-level transport block may be removed only when every persisted
@@ -72,10 +74,10 @@ mod tests {
         let origin_grant = grant("origin", "origin-key");
         let recipient_grant = grant("recipient", "recipient-key");
         for node in [&origin, &recipient] {
-            crate::db::upsert_authorized_node(&conn, node, "writer").unwrap();
+            upsert_authorized_node(&conn, node, "writer").unwrap();
         }
         for grant in [&origin_grant, &recipient_grant] {
-            crate::db::upsert_integration_node_grant(&conn, grant, "writer").unwrap();
+            upsert_integration_node_grant(&conn, grant, "writer").unwrap();
         }
 
         let mut frame = SignedSyncEnvelope::new(
@@ -138,11 +140,11 @@ mod tests {
         assert!(validate_with_store_snapshot(&mut conn, &forged).is_err());
 
         let revoked = recipient_grant.revoke(2, "2026-08-31T00:01:00Z").unwrap();
-        crate::db::upsert_integration_node_grant(&conn, &revoked, "writer").unwrap();
+        upsert_integration_node_grant(&conn, &revoked, "writer").unwrap();
         assert!(validate_with_store_snapshot(&mut conn, &frame).is_err());
         let mut other_active = grant("recipient", "recipient-key");
         other_active.integration_id = "other-integration".into();
-        crate::db::upsert_integration_node_grant(&conn, &other_active, "writer").unwrap();
+        upsert_integration_node_grant(&conn, &other_active, "writer").unwrap();
         assert!(!node_may_receive_integration_frames(&conn, "recipient").unwrap());
     }
 

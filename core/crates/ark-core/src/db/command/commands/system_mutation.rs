@@ -95,7 +95,7 @@ impl RestoreSnapshotCommand {
 impl sealed::Sealed for RestoreSnapshotCommand {}
 
 impl DbMaintenanceCommand for RestoreSnapshotCommand {
-    type Output = crate::db::RestoreReport;
+    type Output = ark_store::snapshot::RestoreReport;
 
     fn weight(&self) -> usize {
         super::serialized_weight(self)
@@ -115,7 +115,7 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
         self,
         connection: &mut rusqlite::Connection,
     ) -> Result<Self::Output, DbError> {
-        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id)
+        ark_store::snapshot::restore_snapshot(connection, &self.db_path, &self.backup_id)
             .map_err(map_restore_error)
     }
 }

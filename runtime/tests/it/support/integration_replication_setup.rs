@@ -1,15 +1,15 @@
 //! Deterministic, plaintext-free Core fixture for the integration replication tests.
 //!
 //! The caller owns the Core child lifecycle. This module only creates isolated
-//! databases and seeds them through `ark-core`'s public database API before
+//! databases and seeds them through Store adapters before
 //! `ArkHost::spawn` is called.
 #![allow(dead_code, unused_imports)]
 
-use ark_core::db::{
-    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
-};
 use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
+};
+use ark_store::integration_replication::{
+    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use engine::package_service::credential_envelope::load_or_create_identity;
@@ -181,7 +181,10 @@ pub async fn wait_for_recipient_state_named(
     loop {
         if let Ok(conn) = Connection::open(path) {
             if let Ok(Some(lease)) =
-                ark_core::db::load_integration_refresh_lease(&conn, integration_id)
+                ark_store::integration_replication::load_integration_refresh_lease(
+                    &conn,
+                    integration_id,
+                )
             {
                 last_seen = Some(format!(
                     "holder={}, generation={}, fence={}",

@@ -1,3 +1,4 @@
+pub use ark_domain::app_identity::canonical_app_key;
 use std::collections::HashSet;
 
 // Canonical app identity + top-apps merge (KOS-287).
@@ -8,51 +9,6 @@ use std::collections::HashSet;
 // analytics. The tracker now hashes the canonical identity below, and
 // `load_usage_analytics` merges legacy per-path rows under the same key so
 // already-accumulated data dedupes without touching stored records.
-
-/// Canonical executable identity: normalized (lowercase, backslash) path with
-/// version-looking directory segments removed. Same app before and after an
-/// update maps to one key; distinct install roots still differ.
-pub fn canonical_app_key(normalized_exe_path: &str, process_name: &str) -> String {
-    let path = normalized_exe_path.trim().replace('/', "\\").to_lowercase();
-    if path.is_empty() {
-        return format!("proc:{}", process_name.trim().to_lowercase());
-    }
-    let mut out = String::with_capacity(path.len());
-    for segment in path.split('\\') {
-        if segment.is_empty() || is_version_segment(segment) {
-            continue;
-        }
-        if !out.is_empty() {
-            out.push('\\');
-        }
-        out.push_str(segment);
-    }
-    if out.is_empty() {
-        return format!("proc:{}", process_name.trim().to_lowercase());
-    }
-    out
-}
-
-/// Directory segment that changes on every update and must not participate in
-/// app identity: "1.2.3", "v2024.1", "app-1.0.9164", "10_0_22621". A plain
-/// numeric dir ("2024") is kept — too ambiguous to strip.
-fn is_version_segment(segment: &str) -> bool {
-    let s = segment.strip_prefix("app-").unwrap_or(segment);
-    let s = s.strip_prefix('v').unwrap_or(s);
-    let mut chars = s.chars();
-    if !matches!(chars.next(), Some(c) if c.is_ascii_digit()) {
-        return false;
-    }
-    let mut has_separator = false;
-    for c in chars {
-        match c {
-            '0'..='9' => {}
-            '.' | '_' | '-' => has_separator = true,
-            _ => return false,
-        }
-    }
-    has_separator
-}
 
 /// System-noise processes live under %SystemRoot% (explorer, sihost,
 /// searchhost, textinputhost, dllhost, ...). Analytics marks rows instead of

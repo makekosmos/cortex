@@ -60,7 +60,7 @@ async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
 
 /// Пишет snapshot live DB в Core-owned `backups/` через Online Backup.
 pub(super) fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str) {
-    let dir = db::backups_dir(db_path);
+    let dir = ark_store::snapshot::backups_dir(db_path);
     std::fs::create_dir_all(&dir).unwrap();
     let dest = dir.join(id);
     with_conn(state, |conn| {
@@ -256,12 +256,12 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
 
     // Не-SQLite garbage.
     std::fs::write(
-        db::backups_dir(&db_path).join("ark.db.backup-garbage"),
+        ark_store::snapshot::backups_dir(&db_path).join("ark.db.backup-garbage"),
         b"not a sqlite database",
     )
     .unwrap();
     // Валидный SQLite с чужой schema.
-    let foreign_path = db::backups_dir(&db_path).join("ark.db.backup-foreign");
+    let foreign_path = ark_store::snapshot::backups_dir(&db_path).join("ark.db.backup-foreign");
     let foreign = rusqlite::Connection::open(&foreign_path).unwrap();
     foreign
         .execute_batch("CREATE TABLE other(id TEXT PRIMARY KEY)")
@@ -301,7 +301,7 @@ async fn db_backup_list_and_validate_contract() {
     seed_rpc_object(&state, "obj-l", "l").await;
     write_snapshot(&state, &db_path, "ark.db.backup-listed");
 
-    let backups = db::backups_dir(&db_path);
+    let backups = ark_store::snapshot::backups_dir(&db_path);
     std::fs::write(backups.join(".staging-tmp"), b"junk").unwrap();
     std::fs::create_dir(backups.join("nested-dir")).unwrap();
 

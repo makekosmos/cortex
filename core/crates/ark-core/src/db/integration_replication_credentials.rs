@@ -1,13 +1,13 @@
 #[cfg(test)]
 use super::integration_replication_common::{envelope_version_is_newer, persist_with_vector};
-#[cfg(test)]
-use super::load_integration_node_grant;
 use crate::integration_replication::read_store::IntegrationReplicationReadPort;
 #[cfg(test)]
 use crate::integration_replication::{envelope_entity_id, GrantStatus, NodeStatus};
 use crate::integration_replication::{
     validate_envelope_recipient, IntegrationContractError, IntegrationCredentialEnvelope,
 };
+#[cfg(test)]
+use ark_store::integration_replication::load_integration_node_grant;
 #[cfg(test)]
 use rusqlite::Connection;
 

@@ -3,23 +3,10 @@ mod command;
 mod committed_feed;
 pub(crate) mod constants;
 
-pub use ark_application::sync_storage::{
-    CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
-    OutboundProgress,
-};
-pub use ark_store::committed_feed::MAX_FEED_PAGE_SIZE;
-#[cfg(test)]
-pub use ark_store::snapshot::backup_to_file_chunked_verified as backup_to_file_chunked;
-pub use ark_store::snapshot::restore_snapshot;
-pub use ark_store::snapshot::{
-    backups_dir, list_snapshots, schema_fingerprint, validate_snapshot, RestoreReport,
-    SnapshotEntry, SnapshotValidation,
-};
 pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 #[cfg(test)]
 pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub use backend::SqliteStorageBackend;
-pub use command::CommandSource;
 pub(crate) use command::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand, AppendLocalRegistryEventCommand,
     AppendTaskMergeOperationRequest, ApplyRegistryEventsCommand,
@@ -51,12 +38,6 @@ mod integration_replication_issuer_lookup;
 mod integration_replication_lease;
 mod integration_replication_publication;
 
-pub use ark_application::integration_export::export_integration_replication;
-pub use ark_store::integration_replication::load_integration_node_grant;
-pub use ark_store::integration_replication::upsert_integration_node_grant;
-pub use ark_store::integration_replication::{
-    upsert_authorized_node, upsert_integration_configuration,
-};
 #[cfg(test)]
 pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
@@ -80,12 +61,6 @@ pub use integration_replication_publication::RefreshLeaseAcquireParams;
 pub use integration_replication_publication::{
     publish_integration_credential_envelope, try_acquire_integration_refresh_lease,
 };
-// Preserve the public database query surface for downstream Rust consumers;
-// Core production paths use the Store adapters directly.
-pub use ark_store::integration_replication::{
-    load_authorized_node, load_integration_configuration, load_integration_refresh_lease,
-};
-
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -94,7 +69,12 @@ mod tests {
     use crate::hlc::HLC;
     use crate::integration_replication::*;
     use crate::types::*;
+    use ark_application::integration_export::export_integration_replication;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+    use ark_store::integration_replication::{
+        load_integration_node_grant, upsert_authorized_node, upsert_integration_configuration,
+        upsert_integration_node_grant,
+    };
     use ark_store::legacy_entities::{
         batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
     };

@@ -1,7 +1,7 @@
 use super::*;
 
 fn write_backup(state: &Arc<ServiceState>, db_path: &str, backup_id: &str) {
-    let directory = db::backups_dir(db_path);
+    let directory = ark_store::snapshot::backups_dir(db_path);
     std::fs::create_dir_all(&directory).unwrap();
     let destination = directory.join(backup_id);
     with_conn(state, |connection| {

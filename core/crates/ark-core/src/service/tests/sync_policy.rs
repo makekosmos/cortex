@@ -219,7 +219,11 @@ async fn sync_selection_does_not_revoke_an_application_grant() {
     .expect("exclude notes from device sync");
 
     let grant = with_conn(&state, |connection| {
-        crate::db::load_integration_node_grant(connection, "notes-app", "app-node")
+        ark_store::integration_replication::load_integration_node_grant(
+            connection,
+            "notes-app",
+            "app-node",
+        )
     })
     .expect("load application grant after changing sync selection")
     .expect("sync selection must preserve the application grant");

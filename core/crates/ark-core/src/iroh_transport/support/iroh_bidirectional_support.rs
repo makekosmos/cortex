@@ -19,6 +19,9 @@ use ark_core::sync_server::{
 };
 use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
+use ark_store::integration_replication::{
+    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
+};
 use ark_sync::protocol::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
@@ -360,10 +363,10 @@ fn authorized_storage() -> (
             hlc: "2026-08-31T00:00:00.000Z:000001:device-A".into(),
         };
         for node in [&origin, &recipient] {
-            ark_core::db::upsert_authorized_node(&guard, node, "device-B").unwrap();
+            upsert_authorized_node(&guard, node, "device-B").unwrap();
         }
         for node_id in ["device-A", "device-B"] {
-            ark_core::db::upsert_integration_node_grant(
+            upsert_integration_node_grant(
                 &guard,
                 &IntegrationNodeGrant {
                     integration_id: "integration".into(),
@@ -383,7 +386,7 @@ fn authorized_storage() -> (
             )
             .unwrap();
         }
-        ark_core::db::upsert_integration_configuration(
+        upsert_integration_configuration(
             &guard,
             &IntegrationConfiguration {
                 integration_id: "integration".into(),

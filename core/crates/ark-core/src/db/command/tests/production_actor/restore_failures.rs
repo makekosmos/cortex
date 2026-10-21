@@ -139,7 +139,7 @@ async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
     let (directory, handle, mut owner) = open_failure_actor().await;
     let db_path = actor_path(&directory);
     let backup_id = "ark.db.backup-restore-failure";
-    let backup_path = crate::db::backups_dir(&db_path);
+    let backup_path = ark_store::snapshot::backups_dir(&db_path);
     std::fs::create_dir_all(&backup_path).unwrap();
     let snapshot_path = backup_path.join(backup_id);
     ark_store::test_support::ProductionActorFailureProbe::create_restore_snapshot_fixture(

@@ -221,13 +221,14 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         }
         if tokio::time::Instant::now() >= deadline {
             let conn = rusqlite::Connection::open(&setup.recipient_db).unwrap();
-            let persisted = ark_core::db::load_integration_credential_envelope(
-                &conn,
-                PACKAGE_ID,
-                &setup.recipient.node_id,
-                1,
-            )
-            .unwrap();
+            let persisted =
+                ark_store::integration_replication::load_integration_credential_envelope(
+                    &conn,
+                    PACKAGE_ID,
+                    &setup.recipient.node_id,
+                    1,
+                )
+                .unwrap();
             assert!(
                 response.ok && persisted.is_some(),
                 "recipient did not persist the signed HPKE envelope: \

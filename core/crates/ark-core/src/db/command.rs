@@ -67,6 +67,7 @@ pub(crate) enum CommandClass {
 pub enum CommandSource {
     Engine,
     System,
+    #[allow(dead_code)]
     ApplicationPackage(String),
     DeviceId(String),
 }
