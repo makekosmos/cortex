@@ -116,6 +116,11 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
         Some(&json!("Original title")),
         "stale and mismatched replays must preserve the original payload"
     );
+    backend
+        .backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -296,6 +301,14 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
         }),
         "inbound legacy update must enter relay's durable outbound feed"
     );
+    source
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+    relay
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

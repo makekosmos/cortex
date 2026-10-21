@@ -1,4 +1,6 @@
 use std::sync::{Arc, Mutex};
+#[cfg(test)]
+use std::time::Instant;
 
 use super::DbHandle;
 
@@ -12,7 +14,7 @@ pub struct SqliteStorageBackend {
     device_id: Arc<Mutex<String>>,
     selective_profile: Arc<Mutex<Option<ark_domain::selective_sync::SelectiveSyncProfile>>>,
     #[cfg(test)]
-    test_owner: Option<Arc<super::command::DbOwner>>,
+    test_owner: Option<Arc<tokio::sync::Mutex<super::command::DbOwner>>>,
 }
 
 impl SqliteStorageBackend {
@@ -26,8 +28,22 @@ impl SqliteStorageBackend {
             .await
             .map_err(|error| error.to_string())?;
         let mut backend = Self::with_db_handle(db);
-        backend.test_owner = Some(Arc::new(owner));
+        backend.test_owner = Some(Arc::new(tokio::sync::Mutex::new(owner)));
         Ok(backend)
+    }
+
+    #[cfg(test)]
+    pub async fn shutdown_for_test(&self, deadline: Instant) -> Result<(), String> {
+        let owner = self
+            .test_owner
+            .as_ref()
+            .ok_or_else(|| "test backend has no database owner".to_owned())?;
+        owner
+            .lock()
+            .await
+            .shutdown(deadline)
+            .await
+            .map_err(|error| error.to_string())
     }
 
     #[cfg(test)]

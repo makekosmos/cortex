@@ -68,6 +68,10 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
             .unwrap_err(),
         "sync_inbox_identity_digest_mismatch"
     );
+    backend
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
