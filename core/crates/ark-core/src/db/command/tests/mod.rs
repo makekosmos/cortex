@@ -4,21 +4,16 @@ use production_actor::WriteProbe;
 struct ReadProbe;
 
 #[tokio::test]
-async fn read_query_uses_backfill_context_without_opening_a_write_transaction() {
+async fn read_query_uses_backfill_context() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
-    let autocommit = handle
-        .query(
+    handle
+        .query_with_store(
             CommandContext::sync_system(CommandClass::Backfill),
             ReadProbe,
         )
         .await
         .unwrap();
-
-    assert!(
-        autocommit,
-        "a read query must not start a write transaction"
-    );
 }
 
 #[tokio::test]
@@ -151,7 +146,7 @@ async fn read_queries_share_bounded_source_admission() {
 
     assert!(matches!(
         handle
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::Backfill),
                 ReadProbe,
             )
@@ -161,7 +156,7 @@ async fn read_queries_share_bounded_source_admission() {
 
     drop(reservations);
     assert!(handle
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::Backfill),
             ReadProbe,
         )

@@ -19,7 +19,7 @@ async fn production_read_keeps_one_snapshot_while_writer_commits() {
     let read_handle = handle.clone();
     let read = tokio::spawn(async move {
         read_handle
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::Backfill),
                 SnapshotReadProbe {
                     started: started_tx,
@@ -70,7 +70,7 @@ async fn production_reads_and_writes_share_global_admission_capacity() {
     let read_handle = handle.clone();
     let read = tokio::spawn(async move {
         read_handle
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::Backfill),
                 SnapshotReadProbe {
                     started: read_started_tx,

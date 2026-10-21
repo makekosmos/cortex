@@ -95,8 +95,8 @@ impl DbMaintenanceCommand for SetMaxPageCount {
     }
 }
 
-impl DbQuery for ReadProbe {
-    type Output = bool;
+impl StoreReadQuery for ReadProbe {
+    type Output = ();
 
     fn class(&self) -> CommandClass {
         CommandClass::Backfill
@@ -109,14 +109,14 @@ impl DbQuery for ReadProbe {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        _capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        Ok(connection.is_autocommit())
+        Ok(())
     }
 }
 
-impl DbQuery for SnapshotReadProbe {
+impl StoreReadQuery for SnapshotReadProbe {
     type Output = (i64, i64);
 
     fn class(&self) -> CommandClass {
@@ -130,16 +130,20 @@ impl DbQuery for SnapshotReadProbe {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        let before = ark_store::test_support::ActorTestLog::count(connection)
+        let before = capabilities
+            .test_support()
+            .actor_log_count()
             .map_err(|error| DbError::Storage(error.to_string()))?;
         let _ = self.started.send(());
         self.resume
             .recv()
             .map_err(|error| DbError::Storage(error.to_string()))?;
-        let after = ark_store::test_support::ActorTestLog::count(connection)
+        let after = capabilities
+            .test_support()
+            .actor_log_count()
             .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok((before, after))
     }

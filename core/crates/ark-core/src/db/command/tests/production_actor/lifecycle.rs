@@ -233,7 +233,7 @@ async fn production_actor_maintenance_rejects_later_writes_and_reads() {
     assert!(matches!(later, Err(DbError::Busy)));
     assert!(matches!(
         handle
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::Backfill),
                 ReadProbe,
             )
@@ -294,7 +294,7 @@ async fn production_actor_maintenance_waits_for_admitted_reads_before_the_reader
     let read_handle = handle.clone();
     let read = tokio::spawn(async move {
         read_handle
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::Backfill),
                 SnapshotReadProbe {
                     started: read_started_tx,

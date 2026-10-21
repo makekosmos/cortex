@@ -207,24 +207,6 @@ pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
     fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
 }
 
-/// Sealed read-only application surface. Query implementations receive a
-/// connection without opening an IMMEDIATE transaction and inspect their
-/// typed principal through `CommandContext`.
-#[cfg(test)]
-pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
-    type Output: Send + 'static;
-
-    fn class(&self) -> CommandClass;
-
-    fn weight(&self) -> usize;
-
-    fn read(
-        self,
-        context: &CommandContext,
-        connection: &Connection,
-    ) -> Result<Self::Output, DbError>;
-}
-
 pub(crate) trait StoreReadQuery: sealed::Sealed + Send + 'static {
     type Output: Send + 'static;
 

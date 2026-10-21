@@ -2,10 +2,6 @@ use super::*;
 #[cfg(test)]
 use executor::actor::TypedCommand;
 use executor::actor::{ActorOwner, ActorShared, TypedMaintenance, WriterTask};
-#[cfg(test)]
-use rusqlite::OpenFlags;
-#[cfg(test)]
-use rusqlite::TransactionBehavior;
 use std::time::Instant;
 
 pub(in crate::db::command) mod authenticated_core_task_write;
@@ -190,55 +186,6 @@ impl DbHandle {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) async fn query<Q: DbQuery>(
-        &self,
-        context: CommandContext,
-        query: Q,
-    ) -> Result<Q::Output, DbError> {
-        if context.class != query.class() {
-            return Err(DbError::Invalid("database query class mismatch".into()));
-        }
-        let weight = query.weight();
-        if weight == 0 || weight > super::MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-        match &self.backend {
-            HandleBackend::Actor(actor) => {
-                let shared = Arc::clone(actor);
-                let _admission = actor.admit_read(query.class(), &context.source, weight)?;
-                tokio::task::spawn_blocking(move || {
-                    let _admission = _admission;
-                    let _snapshot = shared
-                        .readers
-                        .read()
-                        .unwrap_or_else(|error| error.into_inner());
-                    let mut connection = open_reader(&shared.path)?;
-                    let transaction = connection
-                        .transaction_with_behavior(TransactionBehavior::Deferred)
-                        .map_err(|error| DbError::Storage(error.to_string()))?;
-                    let output = query.read(&context, &transaction)?;
-                    transaction
-                        .commit()
-                        .map_err(|error| DbError::Storage(error.to_string()))?;
-                    Ok(output)
-                })
-                .await
-                .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-            #[cfg(test)]
-            HandleBackend::Test(connection) => {
-                let _admission = self
-                    .admission
-                    .try_acquire(query.class(), &context.source, weight)
-                    .map_err(map_admission_error)?;
-                spawn_test_query(Arc::clone(connection), context, query, _admission)
-                    .await
-                    .map_err(|error| DbError::Storage(error.to_string()))?
-            }
-        }
-    }
-
     pub(crate) async fn query_with_store<Q: StoreReadQuery>(
         &self,
         context: CommandContext,
@@ -403,21 +350,6 @@ fn spawn_test_maintenance<C: DbMaintenanceCommand>(
 }
 
 #[cfg(test)]
-#[cfg(test)]
-fn spawn_test_query<Q: DbQuery>(
-    connection: Arc<Mutex<Connection>>,
-    context: CommandContext,
-    query: Q,
-    _admission: executor::AdmissionPermit,
-) -> tokio::task::JoinHandle<Result<Q::Output, DbError>> {
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        query.read(&context, &connection)
-    })
-}
-
-#[cfg(test)]
 fn spawn_test_store_query<Q: StoreReadQuery>(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,
@@ -456,22 +388,6 @@ impl DbOwner {
             .join()
             .map_err(|_| DbError::Storage("database shutdown thread panicked".into()))?
     }
-}
-
-#[cfg(test)]
-fn open_reader(path: &str) -> Result<Connection, DbError> {
-    let connection = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(|error| DbError::Storage(error.to_string()))?;
-    connection
-        .busy_timeout(std::time::Duration::from_secs(5))
-        .map_err(|error| DbError::Storage(error.to_string()))?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| DbError::Storage(error.to_string()))?;
-    Ok(connection)
 }
 
 fn map_store_read_failure(
