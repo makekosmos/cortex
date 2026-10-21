@@ -1,82 +1,10 @@
-use std::collections::BTreeSet;
-
-use super::read_store::IntegrationReplicationReadPort;
+#[cfg(test)]
+use super::NodeStatus;
+pub use ark_application::integration_sync::{
+    validate_outbound_signed_sync, validate_outbound_signed_sync_with_transport,
+};
 #[cfg(test)]
 use rusqlite::Connection;
-
-use super::{IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, VerifiedSyncEnvelope};
-
-/// Revalidate a host-signed frame against current authorization immediately
-/// before transport routing. A frame prepared before revocation must not send.
-pub fn validate_outbound_signed_sync<S: IntegrationReplicationReadPort>(
-    conn: &S,
-    expected_space_id: &str,
-    expected_origin_node_id: &str,
-    frame: &SignedSyncEnvelope,
-) -> Result<(), String> {
-    if frame.origin_node_id != expected_origin_node_id {
-        return Err("signed integration frame origin is not this node".into());
-    }
-    let origin = conn
-        .authorized_node(expected_origin_node_id)?
-        .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
-    let verified = frame
-        .verify(expected_space_id, &frame.recipient_node_id, &origin)
-        .map_err(|error| error.to_string())?;
-    let recipient = conn
-        .authorized_node(&frame.recipient_node_id)?
-        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
-    if recipient.status != NodeStatus::Active {
-        return Err("recipient node is revoked".into());
-    }
-
-    let integrations = integration_ids(&verified);
-    if integrations.is_empty() {
-        return Err("signed integration payload has no integration scope".into());
-    }
-    for integration_id in integrations {
-        super::api::require_current_grant(conn, integration_id, &origin)?;
-        super::api::require_current_grant(conn, integration_id, &recipient)?;
-    }
-    for change in &verified.payload {
-        match &change.entity {
-            IntegrationReplicationEntity::IntegrationRefreshLease(lease)
-                if lease.holder_node_id != verified.origin_node_id =>
-            {
-                return Err("refresh lease holder does not match signed origin".into());
-            }
-            IntegrationReplicationEntity::IntegrationCredentialEnvelope(envelope) => {
-                if envelope.issuer_node_id != verified.origin_node_id {
-                    return Err("credential envelope issuer does not match signed origin".into());
-                }
-                let grant = conn
-                    .grant(&envelope.integration_id, &recipient.node_id)?
-                    .ok_or_else(|| "recipient node has no integration grant".to_string())?;
-                super::validate_envelope_recipient(envelope, &recipient, &grant)
-                    .map_err(|error| error.to_string())?;
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-pub fn validate_outbound_signed_sync_with_transport<S: IntegrationReplicationReadPort>(
-    conn: &S,
-    expected_space_id: &str,
-    expected_origin_node_id: &str,
-    frame: &SignedSyncEnvelope,
-    transport_public_key: &str,
-) -> Result<(), String> {
-    validate_outbound_signed_sync(conn, expected_space_id, expected_origin_node_id, frame)?;
-    let recipient = conn
-        .authorized_node(&frame.recipient_node_id)?
-        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
-    if recipient.transport_public_key.as_deref() != Some(transport_public_key) {
-        return Err("recipient transport identity is no longer authorized".into());
-    }
-    Ok(())
-}
 
 /// A node-level transport block may be removed only when every persisted
 /// integration grant for that node is active and bound to its current key.
@@ -100,28 +28,6 @@ pub fn node_may_receive_integration_frames(
     )
 }
 
-fn integration_ids(frame: &VerifiedSyncEnvelope) -> BTreeSet<&str> {
-    frame
-        .payload
-        .iter()
-        .filter_map(|change| match &change.entity {
-            IntegrationReplicationEntity::IntegrationConfiguration(value) => {
-                Some(value.integration_id.as_str())
-            }
-            IntegrationReplicationEntity::IntegrationNodeGrant(value) => {
-                Some(value.integration_id.as_str())
-            }
-            IntegrationReplicationEntity::IntegrationRefreshLease(value) => {
-                Some(value.integration_id.as_str())
-            }
-            IntegrationReplicationEntity::IntegrationCredentialEnvelope(value) => {
-                Some(value.integration_id.as_str())
-            }
-            IntegrationReplicationEntity::AuthorizedNode(_) => None,
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use ed25519_dalek::{Signer, SigningKey};
@@ -130,7 +36,7 @@ mod tests {
     use crate::integration_replication::{
         encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration,
         IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationReplicationChange,
-        NodeStatus,
+        IntegrationReplicationEntity, SignedSyncEnvelope,
     };
 
     fn validate_with_store_snapshot(

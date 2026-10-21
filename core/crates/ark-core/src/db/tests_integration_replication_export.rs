@@ -53,6 +53,22 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
         IntegrationReplicationEntity::IntegrationNodeGrant(_)
     )));
     assert!(changes.iter().all(|change| !change.vector_hlc.is_empty()));
+
+    let prepared = with_integration_replication_read(&mut conn, |read| {
+        crate::integration_replication::prepare_signed_sync(
+            read,
+            "space-a",
+            "node-b",
+            "integration-a",
+            "node-a",
+            "message-a",
+        )
+    })
+    .unwrap();
+    assert_eq!(prepared.envelope.origin_node_id, "node-b");
+    assert_eq!(prepared.envelope.recipient_node_id, "node-a");
+    assert_eq!(prepared.envelope.payload.len(), changes.len());
+    assert!(!prepared.canonical_signing_bytes_hex.is_empty());
 }
 
 fn rank(entity: &IntegrationReplicationEntity) -> u8 {
