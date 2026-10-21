@@ -48,7 +48,7 @@ const GATE_FEATURES = [
   "--features",
   // KOS-337: engine/local-dictation — the gate must test what ships, and
   // release builds compile the local dictation backend in.
-  "engine/package-worker-fixture,engine/markdown-bridge-fixture,engine/local-dictation,ark-core/test-support",
+  "engine/package-worker-fixture,engine/markdown-bridge-fixture,engine/local-dictation",
 ];
 
 // These are integration-test fixtures, not production dependencies. Build
