@@ -19,9 +19,6 @@ use ark_core::sync_server::{
 };
 use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_store::integration_replication::{
-    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
-};
 use ark_sync::protocol::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
@@ -322,91 +319,84 @@ impl IntegrationReplicationBackend for TestStorage {
     }
 }
 
-fn authorized_storage() -> (
+async fn authorized_storage() -> (
     Arc<ark_core::SqliteStorageBackend>,
-    Arc<std::sync::Mutex<rusqlite::Connection>>,
+    ark_store::test_support::TestDatabase,
 ) {
-    let conn = Arc::new(std::sync::Mutex::new(
-        rusqlite::Connection::open_in_memory().unwrap(),
-    ));
-    {
-        let guard = conn.lock().unwrap();
-        ark_store::open::init_schema(&guard).unwrap();
-        let origin = AuthorizedNode {
-            node_id: "device-B".into(),
-            key_fingerprint: "fp-b".into(),
-            signing_public_key: encode_hex(
-                SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes(),
-            ),
-            encryption_public_key: "enc-b".into(),
-            transport_public_key: None,
-            grant_epoch: 1,
-            status: NodeStatus::Active,
-            authorized_at: "2026-08-31T00:00:00Z".into(),
-            revoked_at: None,
-            revocation_epoch: None,
-            revision: 1,
-            hlc: "2026-08-31T00:00:00.000Z:000001:device-B".into(),
-        };
-        let recipient = AuthorizedNode {
-            node_id: "device-A".into(),
-            key_fingerprint: "fp-a".into(),
-            signing_public_key: "00".into(),
-            encryption_public_key: "enc-a".into(),
-            transport_public_key: None,
-            grant_epoch: 1,
-            status: NodeStatus::Active,
-            authorized_at: "2026-08-31T00:00:00Z".into(),
-            revoked_at: None,
-            revocation_epoch: None,
-            revision: 1,
-            hlc: "2026-08-31T00:00:00.000Z:000001:device-A".into(),
-        };
-        for node in [&origin, &recipient] {
-            upsert_authorized_node(&guard, node, "device-B").unwrap();
-        }
-        for node_id in ["device-A", "device-B"] {
-            upsert_integration_node_grant(
-                &guard,
-                &IntegrationNodeGrant {
-                    integration_id: "integration".into(),
-                    node_id: node_id.into(),
-                    node_encryption_key: format!(
-                        "enc-{}",
-                        if node_id == "device-A" { "a" } else { "b" }
-                    ),
-                    grant_epoch: 1,
-                    status: GrantStatus::Active,
-                    authorized_at: "2026-08-31T00:00:00Z".into(),
-                    revoked_at: None,
-                    revision: 1,
-                    hlc: format!("2026-08-31T00:00:00.000Z:000001:{node_id}"),
-                },
-                "device-B",
-            )
-            .unwrap();
-        }
-        upsert_integration_configuration(
-            &guard,
-            &IntegrationConfiguration {
-                integration_id: "integration".into(),
-                provider: "fatsecret".into(),
-                account_subject: "account".into(),
-                public_scopes: vec![],
-                public_settings: serde_json::json!({}),
-                enabled: true,
-                sync_cursor: None,
-                revision: 1,
-                hlc: "2026-08-31T00:00:00.000Z:000001:device-B".into(),
-            },
-            "device-B",
-        )
-        .unwrap();
-    }
-    (
-        Arc::new(ark_core::SqliteStorageBackend::for_test(conn.clone())),
-        conn,
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let signing_public_key =
+        encode_hex(SigningKey::from_bytes(&[7; 32]).verifying_key().as_bytes());
+    let origin = authorized_node("device-B", "fp-b", &signing_public_key, "enc-b", None, 1);
+    let recipient = authorized_node("device-A", "fp-a", "00", "enc-a", None, 1);
+    seed_authorization(&database, &[origin, recipient]);
+    let backend = ark_core::SqliteStorageBackend::open_for_test(
+        database.path().to_str().unwrap().to_owned(),
+        "device-B",
     )
+    .await
+    .unwrap();
+    (Arc::new(backend), database)
+}
+
+fn authorized_node(
+    node_id: &str,
+    fingerprint: &str,
+    signing_key: &str,
+    encryption_key: &str,
+    transport_key: Option<&str>,
+    epoch: u64,
+) -> AuthorizedNode {
+    AuthorizedNode {
+        node_id: node_id.into(),
+        key_fingerprint: fingerprint.into(),
+        signing_public_key: signing_key.into(),
+        encryption_public_key: encryption_key.into(),
+        transport_public_key: transport_key.map(str::to_owned),
+        grant_epoch: epoch,
+        status: NodeStatus::Active,
+        authorized_at: "2026-08-31T00:00:00Z".into(),
+        revoked_at: None,
+        revocation_epoch: None,
+        revision: 1,
+        hlc: format!("2026-08-31T00:00:00.000Z:000001:{node_id}"),
+    }
+}
+
+fn seed_authorization(database: &ark_store::test_support::TestDatabase, nodes: &[AuthorizedNode]) {
+    let grants: Vec<_> = nodes.iter().map(integration_grant_for_node).collect();
+    seed_authorization_records(database, nodes, &grants);
+}
+
+fn integration_grant_for_node(node: &AuthorizedNode) -> IntegrationNodeGrant {
+    IntegrationNodeGrant {
+        integration_id: "integration".into(),
+        node_id: node.node_id.clone(),
+        node_encryption_key: node.encryption_public_key.clone(),
+        grant_epoch: node.grant_epoch,
+        status: if node.status == NodeStatus::Active {
+            GrantStatus::Active
+        } else {
+            GrantStatus::Revoked
+        },
+        authorized_at: node.authorized_at.clone(),
+        revoked_at: node.revoked_at.clone(),
+        revision: node.revision,
+        hlc: node.hlc.clone(),
+    }
+}
+
+fn seed_authorization_records(
+    database: &ark_store::test_support::TestDatabase,
+    nodes: &[AuthorizedNode],
+    grants: &[IntegrationNodeGrant],
+) {
+    ark_store::test_support::IntegrationReplicationTestFixture::seed_authorization(
+        database.path(),
+        nodes,
+        grants,
+        "device-B",
+    )
+    .unwrap();
 }
 
 fn signed_frame() -> SignedSyncEnvelope {
@@ -443,34 +433,25 @@ fn signed_frame() -> SignedSyncEnvelope {
 }
 
 fn set_recipient_transport_key(
-    conn: &Arc<std::sync::Mutex<rusqlite::Connection>>,
+    database: &ark_store::test_support::TestDatabase,
     transport_key: &str,
     status: NodeStatus,
     epoch: u64,
 ) {
-    let guard = conn.lock().unwrap();
-    let status = match status {
-        NodeStatus::Active => "active",
-        NodeStatus::Revoked => "revoked",
-    };
-    let revoked_at = (status == "revoked").then_some("2026-08-31T00:01:00Z");
-    let revocation_epoch = (status == "revoked").then_some(epoch as i64);
-    guard
-        .execute(
-            concat!(
-                "UPDATE authorized_nodes SET transport_public_key = ?1, status = ?2, ",
-                "grant_epoch = ?3, revoked_at = ?4, revocation_epoch = ?5 WHERE node_id = ?6"
-            ),
-            rusqlite::params![
-                transport_key,
-                status,
-                epoch as i64,
-                revoked_at,
-                revocation_epoch,
-                "device-A"
-            ],
-        )
-        .unwrap();
+    let mut recipient = authorized_node(
+        "device-A",
+        "fp-a",
+        "00",
+        "enc-a",
+        Some(transport_key),
+        epoch,
+    );
+    if status == NodeStatus::Revoked {
+        recipient.status = status;
+        recipient.revoked_at = Some("2026-08-31T00:01:00Z".into());
+        recipient.revocation_epoch = Some(epoch);
+    }
+    seed_authorization(database, &[recipient]);
 }
 
 #[path = "iroh_bidirectional_support/event_helpers.rs"]

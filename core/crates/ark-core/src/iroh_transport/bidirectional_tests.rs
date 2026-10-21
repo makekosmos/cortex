@@ -121,9 +121,9 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         "expected LiveChange {change_id} for {}, got {a_msg:?}",
         entity.id
     );
-    let (backend, conn) = authorized_storage();
+    let (backend, database) = authorized_storage().await;
     let recipient_transport = transport_a.endpoint_id().unwrap().to_string();
-    set_recipient_transport_key(&conn, &recipient_transport, NodeStatus::Active, 1);
+    set_recipient_transport_key(&database, &recipient_transport, NodeStatus::Active, 2);
     let frame = signed_frame();
     transport_b
         .bind_peer_for_control(
@@ -230,14 +230,14 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         }
     });
     first_check.notified().await;
-    set_recipient_transport_key(&conn, "rotated-key", NodeStatus::Active, 1);
+    set_recipient_transport_key(&database, "rotated-key", NodeStatus::Active, 3);
     release_first.notify_one();
     let error = pending
         .await
         .unwrap()
         .expect_err("writer must reject a frame after transport key rotation");
     assert!(error.contains("transport identity"));
-    set_recipient_transport_key(&conn, "rotated-key", NodeStatus::Revoked, 2);
+    set_recipient_transport_key(&database, "rotated-key", NodeStatus::Revoked, 4);
     let enqueue_error = transport_b
         .send_to(
             "device-A",
