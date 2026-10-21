@@ -7,7 +7,7 @@
 // `hello` → `version_vector` → `sync_changes` + ACK → `live_change` +
 // `live_ack`. Also exercises the self-connect rejection path.
 //
-// The test uses in-memory SQLite backends so it needs no filesystem access.
+// The test uses temporary file-backed databases with production writer actors.
 
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -49,18 +49,6 @@ pub(super) async fn make_storage(device_id: &str) -> Arc<TestStorage> {
 
 pub(super) async fn make_storage_with_identity(device_id: &str) -> (Arc<TestStorage>, String) {
     let database = ark_store::test_support::TestDatabase::create().expect("database");
-    let mut conn = database.open_connection().expect("database connection");
-    let candidate = ark_core::iroh_transport::generate_secret_key_candidate();
-    let persisted =
-        ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate_on_connection(
-            &mut conn, candidate,
-        )
-        .expect("device signing key persisted");
-    let endpoint = ark_core::iroh_transport::parse_secret_key_hex(&persisted)
-        .expect("device signing key")
-        .public()
-        .to_string();
-    drop(conn);
     let backend = Arc::new(
         SqliteStorageBackend::open_for_test(
             database
@@ -73,6 +61,12 @@ pub(super) async fn make_storage_with_identity(device_id: &str) -> (Arc<TestStor
         .await
         .expect("production database actor starts"),
     );
+    let endpoint = backend
+        .load_or_generate_iroh_secret_key_for_test()
+        .await
+        .expect("device signing key persisted")
+        .public()
+        .to_string();
     backend.set_device_id(device_id).unwrap();
     (
         Arc::new(TestStorage {

@@ -165,7 +165,6 @@ dependencies = [
  "iroh",
  "proptest",
  "rand 0.8.7",
- "rusqlite",
  "semver",
  "serde",
  "serde_json",
