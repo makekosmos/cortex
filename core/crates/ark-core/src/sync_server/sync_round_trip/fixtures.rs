@@ -6,8 +6,6 @@
 // the other via `DirectClient`, and walks through a full protocol exchange:
 // `hello` → `version_vector` → `sync_changes` + ACK → `live_change` +
 // `live_ack`. Also exercises the self-connect rejection path.
-//
-// The test uses temporary file-backed databases with production writer actors.
 
 use std::collections::HashMap;
 use std::ops::Deref;

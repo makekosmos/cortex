@@ -16,13 +16,13 @@
 
 - [x] Store loads typed local task state, including sorted links, all unit conflict sets, bootstrap state, snapshot token, and legacy revision fallback.
 - [x] Store materializes task history and owns projection repair, links, object revision, and tombstone persistence.
-- [ ] Replace the remaining Core storage calls with the final plan/apply operation.
-- [ ] Store applies local bootstrap, task operations, journal, projection, links, version-vector/feed, object revision, and tombstone changes in the existing transaction.
-- [ ] Core uses the returned materialized object and revision values to preserve current `SyncEntity` output.
-- [ ] Test stale snapshots, bootstrap-only identity, pending causal dependencies, concurrent alternatives, explicit resolution digest, soft/hard delete, link revisions, and full rollback on injected persistence failure.
-- [ ] Remove superseded Core SQL and keep every touched source below the hard size limit.
-- [ ] Run focused Store/Core tests, Clippy, format, source-size, writer census, and graph checks.
-- [ ] Thermo-nuclear code-quality review; resolve confirmed blockers.
+- [x] Replace the remaining Core storage calls with the final plan/apply operation. Core loads typed state from Store, plans changed causal units, and submits one `TaskMergeLocalMutationPlan`.
+- [x] Store applies local bootstrap, task operations, journal, projection, links, version-vector/feed, object revision, and tombstone changes in the existing command transaction.
+- [x] Core uses the returned materialized object and revision values to preserve current `SyncEntity` output.
+- [x] Test stale snapshots, bootstrap-only identity, pending causal dependencies, concurrent alternatives, explicit resolution digest, soft/hard delete, link revisions, and full rollback on injected persistence failure. Current focused tests: Core task-merge 32/32, Store task-merge 22/22; Core rollback coverage includes the production local mutation command with injected journal failure.
+- [x] Remove superseded Core SQL and keep every touched source below the hard size limit.
+- [x] Run focused Store/Core tests, Clippy, format, source-size, writer census, and graph checks.
+- [x] Thermo-nuclear code-quality review; resolve confirmed blockers.
 - [ ] Update the ownership evidence and commit only this unit.
 
 ## Decision rubric and result
