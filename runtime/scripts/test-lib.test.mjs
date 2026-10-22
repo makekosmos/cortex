@@ -65,20 +65,25 @@ test("sweepGateTmp refuses to delete anything outside <target>/gate-tmp", (t) =>
   assert.ok(existsSync(outside));
 });
 
-test("aliasGateTmp gives Unix a short link into the run dir and keeps Windows as is", (t) => {
-  // mbx binds its cache socket under TMPDIR; the real run dir of a deeply
-  // nested checkout overflows SUN_LEN, so Unix gets a short alias instead.
+test("aliasGateTmp gives Unix and Windows short links into the run dir", (t) => {
+  // Unix sockets and Windows Git worktree metadata both need shorter paths
+  // than a deep checkout's target directory.
   const target = scratch(t, "gate-tmp-target-");
   const root = scratch(t, "gate-tmp-alias-");
   const dir = openGateTmp(target, 7);
-  assert.equal(aliasGateTmp(dir, 7, { platform: "win32", root }).path, dir);
+  const windowsAlias = aliasGateTmp(dir, 7, { platform: "win32", root });
+  assert.equal(windowsAlias.path, join(root, "cortex-gate-7"));
+  assert.equal(realpathSync(windowsAlias.path), realpathSync(dir));
+  windowsAlias.release();
   const alias = aliasGateTmp(dir, 7, { platform: "darwin", root });
   assert.equal(alias.path, join(root, "cortex-gate-7"));
   assert.equal(realpathSync(alias.path), realpathSync(dir));
   writeFileSync(join(alias.path, ".tmpViaAlias"), "x");
   alias.release();
   assert.ok(!existsSync(alias.path));
-  assert.deepEqual(sweepGateTmp(target, dir), [{ name: ".tmpViaAlias", contents: [], owner: null }]);
+  assert.deepEqual(sweepGateTmp(target, dir), [
+    { name: ".tmpViaAlias", contents: [], owner: null },
+  ]);
 });
 
 test("a leak logs the build-tree processes still alive before the sweep", (t) => {
@@ -94,10 +99,19 @@ test("a leak logs the build-tree processes still alive before the sweep", (t) =>
   const listProcesses = () => {
     leftoverSeenByListing = existsSync(join(dirty, ".tmpLeaked", "ark.db"));
     return [
-      { pid: 4242, ppid: 7, name: "engine.exe", exe: join(target, "debug", "engine.exe"), cmd: "engine.exe" },
+      {
+        pid: 4242,
+        ppid: 7,
+        name: "engine.exe",
+        exe: join(target, "debug", "engine.exe"),
+        cmd: "engine.exe",
+      },
     ];
   };
-  assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }), true);
+  assert.equal(
+    reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }),
+    true,
+  );
   assert.ok(leftoverSeenByListing, "the listing runs while the leftovers are still on disk");
   assert.match(lines.join("\n"), /1 live build-tree process at sweep time/);
   assert.match(lines.join("\n"), /pid 4242 ppid 7 engine\.exe/);
@@ -111,7 +125,10 @@ test("a clean sweep does not list processes", (t) => {
     listed = true;
     return [];
   };
-  assert.equal(reportGateTmpSweep(target, openGateTmp(target, 4), () => {}, { listProcesses }), false);
+  assert.equal(
+    reportGateTmpSweep(target, openGateTmp(target, 4), () => {}, { listProcesses }),
+    false,
+  );
   assert.equal(listed, false);
 });
 
@@ -124,7 +141,10 @@ test("a failed process listing is logged and does not change the leak result", (
   const listProcesses = () => {
     throw new Error("powershell unavailable");
   };
-  assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }), true);
+  assert.equal(
+    reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }),
+    true,
+  );
   assert.match(lines.join("\n"), /process listing failed: powershell unavailable/);
   assert.ok(!existsSync(dirty));
 });
@@ -159,8 +179,14 @@ test("reportGateTmpSweep names the LEAK_OWNER marker when present", () => {
     writeFileSync(join(entry, "ark.db"), "");
     writeFileSync(join(entry, "LEAK_OWNER"), "ark_core::leaky_test\n");
     const lines = [];
-    assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] }), true);
-    assert.ok(lines.some((l) => /owner ark_core::leaky_test/.test(l)), lines.join("\n"));
+    assert.equal(
+      reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] }),
+      true,
+    );
+    assert.ok(
+      lines.some((l) => /owner ark_core::leaky_test/.test(l)),
+      lines.join("\n"),
+    );
   } finally {
     rmSync(target, { recursive: true, force: true });
   }
