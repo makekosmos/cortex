@@ -33,7 +33,10 @@ pub fn known_folder(id: &windows::core::GUID) -> Result<PathBuf, String> {
 /// A reparse point that this call resolves to somewhere else falls outside
 /// the caller's root and is rejected — fail closed.
 pub fn windows_path_key(path: &Path) -> String {
-    let path = long_path_if_present(path);
+    // Resolve existing reparse-point aliases (including gate-owned temp
+    // junctions) before normalizing the 8.3 spelling and extended prefix.
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let path = long_path_if_present(&path);
     let text = path.to_string_lossy().replace('/', "\\");
     let text = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{rest}")
