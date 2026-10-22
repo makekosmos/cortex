@@ -35,7 +35,7 @@ windows = { version = "0.62", features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-proptest = "1.5"
+proptest = "1.12"
 
 [lints]
 workspace = true

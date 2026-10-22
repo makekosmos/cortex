@@ -59,12 +59,12 @@ windows = { version = "0.62", features = [
 [dev-dependencies]
 ark-store = { path = "../ark-store", features = ["test-support"] }
 ark-sync = { path = "../ark-sync", features = ["test-support"] }
-iroh = { version = "1.0.0", default-features = false, features = ["tls-ring"] }
+iroh = { version = "1.4.1", default-features = false, features = ["tls-ring"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 tokio-tungstenite.workspace = true
 tempfile.workspace = true
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
-proptest = "1.5"
+proptest = "1.12"
 
 [features]
 default = ["desktop-net"]
