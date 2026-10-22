@@ -1,7 +1,9 @@
 use std::time::Duration;
 use std::{io, net::SocketAddr};
 
-use ark_sync::session_io::{SessionIo, SessionIoDriver, SessionIoEvent, SessionOutboundGuard};
+use ark_sync_contracts::session_io::{
+    SessionIo, SessionIoDriver, SessionIoEvent, SessionOutboundGuard,
+};
 use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
@@ -43,7 +45,7 @@ impl Listener {
 
 pub fn session_io<S>(
     websocket: WebSocketStream<S>,
-) -> Result<SessionIo, ark_sync::session_io::SessionIoError>
+) -> Result<SessionIo, ark_sync_contracts::session_io::SessionIoError>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -53,7 +55,7 @@ where
 pub fn session_io_with_guard<S>(
     websocket: WebSocketStream<S>,
     outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
-) -> Result<SessionIo, ark_sync::session_io::SessionIoError>
+) -> Result<SessionIo, ark_sync_contracts::session_io::SessionIoError>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -122,12 +124,12 @@ enum WebSocketControl {
 
 struct SessionWriter<S> {
     sink: futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
-    outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
-    control_outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
+    outgoing: mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
+    control_outgoing: mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
     outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
     control: mpsc::Receiver<WebSocketControl>,
     close_after_flush: mpsc::Receiver<()>,
-    pending_sends: ark_sync::session_io::SessionIoPendingSends,
+    pending_sends: ark_sync_contracts::session_io::SessionIoPendingSends,
     close_result: watch::Sender<Option<Result<(), String>>>,
     incoming: mpsc::Sender<SessionIoEvent>,
     shutdown: watch::Receiver<bool>,
@@ -236,7 +238,7 @@ where
 
 async fn write_sync_frame<S>(
     sink: &mut futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
-    message: ark_sync::protocol::LanSyncMessage,
+    message: ark_sync_contracts::wire::LanSyncMessage,
     incoming: &mpsc::Sender<SessionIoEvent>,
     outbound_guard: Option<&dyn SessionOutboundGuard>,
 ) -> bool
@@ -337,22 +339,24 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct DirectClientConnector;
 
 #[async_trait::async_trait]
-impl ark_sync::client_session::DirectClientConnector for DirectClientConnector {
+impl ark_sync_contracts::client_transport::DirectClientConnector for DirectClientConnector {
     async fn connect(
         &self,
         addresses: &[String],
     ) -> Result<
-        Option<ark_sync::client_session::ConnectedClientTransport>,
-        ark_sync::session_io::SessionIoError,
+        Option<ark_sync_contracts::client_transport::ConnectedClientTransport>,
+        ark_sync_contracts::session_io::SessionIoError,
     > {
         let Some((websocket, selected_address)) = race_connect(addresses).await else {
             return Ok(None);
         };
         session_io(websocket).map(|io| {
-            Some(ark_sync::client_session::ConnectedClientTransport {
-                io,
-                selected_address,
-            })
+            Some(
+                ark_sync_contracts::client_transport::ConnectedClientTransport {
+                    io,
+                    selected_address,
+                },
+            )
         })
     }
 }

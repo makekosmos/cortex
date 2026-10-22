@@ -10,8 +10,11 @@ mod listener_tests {
 
     #[async_trait::async_trait]
     impl SessionOutboundGuard for RejectPing {
-        async fn allow(&self, message: &ark_sync::protocol::LanSyncMessage) -> bool {
-            !matches!(message, ark_sync::protocol::LanSyncMessage::Ping { .. })
+        async fn allow(&self, message: &ark_sync_contracts::wire::LanSyncMessage) -> bool {
+            !matches!(
+                message,
+                ark_sync_contracts::wire::LanSyncMessage::Ping { .. }
+            )
         }
     }
 
@@ -53,9 +56,11 @@ mod listener_tests {
                 .expect("client connects");
             socket
                 .send(Message::Text(
-                    serde_json::to_string(&ark_sync::protocol::LanSyncMessage::Ping { ts: 42 })
-                        .expect("ping serializes")
-                        .into(),
+                    serde_json::to_string(&ark_sync_contracts::wire::LanSyncMessage::Ping {
+                        ts: 42,
+                    })
+                    .expect("ping serializes")
+                    .into(),
                 ))
                 .await
                 .expect("client sends ping");
@@ -63,9 +68,9 @@ mod listener_tests {
                 panic!("client receives server protocol message");
             };
             assert!(matches!(
-                serde_json::from_str::<ark_sync::protocol::LanSyncMessage>(&text)
+                serde_json::from_str::<ark_sync_contracts::wire::LanSyncMessage>(&text)
                     .expect("server message deserializes"),
-                ark_sync::protocol::LanSyncMessage::Pong { ts: 42 }
+                ark_sync_contracts::wire::LanSyncMessage::Pong { ts: 42 }
             ));
             socket
                 .send(Message::Text("malformed".into()))
@@ -79,10 +84,10 @@ mod listener_tests {
         assert!(matches!(
             session.receive().await,
             Some(SessionIoEvent::Message(message))
-                if matches!(*message, ark_sync::protocol::LanSyncMessage::Ping { ts: 42 })
+                if matches!(*message, ark_sync_contracts::wire::LanSyncMessage::Ping { ts: 42 })
         ));
         session
-            .send(ark_sync::protocol::LanSyncMessage::Pong { ts: 42 })
+            .send(ark_sync_contracts::wire::LanSyncMessage::Pong { ts: 42 })
             .await
             .expect("session sends protocol message");
         assert!(matches!(
@@ -151,9 +156,9 @@ mod listener_tests {
                 panic!("terminal protocol frame arrives before close");
             };
             assert!(matches!(
-                serde_json::from_str::<ark_sync::protocol::LanSyncMessage>(&text)
+                serde_json::from_str::<ark_sync_contracts::wire::LanSyncMessage>(&text)
                     .expect("terminal frame deserializes"),
-                ark_sync::protocol::LanSyncMessage::ProtocolRejected { .. }
+                ark_sync_contracts::wire::LanSyncMessage::ProtocolRejected { .. }
             ));
             assert!(matches!(
                 socket.next().await,
@@ -164,7 +169,7 @@ mod listener_tests {
         let (websocket, _) = listener.accept().await.expect("server accepts client");
         let session = session_io(websocket).expect("session transport starts");
         session
-            .send(ark_sync::protocol::LanSyncMessage::ProtocolRejected {
+            .send(ark_sync_contracts::wire::LanSyncMessage::ProtocolRejected {
                 origin_device_id: "server".into(),
                 target_device_id: "client".into(),
                 reason: "unsupported protocol".into(),
@@ -195,9 +200,9 @@ mod listener_tests {
                 panic!("authorized protocol message reaches the socket");
             };
             assert!(matches!(
-                serde_json::from_str::<ark_sync::protocol::LanSyncMessage>(&text)
+                serde_json::from_str::<ark_sync_contracts::wire::LanSyncMessage>(&text)
                     .expect("message deserializes"),
-                ark_sync::protocol::LanSyncMessage::Pong { ts: 7 }
+                ark_sync_contracts::wire::LanSyncMessage::Pong { ts: 7 }
             ));
             socket.close(None).await.expect("client closes websocket");
         });
@@ -207,11 +212,11 @@ mod listener_tests {
         let mut session =
             session_io_with_guard(websocket, Some(guard)).expect("session transport starts");
         session
-            .send(ark_sync::protocol::LanSyncMessage::Ping { ts: 1 })
+            .send(ark_sync_contracts::wire::LanSyncMessage::Ping { ts: 1 })
             .await
             .expect("queued ping awaits write-boundary policy");
         session
-            .send(ark_sync::protocol::LanSyncMessage::Pong { ts: 7 })
+            .send(ark_sync_contracts::wire::LanSyncMessage::Pong { ts: 7 })
             .await
             .expect("pong is allowed");
         assert!(matches!(

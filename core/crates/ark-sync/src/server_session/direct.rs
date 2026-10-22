@@ -1,7 +1,7 @@
 use super::{
     accept_client_hello, AcceptedClientHello, ClientHelloRejection, ResponderHelloRequest,
 };
-use crate::protocol::{requires_registry_admission, LanSyncMessage};
+use ark_sync_contracts::wire::{requires_registry_admission, LanSyncMessage};
 
 pub enum DirectServerMessage {
     SyncPolicy(crate::client_session::SyncPolicyUpdate),
@@ -16,7 +16,7 @@ pub struct DirectServerSyncChanges {
     pub batch_id: String,
     pub entities: Vec<ark_domain::types::SyncEntity>,
     pub is_last: bool,
-    pub policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    pub policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     pub usage_complete_through: Option<std::collections::HashMap<String, u64>>,
 }
 

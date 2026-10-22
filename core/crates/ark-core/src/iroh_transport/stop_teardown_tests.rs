@@ -20,7 +20,7 @@ use crate::db::SqliteStorageBackend;
 use crate::iroh_transport::{IrohConfig, IrohTransport};
 use crate::sync_bind::SyncBind;
 use crate::sync_transport::{SyncTransport, TransportEvent};
-use ark_sync::protocol::LanSyncMessage;
+use ark_sync_contracts::wire::LanSyncMessage;
 use iroh::RelayMode;
 
 fn loopback_transport(device_id: &str, peer_addr: Option<iroh::EndpointAddr>) -> IrohTransport {

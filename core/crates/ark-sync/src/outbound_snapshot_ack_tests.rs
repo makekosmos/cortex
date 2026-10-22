@@ -1,8 +1,8 @@
 use crate::outbound_snapshot::{acknowledge_snapshot, PendingSnapshotAck};
 use ark_application::sync_storage::{
-    CommittedFeedDeliveryPage, CommittedFeedEntry, CommittedFeedPort, OutboundAck,
-    OutboundProgress, PolicyIdentity,
+    CommittedFeedDeliveryPage, CommittedFeedEntry, CommittedFeedPort, OutboundAck, OutboundProgress,
 };
+use ark_domain::sync_policy::PolicyIdentity;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Default)]

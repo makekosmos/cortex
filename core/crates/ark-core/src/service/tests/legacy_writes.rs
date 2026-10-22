@@ -275,7 +275,7 @@ async fn legacy_entity_writes_bump_version_vector() {
 
 /// Fake SyncTransport: захватывает все отправленные LanSyncMessage в shared buf.
 pub(super) struct CapturingTransport {
-    pub(super) sent: Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>>,
+    pub(super) sent: Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>>,
 }
 
 #[async_trait::async_trait]
@@ -287,7 +287,7 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
         Ok(())
     }
 
-    fn send(&self, msg: ark_sync::protocol::LanSyncMessage) -> Result<(), String> {
+    fn send(&self, msg: ark_sync_contracts::wire::LanSyncMessage) -> Result<(), String> {
         // `send` — sync, но нам нужен lock на TokioMutex из sync контекста.
         // Используем blocking_lock через spawn_blocking или try_lock; в тестах
         // конкурентности нет, try_lock гарантированно успевает.
@@ -306,13 +306,13 @@ impl crate::sync_transport::IrohSessionTransport for CapturingTransport {
     async fn send_to(
         &self,
         _: &str,
-        message: ark_sync::protocol::LanSyncMessage,
+        message: ark_sync_contracts::wire::LanSyncMessage,
     ) -> Result<(), String> {
         crate::sync_transport::SyncTransport::send(self, message)
     }
     fn set_outbound_authorizer(
         &self,
-        _: Arc<dyn ark_sync::transport::OutboundIntegrationFrameAuthorizer>,
+        _: Arc<dyn ark_sync_contracts::transport::OutboundIntegrationFrameAuthorizer>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -328,7 +328,7 @@ impl crate::sync_transport::IrohSessionTransport for CapturingTransport {
     async fn send_to_transport_peer(
         &self,
         _: &str,
-        message: ark_sync::protocol::LanSyncMessage,
+        message: ark_sync_contracts::wire::LanSyncMessage,
     ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
         crate::sync_transport::SyncTransport::send(self, message)?;
         Ok(crate::sync_transport::AddressedSendOutcome::Sent)
@@ -336,26 +336,26 @@ impl crate::sync_transport::IrohSessionTransport for CapturingTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
 #[async_trait::async_trait]
-impl ark_sync::relay_registry::PeerSessionControl for CapturingTransport {
+impl ark_sync_contracts::peer_control::PeerSessionControl for CapturingTransport {
     async fn send_control_to_endpoint(
         &self,
         _: &str,
-        message: ark_sync::protocol::LanSyncMessage,
-    ) -> Result<ark_sync::relay_registry::PeerControlSendOutcome, String> {
+        message: ark_sync_contracts::wire::LanSyncMessage,
+    ) -> Result<ark_sync_contracts::peer_control::PeerControlSendOutcome, String> {
         crate::sync_transport::SyncTransport::send(self, message)?;
-        Ok(ark_sync::relay_registry::PeerControlSendOutcome::Sent)
+        Ok(ark_sync_contracts::peer_control::PeerControlSendOutcome::Sent)
     }
     fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
         Ok(())
@@ -366,13 +366,13 @@ impl ark_sync::relay_registry::PeerSessionControl for CapturingTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_endpoint(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }

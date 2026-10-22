@@ -11,7 +11,7 @@ pub(crate) struct LoadPolicyBoundEntitiesPageQuery {
     class: CommandClass,
     offset: usize,
     limit: usize,
-    expected_identity: ark_application::sync_storage::PolicyIdentity,
+    expected_identity: ark_domain::sync_policy::PolicyIdentity,
 }
 
 impl LoadPolicyBoundEntitiesPageQuery {
@@ -22,7 +22,7 @@ impl LoadPolicyBoundEntitiesPageQuery {
         class: SyncReadClass,
         offset: usize,
         limit: usize,
-        expected_identity: ark_application::sync_storage::PolicyIdentity,
+        expected_identity: ark_domain::sync_policy::PolicyIdentity,
     ) -> Self {
         Self {
             vector,
@@ -77,7 +77,7 @@ impl StoreReadQuery for LoadPolicyBoundEntitiesPageQuery {
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct PolicyBoundFeedDeliveryPageQuery {
     peer_device_id: String,
-    expected_identity: ark_application::sync_storage::PolicyIdentity,
+    expected_identity: ark_domain::sync_policy::PolicyIdentity,
     after_position: i64,
     high_watermark: i64,
     limit: usize,
@@ -86,7 +86,7 @@ pub(crate) struct PolicyBoundFeedDeliveryPageQuery {
 impl PolicyBoundFeedDeliveryPageQuery {
     pub(crate) fn new(
         peer_device_id: String,
-        expected_identity: ark_application::sync_storage::PolicyIdentity,
+        expected_identity: ark_domain::sync_policy::PolicyIdentity,
         after_position: i64,
         high_watermark: i64,
         limit: usize,

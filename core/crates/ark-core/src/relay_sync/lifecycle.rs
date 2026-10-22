@@ -37,8 +37,8 @@ impl RelaySync {
         transport: Arc<T>,
     ) -> Result<Arc<Self>, String>
     where
-        T: ark_sync::transport::IrohSessionTransport
-            + ark_sync::relay_registry::PeerSessionControl
+        T: ark_sync_contracts::transport::IrohSessionTransport
+            + ark_sync_contracts::peer_control::PeerSessionControl
             + 'static,
     {
         transport.set_outbound_authorizer(Arc::new(
@@ -49,8 +49,9 @@ impl RelaySync {
                 config.device_id.clone(),
             ),
         ))?;
-        let session: Arc<dyn ark_sync::transport::IrohSessionTransport> = transport.clone();
-        let peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl> = transport;
+        let session: Arc<dyn ark_sync_contracts::transport::IrohSessionTransport> =
+            transport.clone();
+        let peer_control: Arc<dyn ark_sync_contracts::peer_control::PeerSessionControl> = transport;
         let handle = crate::sync_transport::SyncTransportHandle::iroh_with_peer_control(
             session,
             peer_control,
@@ -137,26 +138,32 @@ impl RelaySync {
         self.transport.start(event_tx).await?;
 
         let this = self.clone();
-        self.tasks.lock().await.push(tokio::spawn(async move {
-            while let Some(event) = event_rx.recv().await {
-                this.handle_event(event).await;
-            }
-        }));
-        let incoming_sync = self.incoming_sync.clone();
-        self.tasks.lock().await.push(tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                let mut incoming = incoming_sync.lock().await;
-                let stale = incoming
-                    .as_ref()
-                    .is_some_and(|state| state.last_update.elapsed() >= Duration::from_secs(60));
-                if stale {
-                    *incoming = None;
-                    drop(incoming);
-                    trim_process_heap();
+        self.tasks
+            .lock()
+            .await
+            .push(crate::task_set::spawn(async move {
+                while let Some(event) = event_rx.recv().await {
+                    this.handle_event(event).await;
                 }
-            }
-        }));
+            }));
+        let incoming_sync = self.incoming_sync.clone();
+        self.tasks
+            .lock()
+            .await
+            .push(crate::task_set::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    let mut incoming = incoming_sync.lock().await;
+                    let stale = incoming.as_ref().is_some_and(|state| {
+                        state.last_update.elapsed() >= Duration::from_secs(60)
+                    });
+                    if stale {
+                        *incoming = None;
+                        drop(incoming);
+                        trim_process_heap();
+                    }
+                }
+            }));
 
         Ok(())
     }

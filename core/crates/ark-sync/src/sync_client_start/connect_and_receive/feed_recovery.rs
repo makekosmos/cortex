@@ -13,11 +13,11 @@ pub(super) async fn pump(
                 session
                     .protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1),
+                    .contains(&ProtocolCapability::DurableReceiptAckV1),
                 session
                     .protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
+                    .contains(&ProtocolCapability::PolicyBoundDeliveryV1),
             )
         })
     });

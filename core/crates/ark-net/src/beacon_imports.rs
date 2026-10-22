@@ -30,7 +30,7 @@ use tokio::time::interval;
 
 use crate::host::{get_own_addresses, strip_ipv6_zone};
 use crate::net::{is_address_routable, is_routable_v4, is_virtual_interface};
-use ark_sync::protocol::LAN_SYNC_PORT;
+use ark_sync_contracts::wire::LAN_SYNC_PORT;
 
 const TAG: &str = "[Beacon]";
 pub const BEACON_PORT: u16 = LAN_SYNC_PORT + 1; // 21532

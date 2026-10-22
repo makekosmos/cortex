@@ -9,7 +9,7 @@ impl DbHandle {
         &self,
         context: CommandContext,
         command: PrepareTaskMergeBatchCommand,
-    ) -> Result<Option<ark_application::sync_storage::TaskMergeBatch>, DbError> {
+    ) -> Result<Option<ark_domain::task_merge_sync::TaskMergeBatch>, DbError> {
         let weight = command.weight();
         validate_sync_task_merge_request(&context, &command.peer_id, weight)?;
         {

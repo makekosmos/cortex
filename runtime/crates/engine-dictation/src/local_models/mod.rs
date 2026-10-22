@@ -253,11 +253,10 @@ pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
     }
 
     let mut changed = false;
-    for path in [
-        tools_dir(data_dir),
-        #[cfg(windows)]
-        runtime::vulkan_tools_dir(data_dir),
-    ] {
+    let paths = std::iter::once(tools_dir(data_dir));
+    #[cfg(windows)]
+    let paths = paths.chain(std::iter::once(runtime::vulkan_tools_dir(data_dir)));
+    for path in paths {
         if path.exists() {
             fs::remove_dir_all(path)?;
             changed = true;

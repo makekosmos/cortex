@@ -1,6 +1,5 @@
-use ark_application::sync_storage::{
-    PolicyBoundReadError, PolicyBoundSnapshotPage, PolicyIdentity,
-};
+use ark_application::sync_storage::{PolicyBoundReadError, PolicyBoundSnapshotPage};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::{SyncEntity, VersionVector};
 use rusqlite::Connection;
 

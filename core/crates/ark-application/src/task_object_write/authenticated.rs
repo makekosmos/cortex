@@ -3,9 +3,9 @@ use super::{
 };
 use crate::object_write::ObjectWriteSession;
 use crate::sync_policy::{sync_profile_identity, SyncProfile};
-use crate::sync_storage::PolicyIdentity;
 use crate::task_mutation::TaskMutationSession;
 use ark_domain::hlc::HLC;
+use ark_domain::sync_policy::PolicyIdentity;
 use serde_json::{Map, Value};
 
 #[derive(Clone, Debug, serde::Serialize)]

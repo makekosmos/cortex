@@ -4,11 +4,12 @@ use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
-use crate::{protocol::LanSyncMessage, session_io::SessionIoSender};
+use ark_sync_contracts::session_io::SessionIoSender;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 #[doc(hidden)]
 pub type ClientFeedInFlight =
-    Arc<Mutex<Option<(i64, Option<ark_application::sync_storage::PolicyIdentity>)>>>;
+    Arc<Mutex<Option<(i64, Option<ark_domain::sync_policy::PolicyIdentity>)>>>;
 
 #[derive(Clone)]
 #[doc(hidden)]
@@ -74,7 +75,7 @@ impl ClientMessageSender {
                 space_id,
                 device_id,
             } => {
-                if crate::protocol::requires_registry_admission(&message) {
+                if ark_sync_contracts::wire::requires_registry_admission(&message) {
                     let authenticated_peer_id = self.authenticated_peer_id.read().await.clone();
                     let peer_device_id = match authenticated_peer_id {
                         Some(peer_device_id) => peer_device_id,
@@ -102,7 +103,7 @@ impl ClientMessageSender {
                     sender.send(message).await
                 };
                 result.map_err(|error| match error {
-                    crate::session_io::SessionIoError::OutboundFull => {
+                    ark_sync_contracts::session_io::SessionIoError::OutboundFull => {
                         "LAN peer outbound queue is full".to_owned()
                     }
                     _ => "LAN peer connection is closed".to_owned(),

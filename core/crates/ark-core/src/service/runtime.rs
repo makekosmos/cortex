@@ -153,7 +153,7 @@ pub(super) async fn maybe_broadcast_local_changes(
         return;
     }
     let state = Arc::clone(state);
-    tokio::spawn(async move {
+    crate::task_set::spawn(async move {
         for entity in entities {
             broadcast_local_change(&state, entity).await;
         }

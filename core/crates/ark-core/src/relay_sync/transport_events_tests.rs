@@ -17,8 +17,8 @@ use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncRuntimeStorage;
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
-use ark_sync::protocol::{LanSyncMessage, PROTOCOL_VERSION};
-use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
+use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+use ark_sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
 
 struct StubTransport {
     event_tx: StdMutex<Option<mpsc::UnboundedSender<TransportEvent>>>,
@@ -69,14 +69,14 @@ impl IrohSessionTransport for StubTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -98,14 +98,14 @@ impl PeerSessionControl for StubTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_endpoint(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -181,7 +181,10 @@ async fn wait_for_no_peers(relay: &RelaySync) {
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
-    let offer = ark_sync::protocol::ProtocolOffer::current_with_registry_history(true);
+    let offer =
+        ark_sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
+            true,
+        );
     tx.send(TransportEvent::MessageReceivedFromTransport {
         from_device_id: "peer-x".to_string(),
         transport_public_key: peer_endpoint.to_owned(),

@@ -250,7 +250,7 @@ impl RelaySync {
                 peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                     protocol
                         .capabilities
-                        .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                        .contains(&ProtocolCapability::TaskMergeBootstrapV2)
                 }),
             )
         };
@@ -276,7 +276,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
         if still_supported {
@@ -294,7 +294,7 @@ impl RelaySync {
         &self,
         from_device_id: &str,
         transport_public_key: Option<&str>,
-        batch: ark_application::sync_storage::TaskMergeBatch,
+        batch: ark_domain::task_merge_sync::TaskMergeBatch,
     ) -> Result<(), String> {
         if !self
             .registry_ready_for_peer(from_device_id, transport_public_key)
@@ -312,7 +312,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
         if !supported {
@@ -364,7 +364,7 @@ impl RelaySync {
         from_device_id: &str,
         batch_id: &str,
         through_position: i64,
-        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<(), String> {
         let authenticated_supported = {
             let peers = self.peers.lock().await;
@@ -373,7 +373,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
             authenticated_supported

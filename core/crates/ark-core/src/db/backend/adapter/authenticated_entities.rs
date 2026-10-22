@@ -29,7 +29,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         authenticated_peer_id: &str,
         message_id: &str,
         local_device_id: &str,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<bool, String> {
         let payload_json = serde_json::to_string(entity).map_err(|error| error.to_string())?;
         let write = match policy_identity {
@@ -92,7 +92,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         authenticated_peer_id: &str,
         inbox_message_id: &str,
         local_device_id: &str,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
         let inbox_payload_json =
             serde_json::to_string(entity).map_err(|error| error.to_string())?;
@@ -178,7 +178,7 @@ fn make_inbox_receipt_write(
     message_id: &str,
     payload_json: String,
     local_device_id: &str,
-    policy_identity: Option<&ark_application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<&ark_domain::sync_policy::PolicyIdentity>,
 ) -> InboxReceiptWrite {
     match policy_identity {
         Some(identity) => InboxReceiptWrite::with_policy(

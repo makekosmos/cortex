@@ -20,7 +20,7 @@ impl RootAuthenticatedEntityBackend for Backend {
         _: &str,
         _: &str,
         _: &str,
-        _: Option<ark_application::sync_storage::PolicyIdentity>,
+        _: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<bool, String> {
         Ok(false)
     }
@@ -48,7 +48,7 @@ impl RootAuthenticatedEntityBackend for Backend {
         _: &str,
         _: &str,
         _: &str,
-        _: Option<ark_application::sync_storage::PolicyIdentity>,
+        _: Option<ark_domain::sync_policy::PolicyIdentity>,
     ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
         Err("unused compatibility test backend".into())
     }

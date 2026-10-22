@@ -120,7 +120,7 @@ fn apply_inbound_entity(
     write: InboxReceiptWrite,
     entity: ark_domain::types::SyncEntity,
 ) -> Result<AuthenticatedInboundEntityOutcome, AuthenticatedInboundEntityError> {
-    if write.payload_json.len() > ark_application::sync_storage::MAX_SYNC_BATCH_BYTES {
+    if write.payload_json.len() > ark_domain::types::MAX_SYNC_BATCH_BYTES {
         return Err(AuthenticatedInboundEntityError::Receipt(
             InboxReceiptWriteError::Inbox("sync_inbox_payload_limit_exceeded".into()),
         ));

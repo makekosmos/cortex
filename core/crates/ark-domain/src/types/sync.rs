@@ -55,3 +55,6 @@ pub struct PeerRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
 }
+
+/// Maximum serialized sync payload size shared by storage and wire delivery.
+pub const MAX_SYNC_BATCH_BYTES: usize = 1_048_576;

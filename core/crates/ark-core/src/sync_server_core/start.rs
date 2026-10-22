@@ -14,14 +14,14 @@ struct ServerPeerOutboundGuard {
 }
 
 #[async_trait::async_trait]
-impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
+impl ark_sync_contracts::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
     async fn allow(&self, message: &LanSyncMessage) -> bool {
-        let ready_peer = if ark_sync::protocol::requires_registry_admission(message) {
+        let ready_peer = if ark_sync_contracts::wire::requires_registry_admission(message) {
             current_ready_peer(self.storage.as_ref(), &self.peers, self.peer_id).await
         } else {
             None
         };
-        if ark_sync::protocol::requires_registry_admission(message) && ready_peer.is_none() {
+        if ark_sync_contracts::wire::requires_registry_admission(message) && ready_peer.is_none() {
             return false;
         }
 
@@ -143,7 +143,7 @@ impl SyncServer {
 
         // Ping ticker shares the accept task: a separate ping task had no
         // shutdown path and leaked (plus duplicated pings) on every restart.
-        let accept_task = tokio::spawn(async move {
+        let accept_task = crate::task_set::spawn(async move {
             let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
             ticker.tick().await;
             let _ = accept_ready_tx.send(());
@@ -276,7 +276,7 @@ impl SyncServer {
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
-                                track_task(&conn_tasks, tokio::spawn(async move {
+                                track_task(&conn_tasks, crate::task_set::spawn(async move {
                                     let result = session_driver
                                         .run_controlled(&mut session_io)
                                         .await;

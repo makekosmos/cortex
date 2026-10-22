@@ -111,7 +111,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .await
         .unwrap();
     let change_id = match rx.try_recv().unwrap() {
-        ark_sync::protocol::LanSyncMessage::LiveChange {
+        ark_sync_contracts::wire::LanSyncMessage::LiveChange {
             change_id,
             policy_identity,
             ..

@@ -15,7 +15,7 @@ impl RelaySync {
             .is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                    .contains(&ProtocolCapability::SelectiveSyncPolicyV1)
             });
         let registry = self
             .registry
@@ -217,8 +217,8 @@ impl RelaySync {
             .send_control_to_endpoint(endpoint, message)
             .await?
         {
-            ark_sync::relay_registry::PeerControlSendOutcome::Sent => Ok(()),
-            ark_sync::relay_registry::PeerControlSendOutcome::PeerOffline => {
+            ark_sync_contracts::peer_control::PeerControlSendOutcome::Sent => Ok(()),
+            ark_sync_contracts::peer_control::PeerControlSendOutcome::PeerOffline => {
                 Err("transport peer is offline".into())
             }
         }

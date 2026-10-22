@@ -253,10 +253,10 @@ include!("canonical_object_transaction/pending_receipt.rs");
 include!("canonical_object_transaction/receipt_ack.rs");
 
 fn pop_feed_live_change_id(
-    rx: &mut tokio::sync::mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
+    rx: &mut tokio::sync::mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
 ) -> String {
     match rx.try_recv().unwrap() {
-        ark_sync::protocol::LanSyncMessage::LiveChange { change_id, .. } => change_id,
+        ark_sync_contracts::wire::LanSyncMessage::LiveChange { change_id, .. } => change_id,
         message => panic!("unexpected message: {message:?}"),
     }
 }

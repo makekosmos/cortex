@@ -2,7 +2,7 @@ use super::*;
 use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
-use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
+use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
@@ -58,7 +58,7 @@ impl IrohSessionTransport for FailOncePairingAcceptedTransport {
 
     fn set_outbound_authorizer(
         &self,
-        _: Arc<dyn ark_sync::transport::OutboundIntegrationFrameAuthorizer>,
+        _: Arc<dyn ark_sync_contracts::transport::OutboundIntegrationFrameAuthorizer>,
     ) -> Result<(), String> {
         Ok(())
     }
@@ -96,14 +96,14 @@ impl IrohSessionTransport for FailOncePairingAcceptedTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -131,20 +131,20 @@ impl PeerSessionControl for FailOncePairingAcceptedTransport {
     fn disconnect_peer(
         &self,
         peer: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
         IrohSessionTransport::disconnect_peer(self, peer)
     }
     fn disconnect_transport_endpoint(
         &self,
         endpoint: &str,
-    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
         IrohSessionTransport::disconnect_transport_peer(self, endpoint)
     }
 }
 
 fn hello(device_id: &str) -> LanSyncMessage {
     LanSyncMessage::Hello {
-        protocol_version: ark_sync::protocol::PROTOCOL_VERSION,
+        protocol_version: ark_sync_contracts::wire::PROTOCOL_VERSION,
         device_id: device_id.to_owned(),
         device_name: device_id.to_owned(),
         space_id: "retry-space".into(),
@@ -153,7 +153,7 @@ fn hello(device_id: &str) -> LanSyncMessage {
         auth_hmac: None,
         platform: None,
         app_version: None,
-        supported_protocol_versions: Some(vec![ark_sync::protocol::PROTOCOL_VERSION]),
+        supported_protocol_versions: Some(vec![ark_sync_contracts::wire::PROTOCOL_VERSION]),
         supported_capabilities: Some(vec!["registry_history_v1".into()]),
         negotiated_capabilities: None,
         negotiation_hmac: None,

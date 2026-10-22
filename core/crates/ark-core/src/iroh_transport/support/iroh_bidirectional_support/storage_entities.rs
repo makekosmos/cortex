@@ -36,7 +36,7 @@ impl SyncEntityReadPort for TestStorage {
         vector: &ark_core::VersionVector,
         offset: usize,
         limit: usize,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<
         ark_application::sync_storage::PolicyBoundSnapshotPage,
         ark_application::sync_storage::PolicyBoundSnapshotReadError,

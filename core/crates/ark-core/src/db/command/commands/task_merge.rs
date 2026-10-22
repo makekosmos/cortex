@@ -1,6 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
-use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch};
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
+use ark_domain::task_merge_sync::TaskMergeBatch;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]

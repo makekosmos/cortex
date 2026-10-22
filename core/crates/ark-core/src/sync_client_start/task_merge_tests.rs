@@ -121,14 +121,14 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
                 "merge-receiver".into(),
                 "merge-sender".into(),
                 identity.clone(),
-                ark_application::sync_storage::TaskMergeBatch {
+                ark_domain::task_merge_sync::TaskMergeBatch {
                     batch_id: "c0".repeat(16),
                     identity,
                     after_position: 0,
                     through_position: 1,
-                    entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
+                    entries: vec![ark_domain::task_merge_sync::TaskMergeJournalEntry {
                         position: 1,
-                        record: ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(
+                        record: ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(
                             bootstrap.clone(),
                         ),
                     }],

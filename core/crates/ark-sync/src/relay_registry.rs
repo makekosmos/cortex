@@ -6,38 +6,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
+use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use tokio::sync::Mutex;
 
-use crate::protocol::LanSyncMessage;
+use ark_sync_contracts::wire::LanSyncMessage;
 use state::{Admission, RelayRegistryPeer};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PeerControlSendOutcome {
-    Sent,
-    PeerOffline,
-}
-
-/// Transport-neutral operations needed to establish and revoke an admitted
-/// peer session. Implementations own endpoint/key interpretation and wire I/O.
-#[async_trait::async_trait]
-pub trait PeerSessionControl: Send + Sync {
-    async fn send_control_to_endpoint(
-        &self,
-        endpoint: &str,
-        message: LanSyncMessage,
-    ) -> Result<PeerControlSendOutcome, String>;
-
-    fn mark_peer_data_ready(&self, peer: &str, endpoint: &str) -> Result<(), String>;
-    fn unbind_peer(&self, peer: &str) -> Result<(), String>;
-    fn disconnect_peer(
-        &self,
-        peer: &str,
-    ) -> Result<crate::transport::PeerDisconnectOutcome, String>;
-    fn disconnect_transport_endpoint(
-        &self,
-        endpoint: &str,
-    ) -> Result<crate::transport::PeerDisconnectOutcome, String>;
-}
 
 #[derive(Debug, Clone)]
 pub enum RegistryFrame {

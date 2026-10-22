@@ -54,8 +54,8 @@ use ark_net::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions}
 use ark_net::host::{get_host_device_name, get_own_addresses};
 use ark_net::net::is_address_routable;
 use ark_net::sync_bind::SyncBind;
-use ark_sync::protocol::LAN_SYNC_PORT;
 use ark_sync::transport_select::{select_transport, TransportChoice};
+use ark_sync_contracts::wire::LAN_SYNC_PORT;
 
 mod admission;
 mod definitions;

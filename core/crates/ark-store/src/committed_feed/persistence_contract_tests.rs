@@ -288,12 +288,12 @@ mod tests {
         record_outbound_scan_identity(&mut conn, "peer-a", &current, 1).unwrap();
 
         for stale in [
-            ark_application::sync_storage::PolicyIdentity {
+            ark_domain::sync_policy::PolicyIdentity {
                 revision: 1,
                 digest: "0".repeat(64),
                 active: true,
             },
-            ark_application::sync_storage::PolicyIdentity {
+            ark_domain::sync_policy::PolicyIdentity {
                 revision: 1,
                 digest: digest.clone(),
                 active: false,

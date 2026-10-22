@@ -81,7 +81,7 @@ pub(crate) mod tests {
             vector: &VersionVector,
             offset: usize,
             limit: usize,
-            expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         ) -> Result<
             ark_application::sync_storage::PolicyBoundSnapshotPage,
             ark_application::sync_storage::PolicyBoundSnapshotReadError,
@@ -142,7 +142,7 @@ pub(crate) mod tests {
         async fn accepted_policy_identity_for_peer(
             &self,
             _peer_device_id: &str,
-        ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
+        ) -> Result<Option<ark_domain::sync_policy::PolicyIdentity>, String> {
             Ok(Some(
                 ark_application::sync_policy::default_sync_policy_identity(),
             ))
@@ -154,10 +154,10 @@ pub(crate) mod tests {
         async fn prepare_task_merge_batch(
             &self,
             _peer_device_id: &str,
-            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _expected_identity: &ark_domain::sync_policy::PolicyIdentity,
             _limit: usize,
         ) -> Result<
-            Option<ark_application::sync_storage::TaskMergeBatch>,
+            Option<ark_domain::task_merge_sync::TaskMergeBatch>,
             ark_application::task_merge::TaskMergePrepareError,
         > {
             Ok(None)
@@ -166,7 +166,7 @@ pub(crate) mod tests {
         async fn acknowledge_task_merge_batch(
             &self,
             _peer_device_id: &str,
-            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _expected_identity: &ark_domain::sync_policy::PolicyIdentity,
             _batch_id: &str,
             through_position: i64,
         ) -> Result<i64, String> {
@@ -177,9 +177,9 @@ pub(crate) mod tests {
             &self,
             _peer_device_id: &str,
             _local_device_id: &str,
-            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
-            _batch: &ark_application::sync_storage::TaskMergeBatch,
-        ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
+            _expected_identity: &ark_domain::sync_policy::PolicyIdentity,
+            _batch: &ark_domain::task_merge_sync::TaskMergeBatch,
+        ) -> Result<ark_domain::task_merge_sync::TaskMergeBatchAck, String> {
             Err("test_task_merge_receive_unsupported".into())
         }
     }
@@ -204,7 +204,7 @@ pub(crate) mod tests {
         async fn replace_version_vector_with_policy(
             &self,
             _local_device_id: &str,
-            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            _policy_identity: &ark_domain::sync_policy::PolicyIdentity,
             vector: &VersionVector,
         ) -> Result<(), String> {
             self.replace_version_vector(vector).await
@@ -232,7 +232,7 @@ pub(crate) mod tests {
         async fn merge_version_vector_with_policy(
             &self,
             _local_device_id: &str,
-            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            _policy_identity: &ark_domain::sync_policy::PolicyIdentity,
             vector: &VersionVector,
         ) -> Result<(), String> {
             self.merge_version_vector(vector).await
@@ -308,7 +308,7 @@ pub(crate) mod tests {
         async fn committed_feed_delivery_page_for_peer(
             &self,
             _: &str,
-            _: &ark_application::sync_storage::PolicyIdentity,
+            _: &ark_domain::sync_policy::PolicyIdentity,
             _: i64,
             _: i64,
             _: usize,
@@ -335,7 +335,7 @@ pub(crate) mod tests {
         async fn begin_outbound_policy_identity(
             &self,
             _: &str,
-            _: &ark_application::sync_storage::PolicyIdentity,
+            _: &ark_domain::sync_policy::PolicyIdentity,
         ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
@@ -354,7 +354,7 @@ pub(crate) mod tests {
         async fn complete_outbound_snapshot_identity(
             &self,
             _: &str,
-            _: &ark_application::sync_storage::PolicyIdentity,
+            _: &ark_domain::sync_policy::PolicyIdentity,
         ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             Err("test_policy_identity_completion_observed".into())
         }
@@ -370,7 +370,7 @@ pub(crate) mod tests {
         async fn record_outbound_scan_identity(
             &self,
             _: &str,
-            _: &ark_application::sync_storage::PolicyIdentity,
+            _: &ark_domain::sync_policy::PolicyIdentity,
             _: i64,
         ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
@@ -388,7 +388,7 @@ pub(crate) mod tests {
         async fn acknowledge_outbound_identity(
             &self,
             _: &str,
-            _: &ark_application::sync_storage::PolicyIdentity,
+            _: &ark_domain::sync_policy::PolicyIdentity,
             _: i64,
             _: ark_application::sync_storage::OutboundAck,
         ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
@@ -439,7 +439,7 @@ pub(crate) mod tests {
             _: &str,
             _: &str,
             _: &str,
-            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+            policy: Option<ark_domain::sync_policy::PolicyIdentity>,
         ) -> Result<bool, String> {
             if policy.is_some() {
                 return Err("policy_bound_receipt_unsupported".into());
@@ -472,7 +472,7 @@ pub(crate) mod tests {
             peer: &str,
             message_id: &str,
             _: &str,
-            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+            policy: Option<ark_domain::sync_policy::PolicyIdentity>,
         ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
             if policy.is_some() {
                 return Err("policy_bound_apply_unsupported".into());

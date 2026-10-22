@@ -10,12 +10,10 @@ use ark_application::{
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
 use ed25519_dalek::SigningKey;
 
-use crate::{
-    protocol::LanSyncMessage,
-    relay_registry::{
-        PeerControlSendOutcome, PeerSessionControl, RegistryFrame, RelayRegistryCoordinator,
-    },
-};
+use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+
+use crate::relay_registry::{RegistryFrame, RelayRegistryCoordinator};
+use ark_sync_contracts::wire::LanSyncMessage;
 
 #[derive(Default)]
 struct FakeStorage {
@@ -165,24 +163,24 @@ impl PeerSessionControl for FakeTransport {
     fn disconnect_peer(
         &self,
         peer: &str,
-    ) -> Result<crate::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
         self.trace
             .lock()
             .unwrap()
             .push(format!("disconnect-peer:{peer}"));
-        Ok(crate::transport::PeerDisconnectOutcome::PeerClosed)
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 
     fn disconnect_transport_endpoint(
         &self,
         endpoint: &str,
-    ) -> Result<crate::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
         self.disconnected.lock().unwrap().push(endpoint.to_owned());
         self.trace
             .lock()
             .unwrap()
             .push(format!("disconnect:{endpoint}"));
-        Ok(crate::transport::PeerDisconnectOutcome::PeerClosed)
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 

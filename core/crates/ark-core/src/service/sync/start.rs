@@ -263,7 +263,7 @@ pub(crate) async fn handle_start_sync(
             // Tracked by the transport, not detached: this task holds the
             // transport, and the transport holds the ark.db connection, so
             // `stop()` must abort and join it (KOS-369).
-            let ticket_task = tokio::spawn(async move {
+            let ticket_task = crate::task_set::spawn(async move {
                 match ticket_transport.our_ticket().await {
                     Ok(ticket) => {
                         let _ = ticket_tx.send(Some(ticket));
@@ -354,7 +354,7 @@ pub(crate) async fn handle_start_sync(
                 let own = own_addresses_for_beacon.clone();
                 let auth_secret = auth_secret_for_beacon.clone();
                 let relay = relay_for_beacon.clone();
-                tokio::spawn(async move {
+                crate::task_set::spawn(async move {
                     let addrs: Vec<String> = if peer.addresses.is_empty() {
                         vec![peer.address.clone()]
                     } else {

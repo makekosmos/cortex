@@ -151,7 +151,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         vector: &VersionVector,
         offset: usize,
         limit: usize,
-        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<
         ark_application::sync_storage::PolicyBoundSnapshotPage,
         ark_application::sync_storage::PolicyBoundSnapshotReadError,
@@ -280,7 +280,7 @@ impl PeerProgressPort for SqliteStorageBackend {
     async fn replace_version_vector_with_policy(
         &self,
         local_device_id: &str,
-        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_domain::sync_policy::PolicyIdentity,
         vector: &VersionVector,
     ) -> Result<(), String> {
         self.db
@@ -311,7 +311,7 @@ impl PeerProgressPort for SqliteStorageBackend {
     async fn merge_version_vector_with_policy(
         &self,
         local_device_id: &str,
-        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_domain::sync_policy::PolicyIdentity,
         vector: &VersionVector,
     ) -> Result<(), String> {
         self.db

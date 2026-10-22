@@ -3,9 +3,10 @@ use crate::db::{
     AcknowledgeTaskMergeBatchCommand, ApplyTaskMergeBatchCommand, CommandClass, CommandContext,
     PrepareTaskMergeBatchCommand,
 };
-use ark_application::sync_storage::{
-    PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort,
-};
+use ark_application::sync_storage::TaskMergeDeliveryPort;
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::task_merge_sync::TaskMergeBatch;
+use ark_domain::task_merge_sync::TaskMergeBatchAck;
 
 #[async_trait::async_trait]
 impl TaskMergeDeliveryPort for SqliteStorageBackend {

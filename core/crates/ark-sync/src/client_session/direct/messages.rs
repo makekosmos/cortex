@@ -1,4 +1,4 @@
-use crate::protocol::LanSyncMessage;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 use super::{DirectClientSession, DirectClientSessionRejection, Phase};
 
@@ -32,29 +32,29 @@ pub enum DirectClientMessage {
         batch_id: String,
         entities: Vec<ark_domain::types::SyncEntity>,
         is_last: bool,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         usage_complete_through: Option<std::collections::HashMap<String, u64>>,
     },
     SyncAck {
         batch_id: String,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
     SignedIntegrationFrame(ark_domain::integration_replication::SignedSyncEnvelope),
     SignedIntegrationAck,
     LiveChange {
         change_id: String,
         entity: ark_domain::types::SyncEntity,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
     LiveAck {
         change_id: String,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
     LiveReceiptAck {
         change_id: String,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
-    TaskMergeBatch(ark_application::sync_storage::TaskMergeBatch),
+    TaskMergeBatch(ark_domain::task_merge_sync::TaskMergeBatch),
     TaskMergeBatchAck,
     Ping {
         ts: u64,
@@ -90,7 +90,7 @@ impl DirectClientSession {
             };
         }
 
-        if !self.is_ready() && crate::protocol::requires_registry_admission(&message) {
+        if !self.is_ready() && ark_sync_contracts::wire::requires_registry_admission(&message) {
             return DirectClientSessionEffect::Ignore;
         }
 

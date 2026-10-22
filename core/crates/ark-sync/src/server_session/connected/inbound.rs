@@ -1,13 +1,15 @@
 use super::{ConnectedServerSession, ServerSessionActor};
+use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_sync_contracts::session_io::SessionIoSender;
+use ark_sync_contracts::wire::LanSyncMessage;
+
 use crate::{
     inbound_live_change::{
         apply_live_change, prepare_live_change, IncomingLiveChange, LiveChangeDisposition,
         VersionVectorWriteMode,
     },
     inbound_snapshot::{InboundSnapshotBatch, SnapshotEntityResult},
-    protocol::{LanSyncMessage, ProtocolCapability},
     server_session::DirectServerSyncChanges,
-    session_io::SessionIoSender,
 };
 use ark_application::sync_storage::entity_inbox_message_id;
 use ark_domain::types::{PeerRecord, SyncEntity};
@@ -112,7 +114,7 @@ impl ConnectedServerSession {
         actor: &ServerSessionActor,
         change_id: String,
         entity: SyncEntity,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         sender: &SessionIoSender,
     ) -> bool {
         let Some(peer_device_id) = self.peer.device_id.clone() else {
@@ -273,7 +275,7 @@ impl ConnectedServerSession {
     pub(super) async fn apply_task_merge_batch(
         &self,
         actor: &ServerSessionActor,
-        batch: ark_application::task_merge::TaskMergeBatch,
+        batch: ark_domain::task_merge_sync::TaskMergeBatch,
         sender: &SessionIoSender,
     ) -> bool {
         let Some(peer_device_id) = self.peer.device_id.as_deref() else {
@@ -325,7 +327,7 @@ impl ConnectedServerSession {
         actor: &ServerSessionActor,
         batch_id: String,
         through_position: i64,
-        identity: ark_application::sync_storage::PolicyIdentity,
+        identity: ark_domain::sync_policy::PolicyIdentity,
         sender: &SessionIoSender,
     ) -> bool {
         let Some(device_id) = self.peer.device_id.as_deref() else {

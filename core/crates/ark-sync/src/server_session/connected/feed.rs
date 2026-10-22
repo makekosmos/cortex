@@ -1,10 +1,10 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use crate::{
-    committed_feed_delivery::{
-        acknowledge, FeedAck, FeedAckOutcome, FeedFlight, MAX_FEED_PAGE_SIZE,
-    },
-    protocol::{LanSyncMessage, ProtocolCapability},
-    session_io::SessionIoSender,
+use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_sync_contracts::session_io::SessionIoSender;
+use ark_sync_contracts::wire::LanSyncMessage;
+
+use crate::committed_feed_delivery::{
+    acknowledge, FeedAck, FeedAckOutcome, FeedFlight, MAX_FEED_PAGE_SIZE,
 };
 use ark_application::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
 
@@ -93,7 +93,7 @@ impl ConnectedServerSession {
             {
                 Ok(page) => Ok(page.page),
                 Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
-                    return true
+                    return true;
                 }
                 Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
                     Err(error)
@@ -250,7 +250,7 @@ impl ConnectedServerSession {
         &mut self,
         actor: &ServerSessionActor,
         change_id: String,
-        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
         acknowledgement: OutboundAck,
         sender: &SessionIoSender,
     ) -> bool {
@@ -301,7 +301,7 @@ impl ConnectedServerSession {
         &self,
         actor: &ServerSessionActor,
         device_id: &str,
-        identity: &Option<ark_application::sync_storage::PolicyIdentity>,
+        identity: &Option<ark_domain::sync_policy::PolicyIdentity>,
         generation: i64,
         through_position: i64,
     ) -> bool {
@@ -327,7 +327,7 @@ impl ConnectedServerSession {
         &self,
         actor: &ServerSessionActor,
         device_id: &str,
-        identity: &Option<ark_application::sync_storage::PolicyIdentity>,
+        identity: &Option<ark_domain::sync_policy::PolicyIdentity>,
         generation: i64,
         through_position: i64,
     ) -> bool {
@@ -363,7 +363,7 @@ impl ConnectedServerSession {
         &self,
         actor: &ServerSessionActor,
         device_id: &str,
-        identity: &Option<ark_application::sync_storage::PolicyIdentity>,
+        identity: &Option<ark_domain::sync_policy::PolicyIdentity>,
         generation: i64,
         through_position: i64,
     ) -> bool {

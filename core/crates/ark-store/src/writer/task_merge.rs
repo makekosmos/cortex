@@ -3,10 +3,10 @@ use super::WriteCapabilities;
 use super::{Connection, TransactionFailure};
 use super::{SqliteWriter, StoreTransactionFailure};
 use crate::task_merge::TaskMergeAppendError;
-use ark_application::sync_policy::PolicyIdentity;
-use ark_application::sync_storage::{TaskMergeBatch, TaskMergeBatchAck};
 use ark_application::task_merge::TaskMergeAppendResult;
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::task_merge::TaskMergeOperation;
+use ark_domain::task_merge_sync::{TaskMergeBatch, TaskMergeBatchAck};
 
 pub struct TaskMergeWrites<'scope, 'connection> {
     transaction: &'scope rusqlite::Transaction<'connection>,

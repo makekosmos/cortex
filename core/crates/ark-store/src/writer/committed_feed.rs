@@ -2,8 +2,9 @@ use super::{SqliteWriter, StoreTransactionFailure};
 use crate::committed_feed::InboxState;
 use ark_application::sync_storage::{
     InboxReceiptWrite, InboxReceiptWriteError, OutboundProgressMutation, OutboundProgressPolicy,
-    OutboundProgressWrite, OutboundProgressWriteError, MAX_SYNC_BATCH_BYTES,
+    OutboundProgressWrite, OutboundProgressWriteError,
 };
+use ark_domain::types::MAX_SYNC_BATCH_BYTES;
 
 impl SqliteWriter {
     pub fn receive_inbox_receipt(
@@ -227,7 +228,7 @@ mod tests {
             &mut connection,
             ark_application::sync_storage::InboxReceiptWrite {
                 message_id: "oversized".into(),
-                payload_json: "x".repeat(ark_application::sync_storage::MAX_SYNC_BATCH_BYTES + 1),
+                payload_json: "x".repeat(ark_domain::types::MAX_SYNC_BATCH_BYTES + 1),
                 ..write()
             },
         )

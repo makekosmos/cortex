@@ -215,7 +215,7 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
 
     let msgs = captured.lock().await;
     let live_change = msgs.iter().find(|m| {
-        matches!(m, ark_sync::protocol::LanSyncMessage::LiveChange { entity, .. }
+        matches!(m, ark_sync_contracts::wire::LanSyncMessage::LiveChange { entity, .. }
                 if entity.id == "live-obj-1" && entity.entity_type == "object" &&
                     entity.deleted.is_none())
     });
@@ -307,7 +307,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
 
     let msgs = captured.lock().await;
     let live_change = msgs.iter().find(|m| {
-        matches!(m, ark_sync::protocol::LanSyncMessage::LiveChange { entity, .. }
+        matches!(m, ark_sync_contracts::wire::LanSyncMessage::LiveChange { entity, .. }
                 if entity.id == "live-obj-del"
                     && entity.entity_type == "object"
                     && entity.deleted == Some(true))

@@ -10,12 +10,11 @@ test-support = []
 [dependencies]
 ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
+ark-sync-contracts = { path = "../ark-sync-contracts" }
 async-trait.workspace = true
 chrono.workspace = true
 rand.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]

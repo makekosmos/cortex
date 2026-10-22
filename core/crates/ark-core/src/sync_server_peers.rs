@@ -181,7 +181,7 @@ mod connection_task_tests {
     async fn timed_out_connection_tasks_are_aborted_and_joined() {
         let (started_tx, started_rx) = oneshot::channel();
         let (dropped_tx, mut dropped_rx) = oneshot::channel();
-        let task = tokio::spawn(async move {
+        let task = crate::task_set::spawn(async move {
             let _notice = DropNotice(Some(dropped_tx));
             let _ = started_tx.send(());
             std::future::pending::<()>().await;

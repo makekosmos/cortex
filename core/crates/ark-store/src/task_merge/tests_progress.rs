@@ -11,9 +11,8 @@ fn outbound_progress_store_preserves_policy_flight_and_ack_state() {
     let transaction = connection
         .transaction()
         .expect("actor-style transaction begins");
-    let initial_identity =
-        ark_application::sync_policy::PolicyIdentity::new(1, "a".repeat(64), true)
-            .expect("initial policy identity is valid");
+    let initial_identity = ark_domain::sync_policy::PolicyIdentity::new(1, "a".repeat(64), true)
+        .expect("initial policy identity is valid");
     create_outbound_progress(&transaction, "peer-1", &initial_identity)
         .expect("progress row creates");
     transaction
@@ -33,7 +32,7 @@ fn outbound_progress_store_preserves_policy_flight_and_ack_state() {
     assert_eq!(initial.acknowledged_through, 0);
     assert!(initial.in_flight.is_none());
 
-    let next_identity = ark_application::sync_policy::PolicyIdentity::new(2, "b".repeat(64), false)
+    let next_identity = ark_domain::sync_policy::PolicyIdentity::new(2, "b".repeat(64), false)
         .expect("next policy identity is valid");
     update_outbound_policy_identity(&transaction, "peer-1", &next_identity)
         .expect("policy identity updates");

@@ -10,13 +10,8 @@ pub use sync_progress_write::{
     SyncProgressWriteError, SyncProgressWriteSession,
 };
 
-pub use crate::sync_policy::PolicyIdentity;
-pub use crate::task_merge::{
-    TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,
-    TaskMergeJournalPage, TaskMergeJournalRecord, TaskMergePrepareError,
-};
-
-pub const MAX_SYNC_BATCH_BYTES: usize = 1_048_576;
+pub use crate::task_merge::{TaskMergeDeliveryPort, TaskMergePrepareError};
+use ark_domain::PolicyIdentity;
 
 #[derive(Clone, Debug)]
 pub struct InboxReceiptPolicy {

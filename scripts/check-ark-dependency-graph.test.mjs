@@ -11,11 +11,19 @@ function metadata(overrides = {}) {
   const graph = {
     "ark-domain": [],
     "ark-net-policy": [],
+    "ark-sync-contracts": ["ark-domain"],
     "ark-application": ["ark-domain"],
     "ark-store": ["ark-application", "ark-domain"],
-    "ark-sync": ["ark-application", "ark-domain"],
-    "ark-net": ["ark-net-policy", "ark-sync"],
-    "ark-core": ["ark-application", "ark-domain", "ark-net", "ark-store", "ark-sync"],
+    "ark-sync": ["ark-application", "ark-domain", "ark-sync-contracts"],
+    "ark-net": ["ark-domain", "ark-net-policy", "ark-sync-contracts"],
+    "ark-core": [
+      "ark-application",
+      "ark-domain",
+      "ark-net",
+      "ark-store",
+      "ark-sync",
+      "ark-sync-contracts",
+    ],
     ...overrides,
   };
   return {
@@ -44,9 +52,11 @@ test("accepts the declared ARK dependency whitelist and ignores dev-only edges",
 });
 
 test("rejects an injected forbidden dependency edge", () => {
-  const graph = metadata({ "ark-sync": ["ark-application", "ark-core", "ark-domain"] });
+  const graph = metadata({
+    "ark-sync": ["ark-application", "ark-core", "ark-domain", "ark-sync-contracts"],
+  });
   assert.deepEqual(validateDependencyGraph(graph), [
-    "ark-sync: internal normal dependencies are [ark-application, ark-core, ark-domain], expected [ark-application, ark-domain]",
+    "ark-sync: internal normal dependencies are [ark-application, ark-core, ark-domain, ark-sync-contracts], expected [ark-application, ark-domain, ark-sync-contracts]",
   ]);
 });
 

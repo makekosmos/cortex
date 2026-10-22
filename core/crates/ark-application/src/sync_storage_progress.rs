@@ -1,6 +1,6 @@
 use crate::sync_policy::{sync_profile_identity, SyncProfile};
-use crate::sync_storage::PolicyIdentity;
 use ark_domain::hlc::HLC;
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::VersionVector;
 
 #[derive(Clone, Debug, serde::Serialize)]

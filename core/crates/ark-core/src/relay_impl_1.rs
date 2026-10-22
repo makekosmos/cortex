@@ -6,7 +6,7 @@ impl RelaySync {
         transport_public_key: Option<String>,
         defer_initial_sync: bool,
     ) {
-        if ark_sync::protocol::requires_registry_admission(&msg)
+        if ark_sync_contracts::wire::requires_registry_admission(&msg)
             && !self
                 .registry_ready_for_peer(&from_device_id, transport_public_key.as_deref())
                 .await
@@ -33,7 +33,7 @@ impl RelaySync {
                 if negotiated_capabilities.is_some() {
                     self.reject_protocol_offer(
                         &device_id,
-                        ark_sync::protocol::ProtocolNegotiationError::InvalidSelection,
+                        ProtocolNegotiationError::InvalidSelection,
                         &[],
                     )
                     .await;
@@ -95,7 +95,7 @@ impl RelaySync {
                     negotiation_hmac.as_deref(),
                 ) {
                     (Some(secret), Some(nonce), Some(proof)) => {
-                        ark_sync::protocol::verify_negotiation_offer_hmac(
+                        ark_sync_contracts::protocol_negotiation::verify_negotiation_offer_hmac(
                             secret,
                             &space_id,
                             &device_id,
@@ -110,7 +110,7 @@ impl RelaySync {
                 if negotiation_hmac.is_some() && !offer_authenticated {
                     self.reject_protocol_offer(
                         &device_id,
-                        ark_sync::protocol::ProtocolNegotiationError::InvalidSelectionProof,
+                        ProtocolNegotiationError::InvalidSelectionProof,
                         &remote_offer.version_ids(),
                     )
                     .await;
@@ -131,11 +131,11 @@ impl RelaySync {
                     };
                 if !negotiated
                     .capabilities
-                    .contains(&ark_sync::protocol::ProtocolCapability::RegistryHistoryV1)
+                    .contains(&ProtocolCapability::RegistryHistoryV1)
                 {
                     self.reject_protocol_offer(
                         &device_id,
-                        ark_sync::protocol::ProtocolNegotiationError::MissingRegistryHistory,
+                        ProtocolNegotiationError::MissingRegistryHistory,
                         &remote_offer.version_ids(),
                     )
                     .await;
@@ -147,7 +147,7 @@ impl RelaySync {
                 }) {
                     self.reject_protocol_offer(
                         &device_id,
-                        ark_sync::protocol::ProtocolNegotiationError::InvalidSelection,
+                        ProtocolNegotiationError::InvalidSelection,
                         &remote_offer.version_ids(),
                     )
                     .await;
@@ -298,9 +298,9 @@ impl RelaySync {
                     .is_some_and(|peer| {
                         peer.authenticated
                             && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                                protocol.capabilities.contains(
-                                    &ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1,
-                                )
+                                protocol
+                                    .capabilities
+                                    .contains(&ProtocolCapability::SelectiveSyncPolicyV1)
                             })
                     });
                 if !negotiated {
@@ -430,7 +430,7 @@ impl RelaySync {
     async fn reject_protocol_offer(
         &self,
         target_device_id: &str,
-        error: ark_sync::protocol::ProtocolNegotiationError,
+        error: ProtocolNegotiationError,
         offered_protocol_versions: &[u32],
     ) {
         let message = LanSyncMessage::ProtocolRejected {

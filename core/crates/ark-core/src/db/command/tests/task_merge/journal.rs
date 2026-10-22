@@ -1,34 +1,34 @@
 use super::*;
 
 fn entry_operation(
-    entry: &ark_application::sync_storage::TaskMergeJournalEntry,
+    entry: &ark_domain::task_merge_sync::TaskMergeJournalEntry,
 ) -> &TaskMergeOperation {
     match &entry.record {
-        ark_application::sync_storage::TaskMergeJournalRecord::Operation { operation, .. } => {
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation { operation, .. } => {
             operation
         }
-        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => {
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(_) => {
             panic!("expected operation journal record")
         }
     }
 }
 
-fn expected_digest(entry: &ark_application::sync_storage::TaskMergeJournalEntry) -> Option<&str> {
+fn expected_digest(entry: &ark_domain::task_merge_sync::TaskMergeJournalEntry) -> Option<&str> {
     match &entry.record {
-        ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Operation {
             expected_conflict_digest,
             ..
         } => expected_conflict_digest.as_deref(),
-        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => None,
+        ark_domain::task_merge_sync::TaskMergeJournalRecord::Bootstrap(_) => None,
     }
 }
 
 async fn prepare_batch(
     handle: &DbHandle,
     peer_id: &str,
-    identity: ark_application::sync_storage::PolicyIdentity,
+    identity: ark_domain::sync_policy::PolicyIdentity,
     limit: usize,
-) -> Result<Option<ark_application::sync_storage::TaskMergeBatch>, DbError> {
+) -> Result<Option<ark_domain::task_merge_sync::TaskMergeBatch>, DbError> {
     handle
         .prepare_task_merge_batch(
             CommandContext::authenticated_peer(peer_id.into()),
@@ -40,8 +40,8 @@ async fn prepare_batch(
 async fn acknowledge_batch(
     handle: &DbHandle,
     peer_id: &str,
-    identity: ark_application::sync_storage::PolicyIdentity,
-    batch: &ark_application::sync_storage::TaskMergeBatch,
+    identity: ark_domain::sync_policy::PolicyIdentity,
+    batch: &ark_domain::task_merge_sync::TaskMergeBatch,
     through: i64,
 ) -> Result<i64, DbError> {
     handle
@@ -84,7 +84,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
         )
         .await
         .unwrap();
-    let identity = ark_application::sync_storage::PolicyIdentity {
+    let identity = ark_domain::sync_policy::PolicyIdentity {
         revision: 1,
         digest,
         active: true,
@@ -138,7 +138,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
-                ark_application::sync_storage::PolicyIdentity {
+                ark_domain::sync_policy::PolicyIdentity {
                     revision: 2,
                     digest: filtered_digest,
                     active: true,
@@ -155,7 +155,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
 async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let identity = ark_application::sync_policy::default_sync_policy_identity();
-    for limit in [0, ark_application::task_merge::MAX_TASK_MERGE_PAGE_SIZE + 1] {
+    for limit in [0, ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE + 1] {
         assert!(matches!(
             prepare_batch(&handle, "peer-a", identity.clone(), limit).await,
             Err(DbError::Invalid(message)) if message == "task_merge_page_limit_exceeded"
@@ -372,7 +372,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         )
         .await
         .unwrap();
-    let excluded_identity = ark_application::sync_storage::PolicyIdentity {
+    let excluded_identity = ark_domain::sync_policy::PolicyIdentity {
         revision: 1,
         digest: excluded_digest,
         active: true,
@@ -402,7 +402,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         )
         .await
         .unwrap();
-    let widened_identity = ark_application::sync_storage::PolicyIdentity {
+    let widened_identity = ark_domain::sync_policy::PolicyIdentity {
         revision: 2,
         digest: full_digest,
         active: true,

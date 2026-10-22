@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use ark_core::sync_transport::TransportEvent;
-use ark_sync::protocol::LanSyncMessage;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 /// Generous hang guard for event drains — the awaited message is the real
 /// condition; the cap only bounds a wedged transport under load (KOS-308).

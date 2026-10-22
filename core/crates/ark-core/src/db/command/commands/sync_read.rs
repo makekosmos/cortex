@@ -102,7 +102,7 @@ impl LoadEntitiesQuery {
         capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<
         (
-            Option<ark_application::sync_storage::PolicyIdentity>,
+            Option<ark_domain::sync_policy::PolicyIdentity>,
             Vec<SyncEntity>,
         ),
         DbError,

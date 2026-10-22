@@ -4,7 +4,8 @@ use super::*;
 mod tests {
     use super::*;
     use ark_domain::types::*;
-    use ark_sync::protocol::*;
+    use ark_sync_contracts::protocol_negotiation::*;
+    use ark_sync_contracts::wire::*;
     use futures_util::{SinkExt, StreamExt};
     use std::time::Duration;
     use tokio::net::TcpListener;

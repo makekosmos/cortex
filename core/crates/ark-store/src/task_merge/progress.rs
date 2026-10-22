@@ -1,5 +1,5 @@
 use super::{storage_error, TaskMergeStoreError};
-use ark_application::sync_policy::PolicyIdentity;
+use ark_domain::sync_policy::PolicyIdentity;
 use rusqlite::{Connection, OptionalExtension, Transaction};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,7 +74,7 @@ pub fn load_outbound_progress(
         _ => {
             return Err(TaskMergeStoreError::Invalid(
                 "task_merge_progress_corrupt".into(),
-            ))
+            ));
         }
     };
     let last_acknowledged = match (last_id, last_through) {
@@ -83,7 +83,7 @@ pub fn load_outbound_progress(
         _ => {
             return Err(TaskMergeStoreError::Invalid(
                 "task_merge_progress_corrupt".into(),
-            ))
+            ));
         }
     };
     Ok(Some(TaskMergeOutboundProgress {

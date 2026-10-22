@@ -23,7 +23,7 @@ use super::{
     DirectServerSyncStartPolicy, ResponderHelloRequest, ServerConnectionLease,
     ServerPeerProjection, ServerPeerReadiness, ServerSessionActor,
 };
-use crate::protocol::LanSyncMessage;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 #[async_trait::async_trait]
 pub trait ConnectedServerSessionHost: Send + Sync {
@@ -74,7 +74,7 @@ pub(super) struct ConnectedServerSession {
     pub(crate) direct: Option<DirectServerSession>,
     pub(crate) admission: Option<DirectServerAdmission>,
     pub(crate) peer: ServerPeerProjection,
-    pub(crate) protocol: Option<crate::protocol::NegotiatedProtocol>,
+    pub(crate) protocol: Option<ark_sync_contracts::protocol_negotiation::NegotiatedProtocol>,
     pub(crate) snapshot_progress: crate::outbound_snapshot::OutboundSnapshotProgress,
     pub(crate) feed_flight: Option<crate::committed_feed_delivery::FeedFlight>,
 }
@@ -101,7 +101,7 @@ impl ConnectedServerSession {
     pub(crate) fn classify_message(
         &mut self,
         message: LanSyncMessage,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
     ) -> Option<DirectServerMessage> {
         let Some(direct) = self.direct.as_mut() else {
             sender.close_after_flush();
@@ -123,7 +123,10 @@ impl ConnectedServerSession {
         }
     }
 
-    pub(super) fn supports(&self, capability: crate::protocol::ProtocolCapability) -> bool {
+    pub(super) fn supports(
+        &self,
+        capability: ark_sync_contracts::protocol_negotiation::ProtocolCapability,
+    ) -> bool {
         self.protocol
             .as_ref()
             .is_some_and(|protocol| protocol.capabilities.contains(&capability))
@@ -138,7 +141,7 @@ impl ConnectedServerSession {
         &mut self,
         actor: &ServerSessionActor,
         update: crate::client_session::SyncPolicyUpdate,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
     ) -> bool {
         let (Some(device_id), Some(protocol), Some(direct)) = (
             self.peer.device_id.as_deref(),
@@ -183,7 +186,7 @@ impl ConnectedServerSession {
         &self,
         actor: &ServerSessionActor,
         event: RegistryEvent,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
     ) -> bool {
         let Some(session_id) = self
             .peer
@@ -210,7 +213,7 @@ impl ConnectedServerSession {
         &mut self,
         actor: &mut ServerSessionActor,
         message: LanSyncMessage,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
     ) -> bool {
         let Some(device_id) = self.peer.device_id.clone() else {
             sender.close_after_flush();
@@ -284,7 +287,7 @@ impl ConnectedServerSession {
     async fn activate_ready_peer(
         &mut self,
         actor: &mut ServerSessionActor,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
         admission: DirectServerAdmission,
         ready: AdmittedServerPeer,
         device_id: String,
@@ -415,8 +418,8 @@ impl PendingPeerList {
     pub(super) fn try_send_due(
         &mut self,
         now: tokio::time::Instant,
-        sender: &crate::session_io::SessionIoSender,
-    ) -> Result<bool, crate::session_io::SessionIoError> {
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
+    ) -> Result<bool, ark_sync_contracts::session_io::SessionIoError> {
         if now < self.deadline {
             return Ok(false);
         }
@@ -424,7 +427,7 @@ impl PendingPeerList {
             peers: self.peers.clone(),
         }) {
             Ok(()) => Ok(true),
-            Err(crate::session_io::SessionIoError::OutboundFull) => {
+            Err(ark_sync_contracts::session_io::SessionIoError::OutboundFull) => {
                 self.deadline = now + std::time::Duration::from_millis(25);
                 Ok(false)
             }

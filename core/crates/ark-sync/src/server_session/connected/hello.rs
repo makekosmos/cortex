@@ -3,14 +3,15 @@ use super::super::{
     DirectServerSessionInput, ServerPeerProjection, ServerPeerReadiness, ServerSessionActor,
 };
 use super::ConnectedServerSession;
-use crate::protocol::{LanSyncMessage, ProtocolNegotiationError};
+use ark_sync_contracts::protocol_negotiation::ProtocolNegotiationError;
+use ark_sync_contracts::wire::LanSyncMessage;
 
 impl ConnectedServerSession {
     pub(in crate::server_session) async fn handle_hello(
         &mut self,
         actor: &ServerSessionActor,
         message: LanSyncMessage,
-        sender: &crate::session_io::SessionIoSender,
+        sender: &ark_sync_contracts::session_io::SessionIoSender,
     ) -> bool {
         let direct = self
             .direct
@@ -113,9 +114,10 @@ fn protocol_rejection(
         origin_device_id: origin_device_id.to_owned(),
         target_device_id: target_device_id.to_owned(),
         reason: error.code().to_owned(),
-        supported_protocol_versions: crate::protocol::SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
+        supported_protocol_versions:
+            ark_sync_contracts::protocol_negotiation::SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
         offered_protocol_versions: if offered_protocol_versions.len()
-            <= crate::protocol::MAX_PROTOCOL_OFFER_VERSIONS
+            <= ark_sync_contracts::protocol_negotiation::MAX_PROTOCOL_OFFER_VERSIONS
         {
             offered_protocol_versions.to_vec()
         } else {

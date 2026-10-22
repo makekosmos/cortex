@@ -210,7 +210,7 @@ pub fn read_committed_feed_delivery_page(
 pub fn read_committed_feed_delivery_page_for_peer(
     conn: &Connection,
     peer_device_id: &str,
-    expected_identity: &ark_application::sync_storage::PolicyIdentity,
+    expected_identity: &ark_domain::sync_policy::PolicyIdentity,
     after_position: i64,
     high_watermark: i64,
     limit: usize,

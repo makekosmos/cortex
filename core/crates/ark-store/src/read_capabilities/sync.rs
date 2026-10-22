@@ -3,8 +3,8 @@ use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile};
 use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, PolicyBoundFeedPage,
     PolicyBoundFeedReadError, PolicyBoundSnapshotPage, PolicyBoundSnapshotReadError,
-    PolicyIdentity,
 };
+use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::{SyncEntity, VersionVector};
 use std::collections::HashMap;
 
