@@ -16,7 +16,7 @@ fn spec_for(version: &str, archive: &Path, executable: &str) -> NativeInstallSpe
         executable: executable.into(),
         sha256: format!("{:x}", Sha256::digest(&bytes)),
         size: bytes.len() as u64,
-        repository: "makekosmos/agenda-gpui".into(),
+        repository: "makekosmos/agenda-unified".into(),
         release_tag: format!("v{version}"),
     }
 }

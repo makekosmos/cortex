@@ -55,11 +55,11 @@ The apps themselves live in sibling repositories. The Engine's Store installs
 them from their GitHub Releases into `%LOCALAPPDATA%\Mundus\Apps`; the
 installer does not bundle them.
 
-| App          | Repository                                                              |
-| ------------ | ----------------------------------------------------------------------- |
-| 📅 Agenda    | [`makekosmos/agenda-gpui`](https://github.com/makekosmos/agenda-gpui)   |
-| 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui) |
-| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)       |
+| App          | Repository                                                                  |
+| ------------ | --------------------------------------------------------------------------- |
+| 📅 Agenda    | [`makekosmos/agenda-unified`](https://github.com/makekosmos/agenda-unified) |
+| 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui)     |
+| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)           |
 
 ## Download
 

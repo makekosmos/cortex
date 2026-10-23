@@ -396,7 +396,7 @@ async fn native_list_offline_keeps_installed_state() {
                 executable: "agenda-gpui.exe".into(),
                 sha256: format!("{:x}", Sha256::digest(&bytes)),
                 size: bytes.len() as u64,
-                repository: "makekosmos/agenda-gpui".into(),
+                repository: "makekosmos/agenda-unified".into(),
                 release_tag: "v0.1.0".into(),
             },
             &archive,

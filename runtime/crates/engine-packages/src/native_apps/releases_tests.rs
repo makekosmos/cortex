@@ -260,8 +260,8 @@ mod releases_tests {
         assert_eq!(
             tag_from_location(
                 &base,
-                "makekosmos/agenda-gpui",
-                "https://github.com/makekosmos/agenda-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
+                "makekosmos/agenda-unified",
+                "https://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
             )
             .as_deref(),
             Some("v0.3.0"),
@@ -270,8 +270,8 @@ mod releases_tests {
         assert_eq!(
             tag_from_location(
                 &base,
-                "makekosmos/agenda-gpui",
-                "/makekosmos/agenda-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
+                "makekosmos/agenda-unified",
+                "/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
             )
             .as_deref(),
             Some("v0.3.0"),
@@ -279,27 +279,27 @@ mod releases_tests {
         // Other host, other repo, wrong asset → None.
         assert!(tag_from_location(
             &base,
-            "makekosmos/agenda-gpui",
-            "https://evil.example/makekosmos/agenda-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
+            "makekosmos/agenda-unified",
+            "https://evil.example/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
         )
         .is_none());
         assert!(tag_from_location(
             &base,
-            "makekosmos/agenda-gpui",
+            "makekosmos/agenda-unified",
             "https://github.com/makekosmos/other/releases/download/v0.3.0/SHA256SUMS.txt",
         )
         .is_none());
         assert!(tag_from_location(
             &base,
-            "makekosmos/agenda-gpui",
-            "https://github.com/makekosmos/agenda-gpui/releases/download/v0.3.0/EVIL.txt",
+            "makekosmos/agenda-unified",
+            "https://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/EVIL.txt",
         )
         .is_none());
         // Same host over plain http is a downgrade, not a valid tag hop.
         assert!(tag_from_location(
             &base,
-            "makekosmos/agenda-gpui",
-            "http://github.com/makekosmos/agenda-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
+            "makekosmos/agenda-unified",
+            "http://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
         )
         .is_none());
     }

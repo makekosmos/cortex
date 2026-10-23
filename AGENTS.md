@@ -2,7 +2,7 @@
 
 Cortex — это Mundus Engine (`runtime/`), встроенное ядро данных ARK (`core/`),
 Manager (`manager-gpui/`) и упаковка/релизы (`desktop/`). Агенда, Memoria и
-Dictation живут в своих репозиториях (`makekosmos/agenda-gpui`,
+Dictation живут в своих репозиториях (`makekosmos/agenda-unified`,
 `makekosmos/memoria-gpui`, `makekosmos/dictation`) и ставятся Engine из GitHub
 Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
 Linux годится для разработки Engine (`docs/linux-dev.md`).
