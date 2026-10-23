@@ -140,7 +140,9 @@ async function loadAllowlist(file) {
       throw new Error(`invalid writer allowlist entry: ${JSON.stringify(entry)}`);
     if (
       !arkSourceRoots.some((root) =>
-        String(entry.path ?? "").startsWith(`${path.relative(repoRoot, root)}/`),
+        String(entry.path ?? "").startsWith(
+          `${path.relative(repoRoot, root).split(path.sep).join("/")}/`,
+        ),
       ) ||
       !patterns.some(([category]) => category === entry.category) ||
       !Number.isSafeInteger(entry.count) ||
