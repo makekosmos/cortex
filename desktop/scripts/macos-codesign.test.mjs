@@ -41,7 +41,7 @@ test("listMachOFiles finds every binary under the bundle, not plist/icns", async
     await writeFile(path.join(root, "Contents", "Info.plist"), "<plist/>");
     await writeFile(path.join(root, "Contents", "Resources", "mundus.icns"), "icns");
     const found = listMachOFiles(root)
-      .map((f) => path.relative(macos, f))
+      .map((f) => path.relative(macos, f).split(path.sep).join("/"))
       .sort();
     assert.deepEqual(found, ["Mundus Manager", "mundus-engine", "native/macos/paste-text"]);
   } finally {
