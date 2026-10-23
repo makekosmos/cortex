@@ -1,5 +1,14 @@
-import { lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 
 // KOS-270: engine/ark-core tests must never write to the user's %TEMP%.
@@ -16,14 +25,17 @@ export function openGateTmp(targetDir, runId) {
   return dir;
 }
 
-// Unix sockets cap their path at ~104 bytes (SUN_LEN), and tools that open
-// one under TMPDIR — mbx's `mbx-session-*/cache-agent.sock` — overflow it
-// once the checkout path is long enough. On Unix the gate therefore hands out
-// a short `/tmp/cortex-gate-<runId>` symlink to the real run dir: the bytes
-// still land in the target dir (KOS-270), only the path is short. Windows
-// keeps the real dir. `release` removes just the link, before the sweep.
-export function aliasGateTmp(dir, runId, { platform = process.platform, root = "/tmp" } = {}) {
-  if (platform === "win32") return { path: dir, release() {} };
+// Unix sockets cap their path at ~104 bytes (SUN_LEN), and Windows Git has
+// MAX_PATH-sensitive worktree metadata. On either platform the gate hands out
+// a short alias to the real run dir: files still land under target (KOS-270),
+// while nested sockets and linked worktrees avoid overlong paths. Windows uses
+// an unprivileged junction in the system temp directory. `release` removes
+// just the alias before the target-owned directory is swept.
+export function aliasGateTmp(
+  dir,
+  runId,
+  { platform = process.platform, root = platform === "win32" ? tmpdir() : "/tmp" } = {},
+) {
   const link = join(root, `cortex-gate-${runId}`);
   rmSync(link, { force: true });
   // Tests can exercise the Unix branch on a Windows host. A junction keeps
@@ -143,10 +155,14 @@ export function reportGateTmpSweep(
 // narrows the candidates. Logged before removal, like the process listing.
 function logLeftoverTimes(dir, entries, log) {
   for (const { name, contents } of entries.slice(0, 20)) {
-    const paths = contents.length ? contents.slice(0, 5).map((file) => join(dir, name, file)) : [join(dir, name)];
+    const paths = contents.length
+      ? contents.slice(0, 5).map((file) => join(dir, name, file))
+      : [join(dir, name)];
     for (const path of paths) {
       try {
-        log(`gate tmp:   last written ${statSync(path).mtime.toISOString()} ${path.slice(dir.length + 1)}`);
+        log(
+          `gate tmp:   last written ${statSync(path).mtime.toISOString()} ${path.slice(dir.length + 1)}`,
+        );
       } catch (error) {
         log(`gate tmp:   last written unknown ${path.slice(dir.length + 1)}: ${error.message}`);
       }
@@ -155,7 +171,9 @@ function logLeftoverTimes(dir, entries, log) {
 }
 
 function logLiveProcesses(rows, log) {
-  log(`gate tmp: ${rows.length} live build-tree process${rows.length === 1 ? "" : "es"} at sweep time`);
+  log(
+    `gate tmp: ${rows.length} live build-tree process${rows.length === 1 ? "" : "es"} at sweep time`,
+  );
   for (const row of rows.slice(0, 20)) {
     const cmd = String(row.cmd ?? "-").slice(0, 300);
     log(`gate tmp:   pid ${row.pid} ppid ${row.ppid} ${row.name} exe=${row.exe ?? "-"} cmd=${cmd}`);

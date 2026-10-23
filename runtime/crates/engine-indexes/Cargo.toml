@@ -41,7 +41,7 @@ tracing.workspace = true
 [target.'cfg(windows)'.dependencies]
 # Fast whole-drive listing via the NTFS MFT (file_index local fast path +
 # privileged service scan).
-ntfs-reader = "0.4.5"
+ntfs-reader = "0.4.7"
 # SCM install/status + service dispatcher for the privileged service.
 windows-service = "0.7"
 windows = { version = "0.62", features = [
