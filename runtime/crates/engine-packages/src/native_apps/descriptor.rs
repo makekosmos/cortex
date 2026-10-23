@@ -36,7 +36,7 @@ pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
     NativeAppDescriptor {
         id: "com.kosmos.agenda",
         name: "Agenda",
-        repository: "makekosmos/agenda-gpui",
+        repository: "makekosmos/agenda-unified",
         tag_prefix: "v",
         asset_stem: "agenda-gpui",
         env_override: "AGENDA_EXECUTABLE",

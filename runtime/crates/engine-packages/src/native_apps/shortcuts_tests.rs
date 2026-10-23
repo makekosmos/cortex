@@ -21,7 +21,7 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
                 executable: "agenda-gpui.exe".into(),
                 sha256: format!("{:x}", Sha256::digest(&bytes)),
                 size: bytes.len() as u64,
-                repository: "makekosmos/agenda-gpui".into(),
+                repository: "makekosmos/agenda-unified".into(),
                 release_tag: format!("v{version}"),
             },
             &archive,
