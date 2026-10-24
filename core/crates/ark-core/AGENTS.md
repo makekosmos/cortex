@@ -33,8 +33,7 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
 - Schema evolution is additive by default: prefer idempotent
   `CREATE TABLE IF NOT EXISTS` / additive indexes (`../ark-store/src/schema.rs`). A one-off
   rewrite of stored objects is allowed only when it is approved for a specific
-  issue, runs once in a transaction, and takes a backup of `ark.db` first
-  (KOS-397: `com.kosmos.task` 1.1.0 → `core.task` 0.1.0, approved 2026-10-13).
+  issue, runs once in a transaction, and takes a backup of `ark.db` first (KOS-397 and KOS-436).
 - Every writer to syncable data must update revision/feed state through
   `ark_store::sync_versions::bump_sync_version_vector` in the same caller-owned
   transaction. Usage sequence migration and backfill live in

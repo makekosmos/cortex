@@ -15,7 +15,7 @@ impl StoreDatabase {
         &self,
         bootstrap_device_id: &str,
     ) -> Result<SqliteWriter, StoreBootstrapError> {
-        let migration_backup_path = format!("{}.pre-core-task.bak", self.path);
+        let migration_backup_path = format!("{}.pre-core.bak", self.path);
         SqliteWriter::open_initialized(&self.path, &migration_backup_path, bootstrap_device_id)
     }
 

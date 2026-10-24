@@ -64,18 +64,9 @@ pub fn init_schema(connection: &Connection) -> Result<(), String> {
     crate::canonical_migrations::objects::ensure_object_state_schema(connection).map_err(
         |error| format!("canonical runtime schema during init_schema failed: {error:?}"),
     )?;
-    let migration = crate::canonical_migrations::migration::migrate_phase3(connection)
-        .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
     crate::canonical_migrations::registry::prepare_registry_for_objects(connection).map_err(
         |error| format!("canonical version install during init_schema failed: {error:?}"),
     )?;
-    if migration.status == "completed" {
-        crate::canonical_migrations::migration::retire_legacy_planning_tables(connection)
-            .map(|_| ())
-            .map_err(|error| {
-                format!("legacy planning retirement during init_schema failed: {error:?}")
-            })?;
-    }
     Ok(())
 }
 
