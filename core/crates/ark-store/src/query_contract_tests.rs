@@ -1,10 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use ark_domain::types::{ArkObject, ObjectType, TodoItem, TrackedApp, UsageEvent, UsageSession};
+use ark_domain::types::{ArkObject, ObjectType, TrackedApp, UsageEvent, UsageSession};
 use rusqlite::{params, Connection};
 use serde_json::json;
 
-use crate::legacy_entities::upsert_todo;
 use crate::objects::{
     list_object_summaries, list_object_summaries_by_type, list_objects_by_type,
     list_running_time_entries, search_objects,
@@ -47,34 +46,6 @@ fn make_object_type(id: &str, name: &str) -> ObjectType {
         created_at: "2026-01-01T00:00:00.000Z".to_owned(),
         updated_at: "2026-01-01T00:00:00.000Z".to_owned(),
         system_locked: false,
-    }
-}
-
-fn make_todo(id: &str, title: &str) -> TodoItem {
-    TodoItem {
-        id: id.to_owned(),
-        title: title.to_owned(),
-        notes: None,
-        priority: 0,
-        scheduled_date: None,
-        deadline: None,
-        reminder_date: None,
-        is_today: false,
-        is_evening: false,
-        is_someday: false,
-        is_completed: false,
-        completed_at: None,
-        is_cancelled: false,
-        cancelled_at: None,
-        is_trashed: false,
-        sort_order: 0,
-        heading_id: None,
-        project_id: None,
-        area_id: None,
-        tag_ids: vec![],
-        checklist_items: json!([]),
-        recurrence_rule: None,
-        created_at: "2026-01-01T00:00:00.000Z".to_owned(),
     }
 }
 
@@ -370,7 +341,6 @@ fn test_sync_kv() {
 #[test]
 fn test_clear_all() {
     let conn = setup_db();
-    upsert_todo(&conn, &make_todo("t1", "X")).unwrap();
     crate::usage::upsert_tracked_app(&conn, &make_tracked_app("app-clear")).unwrap();
     crate::usage::upsert_usage_session(&conn, &make_usage_session("session-clear", "app-clear"))
         .unwrap();
@@ -382,7 +352,6 @@ fn test_clear_all() {
     crate::sync_kv::set_sync_kv(&conn, "k", "v").unwrap();
     crate::load_all::clear_all(&conn).unwrap();
     let data = crate::load_all::load_all(&conn).unwrap();
-    assert_eq!(data.todos.len(), 0);
     assert_eq!(data.tracked_apps.len(), 0);
     assert_eq!(data.usage_sessions.len(), 0);
     assert_eq!(data.usage_events.len(), 0);
@@ -397,78 +366,4 @@ fn test_clear_all() {
         .iter()
         .any(|item| item.id == "com.kosmos.game"));
     assert_eq!(crate::sync_kv::get_sync_kv(&conn, "k").unwrap(), None);
-}
-
-#[test]
-fn test_delete_trashed() {
-    let conn = setup_db();
-    let mut todo = make_todo("t1", "Keep");
-    upsert_todo(&conn, &todo).unwrap();
-
-    todo.id = "t2".to_string();
-    todo.title = "Trash me".to_string();
-    todo.is_trashed = true;
-    upsert_todo(&conn, &todo).unwrap();
-
-    let count = crate::load_all::delete_trashed(&conn, "device-under-test").unwrap();
-    assert_eq!(count, 1);
-    let data = crate::load_all::load_all(&conn).unwrap();
-    assert_eq!(data.todos.len(), 1);
-    assert_eq!(data.todos[0].id, "t1");
-}
-
-#[test]
-fn by_type_queries_match_objects_stored_under_legacy_alias() {
-    let conn = setup_db();
-    // Rows written before the type registry existed keep `task_obj` in
-    // objects.type_id, which never was a row in object_types. Seeding the
-    // row directly avoids the compatibility writer canonicalising the ID,
-    // so this connection disables FK checks for the fixture.
-    conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
-    for (id, deleted) in [
-        ("legacy-task-1", None),
-        ("legacy-task-2", None),
-        ("legacy-task-gone", Some("2026-02-01T00:00:00.000Z")),
-    ] {
-        conn.execute(
-            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,
-                 created_at,updated_at,deleted_at)
-                 VALUES (?1,'task_obj','0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',
-                 '2026-01-02T00:00:00.000Z',?2)",
-            params![id, deleted],
-        )
-        .unwrap();
-    }
-    for queried in ["com.kosmos.task", "task_obj"] {
-        let summaries = list_object_summaries_by_type(&conn, queried).unwrap();
-        assert_eq!(
-            summaries.len(),
-            3,
-            "{queried} must see alias-stored objects"
-        );
-        let objects = list_objects_by_type(&conn, queried).unwrap();
-        assert_eq!(objects.len(), 3);
-    }
-
-    // Same contract for the running-time-entry hot path.
-    let running = make_time_entry("entry-legacy", "2026-03-01T10:00:00.000Z", None, "manual");
-    conn.execute(
-        "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,
-             updated_at,deleted_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
-        params![
-            running.id,
-            running.type_id,
-            running.type_version,
-            running.title,
-            serde_json::to_string(&running.content_json).unwrap(),
-            serde_json::to_string(&running.props_json).unwrap(),
-            running.created_at,
-            running.updated_at,
-        ],
-    )
-    .unwrap();
-    let running_entries = list_running_time_entries(&conn, Some("manual")).unwrap();
-    assert_eq!(running_entries.len(), 1);
-    assert_eq!(running_entries[0].id, "entry-legacy");
 }

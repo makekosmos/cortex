@@ -13,7 +13,6 @@ mod inbound_entity;
 mod inbox_receipt;
 mod integration_admin;
 mod iroh_identity;
-mod legacy_mutation;
 mod local_sync_key_value_write;
 mod object_link_mutation;
 mod object_mutation;

@@ -13,34 +13,6 @@ pub(super) fn setup_db() -> Connection {
     conn
 }
 
-pub(super) fn make_todo(id: &str, title: &str) -> TodoItem {
-    TodoItem {
-        id: id.to_string(),
-        title: title.to_string(),
-        notes: None,
-        priority: 0,
-        scheduled_date: None,
-        deadline: None,
-        reminder_date: None,
-        is_today: false,
-        is_evening: false,
-        is_someday: false,
-        is_completed: false,
-        completed_at: None,
-        is_cancelled: false,
-        cancelled_at: None,
-        is_trashed: false,
-        sort_order: 0,
-        heading_id: None,
-        project_id: None,
-        area_id: None,
-        tag_ids: vec![],
-        checklist_items: json!([]),
-        recurrence_rule: None,
-        created_at: "2026-01-01T00:00:00.000Z".to_string(),
-    }
-}
-
 pub(super) fn make_tracked_app(id: &str) -> TrackedApp {
     TrackedApp {
         id: id.to_string(),

@@ -6,12 +6,7 @@ async fn local_object_and_usage_writes_record_sync_state() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -168,12 +163,7 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 

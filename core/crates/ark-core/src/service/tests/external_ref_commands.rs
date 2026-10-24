@@ -5,12 +5,7 @@ async fn external_ref_request_keeps_wire_shape_and_rolls_back_failed_update() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = fixture.db_path();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().into_owned(),)
     .await
     .unwrap();
 

@@ -7,7 +7,6 @@ fn serialize<T: serde::Serialize>(value: Result<T, String>) -> Result<serde_json
 
 #[derive(serde::Serialize)]
 pub(crate) enum ObjectReadQuery {
-    LoadAll,
     List,
     ListSummaries,
     ListByType(String),
@@ -43,7 +42,6 @@ impl StoreReadQuery for ObjectReadQuery {
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         match self {
-            Self::LoadAll => serialize(capabilities.objects().load_all()),
             Self::List => serialize(capabilities.objects().list()),
             Self::ListSummaries => serialize(capabilities.objects().list_summaries()),
             Self::ListByType(type_id) => serialize(capabilities.objects().list_by_type(&type_id)),

@@ -1,15 +1,10 @@
 use super::ObjectReadCapabilities;
 use ark_application::data_volume::{DataVolumeEstimate, DataVolumeQuery, DataVolumeReadPort};
-use ark_application::load_all_data::LoadAllData;
 use ark_application::object_read::SearchResult;
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectSummary};
 
 impl ObjectReadCapabilities<'_> {
-    pub fn load_all(&self) -> Result<LoadAllData, String> {
-        crate::load_all::load_all(self.connection)
-    }
-
     pub fn list(&self) -> Result<Vec<ArkObject>, String> {
         crate::objects::list_objects(self.connection)
     }

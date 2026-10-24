@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use ark_domain::types::{SyncEntity, TodoItem, TrackedApp, UsageSession, VersionVector};
+use ark_domain::types::{SyncEntity, TrackedApp, UsageSession, VersionVector};
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 
@@ -158,62 +158,5 @@ fn clear_all_clears_usage_sync_log_residue() {
                 .unwrap();
             assert_eq!(count, 0, "clear_all must clear {table}");
         }
-    });
-}
-
-#[test]
-fn delete_trashed_records_sync_tombstones() {
-    // delete_trashed hard-deleted todo rows without writing sync
-    // tombstones, so peers kept resurrecting them on the next sync.
-    let connection = setup_db();
-    let todo = TodoItem {
-        id: "trashed-1".to_string(),
-        title: "gone".to_string(),
-        notes: None,
-        priority: 0,
-        scheduled_date: None,
-        deadline: None,
-        reminder_date: None,
-        is_today: false,
-        is_evening: false,
-        is_someday: false,
-        is_completed: false,
-        completed_at: None,
-        is_cancelled: false,
-        cancelled_at: None,
-        is_trashed: true,
-        sort_order: 0,
-        heading_id: None,
-        project_id: None,
-        area_id: None,
-        tag_ids: vec![],
-        checklist_items: json!([]),
-        recurrence_rule: None,
-        created_at: "2026-01-01T00:00:00.000Z".to_string(),
-    };
-    crate::legacy_entities::upsert_todo(&connection, &todo).unwrap();
-
-    let mut writer = SqliteWriter::from_connection(connection);
-    assert_eq!(writer.delete_trashed("device-under-test").unwrap(), 1);
-    writer.with_connection_mut(|connection| {
-        let tombstone_hlc: Option<String> = connection
-            .query_row(
-                "SELECT hlc FROM sync_tombstones WHERE id = 'trashed-1' AND entity_type = 'todo'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .unwrap();
-        assert!(
-            tombstone_hlc.is_some(),
-            "delete_trashed must record a sync tombstone per deleted todo"
-        );
-        let vector = crate::sync_kv::get_sync_kv(connection, "lan_sync.version_vector").unwrap();
-        assert!(
-            vector
-                .as_deref()
-                .is_some_and(|raw| raw.contains("trashed-1")),
-            "delete_trashed must bump the version vector; got {vector:?}"
-        );
     });
 }

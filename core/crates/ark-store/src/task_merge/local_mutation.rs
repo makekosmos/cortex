@@ -11,7 +11,6 @@ pub struct TaskMergeLocalMutationState {
     pub source_links: Vec<ObjectLink>,
     pub has_bootstrap: bool,
     pub snapshot: ObjectWriteSnapshot,
-    pub legacy_revision: Option<String>,
     pub unit_conflicts: Vec<(TaskMergeUnit, TaskConflictSet)>,
 }
 
@@ -34,13 +33,11 @@ pub fn load_local_mutation_state(
         Vec::new()
     };
     let task_revision = task_snapshot_token_from_conflicts(has_bootstrap, &unit_conflicts)?;
-    let legacy_revision =
-        crate::sync_versions::object_revision(transaction, object_id).map_err(storage_error)?;
     let snapshot = ObjectWriteSnapshot {
         exists: object.is_some(),
         type_id: object.as_ref().map(|value| value.type_id.clone()),
         type_version: object.as_ref().map(|value| value.type_version.clone()),
-        revision: task_revision.or_else(|| legacy_revision.clone()),
+        revision: task_revision,
     };
 
     Ok(TaskMergeLocalMutationState {
@@ -48,7 +45,6 @@ pub fn load_local_mutation_state(
         source_links,
         has_bootstrap,
         snapshot,
-        legacy_revision,
         unit_conflicts,
     })
 }

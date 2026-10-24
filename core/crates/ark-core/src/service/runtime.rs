@@ -12,10 +12,10 @@ pub(super) fn get_db_handle(state: &ServiceState) -> Result<db::DbHandle, String
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .cloned()
-        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
+        .ok_or_else(|| "Database is not initialized.".to_string())
 }
 
-/// Путь к live ARK DB (из Init). Общий accessor для `db_backup`,
+/// Путь к live ARK DB. Общий accessor для `db_backup`,
 /// `db_backup_list/validate/restore` — restore резолвит `<dir>/backups/`
 /// от этого пути.
 pub(super) fn current_db_path(state: &ServiceState) -> Result<String, String> {
@@ -24,7 +24,7 @@ pub(super) fn current_db_path(state: &ServiceState) -> Result<String, String> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
-        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
+        .ok_or_else(|| "Database is not initialized.".to_string())
 }
 
 // --- DB backup: background-priority thread + chunking config ---------------
@@ -187,35 +187,10 @@ pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEnt
     }
 }
 
-fn legacy_content() -> Value {
-    json!({"type":"doc","content":[{"type":"paragraph"}]})
-}
-
-fn legacy_record(
-    id: &str,
-    legacy_type_id: &str,
-    title: &str,
-    props: Value,
-    created_at: &str,
-    deleted_at: Option<String>,
-) -> ark_application::canonical_compatibility::LegacyRecord {
-    ark_application::canonical_compatibility::LegacyRecord {
-        id: id.into(),
-        legacy_type_id: legacy_type_id.into(),
-        title: title.into(),
-        content: legacy_content(),
-        props,
-        created_at: created_at.into(),
-        updated_at: created_at.into(),
-        deleted_at,
-    }
-}
-
 // ---------------------------------------------------------------------------
 
 mod dispatch;
 mod integration;
-mod legacy;
 mod objects;
 mod system;
 mod types;

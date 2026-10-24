@@ -18,7 +18,7 @@ pub(crate) use commands::{
     CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
     CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand, EnrollPairedDeviceCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand, IntegrationAdminOutput,
-    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    IntegrationReadQuery,
     LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
     LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery,
     LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,

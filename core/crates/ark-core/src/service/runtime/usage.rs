@@ -1,5 +1,47 @@
 use super::*;
 
+pub(super) async fn upsert_tracked_app(
+    state: &Arc<ServiceState>,
+    tracked_app: TrackedApp,
+    device_id: Option<String>,
+) -> Result<Value, String> {
+    use ark_application::tracked_app_mutation::{TrackedAppMutation, TrackedAppUpsert};
+
+    let entity = get_db_handle(state)?
+        .submit_tracked_app_mutation(
+            db::CommandContext::engine(),
+            TrackedAppMutation::Upsert(Box::new(TrackedAppUpsert {
+                tracked_app,
+                device_id: local_write_device_id(device_id),
+            })),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_change(state, entity).await;
+    Ok(json!(true))
+}
+
+pub(super) async fn delete_tracked_app(
+    state: &Arc<ServiceState>,
+    id: String,
+    device_id: Option<String>,
+) -> Result<Value, String> {
+    use ark_application::tracked_app_mutation::{TrackedAppDelete, TrackedAppMutation};
+
+    let entity = get_db_handle(state)?
+        .submit_tracked_app_mutation(
+            db::CommandContext::engine(),
+            TrackedAppMutation::Delete(TrackedAppDelete {
+                id,
+                device_id: local_write_device_id(device_id),
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    maybe_broadcast_local_change(state, entity).await;
+    Ok(json!(true))
+}
+
 async fn submit_local_usage_write(
     state: &ServiceState,
     device_id: String,

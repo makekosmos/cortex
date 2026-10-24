@@ -5,8 +5,6 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Instant;
 use tokio::sync::oneshot;
 
-#[path = "actor/task/legacy_mutation.rs"]
-mod legacy_mutation_task;
 mod maintenance;
 #[path = "actor/task/registry_events.rs"]
 mod registry_events_task;
@@ -16,7 +14,6 @@ mod runtime;
 mod task;
 #[path = "actor/task/task_merge_progress.rs"]
 mod task_merge_progress;
-pub(in crate::db::command) use legacy_mutation_task::{LegacyDeleteTask, LegacyGraphWriteTask};
 use maintenance::has_maintenance_barrier;
 pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
 pub(in crate::db::command) use registry_local_mutation_task::{
@@ -42,7 +39,7 @@ pub(in crate::db::command) use task::TypedCommand;
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, CanonicalGameUpsertTask,
     ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
-    DeleteTrashedTask, ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask,
+    ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask,
     LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
     LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterPackageTypesTask,
     ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,

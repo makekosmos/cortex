@@ -5,28 +5,12 @@ pub(crate) async fn handle_request(
     request: Request,
 ) -> Result<Value, String> {
     match request {
-        Request::Init { db_path } => legacy::init(state, db_path).await,
-        Request::LoadAll => legacy::load_all(state).await,
-        Request::UpsertTodo { todo, device_id } => {
-            legacy::upsert_todo(state, todo, device_id).await
-        }
-        Request::DeleteTodo { id, device_id } => legacy::delete_todo(state, id, device_id).await,
-        Request::DeleteProject { id, device_id } => {
-            legacy::delete_project(state, id, device_id).await
-        }
-        Request::BatchUpsertTodos { todos, device_id } => {
-            legacy::batch_upsert_todos(state, todos, device_id).await
-        }
-        Request::UpsertProject { project, device_id } => {
-            legacy::upsert_project(state, project, device_id).await
-        }
-        Request::UpsertTag { tag, device_id } => legacy::upsert_tag(state, tag, device_id).await,
         Request::UpsertTrackedApp {
             tracked_app,
             device_id,
-        } => legacy::upsert_tracked_app(state, tracked_app, device_id).await,
+        } => usage::upsert_tracked_app(state, tracked_app, device_id).await,
         Request::DeleteTrackedApp { id, device_id } => {
-            legacy::delete_tracked_app(state, id, device_id).await
+            usage::delete_tracked_app(state, id, device_id).await
         }
 
         Request::UpsertUsageSession {
@@ -176,7 +160,6 @@ pub(crate) async fn handle_request(
         Request::SetSyncKv { key, value } => system::set_sync_kv(state, key, value).await,
         Request::ExternalRefsUpsert(params) => system::external_refs_upsert(state, params).await,
         Request::ClearAll => system::clear_all(state).await,
-        Request::DeleteTrashed => system::delete_trashed(state).await,
         Request::DbBackup { dest_path } => system::db_backup(state, dest_path).await,
         Request::DbBackupList => system::db_backup_list(state).await,
         Request::DbBackupValidate { backup_id } => {

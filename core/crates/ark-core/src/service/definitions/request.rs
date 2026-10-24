@@ -33,42 +33,6 @@ fn default_sync_filter() -> Value {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
-    // --- DB ops (unchanged wire format) ---
-    Init {
-        #[serde(rename = "dbPath")]
-        db_path: String,
-    },
-    LoadAll,
-    UpsertTodo {
-        todo: TodoItem,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    DeleteTodo {
-        id: String,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    BatchUpsertTodos {
-        todos: Vec<TodoItem>,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    UpsertProject {
-        project: Project,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    DeleteProject {
-        id: String,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    UpsertTag {
-        tag: Tag,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
     UpsertTrackedApp {
         tracked_app: TrackedApp,
         #[serde(default)]
@@ -286,7 +250,6 @@ pub(crate) enum Request {
     #[serde(rename = "external_refs.upsert")]
     ExternalRefsUpsert(ark_application::external_ref::ExternalRefUpsert),
     ClearAll,
-    DeleteTrashed,
 
     /// SQLite Online Backup в указанный path. Source DB остаётся live —
     /// concurrent readers/writer safe. Используется db_backup scheduler

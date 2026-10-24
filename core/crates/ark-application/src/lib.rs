@@ -1,5 +1,4 @@
 pub mod book_cover;
-pub mod canonical_compatibility;
 pub mod canonical_game;
 pub mod data_volume;
 pub mod external_ref;

@@ -197,12 +197,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -257,12 +252,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
 async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
     handle_request(

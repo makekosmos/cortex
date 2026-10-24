@@ -30,10 +30,6 @@ impl TaskMutationSession for SqliteTaskMutationSession<'_> {
         )
     }
 
-    fn ensure_legacy_task_write_allowed(&self, id: &str) -> Result<(), String> {
-        crate::task_merge::ensure_legacy_task_write_allowed(self.connection, id)
-    }
-
     fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String> {
         ark_application::object_write::ObjectWriteSession::persist_object(
             &self.object_write,
@@ -66,14 +62,6 @@ impl TaskMutationSession for SqliteTaskMutationSession<'_> {
     fn task_type_id(&self, id: &str) -> Result<Option<String>, String> {
         crate::objects::get_object(self.connection, id)
             .map(|object| object.map(|object| object.type_id))
-    }
-
-    fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String> {
-        crate::sync_versions::stored_object_revision(self.connection, id)
-    }
-
-    fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
-        crate::sync_versions::record_remote_object_revision(self.connection, id, source_hlc, false)
     }
 
     fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {

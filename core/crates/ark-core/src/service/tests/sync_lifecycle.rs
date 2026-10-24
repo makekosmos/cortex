@@ -6,12 +6,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -157,12 +152,7 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -237,12 +227,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 

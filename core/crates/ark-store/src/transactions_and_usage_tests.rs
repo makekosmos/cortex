@@ -2,13 +2,12 @@
 
 use ark_domain::hlc::HLC;
 use ark_domain::types::{
-    ArkObject, ObjectType, SyncEntity, TodoItem, UsageDay, UsageSpanWrite, UsageTitleTotal,
+    ArkObject, ObjectType, SyncEntity, UsageDay, UsageSpanWrite, UsageTitleTotal,
     VersionVector,
 };
 use rusqlite::Connection;
 use serde_json::json;
 
-use crate::legacy_entities::batch_upsert_todos;
 
 fn setup_db() -> Connection {
     let connection = Connection::open_in_memory().unwrap();
@@ -22,34 +21,6 @@ fn setup_db() -> Connection {
         .unwrap();
     crate::open::init_schema(&connection).unwrap();
     connection
-}
-
-fn make_todo(id: &str, title: &str) -> TodoItem {
-    TodoItem {
-        id: id.into(),
-        title: title.into(),
-        notes: None,
-        priority: 0,
-        scheduled_date: None,
-        deadline: None,
-        reminder_date: None,
-        is_today: false,
-        is_evening: false,
-        is_someday: false,
-        is_completed: false,
-        completed_at: None,
-        is_cancelled: false,
-        cancelled_at: None,
-        is_trashed: false,
-        sort_order: 0,
-        heading_id: None,
-        project_id: None,
-        area_id: None,
-        tag_ids: vec![],
-        checklist_items: json!([]),
-        recurrence_rule: None,
-        created_at: "2026-01-01T00:00:00.000Z".into(),
-    }
 }
 
 fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
@@ -77,32 +48,6 @@ fn make_object_type(id: &str, name: &str) -> ObjectType {
         system_locked: false,
     }
 }
-#[test]
-fn batch_upsert_todos_nests_in_outer_transaction() {
-    let conn = setup_db();
-    // РћС‚РєСЂС‹РІР°РµРј РІРЅРµС€РЅСЋСЋ С‚СЂР°РЅР·Р°РєС†РёСЋ вЂ” РёРјРёС‚РёСЂСѓРµРј РІС‹Р·РѕРІ
-    // РёР· with_write_tx.
-    conn.execute_batch("BEGIN IMMEDIATE").unwrap();
-    let todos = vec![
-        make_todo("bt1", "Nested todo A"),
-        make_todo("bt2", "Nested todo B"),
-    ];
-    // Р”Рѕ Р¤Р°Р·С‹ B РїР°РґР°РµС‚: "cannot start a transaction within a transaction".
-    // РџРѕСЃР»Рµ Р¤Р°Р·С‹ B (SAVEPOINT) РґРѕР»Р¶РЅРѕ РїСЂРѕР№С‚Рё Р±РµР· РѕС€РёР±РєРё.
-    batch_upsert_todos(&conn, &todos).expect(concat!(
-        "batch_upsert_todos РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё ",
-        "РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё"
-    ));
-    conn.execute_batch("COMMIT").unwrap();
-    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ todo РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ Р·Р°РїРёСЃР°РЅС‹.
-    let data = crate::load_all::load_all(&conn).unwrap();
-    assert_eq!(
-        data.todos.len(),
-        2,
-        "РѕР±Р° todo РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ Р·Р°РїРёСЃР°РЅС‹"
-    );
-}
-
 #[test]
 fn upsert_object_type_nests_in_outer_transaction() {
     let conn = setup_db();
