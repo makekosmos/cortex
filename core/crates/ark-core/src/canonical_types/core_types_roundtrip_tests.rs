@@ -1,5 +1,6 @@
 use crate::service::ArkService;
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
 
 fn core_types() -> Vec<(&'static str, Value)> {
     vec![
@@ -53,42 +54,62 @@ async fn every_core_type_round_trips_through_upsert_get_and_list() {
         .await
         .expect("service opens with current core registrations");
 
-    for (index, (type_id, props)) in core_types().into_iter().enumerate() {
-        let id = format!("core-type-{index}");
-        service
-            .call(
-                "upsert_object",
-                json!({
-                    "object": {
-                        "id": id.clone(),
-                        "typeId": type_id,
-                        "typeVersion": "0.1.0",
-                        "title": type_id,
-                        "contentJson": {"type":"doc", "content":[{"type":"paragraph"}]},
-                        "propsJson": props,
-                        "createdAt": "2026-10-24T12:00:00.000Z",
-                        "updatedAt": "2026-10-24T12:00:00.000Z",
-                        "deletedAt": null
-                    }
-                }),
-            )
-            .await
-            .expect("core type upsert succeeds");
+    let result = async {
+        for (index, (type_id, props)) in core_types().into_iter().enumerate() {
+            let id = format!("core-type-{index}");
+            service
+                .call(
+                    "upsert_object",
+                    json!({
+                        "object": {
+                            "id": id.clone(),
+                            "typeId": type_id,
+                            "typeVersion": "0.1.0",
+                            "title": type_id,
+                            "contentJson": {"type":"doc", "content":[{"type":"paragraph"}]},
+                            "propsJson": props,
+                            "createdAt": "2026-10-24T12:00:00.000Z",
+                            "updatedAt": "2026-10-24T12:00:00.000Z",
+                            "deletedAt": null
+                        }
+                    }),
+                )
+                .await
+                .map_err(|error| format!("{type_id} upsert failed: {error}"))?;
 
-        let stored = service
-            .call("get_object", json!({"id": id}))
-            .await
-            .expect("core type get succeeds");
-        assert_eq!(stored["typeId"], type_id);
-        assert_eq!(stored["typeVersion"], "0.1.0");
-        assert_eq!(stored["propsJson"], props);
+            let stored = service
+                .call("get_object", json!({"id": id}))
+                .await
+                .map_err(|error| format!("{type_id} get failed: {error}"))?;
+            if stored["typeId"] != type_id
+                || stored["typeVersion"] != "0.1.0"
+                || stored["propsJson"] != props
+            {
+                return Err(format!(
+                    "{type_id} get returned an unexpected object: {stored}"
+                ));
+            }
 
-        let listed = service
-            .call("list_objects_by_type", json!({"type_id": type_id}))
-            .await
-            .expect("core type list succeeds");
-        assert_eq!(listed.as_array().map(Vec::len), Some(1));
-        assert_eq!(listed[0]["id"], id);
-        assert_eq!(listed[0]["typeId"], type_id);
+            let listed = service
+                .call("list_objects_by_type", json!({"type_id": type_id}))
+                .await
+                .map_err(|error| format!("{type_id} list failed: {error}"))?;
+            if listed.as_array().map(Vec::len) != Some(1)
+                || listed[0]["id"] != id
+                || listed[0]["typeId"] != type_id
+            {
+                return Err(format!(
+                    "{type_id} list returned an unexpected result: {listed}"
+                ));
+            }
+        }
+        Ok::<(), String>(())
     }
+    .await;
+
+    service
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await
+        .expect("service shuts down before deleting the test database");
+    result.expect("all core types round-trip through upsert, get, and list");
 }

@@ -1052,12 +1052,12 @@ mod tests {
     fn import_requires_version_and_editable_allowlist() {
         let valid = concat!(
             "---\nark_id: \"id-1\"\nark_type: \"core.note\"\nark_version: ",
-            "\"1.0.0\"\nbridge_version: 1\nreadonly: \"changed\"\n---\nbody"
+            "\"0.1.0\"\nbridge_version: 1\nreadonly: \"changed\"\n---\nbody"
         );
         let parsed = parse(valid, &config()).expect("valid bridge file");
         assert!(parsed.2.is_empty());
         assert!(apply_editable(
-            json!({"id":"id-1","type_id":"note","title":"One","props_json":{"body":"body"}}),
+            json!({"id":"id-1","type_id":"core.note","title":"One","props_json":{"body":"body"}}),
             parsed.2,
             parsed.3,
             &config()
@@ -1074,7 +1074,7 @@ mod tests {
         };
         let parsed = parse(valid, &body_config).unwrap();
         assert!(apply_editable(
-            json!({"id":"id-1","type_id":"note","title":"One","props_json":{"body":"body"}}),
+            json!({"id":"id-1","type_id":"core.note","title":"One","props_json":{"body":"body"}}),
             parsed.2,
             "different".into(),
             &body_config
