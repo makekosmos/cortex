@@ -3,6 +3,9 @@ pub mod canonical_asset_sources;
 pub mod canonical_game;
 pub mod canonical_migrations;
 pub mod committed_feed;
+mod core_migration;
+#[cfg(test)]
+mod core_migration_tests;
 pub mod data_platform;
 pub mod data_volume;
 pub mod database;
@@ -22,7 +25,6 @@ mod read_capabilities;
 pub mod read_snapshot;
 pub mod schema;
 pub mod snapshot;
-pub mod source_snapshot;
 pub mod sync_entities;
 pub mod sync_kv;
 pub mod sync_tombstones;

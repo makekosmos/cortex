@@ -12,7 +12,6 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
         conn.execute("DELETE FROM object_search_fts", [])
             .map_err(|e| e.to_string())?;
     }
-    let phase3_completed = phase3_migration_completed(conn)?;
     for table in [
         "device_registry_events",
         "device_registry_projection",
@@ -20,8 +19,6 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
         "object_local_state",
         "entity_write_receipts",
         "ark_operation_receipts",
-        "canonical_migration_items",
-        "canonical_migration_runs",
         "object_sync_versions",
     ] {
         let exists: bool = conn
@@ -34,8 +31,6 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
         if exists {
             conn.execute(&format!("DELETE FROM {table}"), [])
                 .map_err(|e| e.to_string())?;
-        } else if phase3_completed {
-            return Err(format!("clear_all missing owned table: {table}"));
         }
     }
     conn.execute_batch(
@@ -53,9 +48,6 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
          DELETE FROM usage_sync_log;
          DELETE FROM usage_sync_versions;
          DELETE FROM tracked_apps;
-         DELETE FROM todos;
-         DELETE FROM projects;
-         DELETE FROM tags;
          DELETE FROM sync_tombstones;
          DELETE FROM sync_kv;",
     )
@@ -173,25 +165,4 @@ fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Headin
         }
     }
     (areas, headings)
-}
-
-fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
-    let table_exists: bool = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND \
-             name='canonical_migration_runs')",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
-    if !table_exists {
-        return Ok(false);
-    }
-    conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE \
-         contract_version='phase3-canonical-v1' AND status='completed')",
-        [],
-        |row| row.get(0),
-    )
-    .map_err(|error| error.to_string())
 }

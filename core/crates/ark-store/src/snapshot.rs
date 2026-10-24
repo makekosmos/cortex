@@ -12,7 +12,7 @@
 //     нет TOCTOU на его содержимое между validate и apply;
 //   - до изменения live DB: `PRAGMA integrity_check` staging-копии + сравнение
 //     нормализованного `sqlite_schema` fingerprint'а (+ `user_version`,
-//     `application_id`, provenance `canonical_migration_runs`) с текущей ARK
+//     `application_id`) с текущей ARK
 //     schema;
 //   - apply идёт через SQLite Online Backup API прямо в live `Connection`
 //     (`conn.restore`) под глобальным DB mutex — destination пишется
@@ -237,8 +237,8 @@ fn normalize_sql(sql: &str) -> String {
 }
 
 /// Нормализованный fingerprint схемы: все записи `sqlite_schema`
-/// (type/name/tbl_name/sql со схлопнутым whitespace), `user_version`,
-/// `application_id` и provenance-строки `canonical_migration_runs`.
+/// (type/name/tbl_name/sql со схлопнутым whitespace), `user_version` и
+/// `application_id`.
 /// Snapshot допустим к restore только при полном совпадении с live DB.
 pub fn schema_fingerprint(conn: &Connection) -> Result<Vec<String>, String> {
     let mut rows: Vec<String> = {
@@ -271,35 +271,6 @@ pub fn schema_fingerprint(conn: &Connection) -> Result<Vec<String>, String> {
         .map_err(|e| e.to_string())?;
     rows.push(format!("pragma|user_version|{user_version}"));
     rows.push(format!("pragma|application_id|{application_id}"));
-    let has_migration_runs: bool = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_schema
-             WHERE type='table' AND name='canonical_migration_runs')",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if has_migration_runs {
-        let mut stmt = conn
-            .prepare(
-                "SELECT contract_version, status, source_inventory_hash
-                 FROM canonical_migration_runs ORDER BY contract_version",
-            )
-            .map_err(|e| e.to_string())?;
-        let mut runs = stmt
-            .query_map([], |row| {
-                Ok(format!(
-                    "migration|{}|{}|{}",
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        rows.append(&mut runs);
-    }
     Ok(rows)
 }
 

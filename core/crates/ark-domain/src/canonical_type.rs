@@ -4,7 +4,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub mod definitions;
-pub mod legacy_task;
 pub mod registry;
 pub mod validation;
 

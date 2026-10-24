@@ -36,25 +36,38 @@ impl SqliteWriter {
             }
         })?;
 
-        let connection = crate::open::open_db(path).map_err(|message| StoreBootstrapError {
+        let connection = rusqlite::Connection::open(path).map_err(|error| StoreBootstrapError {
             stage: StoreBootstrapStage::Open,
-            message,
+            message: error.to_string(),
         })?;
+        crate::core_migration::backup_before_migration(&connection, migration_backup_path).map_err(
+            |message| StoreBootstrapError {
+                stage: StoreBootstrapStage::Migration,
+                message,
+            },
+        )?;
+        connection
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;
+                 PRAGMA synchronous = FULL;
+                 PRAGMA foreign_keys = ON;
+                 PRAGMA busy_timeout = 5000;",
+            )
+            .map_err(|error| StoreBootstrapError {
+                stage: StoreBootstrapStage::Open,
+                message: error.to_string(),
+            })?;
         crate::open::init_schema(&connection).map_err(|message| StoreBootstrapError {
             stage: StoreBootstrapStage::Schema,
             message,
         })?;
-
-        let mut writer = Self::from_connection(connection);
-        crate::canonical_migrations::rewrite_legacy_tasks(
-            &mut writer,
-            migration_backup_path,
-            bootstrap_device_id,
-        )
-        .map_err(|message| StoreBootstrapError {
+        let mut connection = connection;
+        crate::core_migration::migrate(&mut connection, bootstrap_device_id).map_err(|message| {
+            StoreBootstrapError {
             stage: StoreBootstrapStage::Migration,
             message,
+            }
         })?;
-        Ok(writer)
+        Ok(Self::from_connection(connection))
     }
 }

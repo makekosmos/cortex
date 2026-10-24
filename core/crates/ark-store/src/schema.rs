@@ -2,52 +2,6 @@ pub mod migrations;
 
 /// SQL statements for creating the ARK core database schema.
 pub const CREATE_TABLES: &str = "
-CREATE TABLE IF NOT EXISTS todos (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    notes TEXT,
-    priority INTEGER NOT NULL DEFAULT 0,
-    scheduled_date TEXT,
-    deadline TEXT,
-    reminder_date TEXT,
-    is_today INTEGER NOT NULL DEFAULT 0,
-    is_evening INTEGER NOT NULL DEFAULT 0,
-    is_someday INTEGER NOT NULL DEFAULT 0,
-    is_completed INTEGER NOT NULL DEFAULT 0,
-    completed_at TEXT,
-    is_cancelled INTEGER NOT NULL DEFAULT 0,
-    cancelled_at TEXT,
-    is_trashed INTEGER NOT NULL DEFAULT 0,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    heading_id TEXT,
-    project_id TEXT,
-    area_id TEXT,
-    tag_ids TEXT NOT NULL DEFAULT '[]',
-    checklist_items TEXT NOT NULL DEFAULT '[]',
-    recurrence_rule TEXT,
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    notes TEXT,
-    status TEXT NOT NULL DEFAULT 'active',
-    scheduled_date TEXT,
-    deadline TEXT,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    color_tag TEXT,
-    area_id TEXT,
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS tags (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    color TEXT,
-    created_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS tracked_apps (
     id TEXT PRIMARY KEY,
     platform TEXT NOT NULL,
