@@ -1,7 +1,7 @@
 //! Port of `products/delphi/src/services/filters/todoFilterService.ts`.
 //!
 //! Pure functions over `&[TodoItem]`. Никакой DB, никакой I/O — для I/O
-//! есть ARK operations выше (которые fetch task_obj, deserialize в
+//! есть ARK operations выше (которые fetch core.task, deserialize в
 //! TodoItem, потом дёргают эти filters).
 //!
 //! Parity-tested: см. `tests::golden_parity_*` + `.agent/tasks/...`.

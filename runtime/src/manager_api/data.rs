@@ -1,10 +1,8 @@
 //! `manager.data.*` — объектная статистика и списки для страницы «Данные».
 //!
 //! Counts are derived from the objects themselves (`list_object_summaries`),
-//! not from the type registry: rows written before canonicalisation keep a
-//! legacy alias in `objects.type_id`, and a registry-driven count reports
-//! them as zero. Grouping by canonical identity keeps the page honest for
-//! both stored forms.
+//! not from the type registry, so package-defined and system types remain
+//! visible alongside the first-party core types.
 
 use super::ManagerState;
 use crate::ark_host::ArkHost;
@@ -14,30 +12,26 @@ use std::sync::Arc;
 
 const MAX_BROWSE_PAGE: usize = 200;
 const MAX_SEARCH_RESULTS: usize = 100;
-const CANONICAL_VERSION: &str = "1.0.0";
-const CANONICAL_TYPES: &[(&str, &str, &str)] = &[
-    ("com.kosmos.note", "Заметка", "note_obj"),
-    ("core.task", "Задача", "task_obj"),
-    ("com.kosmos.game", "Игра", "game_obj"),
+const CANONICAL_TYPES: &[(&str, &str)] = &[
+    ("core.task", "Задача"),
+    ("core.note", "Заметка"),
+    ("core.project", "Проект"),
+    ("core.tag", "Тег"),
+    ("core.person", "Человек"),
+    ("core.image", "Изображение"),
+    ("core.time-entry", "Запись времени"),
+    ("core.game", "Игра"),
+    ("core.book", "Книга"),
 ];
 
 fn canonical_identity(type_id: &str) -> Option<(&'static str, &'static str)> {
-    CANONICAL_TYPES.iter().find_map(|(canonical, _, alias)| {
-        (*canonical == type_id || *alias == type_id)
-            .then_some((*canonical, canonical_version(canonical)))
-    })
+    CANONICAL_TYPES
+        .iter()
+        .find(|(canonical, _)| *canonical == type_id)
+        .map(|(canonical, _)| (*canonical, "0.1.0"))
 }
 
-/// core.task 0.1.0 is the one contract that moved on from the shared 1.0.0.
-fn canonical_version(canonical: &str) -> &'static str {
-    match canonical {
-        "core.task" => "0.1.0",
-        _ => CANONICAL_VERSION,
-    }
-}
-
-/// The grouping key for one stored type id: the canonical id when known,
-/// the raw id otherwise (package-defined and system types have no alias).
+/// The grouping key for one stored type id: the registered core id or raw id.
 fn bucket_key(type_id: &str) -> &str {
     canonical_identity(type_id)
         .map(|(id, _)| id)
@@ -47,8 +41,8 @@ fn bucket_key(type_id: &str) -> &str {
 fn canonical_name(bucket: &str) -> Option<&'static str> {
     CANONICAL_TYPES
         .iter()
-        .find(|(id, _, _)| *id == bucket)
-        .map(|(_, name, _)| *name)
+        .find(|(id, _)| *id == bucket)
+        .map(|(_, name)| *name)
 }
 
 fn row_type_id(row: &Value) -> Option<&str> {
@@ -78,7 +72,7 @@ fn collect_type_buckets(rows: &[Value]) -> (Vec<Value>, u64) {
         *total = total.saturating_add(bytes);
         let name = canonical_name(key).unwrap_or_default();
         let version = canonical_identity(key)
-            .map(|(_, v)| json!(v))
+            .map(|(_, version)| json!(version))
             .unwrap_or(Value::Null);
         out.push(json!({
             "id": key,
@@ -89,7 +83,7 @@ fn collect_type_buckets(rows: &[Value]) -> (Vec<Value>, u64) {
             "logical_bytes": bytes,
         }));
     };
-    for (canonical, _, _) in CANONICAL_TYPES {
+    for (canonical, _) in CANONICAL_TYPES {
         if let Some((count, bytes)) = buckets.remove(*canonical) {
             emit(canonical, count, bytes, &mut total);
         }
@@ -133,9 +127,8 @@ impl ManagerState {
     pub async fn data_list(&self, ark: &Arc<ArkHost>, params: &Value) -> Result<Value, String> {
         let limit = bounded_limit(params.get("limit"), MAX_BROWSE_PAGE)?;
         let offset = parse_cursor(params.get("cursor"))?;
-        // One unfiltered read: rows stored under a legacy alias still belong
-        // to the requested canonical type, so filtering happens on the
-        // bucket key, not on the stored `type_id` string.
+        // One unfiltered read keeps registered and package-defined types in
+        // the same paging path.
         let bucket = params
             .get("type_id")
             .and_then(Value::as_str)
@@ -264,9 +257,8 @@ fn safe_row(row: &Value, query: Option<&str>) -> Option<Value> {
         return None;
     }
     let type_id = bucket_key(raw_type);
-    // Objects keep the version they were written with (pre-registry rows say
-    // "0.0.0-legacy"); echo it instead of pretending the row is the current
-    // contract version — hiding it is what made real data look absent.
+    // Preserve the stored version so the caller can interpret the projected
+    // fields against the contract that produced the row.
     let type_version = row
         .get("type_version")
         .or_else(|| row.get("typeVersion"))
@@ -282,7 +274,7 @@ fn safe_row(row: &Value, query: Option<&str>) -> Option<Value> {
     // Only the canonical contracts have a vetted allow-list; every other
     // type projects to identity + timestamps and nothing else.
     let allowed = match type_id {
-        "com.kosmos.note" => ["description"].as_slice(),
+        "core.note" => ["description"].as_slice(),
         "core.task" => [
             "state",
             "planning",
@@ -293,7 +285,7 @@ fn safe_row(row: &Value, query: Option<&str>) -> Option<Value> {
             "checklist",
         ]
         .as_slice(),
-        "com.kosmos.game" => [
+        "core.game" => [
             "playStatus",
             "userRating",
             "released",

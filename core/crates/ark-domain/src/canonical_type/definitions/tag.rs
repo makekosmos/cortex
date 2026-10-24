@@ -1,13 +1,13 @@
 pub(crate) const TAG_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.tag",
+  "typeId": "core.tag",
   "name": "Тег",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["tag_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -121,7 +121,7 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
     {
       "type": "related",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     }
@@ -131,5 +131,5 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "de364bb69edcad14f474b018e65c2ccc8be53426133d5107ac9cbd9492d5b18f"
+  "schemaHash": "ba8e9c1784b8590a1db80b9e1d613940fe04bf9370f05a0449447c85d2a40517"
 }"###;

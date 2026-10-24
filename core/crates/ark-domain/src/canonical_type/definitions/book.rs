@@ -1,13 +1,13 @@
 pub(crate) const BOOK_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.book",
+  "typeId": "core.book",
   "name": "Книга",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["book_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -173,21 +173,21 @@ pub(crate) const BOOK_DEFINITION: &str = r###"{
     {
       "type": "cover-image",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.image",
+      "targetTypeId": "core.image",
       "min": 0,
       "max": 1
     },
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     },
     {
       "type": "author-person",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.person",
+      "targetTypeId": "core.person",
       "min": 0,
       "max": null
     }
@@ -197,5 +197,5 @@ pub(crate) const BOOK_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "8ce61b253c590aa2b54b00bac4854c8b0e92469bb916e58ebc9fccd7070b12a0"
+  "schemaHash": "7217e0ef3d1b48f250a904891593a4bdfb41d8f3718da4eaa542a81a5d5a40ed"
 }"###;

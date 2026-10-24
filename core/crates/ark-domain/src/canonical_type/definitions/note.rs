@@ -5,15 +5,15 @@
 // authority; the existing type-registry hash implementation remains authoritative.
 
 pub(crate) const NOTE_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.note",
+  "typeId": "core.note",
   "name": "Заметка",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["note_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -127,14 +127,14 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
     {
       "type": "related",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.note",
+      "targetTypeId": "core.note",
       "min": 0,
       "max": null
     },
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     }
@@ -144,5 +144,5 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "8dae6b0a41de279ab6176bfc2115ec88c08b40551bb5ed566a3773b0cac2be53"
+  "schemaHash": "df2874984e7fae9cda3aa47ce42311e3ba1deb37196cd4e5a0f94a4b9accb311"
 }"###;

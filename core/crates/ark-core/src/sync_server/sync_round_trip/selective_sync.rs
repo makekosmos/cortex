@@ -30,10 +30,10 @@ fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -
         id: id.into(),
         data: serde_json::from_value(json!({
             "typeId": type_id,
-            "typeVersion": if type_id == "core.task" { "0.1.0" } else { "1.0.0" },
+            "typeVersion": "0.1.0",
             "title": title,
             "contentJson": {"type":"doc","content":[{"type":"paragraph"}]},
-            "propsJson": if type_id == "com.kosmos.game" {
+            "propsJson": if type_id == "core.game" {
                 json!(
                     {"playStatus":null,
                     "userRating":null,
@@ -81,13 +81,13 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         &endpoint_b,
     )
     .await;
-    let note = selective_object_entity("sync-note", "com.kosmos.note", "Sync note", 1);
+    let note = selective_object_entity("sync-note", "core.note", "Sync note", 1);
     let task = selective_object_entity("sync-task", "core.task", "Sync task", 2);
-    let game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 3);
+    let game = selective_object_entity("sync-game", "core.game", "Sync game", 3);
     for (type_id, name, counter) in [
-        ("com.kosmos.note", "Note", 10),
+        ("core.note", "Note", 10),
         ("core.task", "Task", 11),
-        ("com.kosmos.game", "Game", 12),
+        ("core.game", "Game", 12),
     ] {
         storage_a
             .apply_entity(&SyncEntity {
@@ -158,7 +158,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
     profile.set_rule(
         "type",
-        "com.kosmos.note",
+        "core.note",
         ark_domain::selective_sync::SyncMode::Full,
     );
     profile.set_rule(
@@ -168,7 +168,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     );
     profile.set_rule(
         "type",
-        "com.kosmos.game",
+        "core.game",
         ark_domain::selective_sync::SyncMode::Metadata,
     );
     profile.set_rule(
@@ -233,9 +233,9 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
             task.id.as_str(),
             game.id.as_str(),
             "sync-link",
-            "com.kosmos.note",
+            "core.note",
             "core.task",
-            "com.kosmos.game",
+            "core.game",
         ]
         .iter()
         .all(|id| entities.iter().any(|entity| entity.id == *id))
@@ -252,7 +252,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         .any(|entity| entity.entity_type == "object_link" && entity.id == "sync-link"));
     let type_pos = loaded
         .iter()
-        .position(|entity| entity.entity_type == "object_type" && entity.id == "com.kosmos.game")
+        .position(|entity| entity.entity_type == "object_type" && entity.id == "core.game")
         .expect("selected type definition should be received");
     let object_pos = loaded
         .iter()
@@ -267,7 +267,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_a
         .apply_entity(&selective_object_entity(
             "sync-note",
-            "com.kosmos.note",
+            "core.note",
             "Updated while disconnected",
             7,
         ))
@@ -313,14 +313,14 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_a.set_selective_sync_profile(Some(ark_domain::selective_sync::SelectiveSyncProfile {
         rules: [
             (
-                ("type".into(), "com.kosmos.note".into()),
+                ("type".into(), "core.note".into()),
                 ark_domain::selective_sync::SelectiveSyncRule {
                     mode: ark_domain::selective_sync::SyncMode::Full,
                     filter: ark_domain::selective_sync::FilterV1::match_all(),
                 },
             ),
             (
-                ("type".into(), "com.kosmos.game".into()),
+                ("type".into(), "core.game".into()),
                 ark_domain::selective_sync::SelectiveSyncRule {
                     mode: ark_domain::selective_sync::SyncMode::Metadata,
                     filter: ark_domain::selective_sync::FilterV1::match_all(),
@@ -339,7 +339,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
 
     // Deletes use the same live transport and retain type metadata for
     // profile filtering at the receiver.
-    let mut deleted_game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 6);
+    let mut deleted_game = selective_object_entity("sync-game", "core.game", "Sync game", 6);
     deleted_game.deleted = Some(true);
     storage_a.apply_entity(&deleted_game).await.unwrap();
     server_a.broadcast_live_change(None).await;
@@ -358,7 +358,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
             .data
             .get("typeId")
             .and_then(|value| value.as_str()),
-        Some("com.kosmos.game")
+        Some("core.game")
     );
 
     reconnect.stop_and_join().await;

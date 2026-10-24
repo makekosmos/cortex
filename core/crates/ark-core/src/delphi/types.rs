@@ -1,7 +1,7 @@
 //! TodoItem shape — мatch TS `products/delphi/src/types/task.ts:TodoItem`.
 //!
 //! Поля только те что нужны `filters` модулю; полная schema живёт в
-//! task_obj propsJson и сериализуется TS-side adapter'ом (см.
+//! core.task propsJson и сериализуется TS-side adapter'ом (см.
 //! `products/delphi/src/lib/electron-api-shim.ts:arkTaskObjectToTodo`).
 
 use serde::{Deserialize, Serialize};
