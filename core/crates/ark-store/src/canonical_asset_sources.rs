@@ -8,8 +8,8 @@ use std::collections::HashSet;
 
 // Engine-owned typed canonical read/write facades.
 
-pub(crate) const IMAGE: &str = "com.kosmos.image";
-pub(crate) const VERSION: &str = "1.0.0";
+pub(crate) const IMAGE: &str = "core.image";
+pub(crate) const VERSION: &str = "0.1.0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetSourceError {

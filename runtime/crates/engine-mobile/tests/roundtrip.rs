@@ -1,7 +1,7 @@
 //! Host-side proof for KOS-370 unit 2 and KOS-397: open a temp data dir, upsert
 //! an agenda task object in the `core.task` 0.1.0 shape agenda writes, list it
 //! back, receive the `object_upserted` event through a `ChangeListener`, then
-//! drop and reopen and still see the task. Legacy `com.kosmos.task` writes are
+//! drop and reopen and still see the task. Legacy `core.task` writes are
 //! refused after the cutover, so this test writes the new shape only.
 
 use std::path::Path;
@@ -182,11 +182,11 @@ fn task_roundtrip_survives_reopen() {
 const PROJECT_A: &str = "project-mobile-a";
 const PROJECT_B: &str = "project-mobile-b";
 
-/// A `com.kosmos.project` 1.0.0 object: the target of a task's project link.
+/// A `core.project` 1.0.0 object: the target of a task's project link.
 fn project_object(id: &str) -> Value {
     json!({
         "id": id,
-        "typeId": "com.kosmos.project",
+        "typeId": "core.project",
         "typeVersion": "1.0.0",
         "title": id,
         "createdAt": "2026-10-10T12:00:00.000Z",

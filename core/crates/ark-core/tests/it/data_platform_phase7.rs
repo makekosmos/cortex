@@ -96,8 +96,8 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
             "object",
             "game",
             json!(
-                {"typeId":"com.kosmos.game",
-                "typeVersion":"1.0.0",
+                {"typeId":"core.game",
+                "typeVersion":"0.1.0",
                 "title":"Game",
                 "contentJson":{"body":"heavy"},
                 "propsJson":{"localState":{"path":"C:/game"}}}),
@@ -106,8 +106,8 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
             "object",
             "note",
             json!(
-                {"typeId":"com.kosmos.note",
-                "typeVersion":"1.0.0",
+                {"typeId":"core.note",
+                "typeVersion":"0.1.0",
                 "title":"Note",
                 "contentJson":{"body":"full"},
                 "propsJson":{}}),
@@ -122,17 +122,17 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
             "usage-1",
             json!({"exePath":"C:/secret.exe","secret":"no"}),
         ),
-        entity("object_type", "com.kosmos.note", json!({"name":"Note"})),
+        entity("object_type", "core.note", json!({"name":"Note"})),
     ];
     let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
     profile.set_rule(
         "type",
-        "com.kosmos.note",
+        "core.note",
         ark_domain::selective_sync::SyncMode::Full,
     );
     profile.set_rule(
         "type",
-        "com.kosmos.game",
+        "core.game",
         ark_domain::selective_sync::SyncMode::Metadata,
     );
     profile.set_rule(
@@ -157,7 +157,7 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
         .all(|e| !e.data.contains_key("secret") && !e.data.contains_key("exePath")));
     profile.set_rule_with_filter(
         "type",
-        "com.kosmos.game",
+        "core.game",
         ark_domain::selective_sync::SyncMode::Metadata,
         ark_domain::selective_sync::FilterV1::parse(
             r#"{"version":1,"where":{"eq":{"field":"title","value":"Other"}}}"#,
@@ -170,7 +170,7 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
             .iter()
             .map(|entity| entity.id.as_str())
             .collect::<Vec<_>>(),
-        ["com.kosmos.note", "note"]
+        ["core.note", "note"]
     );
     let disabled =
         ark_domain::selective_sync::filter_entities_for_profile(&Default::default(), &projected);

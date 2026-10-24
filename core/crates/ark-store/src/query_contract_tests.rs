@@ -145,8 +145,8 @@ fn object_summary_queries_skip_body_and_filter_by_type() {
 fn make_time_entry(id: &str, started_at: &str, ended_at: Option<&str>, source: &str) -> ArkObject {
     ArkObject {
         id: id.to_string(),
-        type_id: "time_entry_obj".to_string(),
-        type_version: "0.0.0-legacy".to_string(),
+        type_id: "core.time-entry".to_string(),
+        type_version: "0.1.0".to_string(),
         title: format!("entry {id}"),
         content_json: json!({}),
         props_json: json!({
@@ -360,10 +360,29 @@ fn test_clear_all() {
     assert!(data
         .object_types
         .iter()
-        .any(|item| item.id == "com.kosmos.note"));
+        .any(|item| item.id == "core.note"));
     assert!(data
         .object_types
         .iter()
-        .any(|item| item.id == "com.kosmos.game"));
+        .any(|item| item.id == "core.game"));
     assert_eq!(crate::sync_kv::get_sync_kv(&conn, "k").unwrap(), None);
+}
+
+#[test]
+fn by_type_queries_match_core_type_ids() {
+    let conn = setup_db();
+    for id in ["task-1", "task-2"] {
+        let mut task = make_object(id, "core.task", id);
+        task.type_version = "0.1.0".into();
+        crate::objects::upsert_object(&conn, &task).unwrap();
+    }
+    let summaries = list_object_summaries_by_type(&conn, "core.task").unwrap();
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(list_objects_by_type(&conn, "core.task").unwrap().len(), 2);
+
+    let running = make_time_entry("entry-1", "2026-03-01T10:00:00.000Z", None, "manual");
+    crate::objects::upsert_object(&conn, &running).unwrap();
+    let running_entries = list_running_time_entries(&conn, Some("manual")).unwrap();
+    assert_eq!(running_entries.len(), 1);
+    assert_eq!(running_entries[0].id, "entry-1");
 }

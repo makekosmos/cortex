@@ -81,7 +81,7 @@ fn target(id: &str, type_id: &str) -> ArkObject {
     ArkObject {
         id: id.into(),
         type_id: type_id.into(),
-        type_version: "1.0.0".into(),
+        type_version: "0.1.0".into(),
         title: "target".into(),
         content_json: json!({}),
         props_json: json!({}),
@@ -175,7 +175,7 @@ fn invalid_game_rejects_without_object_hlc_or_vector_mutation() {
 #[test]
 fn wrong_link_target_rolls_back_object_and_local_state() {
     let mut conn = setup();
-    crate::objects::upsert_object_compat(&conn, &target("note", "com.kosmos.task")).unwrap();
+    crate::objects::upsert_object_compat(&conn, &target("note", "core.task")).unwrap();
     let mut value = command("g", "a");
     value.links = vec![GameLink {
         id: "l".into(),
@@ -194,7 +194,7 @@ fn wrong_link_target_rolls_back_object_and_local_state() {
 #[test]
 fn late_sync_version_failure_rolls_back_game_local_quarantine_and_links() {
     let mut conn = setup();
-    crate::objects::upsert_object_compat(&conn, &target("note", "com.kosmos.note")).unwrap();
+    crate::objects::upsert_object_compat(&conn, &target("note", "core.note")).unwrap();
     conn.execute_batch(
         "CREATE TRIGGER reject_game_sync_version
          BEFORE INSERT ON object_sync_versions
@@ -253,7 +253,7 @@ fn usage_projection_merges_game_executable_version_splits() {
         ("app-v2", "c:\\games\\demo\\app-1.0.2\\game.exe"),
     ] {
         crate::usage::upsert_tracked_app(&conn, &tracked_app(id, path)).unwrap();
-        crate::objects::upsert_object_compat(&conn, &target(id, "com.kosmos.image")).unwrap();
+        crate::objects::upsert_object_compat(&conn, &target(id, "core.image")).unwrap();
     }
     crate::usage::upsert_usage_session(&conn, &usage_session("s1", "app-v1", 1_800_000, 600_000))
         .unwrap();
@@ -279,8 +279,8 @@ fn usage_projection_merges_game_executable_version_splits() {
 #[test]
 fn replace_removes_stale_owned_links() {
     let mut conn = setup();
-    crate::objects::upsert_object_compat(&conn, &target("n1", "com.kosmos.note")).unwrap();
-    crate::objects::upsert_object_compat(&conn, &target("n2", "com.kosmos.note")).unwrap();
+    crate::objects::upsert_object_compat(&conn, &target("n1", "core.note")).unwrap();
+    crate::objects::upsert_object_compat(&conn, &target("n2", "core.note")).unwrap();
     let mut first = command("g", "a");
     first.links = vec![GameLink {
         id: "l1".into(),

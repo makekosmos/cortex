@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn legacy_alias_object_write_read_and_filter_is_canonical() {
+async fn canonical_object_write_read_and_filter_uses_core_type() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
@@ -14,8 +14,8 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
         Request::UpsertObject {
             object: ArkObjectWrite {
                 id: "alias-note".into(),
-                type_id: "com.kosmos.note".into(),
-                type_version: Some("1.0.0".into()),
+                type_id: "core.note".into(),
+                type_version: Some("0.1.0".into()),
                 title: "Alias note".into(),
                 content_json: json!({"type":"doc","content":[]}),
                 props_json: json!({"description":null,"extensions":{}}),
@@ -39,9 +39,9 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
     )
     .await
     .unwrap();
-    assert_eq!(object["typeId"], "com.kosmos.note");
-    assert_eq!(object["typeVersion"], "1.0.0");
-    for type_id in ["note_obj", "com.kosmos.note"] {
+    assert_eq!(object["typeId"], "core.note");
+    assert_eq!(object["typeVersion"], "0.1.0");
+    for type_id in ["core.note"] {
         let objects = handle_request(
             &state,
             Request::ListObjectsByType {

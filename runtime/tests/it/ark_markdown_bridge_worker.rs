@@ -66,7 +66,7 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
             "token":"token",
             "bridge_config":{"vault_root":vault_root,
             "state_root":state_root,
-            "selected_types":["com.kosmos.note"],
+            "selected_types":["core.note"],
             "editable_fields":["title",
             "body"],
             "readonly_fields":[]}}),
@@ -76,8 +76,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     assert_eq!(next(&mut output)["method"], "worker.hello");
     let object = json!(
         {"id":"note-1",
-        "type_id":"com.kosmos.note",
-        "type_version":"1.0.0",
+        "type_id":"core.note",
+        "type_version":"0.1.0",
         "title":"One",
         "props_json":{"description":null,
         "extensions":{}},
@@ -185,8 +185,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     assert_eq!(get["params"]["operation"], "get_object");
     let updated = json!(
         {"id":"note-1",
-        "type_id":"com.kosmos.note",
-        "type_version":"1.0.0",
+        "type_id":"core.note",
+        "type_version":"0.1.0",
         "title":"One",
         "props_json":{"description":null,
         "extensions":{}},
@@ -245,8 +245,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     let ark = call(&mut output);
     let server = json!(
         {"id":"note-1",
-        "type_id":"com.kosmos.note",
-        "type_version":"1.0.0",
+        "type_id":"core.note",
+        "type_version":"0.1.0",
         "title":"One",
         "props_json":{"description":null,
         "extensions":{}},
@@ -417,8 +417,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     let ark = call(&mut output);
     let remote = json!(
         {"id":"note-1",
-        "type_id":"com.kosmos.note",
-        "type_version":"1.0.0",
+        "type_id":"core.note",
+        "type_version":"0.1.0",
         "title":"One",
         "props_json":{"description":null,
         "extensions":{}},
@@ -566,8 +566,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         true,
         json!(
             {"id":"note-1",
-            "type_id":"com.kosmos.note",
-            "type_version":"1.0.0",
+            "type_id":"core.note",
+            "type_version":"0.1.0",
             "title":"One",
             "props_json":{"description":null,
             "extensions":{}},

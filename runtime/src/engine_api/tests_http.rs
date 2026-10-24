@@ -1437,7 +1437,7 @@
                     "device_id": "log-test",
                     "object": {
                         "id": "log-test-object",
-                        "typeId": "com.kosmos.note",
+                        "typeId": "core.note",
                         "typeVersion": "1.0.0",
                         "title": "SECRET-TITLE-456",
                         "propsJson": {

@@ -69,7 +69,7 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
         .expect("installed listing");
     assert_eq!(listing.len(), 1);
     assert_eq!(listing[0].effective_grants.len(), 1);
-    assert_eq!(listing[0].effective_grants[0].type_id, "com.kosmos.note");
+    assert_eq!(listing[0].effective_grants[0].type_id, "core.note");
     assert_eq!(
         listing[0].effective_grants[0].fields_read,
         ["props.description"]
@@ -92,7 +92,7 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
     let listing = restarted
         .store_installed_listings()
         .expect("restarted listing");
-    assert_eq!(listing[0].effective_grants[0].type_id, "com.kosmos.note");
+    assert_eq!(listing[0].effective_grants[0].type_id, "core.note");
     assert!(restarted
         .launch_app(&manifest.id, Some(&manifest.version))
         .is_ok());

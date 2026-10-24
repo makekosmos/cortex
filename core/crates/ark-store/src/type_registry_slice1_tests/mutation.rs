@@ -93,7 +93,7 @@ fn registry_contract_shapes_are_rejected_in_migration_and_insert() {
         ("sync_policy_json", "[]"),
         ("relations_json", "{}"),
     ] {
-        let mut candidate = version("com.kosmos.note", "1.0.0", "{}");
+        let mut candidate = version("core.note", "0.1.0", "{}");
         match field {
             "schema_json" => candidate.schema_json = value.into(),
             "ui_schema_json" => candidate.ui_schema_json = value.into(),
@@ -115,7 +115,7 @@ fn production_registration_rolls_back_late_alias_failure_and_rejects_alias_colli
         &conn,
         &AliasRecord {
             alias: "reserved".into(),
-            canonical_type_id: "com.kosmos.note".into(),
+            canonical_type_id: "core.note".into(),
             created_at: "now".into(),
         },
     )
@@ -133,7 +133,7 @@ fn production_registration_rolls_back_late_alias_failure_and_rejects_alias_colli
         owner_kind: "extension".into(),
         owner_id: Some("owner".into()),
         status: "active".into(),
-        base_type_id: Some("com.kosmos.note".into()),
+        base_type_id: Some("core.note".into()),
         aliases: vec![AliasRecord {
             alias: "reserved".into(),
             canonical_type_id: "new-type".into(),
@@ -183,7 +183,7 @@ fn production_registration_rolls_back_late_alias_failure_and_rejects_alias_colli
             "owner".into(),
             "1.0.0".into(),
             "active".into(),
-            "com.kosmos.note".into()
+            "core.note".into()
         )
     );
     assert!(register_type(
@@ -204,11 +204,11 @@ fn corrupt_persisted_version_listing_fails_closed_without_panic() {
         concat!(
             "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
             "content_contract_json,relations_json,sync_policy_json,schema_hash,",
-            "created_at) VALUES ('com.kosmos.note','not-semver','{}','{}','{}','[]','{}',",
+            "created_at) VALUES ('core.note','not-semver','{}','{}','{}','[]','{}',",
             "'hash','now')"
         ),
         [],
     )
     .unwrap();
-    assert!(list_type_versions(&conn, "com.kosmos.note").is_err());
+    assert!(list_type_versions(&conn, "core.note").is_err());
 }

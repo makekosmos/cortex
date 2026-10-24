@@ -163,8 +163,8 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
         .unwrap();
     assert_eq!(tombstone_table_count, 1);
     let object_types = crate::object_types::list(&conn).unwrap();
-    assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
-    assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
+    assert!(object_types.iter().any(|item| item.id == "core.note"));
+    assert!(object_types.iter().any(|item| item.id == "core.task"));
     let migrated: (String, String) = conn
         .query_row(
             "SELECT type_id, type_version FROM objects WHERE id = 'legacy-todo'",

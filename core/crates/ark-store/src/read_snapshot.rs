@@ -90,8 +90,8 @@ mod tests {
     fn object(title: &str) -> ArkObject {
         ArkObject {
             id: "object".into(),
-            type_id: "com.kosmos.note".into(),
-            type_version: "1.0.0".into(),
+            type_id: "core.note".into(),
+            type_version: "0.1.0".into(),
             title: title.into(),
             content_json: json!({"type":"doc","content":[]}),
             props_json: json!({"description":null,"extensions":{}}),

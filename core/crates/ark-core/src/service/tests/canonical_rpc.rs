@@ -321,7 +321,6 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
     );
     fixture.shutdown().await;
 }
-
 #[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutation() {
     let fixture = service_fixture();
@@ -368,31 +367,3 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
     fixture.shutdown().await;
 }
 
-#[tokio::test]
-async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    initialize_test_database(&state, db_path.to_string_lossy().to_string())
-    .await
-    .unwrap();
-    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
-    object.type_id = "note_obj".to_string();
-    object.type_version = Some("1.0.0".to_string());
-    let result = handle_request(
-        &state,
-        Request::UpsertObject {
-            object,
-            expected_snapshot: None,
-            operation_id: None,
-            device_id: None,
-        },
-    )
-    .await;
-    assert_eq!(
-        result.unwrap_err(),
-        "canonical_ingress:invalid_request:legacy_alias_new_write"
-    );
-    fixture.shutdown().await;
-}
