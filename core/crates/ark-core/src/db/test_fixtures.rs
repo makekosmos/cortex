@@ -1,31 +1,3 @@
-fn make_todo(id: &str, title: &str) -> TodoItem {
-    TodoItem {
-        id: id.to_string(),
-        title: title.to_string(),
-        notes: None,
-        priority: 0,
-        scheduled_date: None,
-        deadline: None,
-        reminder_date: None,
-        is_today: false,
-        is_evening: false,
-        is_someday: false,
-        is_completed: false,
-        completed_at: None,
-        is_cancelled: false,
-        cancelled_at: None,
-        is_trashed: false,
-        sort_order: 0,
-        heading_id: None,
-        project_id: None,
-        area_id: None,
-        tag_ids: vec![],
-        checklist_items: json!([]),
-        recurrence_rule: None,
-        created_at: "2026-01-01T00:00:00.000Z".to_string(),
-    }
-}
-
 fn make_tracked_app(id: &str) -> TrackedApp {
     TrackedApp {
         id: id.to_string(),
@@ -83,7 +55,7 @@ fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) ->
 }
 
 fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
-    ArkObject {
+    let mut object = ArkObject {
         id: id.to_string(),
         type_id: type_id.to_string(),
         type_version: "0.0.0-legacy".to_string(),
@@ -98,15 +70,10 @@ fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
         created_at: "2026-01-01T00:00:00.000Z".to_string(),
         updated_at: "2026-01-01T00:00:00.000Z".to_string(),
         deleted_at: None,
+    };
+    if type_id == "core.note" {
+        object.type_version = "0.1.0".into();
+        object.props_json["extensions"] = json!({});
     }
-}
-
-fn make_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> ObjectLink {
-    ObjectLink {
-        id: id.to_string(),
-        source_object_id: source_object_id.to_string(),
-        target_object_id: target_object_id.to_string(),
-        link_type: "related".to_string(),
-        created_at: "2026-01-01T00:00:00.000Z".to_string(),
-    }
+    object
 }

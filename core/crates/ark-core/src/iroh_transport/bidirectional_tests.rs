@@ -79,13 +79,23 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
 
     let change_id = format!("reverse-change-{}", generate_id());
     let entity = SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: format!("reverse-entity-{}", generate_id()),
         data: {
             let mut m = serde_json::Map::new();
             m.insert(
                 "title".to_string(),
                 serde_json::Value::String("B>A reverse direction test".to_string()),
+            );
+            m.insert("typeId".to_string(), serde_json::json!("core.note"));
+            m.insert("typeVersion".to_string(), serde_json::json!("0.1.0"));
+            m.insert(
+                "contentJson".to_string(),
+                serde_json::json!({"type":"doc", "content":[{"type":"paragraph"}]}),
+            );
+            m.insert(
+                "propsJson".to_string(),
+                serde_json::json!({"description":null, "extensions":{}}),
             );
             m
         },

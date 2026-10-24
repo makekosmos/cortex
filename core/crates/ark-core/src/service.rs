@@ -157,13 +157,11 @@ pub struct ArkService {
     admission: RequestAdmission,
     worker: Option<std::thread::JoinHandle<()>>,
     panic_count: Arc<AtomicU64>,
-    db_path: String,
     shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 }
 
 impl ArkService {
-    /// Spawn the worker and open (create if needed) the ARK database at
-    /// `db_path`. Same semantics as the sidecar's `init` op.
+    /// Open (create if needed) the ARK database, then spawn the service worker.
     pub async fn open(db_path: impl Into<String>) -> Result<Self, ArkServiceError> {
         Self::open_with_host_config(db_path, ArkHostConfig::default()).await
     }
@@ -175,6 +173,18 @@ impl ArkService {
     ) -> Result<Self, ArkServiceError> {
         let db_path = db_path.into();
         let state = Arc::new(ServiceState::new(host_config));
+        let (db, owner) = db::DbHandle::open(db_path.clone(), "ark-core".to_string())
+            .await
+            .map_err(|error| ArkServiceError::Unavailable(error.to_string()))?;
+        *state.db.lock().unwrap_or_else(|error| error.into_inner()) = Some(db);
+        *state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(owner);
+        *state
+            .db_path
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(db_path.clone());
         let panic_count = Arc::new(AtomicU64::new(0));
         let shutdown_deadline = Arc::new(StdMutex::new(None));
         let (jobs, worker) = spawn_worker(
@@ -188,12 +198,8 @@ impl ArkService {
             admission: RequestAdmission::new(),
             worker: Some(worker),
             panic_count,
-            db_path,
             shutdown_deadline,
         };
-        service
-            .call("init", json!({ "dbPath": service.db_path }))
-            .await?;
         Ok(service)
     }
 

@@ -15,7 +15,7 @@ fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply() {
         .execute(
             concat!(
                 "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
-                "VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')"
+                "VALUES('deleted-note','core.note','1.0.0','Note','t','t')"
             ),
             [],
         )
@@ -41,12 +41,12 @@ fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply() {
     )
     .unwrap();
     let mut profile = SelectiveSyncProfile::default();
-    profile.set_rule("type", "com.kosmos.note", SyncMode::Full);
+    profile.set_rule("type", "core.note", SyncMode::Full);
     let tombstone = filter_entities_for_profile(&profile, &collected)
         .into_iter()
         .find(|entity| entity.id == "deleted-note" && entity.deleted == Some(true))
         .expect("typed tombstone should survive collection and profile filtering");
-    assert_eq!(tombstone.data["typeId"], json!("com.kosmos.note"));
+    assert_eq!(tombstone.data["typeId"], json!("core.note"));
 
     let destination_db = TestDatabase::create().unwrap();
     let mut destination_conn = destination_db.open_connection().unwrap();
@@ -54,7 +54,7 @@ fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply() {
         .execute(
             concat!(
                 "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
-                "VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')"
+                "VALUES('deleted-note','core.note','1.0.0','Note','t','t')"
             ),
             [],
         )

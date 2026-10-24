@@ -147,11 +147,6 @@ pub(in crate::db::command) struct ClearAllTask {
     pub reply: oneshot::Sender<Result<(), DbError>>,
 }
 
-pub(in crate::db::command) struct DeleteTrashedTask {
-    pub device_id: String,
-    pub reply: oneshot::Sender<Result<usize, DbError>>,
-}
-
 pub(in crate::db::command) struct UpsertObjectLinkTask {
     pub object_link: ark_domain::types::ObjectLink,
     pub device_id: Option<String>,
@@ -238,28 +233,6 @@ impl WriterTask for ClearAllTask {
     ) -> (Result<(), DbError>, Publish) {
         let Self { reply } = *self;
         let result = writer.clear_all().map_err(map_storage_transaction_failure);
-        settle(result, reply, on_error)
-    }
-
-    fn cancel_before_start(self: Box<Self>) {
-        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
-    }
-
-    fn receiver_closed(&self) -> bool {
-        self.reply.is_closed()
-    }
-}
-
-impl WriterTask for DeleteTrashedTask {
-    fn run(
-        self: Box<Self>,
-        writer: &mut SqliteWriter,
-        on_error: &mut dyn FnMut(&DbError),
-    ) -> (Result<(), DbError>, Publish) {
-        let Self { device_id, reply } = *self;
-        let result = writer
-            .delete_trashed(&device_id)
-            .map_err(map_storage_transaction_failure);
         settle(result, reply, on_error)
     }
 

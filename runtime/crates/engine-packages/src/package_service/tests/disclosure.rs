@@ -48,7 +48,7 @@ fn disclosure_projects_the_catalog_manifest_contract() {
         scopes: vec!["https://api.example.com/".into()],
     }];
     package_manifest.data.access = vec![DataAccessRule {
-        type_id: "com.kosmos.note".into(),
+        type_id: "core.note".into(),
         versions: "*".into(),
         actions: vec![DataAction::Read, DataAction::Update],
         fields: FieldAccess {
@@ -58,7 +58,7 @@ fn disclosure_projects_the_catalog_manifest_contract() {
         relations: None,
     }];
     package_manifest.data.mappings = vec![ManifestMapping {
-        type_id: "com.kosmos.note".into(),
+        type_id: "core.note".into(),
         versions: "*".into(),
         direction: MappingDirection::Export,
         fidelity: MappingFidelity::Lossy,
@@ -90,8 +90,8 @@ fn disclosure_projects_the_catalog_manifest_contract() {
     assert_eq!(
         disclosure.volume_scopes,
         Some(vec![DisclosureVolumeScope {
-            type_id: "com.kosmos.note".into(),
-            type_version: "1.0.0".into(),
+            type_id: "core.note".into(),
+            type_version: "0.1.0".into(),
             fields: vec!["props.description".into()],
         }])
     );

@@ -6,14 +6,9 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
     handle_request(
         &state,
         Request::UpsertObject {

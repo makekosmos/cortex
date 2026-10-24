@@ -86,7 +86,7 @@
         fixture.ark.emit_event(json!({
             "event": "object_upserted",
             "id": "o-allowed",
-            "type_id": "com.kosmos.note",
+            "type_id": "core.note",
             "title": "private title",
             "props": {"private": "private note body"},
         }));
@@ -116,7 +116,7 @@
         fixture.ark.emit_event(json!({
             "event": "object_upserted",
             "id": "o-after-revoke",
-            "type_id": "com.kosmos.note",
+            "type_id": "core.note",
         }));
         let mut tail = String::new();
         tokio::time::timeout(Duration::from_secs(60), async {

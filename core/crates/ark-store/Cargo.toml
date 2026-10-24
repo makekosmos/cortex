@@ -6,10 +6,6 @@ description = "SQLite adapters for ARK persistence contracts"
 autotests = false
 
 [[test]]
-name = "phase3_migration_tests"
-path = "tests/phase3_migration_tests.rs"
-
-[[test]]
 name = "object_sync_invariants"
 path = "tests/object_sync_invariants.rs"
 

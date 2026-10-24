@@ -219,7 +219,7 @@ pub fn list_running_time_entries(
     conn: &Connection,
     source_filter: Option<&str>,
 ) -> Result<Vec<ArkObject>, String> {
-    let type_ids = crate::type_registry::stored_type_ids_for_query(conn, "time_entry_obj")?;
+    let type_ids = crate::type_registry::stored_type_ids_for_query(conn, "core.time-entry")?;
     let base_sql = format!(
         "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
          deleted_at FROM objects WHERE {} AND deleted_at IS NULL

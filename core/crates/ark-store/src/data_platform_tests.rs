@@ -10,7 +10,7 @@ fn external_refs_are_additive_and_unique() {
     conn.execute(
         concat!(
             "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
-            "VALUES('note-1','com.kosmos.note','1.0.0','Note','now','now')"
+            "VALUES('note-1','core.note','0.1.0','Note','now','now')"
         ),
         [],
     )
@@ -65,7 +65,7 @@ fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
     )
     .unwrap();
     for (kind, id, mode) in [
-        ("type", "com.kosmos.note", "full"),
+        ("type", "core.note", "full"),
         ("dataset", "usage", "metadata"),
         ("blob", "attachments", "none"),
     ] {
@@ -114,7 +114,7 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
     let path = dir.path().join("profiles.db");
     let rules = [ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
-        resource_id: "com.kosmos.note".into(),
+        resource_id: "core.note".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
         filter: ark_domain::selective_sync::FilterV1::parse(
             r#"{"where":{"eq":{"field":"title","value":"Note"}},"version":1}"#,
@@ -143,7 +143,7 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         let entity = |id: &str, title: &str| ark_domain::types::SyncEntity {
             entity_type: "object".into(),
             id: id.into(),
-            data: json!({"typeId":"com.kosmos.note", "title":title})
+            data: json!({"typeId":"core.note", "title":title})
                 .as_object()
                 .unwrap()
                 .clone(),

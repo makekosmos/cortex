@@ -136,14 +136,8 @@ fn test_object_model_crud() {
     upsert_object_link(&conn, &link).unwrap();
 
     let data = crate::load_all::load_all(&conn).unwrap();
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "com.kosmos.note"));
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "com.kosmos.game"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.note"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.game"));
     assert!(data
         .object_types
         .iter()
@@ -168,9 +162,9 @@ fn test_object_model_crud() {
 fn upsert_object_preserves_existing_links() {
     // Regression: 2026-06-04. SQLite REPLACE deletes the old object row first.
     let conn = setup_db();
-    let note = make_object("obj-note", "note_obj", "РџРµСЂРІР°СЏ Р·Р°РјРµС‚РєР°");
-    let task = make_object("obj-task", "note_obj", "Р—Р°РґР°С‡Р°");
-    let tag = make_object("obj-tag", "note_obj", "РўРµРі");
+    let note = make_object("obj-note", "core.note", "РџРµСЂРІР°СЏ Р·Р°РјРµС‚РєР°");
+    let task = make_object("obj-task", "core.note", "Р—Р°РґР°С‡Р°");
+    let tag = make_object("obj-tag", "core.note", "РўРµРі");
     upsert_object(&conn, &note).unwrap();
     upsert_object(&conn, &task).unwrap();
     upsert_object(&conn, &tag).unwrap();
@@ -180,7 +174,7 @@ fn upsert_object_preserves_existing_links() {
 
     let mut updated_note = make_object(
         "obj-note",
-        "note_obj",
+        "core.note",
         "РћР±РЅРѕРІР»РµРЅРЅР°СЏ Р·Р°РјРµС‚РєР°",
     );
     updated_note.updated_at = "2026-01-02T00:00:00.000Z".to_string();
@@ -235,9 +229,9 @@ fn upsert_object_type_preserves_existing_objects_and_links() {
 fn upsert_object_link_updates_existing_row_in_place() {
     // Regression: 2026-06-04. Link upsert should update, not delete+insert.
     let conn = setup_db();
-    upsert_object(&conn, &make_object("obj-a", "note_obj", "A")).unwrap();
-    upsert_object(&conn, &make_object("obj-b", "note_obj", "B")).unwrap();
-    upsert_object(&conn, &make_object("obj-c", "note_obj", "C")).unwrap();
+    upsert_object(&conn, &make_object("obj-a", "core.note", "A")).unwrap();
+    upsert_object(&conn, &make_object("obj-b", "core.note", "B")).unwrap();
+    upsert_object(&conn, &make_object("obj-c", "core.note", "C")).unwrap();
     upsert_object_link(&conn, &make_object_link("link-1", "obj-a", "obj-b")).unwrap();
 
     let before_rowid: i64 = conn

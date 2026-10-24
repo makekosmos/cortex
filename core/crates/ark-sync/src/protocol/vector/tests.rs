@@ -79,7 +79,7 @@ fn compute_local_excess_finds_local_only_entities() {
 fn split_into_batches_by_count() {
     let entities: Vec<SyncEntity> = (0..250)
         .map(|i| SyncEntity {
-            entity_type: "todo".to_string(),
+            entity_type: "object".to_string(),
             id: format!("t{i}"),
             data: serde_json::Map::new(),
             hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
@@ -103,7 +103,7 @@ fn split_into_batches_by_bytes() {
             let mut data = serde_json::Map::new();
             data.insert("big".to_string(), json!("x".repeat(200_000)));
             SyncEntity {
-                entity_type: "todo".to_string(),
+                entity_type: "object".to_string(),
                 id: format!("t{i}"),
                 data,
                 hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),

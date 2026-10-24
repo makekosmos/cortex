@@ -6,14 +6,9 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let backend = Arc::new(crate::db::SqliteStorageBackend::with_db_handle(
         get_db_handle(&state).unwrap(),
@@ -155,45 +150,19 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
 async fn upsert_object_broadcasts_live_change_to_peers() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-
-    // Нужен объектный тип перед вставкой объекта (FK constraint)
-    handle_request(
-        &state,
-        Request::UpsertObjectType {
-            object_type: ObjectType {
-                id: "note".to_string(),
-                name: "Note".to_string(),
-                schema_json: "{}".to_string(),
-                ui_schema_json: "{}".to_string(),
-                created_at: "2026-06-17T00:00:00.000Z".to_string(),
-                updated_at: "2026-06-17T00:00:00.000Z".to_string(),
-                system_locked: false,
-            },
-            device_id: Some("test-device".to_string()),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let captured = setup_sync_with_capturing_transport(&state).await;
 
     let object = ArkObjectWrite {
         id: "live-obj-1".to_string(),
-        type_id: "note".to_string(),
-        type_version: Some("0.0.0-legacy".to_string()),
+        type_id: "core.note".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: "Live Test".to_string(),
-        content_json: json!({ "type": "doc", "content": [] }),
-        props_json: json!({}),
+        content_json: json!({ "type": "doc", "content": [{"type": "paragraph"}] }),
+        props_json: json!({"description": null, "extensions": {}}),
         created_at: "2026-06-17T00:00:00.000Z".to_string(),
         updated_at: "2026-06-17T00:00:00.000Z".to_string(),
         deleted_at: None,
@@ -235,44 +204,18 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
 async fn delete_object_broadcasts_live_change_with_deleted_flag() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-
-    // Нужен объектный тип
-    handle_request(
-        &state,
-        Request::UpsertObjectType {
-            object_type: ObjectType {
-                id: "note".to_string(),
-                name: "Note".to_string(),
-                schema_json: "{}".to_string(),
-                ui_schema_json: "{}".to_string(),
-                created_at: "2026-06-17T00:00:00.000Z".to_string(),
-                updated_at: "2026-06-17T00:00:00.000Z".to_string(),
-                system_locked: false,
-            },
-            device_id: Some("test-device".to_string()),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     // Создаём объект сначала
     let object = ArkObjectWrite {
         id: "live-obj-del".to_string(),
-        type_id: "note".to_string(),
-        type_version: Some("0.0.0-legacy".to_string()),
+        type_id: "core.note".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: "To Delete".to_string(),
-        content_json: json!({}),
-        props_json: json!({}),
+        content_json: json!({ "type": "doc", "content": [{"type": "paragraph"}] }),
+        props_json: json!({"description": null, "extensions": {}}),
         created_at: "2026-06-17T00:00:00.000Z".to_string(),
         updated_at: "2026-06-17T00:00:00.000Z".to_string(),
         deleted_at: None,

@@ -1,16 +1,16 @@
-//! Pure compatibility mapping for the one-time legacy task migration.
+//! Task property conversion used only by the startup migration.
 
 use chrono::NaiveDate;
 use serde_json::{json, Map, Value};
 
-use super::definitions::canonical_type_registrations;
-use super::validation::validate_canonical;
-use super::TypeRegistration;
+use ark_domain::canonical_type::definitions::canonical_type_registrations;
+use ark_domain::canonical_type::validation::validate_canonical;
+use ark_domain::canonical_type::TypeRegistration;
 
-pub const LEGACY_TASK_TYPE: &str = crate::canonical_type::LEGACY_TASK_TYPE;
-pub const LEGACY_TASK_VERSION: &str = "1.1.0";
-pub const CORE_TASK_TYPE: &str = "core.task";
-pub const CORE_TASK_VERSION: &str = "0.1.0";
+const LEGACY_TASK_TYPE: &str = "com.kosmos.task";
+const LEGACY_TASK_VERSION: &str = "1.1.0";
+const CORE_TASK_TYPE: &str = "core.task";
+const CORE_TASK_VERSION: &str = "0.1.0";
 
 static NULL: Value = Value::Null;
 
@@ -52,19 +52,19 @@ const UNSUPPORTED_EXTENSION_KEYS: [&str; 7] = [
 
 /// Поля, которые перезапись отбрасывает намеренно: топливо (`fuel_cost`) удалено
 /// из продукта. Это не «неподдерживаемые» поля, их значение не останавливает
-/// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core-task.bak`.
+/// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core.bak`.
 const REMOVED_EXTENSION_KEYS: [&str; 1] = ["fuel_cost"];
 #[derive(Debug, Clone)]
-pub struct LegacyTask {
-    pub id: String,
-    pub type_version: String,
-    pub content_json: String,
-    pub props_json: String,
-    pub deleted_at: Option<String>,
+pub(super) struct LegacyTask {
+    pub(super) id: String,
+    pub(super) type_version: String,
+    pub(super) content_json: String,
+    pub(super) props_json: String,
+    pub(super) deleted_at: Option<String>,
 }
 
 /// Convert a stored legacy task to validated `core.task` properties.
-pub fn map_legacy_task(row: &LegacyTask) -> Result<Value, String> {
+pub(super) fn map_legacy_task(row: &LegacyTask) -> Result<Value, String> {
     let registration = canonical_type_registrations()?
         .into_iter()
         .find(|r| r.type_id == CORE_TASK_TYPE && r.version == CORE_TASK_VERSION)

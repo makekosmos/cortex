@@ -6,14 +6,9 @@ use super::*;
 /// closing the connection before the directory is removed (KOS-270).
 async fn init_snapshot_db(fixture: &ServiceFixture) -> String {
     let db_str = fixture.db_path().to_string_lossy().to_string();
-    handle_request(
-        &fixture.state,
-        Request::Init {
-            db_path: db_str.clone(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&fixture.state, db_str.clone())
+        .await
+        .unwrap();
     db_str
 }
 
@@ -151,14 +146,9 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     handle_request(&state, Request::StopSync).await.unwrap();
 
     // Restart-equivalent: refusal leaves the same live contents on disk.
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.clone(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.clone())
+        .await
+        .unwrap();
     assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
 }
 

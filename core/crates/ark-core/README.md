@@ -75,7 +75,8 @@ const ark = new ArkClient({
 
 await ark.objects.upsert({
   id: "object-id",
-  typeId: "game_obj",
+  typeId: "core.game",
+  typeVersion: "0.1.0",
   title: "Example",
   contentJson: { type: "doc", content: [] },
   propsJson: { source: "my-app" },

@@ -31,8 +31,8 @@ fn task(id: &str, title: &str) -> ArkObjectWrite {
 fn project(id: &str, title: &str) -> ArkObjectWrite {
     ArkObjectWrite {
         id: id.to_string(),
-        type_id: "com.kosmos.project".to_string(),
-        type_version: Some("1.0.0".to_string()),
+        type_id: "core.project".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: title.to_string(),
         content_json: json!({
             "type": "doc",
@@ -92,11 +92,9 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
-    handle_request(
+    initialize_test_database(
         &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
+        dir.path().join("ark.db").to_string_lossy().to_string(),
     )
     .await
     .unwrap();
@@ -185,7 +183,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
 
     let stale_identity = snapshot(&state, "guarded-task").await;
     storage
-        .set_object_type_identity("guarded-task", "com.kosmos.note", "1.0.0")
+        .set_object_type_identity("guarded-task", "core.note", "0.1.0")
         .unwrap();
     assert_eq!(
         guarded_upsert(&state, task("guarded-task", "wrong-type"), stale_identity)
@@ -241,11 +239,9 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
+    initialize_test_database(
         &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
+        dir.path().join("ark.db").to_string_lossy().to_string(),
     )
     .await
     .unwrap();
@@ -311,11 +307,9 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
+    initialize_test_database(
         &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
+        dir.path().join("ark.db").to_string_lossy().to_string(),
     )
     .await
     .unwrap();

@@ -39,14 +39,9 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = fixture.db_path().to_string_lossy().to_string();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.clone(),
-        },
-    )
-    .await
-    .expect("initialize snapshot db");
+    initialize_test_database(&state, db_path.clone())
+        .await
+        .expect("initialize snapshot db");
     let db = get_db_handle(&state).expect("service database handle");
     db.set_local_sync_key_value(
         db::CommandContext::engine(),

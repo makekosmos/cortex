@@ -4,12 +4,8 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub mod definitions;
-pub mod legacy_task;
 pub mod registry;
 pub mod validation;
-
-/// Retired task identifier accepted for reads, but never for new writes.
-pub const LEGACY_TASK_TYPE: &str = "com.kosmos.task";
 
 /// Validate and materialize an object write after its type identity has been
 /// resolved by the persistence boundary.
@@ -28,9 +24,6 @@ pub fn prepare_resolved_object(
         return Err(CanonicalIngressError::invariant(
             "resolved_registration_mismatch",
         ));
-    }
-    if input_type_id == LEGACY_TASK_TYPE {
-        return Err(CanonicalIngressError::invalid("legacy_task_type_retired"));
     }
     if let Some(registration) = registration {
         if input_type_id != canonical_type_id {

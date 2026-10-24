@@ -6,14 +6,9 @@ async fn integration_rpc_rejects_revocation_without_local_authorization() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let request: Request = serde_json::from_value(json!({
         "operation": "integration.persist_node_authorization",
@@ -45,14 +40,9 @@ async fn integration_rpc_rejects_stale_refresh_lease_fence() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let node = serde_json::from_value(json!({
         "operation": "integration.persist_node_authorization",
@@ -138,16 +128,13 @@ async fn integration_issuer_key_lookup_rejects_wrong_space() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
+    initialize_test_database(
         &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
-        },
+        dir.path().join("ark.db").to_string_lossy().into_owned(),
     )
     .await
     .unwrap();
     setup_sync_with_capturing_transport(&state).await;
-
     let error = handle_request(
         &state,
         Request::IntegrationLookupIssuerEncryptionKey {
@@ -233,7 +220,7 @@ async fn panicking_request_stops_service_until_explicit_reopen() {
     );
 
     let unavailable = service
-        .call("load_all", json!({}))
+        .call("list_objects", json!({}))
         .await
         .expect_err("the failed service must reject later requests");
     assert!(
@@ -250,10 +237,10 @@ async fn panicking_request_stops_service_until_explicit_reopen() {
         .await
         .expect("explicit service reopen");
     let data = restarted
-        .call("load_all", json!({}))
+        .call("list_objects", json!({}))
         .await
         .expect("new service serves after bootstrap");
-    assert!(data.is_object(), "load_all returned {data:?}");
+    assert!(data.is_array(), "list_objects returned {data:?}");
     restarted
         .shutdown(Instant::now() + Duration::from_secs(2))
         .await
@@ -276,7 +263,7 @@ async fn oversized_request_is_rejected_before_queue_and_service_keeps_serving() 
         .await;
     assert!(matches!(result, Err(ArkServiceError::Busy(_))));
 
-    assert!(service.call("load_all", json!({})).await.is_ok());
+    assert!(service.call("list_objects", json!({})).await.is_ok());
     service
         .shutdown(Instant::now() + Duration::from_secs(2))
         .await
@@ -296,8 +283,8 @@ async fn production_writer_object_mutations_replay_receipts_without_new_revision
             "deviceId": "ignored-for-principal",
             "object": {
                 "id": "production-upsert-note",
-                "typeId": "com.kosmos.note",
-                "typeVersion": "1.0.0",
+                "typeId": "core.note",
+                "typeVersion": "0.1.0",
                 "title": title,
                 "contentJson": {"type":"doc","content":[]},
                 "propsJson": {"description":null,"extensions":{}},

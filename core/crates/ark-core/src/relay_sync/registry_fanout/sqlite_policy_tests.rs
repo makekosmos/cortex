@@ -221,8 +221,8 @@ async fn actor_backed_iroh_sync_respects_task_policy_and_backfills_after_widenin
 fn note_rule(mode: SyncMode) -> SyncProfileRule {
     SyncProfileRule {
         resource_kind: "type".into(),
-        // `note_obj` is a legacy alias; policy identities use the canonical type ID.
-        resource_id: "com.kosmos.note".into(),
+        // Sync rules identify canonical types directly.
+        resource_id: "core.note".into(),
         mode,
         filter: FilterV1::match_all(),
     }
@@ -233,7 +233,7 @@ async fn register_note_type(peer: &ActorPeer) {
         .expect("load canonical type definitions");
     let registration = registrations
         .into_iter()
-        .find(|registration| registration.type_id == "com.kosmos.note")
+        .find(|registration| registration.type_id == "core.note")
         .expect("canonical note type is defined");
     peer.db
         .submit_register_package_types(CommandContext::engine(), vec![registration])
@@ -275,7 +275,7 @@ async fn note_title(peer: &ActorPeer, id: &str) -> Option<String> {
 fn pending_note_count(database: &std::path::Path, id: &str) -> i64 {
     ark_store::test_support::TypeMutationFixture::open(database)
         .expect("open Store-owned type-mutation fixture")
-        .inspect("note_obj", id)
+        .inspect("core.note", id)
         .expect("inspect pending note state")
         .pending_objects
 }
@@ -284,14 +284,14 @@ async fn write_note(peer: &ActorPeer, id: &str, title: &str) {
     let hlc = HLC::now(&peer.storage.device_id()).to_string();
     let object = ArkObject {
         id: id.into(),
-        type_id: "note_obj".into(),
-        type_version: "0.0.0-legacy".into(),
+        type_id: "core.note".into(),
+        type_version: "0.1.0".into(),
         title: title.into(),
         content_json: serde_json::json!({
             "type": "doc",
             "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": title }] }]
         }),
-        props_json: serde_json::json!({"description": title}),
+        props_json: serde_json::json!({"description": title, "extensions": {}}),
         created_at: "2026-10-17T00:00:00.000Z".into(),
         updated_at: "2026-10-17T00:00:00.000Z".into(),
         deleted_at: None,
@@ -331,7 +331,7 @@ async fn wait_for_accepted_note_mode(
                     policy.revision == revision
                         && policy.rules.iter().any(|rule| {
                             rule.resource_kind == "type"
-                                && rule.resource_id == "com.kosmos.note"
+                                && rule.resource_id == "core.note"
                                 && rule.mode == mode
                         })
                 })

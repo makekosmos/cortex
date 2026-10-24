@@ -219,38 +219,24 @@ mod tests {
         backend.set_device_id(device_id).unwrap();
         (backend, database)
     }
-    fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
-        let mut data = serde_json::Map::new();
-        data.insert(
-            "title".to_string(),
-            serde_json::Value::String(title.to_string()),
-        );
-        data.insert("notes".to_string(), serde_json::Value::Null);
-        data.insert("priority".to_string(), serde_json::json!(0));
-        data.insert("scheduledDate".to_string(), serde_json::Value::Null);
-        data.insert("deadline".to_string(), serde_json::Value::Null);
-        data.insert("reminderDate".to_string(), serde_json::Value::Null);
-        data.insert("isToday".to_string(), serde_json::json!(false));
-        data.insert("isEvening".to_string(), serde_json::json!(false));
-        data.insert("isSomeday".to_string(), serde_json::json!(false));
-        data.insert("isCompleted".to_string(), serde_json::json!(false));
-        data.insert("completedAt".to_string(), serde_json::Value::Null);
-        data.insert("isCancelled".to_string(), serde_json::json!(false));
-        data.insert("cancelledAt".to_string(), serde_json::Value::Null);
-        data.insert("isTrashed".to_string(), serde_json::json!(false));
-        data.insert("sortOrder".to_string(), serde_json::json!(0));
-        data.insert("headingId".to_string(), serde_json::Value::Null);
-        data.insert("projectId".to_string(), serde_json::Value::Null);
-        data.insert("areaId".to_string(), serde_json::Value::Null);
-        data.insert("tagIds".to_string(), serde_json::json!([]));
-        data.insert("checklistItems".to_string(), serde_json::json!([]));
-        data.insert("recurrenceRule".to_string(), serde_json::Value::Null);
-        data.insert(
-            "createdAt".to_string(),
-            serde_json::json!("2026-04-25T00:00:00.000Z"),
-        );
+    fn core_note_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+        let data: serde_json::Value = serde_json::from_value(serde_json::json!({
+            "typeId": "core.note",
+            "typeVersion": "0.1.0",
+            "title": title,
+            "contentJson": {"type":"doc", "content":[{"type":"paragraph"}]},
+            "propsJson": {"description":null, "extensions":{}},
+            "createdAt": "2026-04-25T00:00:00.000Z",
+            "updatedAt": "2026-04-25T00:00:00.000Z",
+            "deletedAt": null
+        }))
+        .expect("core.note sync payload is valid");
+        let data = data
+            .as_object()
+            .cloned()
+            .expect("core.note sync payload is an object");
         SyncEntity {
-            entity_type: "todo".to_string(),
+            entity_type: "object".to_string(),
             id: id.to_string(),
             data,
             hlc: format!("2026-04-25T00:00:00.000Z:{counter:06}:{device_id}"),
@@ -284,7 +270,7 @@ mod tests {
         let (storage_a, _database_a) = make_storage("device-a").await;
         let (storage_b, _database_b) = make_storage("device-b").await;
         storage_a
-            .apply_entity(&todo_entity("relay-existing", "Existing", "device-a", 1))
+            .apply_entity(&core_note_entity("relay-existing", "Existing", "device-a", 1))
             .await
             .unwrap();
         let relay_a = relay_sync(
@@ -322,48 +308,12 @@ mod tests {
             .unwrap();
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn relay_rejects_legacy_peers_before_live_data() {
-        let relay_url = test_relay_url().await;
-        let (storage_a, _database_a) = make_storage("device-a").await;
-        let (storage_b, _database_b) = make_storage("device-b").await;
-        let relay_a = relay_sync(storage_a.clone(), &relay_url, "device-a", "Alpha", None);
-        relay_a.start().await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let relay_b = relay_sync(storage_b.clone(), &relay_url, "device-b", "Beta", None);
-        relay_b.start().await.unwrap();
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        let live = todo_entity("relay-live", "Live", "device-a", 2);
-        storage_a.apply_entity(&live).await.unwrap();
-        let send_error = relay_a.broadcast_live_change(live).await.unwrap_err();
-        assert!(send_error.contains("does not support per-device registry admission"));
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
-        assert!(
-            loaded_b.iter().all(|entity| entity.id != "relay-live"),
-            "a relay peer without registry admission must not receive live data"
-        );
-        assert!(
-            relay_b.get_connected_peer_entries().await.is_empty(),
-            "a peer without registry admission must not become connected"
-        );
-        relay_a.stop().await;
-        relay_b.stop().await;
-        storage_a
-            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
-            .await
-            .unwrap();
-        storage_b
-            .shutdown_for_test(std::time::Instant::now() + Duration::from_secs(5))
-            .await
-            .unwrap();
-    }
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_wrong_hmac_secret() {
         let relay_url = test_relay_url().await;
         let (storage_a, _database_a) = make_storage("device-a").await;
         let (storage_b, _database_b) = make_storage("device-b").await;
         storage_a
-            .apply_entity(&todo_entity("relay-denied", "Denied", "device-a", 1))
+            .apply_entity(&core_note_entity("relay-denied", "Denied", "device-a", 1))
             .await
             .unwrap();
         let relay_a = relay_sync(

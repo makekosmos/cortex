@@ -169,7 +169,7 @@ fn protocol(capabilities: &[ProtocolCapability]) -> NegotiatedProtocol {
 
 fn entity() -> SyncEntity {
     SyncEntity {
-        entity_type: "todo".into(),
+        entity_type: "object".into(),
         id: "todo-1".into(),
         data: Default::default(),
         hlc: "2026-10-17T12:00:00.000Z-0-device".into(),

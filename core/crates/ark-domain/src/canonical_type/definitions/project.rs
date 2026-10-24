@@ -1,13 +1,13 @@
 pub(crate) const PROJECT_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.project",
+  "typeId": "core.project",
   "name": "Проект",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["project_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -21,12 +21,12 @@ pub(crate) const PROJECT_DEFINITION: &str = r###"{
       "scheduledAt": {
         "type": ["string", "null"],
         "default": null,
-        "format": "date-time"
+        "format": "date"
       },
       "dueAt": {
         "type": ["string", "null"],
         "default": null,
-        "format": "date-time"
+        "format": "date"
       },
       "color": {
         "type": ["string", "null"],
@@ -136,7 +136,7 @@ pub(crate) const PROJECT_DEFINITION: &str = r###"{
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     },
@@ -153,5 +153,5 @@ pub(crate) const PROJECT_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "55ea05493991deda6093dc86c73e30d05f5db3b4b1d42c9b675d6b176a633bac"
+  "schemaHash": "e3e45412ffbfd5dc51267d26141f19e6d02612cbf9a9b7f6943895dfc23e7862"
 }"###;

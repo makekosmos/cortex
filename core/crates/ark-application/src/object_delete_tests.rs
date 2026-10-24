@@ -7,8 +7,8 @@ use ark_domain::object_write::ObjectWriteSnapshot;
 fn snapshot(revision: &str) -> ObjectWriteSnapshot {
     ObjectWriteSnapshot {
         exists: true,
-        type_id: Some("com.kosmos.note".into()),
-        type_version: Some("1.0.0".into()),
+        type_id: Some("core.note".into()),
+        type_version: Some("0.1.0".into()),
         revision: Some(revision.into()),
     }
 }
@@ -22,7 +22,7 @@ fn delete_plan_requires_the_expected_snapshot_and_builds_sync_commit() {
     };
     let facts = LocalObjectDeleteFacts {
         current_snapshot: snapshot("revision-2"),
-        type_id: Some("com.kosmos.note".into()),
+        type_id: Some("core.note".into()),
     };
     assert_eq!(
         plan_local_object_delete(write.clone(), facts),
@@ -33,12 +33,12 @@ fn delete_plan_requires_the_expected_snapshot_and_builds_sync_commit() {
         write,
         LocalObjectDeleteFacts {
             current_snapshot: snapshot("revision-1"),
-            type_id: Some("com.kosmos.note".into()),
+            type_id: Some("core.note".into()),
         },
     )
     .expect("current snapshot creates a delete plan");
     let commit = build_local_object_delete_commit(plan, "time:1:device-1".into());
     assert_eq!(commit.id, "note-1");
-    assert_eq!(commit.entity.data["typeId"], "com.kosmos.note");
+    assert_eq!(commit.entity.data["typeId"], "core.note");
     assert_eq!(commit.entity.deleted, Some(true));
 }

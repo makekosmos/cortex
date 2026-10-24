@@ -100,33 +100,56 @@ pub(super) async fn pair_storages(
         .expect("enroll device A on B");
 }
 
-fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
-    let mut data = serde_json::Map::new();
-    data.insert("title".to_string(), Value::String(title.to_string()));
-    data.insert("notes".to_string(), Value::Null);
-    data.insert("priority".to_string(), json!(0));
-    data.insert("scheduledDate".to_string(), Value::Null);
-    data.insert("deadline".to_string(), Value::Null);
-    data.insert("reminderDate".to_string(), Value::Null);
-    data.insert("isToday".to_string(), json!(false));
-    data.insert("isEvening".to_string(), json!(false));
-    data.insert("isSomeday".to_string(), json!(false));
-    data.insert("isCompleted".to_string(), json!(false));
-    data.insert("completedAt".to_string(), Value::Null);
-    data.insert("isCancelled".to_string(), json!(false));
-    data.insert("cancelledAt".to_string(), Value::Null);
-    data.insert("isTrashed".to_string(), json!(false));
-    data.insert("sortOrder".to_string(), json!(0));
-    data.insert("headingId".to_string(), Value::Null);
-    data.insert("projectId".to_string(), Value::Null);
-    data.insert("areaId".to_string(), Value::Null);
-    data.insert("tagIds".to_string(), json!([]));
-    data.insert("checklistItems".to_string(), json!([]));
-    data.insert("recurrenceRule".to_string(), Value::Null);
-    data.insert("createdAt".to_string(), json!("2026-04-01T00:00:00.000Z"));
-
+fn task_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+    let data = json!({
+        "typeId": "core.task",
+        "typeVersion": "0.1.0",
+        "title": title,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {
+            "state": {"kind": "open", "at": null},
+            "planning": {"kind": "inbox", "period": "any", "date": null},
+            "deadline": null,
+            "reminders": [],
+            "recurrence": null,
+            "priority": "none",
+            "checklist": [],
+            "extensions": {}
+        },
+        "createdAt": "2026-04-01T00:00:00.000Z",
+        "updatedAt": "2026-04-01T00:00:00.000Z",
+        "deletedAt": null
+    })
+    .as_object()
+    .expect("canonical task payload is an object")
+    .clone();
     SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
+    }
+}
+
+fn note_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+    let data = json!({
+        "typeId": "core.note",
+        "typeVersion": "0.1.0",
+        "title": title,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {"description": null, "extensions": {}},
+        "createdAt": "2026-04-01T00:00:00.000Z",
+        "updatedAt": "2026-04-01T00:00:00.000Z",
+        "deletedAt": null
+    })
+    .as_object()
+    .expect("canonical note payload is an object")
+    .clone();
+    SyncEntity {
+        entity_type: "object".to_string(),
         id: id.to_string(),
         data,
         hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),

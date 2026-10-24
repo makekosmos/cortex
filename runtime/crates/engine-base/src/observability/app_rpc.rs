@@ -208,7 +208,7 @@ pub mod tests {
         tracing::subscriber::with_default(subscriber, || {
             let params = serde_json::json!({
                 "object": {
-                    "typeId": "com.kosmos.note",
+                    "typeId": "core.note",
                     "title": "PRIVATE TITLE",
                     "contentJson": {"text": "private body"},
                 }
@@ -240,7 +240,7 @@ pub mod tests {
         assert!(line.contains("app RPC rejected"));
         assert!(line.contains("memoria-gpui"));
         assert!(line.contains("upsert_object"));
-        assert!(line.contains("com.kosmos.note"));
+        assert!(line.contains("core.note"));
         assert!(line.contains("canonical_ingress:invalid_request"));
         assert!(line.contains("reason=unavailable"));
         assert!(line.contains("forbidden"));

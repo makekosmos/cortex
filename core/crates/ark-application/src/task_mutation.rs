@@ -7,14 +7,11 @@ use serde_json::json;
 pub trait TaskMutationSession {
     fn current_revision(&self, id: &str) -> Result<Option<String>, String>;
     fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
-    fn ensure_legacy_task_write_allowed(&self, id: &str) -> Result<(), String>;
     fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String>;
     fn record_task_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn record_task_link_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn task_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String>;
     fn task_type_id(&self, id: &str) -> Result<Option<String>, String>;
-    fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String>;
-    fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
     fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
     fn hard_delete_remote_task(&self, entity: &SyncEntity) -> Result<(), String>;
     fn commit_local_task_upsert(
@@ -44,11 +41,6 @@ pub enum InboundTaskMutation<'a> {
         links: &'a [ObjectLink],
         source_hlc: &'a str,
     },
-    LegacyTodoSnapshot {
-        object: &'a ArkObject,
-        links: &'a [ObjectLink],
-        source_hlc: &'a str,
-    },
     RemoteHardDelete {
         entity: &'a SyncEntity,
     },
@@ -71,7 +63,6 @@ pub fn apply_inbound_task_mutation(
             source_hlc,
         } => {
             validate_task(object)?;
-            session.ensure_legacy_task_write_allowed(&object.id)?;
             session.persist_task(object, links)?;
             session.record_remote_revision(&object.id, source_hlc)?;
         }
@@ -81,7 +72,6 @@ pub fn apply_inbound_task_mutation(
             source_hlc,
         } => {
             validate_task(object)?;
-            session.ensure_legacy_task_write_allowed(&object.id)?;
             if session
                 .current_revision(&object.id)?
                 .as_deref()
@@ -94,27 +84,7 @@ pub fn apply_inbound_task_mutation(
             session.persist_task(object, links)?;
             session.record_canonical_task_revision(&object.id, source_hlc)?;
         }
-        InboundTaskMutation::LegacyTodoSnapshot {
-            object,
-            links,
-            source_hlc,
-        } => {
-            validate_task(object)?;
-            session.ensure_legacy_task_write_allowed(&object.id)?;
-            if session
-                .legacy_task_revision(&object.id)?
-                .as_deref()
-                .is_some_and(|current| {
-                    HLC::compare_str(source_hlc, current) != std::cmp::Ordering::Greater
-                })
-            {
-                return Ok(InboundTaskMutationOutcome::Stale);
-            }
-            session.persist_task(object, links)?;
-            session.record_legacy_task_revision(&object.id, source_hlc)?;
-        }
         InboundTaskMutation::RemoteHardDelete { entity } => {
-            session.ensure_legacy_task_write_allowed(&entity.id)?;
             if session
                 .current_revision(&entity.id)?
                 .as_deref()

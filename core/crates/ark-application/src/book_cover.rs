@@ -2,10 +2,10 @@ use ark_domain::types::{ArkObject, ObjectLink};
 use serde::Serialize;
 use std::fmt;
 
-pub const BOOK_TYPE_ID: &str = "com.kosmos.book";
-pub const IMAGE_TYPE_ID: &str = "com.kosmos.image";
+pub const BOOK_TYPE_ID: &str = "core.book";
+pub const IMAGE_TYPE_ID: &str = "core.image";
 pub const BOOK_COVER_LINK_TYPE: &str = "cover-image";
-pub const CANONICAL_VERSION: &str = "1.0.0";
+pub const CANONICAL_VERSION: &str = "0.1.0";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LocalBookCoverWrite {

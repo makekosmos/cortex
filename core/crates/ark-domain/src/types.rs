@@ -15,10 +15,11 @@ mod tests {
     use super::{ArkObjectWrite, PeerRecord, SyncEntity};
 
     #[test]
-    fn object_write_keeps_legacy_default_json_shape() {
+    fn object_write_uses_core_note_type_and_default_json_shape() {
         let object: ArkObjectWrite = serde_json::from_value(json!({
             "id": "object-1",
-            "typeId": "note",
+            "typeId": "core.note",
+            "typeVersion": "0.1.0",
             "title": "Example",
             "createdAt": "2026-10-17T00:00:00Z",
             "updatedAt": "2026-10-17T00:00:00Z",
@@ -26,7 +27,7 @@ mod tests {
         }))
         .unwrap();
 
-        assert_eq!(object.type_version, None);
+        assert_eq!(object.type_version.as_deref(), Some("0.1.0"));
         assert_eq!(
             object.content_json,
             json!({"type": "doc", "content": [{"type": "paragraph"}]})
@@ -37,8 +38,8 @@ mod tests {
     #[test]
     fn sync_contracts_keep_their_wire_field_names() {
         let entity = SyncEntity {
-            entity_type: "todo".into(),
-            id: "todo-1".into(),
+            entity_type: "object".into(),
+            id: "object-1".into(),
             data: serde_json::Map::new(),
             hlc: "1:0:device".into(),
             deleted: None,
@@ -57,7 +58,7 @@ mod tests {
 
         assert_eq!(
             serde_json::to_value(entity).unwrap(),
-            json!({"type": "todo", "id": "todo-1", "data": {}, "hlc": "1:0:device"})
+            json!({"type": "object", "id": "object-1", "data": {}, "hlc": "1:0:device"})
         );
         assert_eq!(
             serde_json::to_value(peer).unwrap(),

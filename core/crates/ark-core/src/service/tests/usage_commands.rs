@@ -4,14 +4,9 @@ use super::*;
 async fn usage_span_command_commits_days_and_rolls_back_invalid_timestamp() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let response = handle_request(
         &state,

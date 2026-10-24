@@ -11,7 +11,7 @@ fn sync_policy_request_parses_canonical_filter_inputs() {
         "expectedRevision": 2,
         "rules": [{
             "resourceKind": "type",
-            "resourceId": "com.kosmos.note",
+            "resourceId": "core.note",
             "mode": "full",
             "filter": {"version": 1, "where": {"exists": {"field": "title", "value": true}}}
         }]
@@ -47,7 +47,7 @@ fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
         revision: 1,
         name: "Phone".into(),
         active: true,
-        rules: vec![rule("com.kosmos.note"), rule("com.kosmos.book")],
+        rules: vec![rule("core.note"), rule("core.book")],
     };
     let mut reordered = profile.clone();
     reordered.rules.reverse();
@@ -61,11 +61,9 @@ fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
 #[tokio::test]
 async fn engine_sync_policy_api_round_trips_active_device_policy() {
     let fixture = service_fixture();
-    handle_request(
+    initialize_test_database(
         &fixture.state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
+        fixture.db_path().to_string_lossy().into_owned(),
     )
     .await
     .expect("initialize service database");
@@ -88,7 +86,7 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
             expected_revision: None,
             rules: vec![SyncPolicyRuleInput {
                 resource_kind: "type".into(),
-                resource_id: "com.kosmos.note".into(),
+                resource_id: "core.note".into(),
                 mode: ark_domain::selective_sync::SyncMode::Metadata,
                 filter: json!({
                     "version": 1,
@@ -147,14 +145,9 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
 async fn sync_selection_does_not_revoke_an_application_grant() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .expect("initialize service database");
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .expect("initialize service database");
     get_db_handle(&state)
         .unwrap()
         .set_local_sync_key_value(
@@ -209,7 +202,7 @@ async fn sync_selection_does_not_revoke_an_application_grant() {
             expected_revision: None,
             rules: vec![crate::service::SyncPolicyRuleInput {
                 resource_kind: "type".into(),
-                resource_id: "com.kosmos.note".into(),
+                resource_id: "core.note".into(),
                 mode: ark_domain::selective_sync::SyncMode::None,
                 filter: json!({"version": 1, "where": {"and": []}}),
             }],

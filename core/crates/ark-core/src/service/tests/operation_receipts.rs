@@ -4,8 +4,8 @@ fn upsert_params(title: &str) -> serde_json::Value {
     json!({
         "object": {
             "id": "operation-receipt-note",
-            "typeId": "com.kosmos.note",
-            "typeVersion": "1.0.0",
+            "typeId": "core.note",
+            "typeVersion": "0.1.0",
             "title": title,
             "contentJson": {"type":"doc","content":[]},
             "propsJson": {"description":null,"extensions":{}},
@@ -39,14 +39,9 @@ async fn write_snapshot(state: &Arc<ServiceState>) -> serde_json::Value {
 async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
     ark_store::test_support::ObjectMutationReplayFixture::install_write_probe(&fixture.db_path())
         .expect("mutation counter triggers install");
 
@@ -110,11 +105,9 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
 #[tokio::test]
 async fn production_store_replays_receipt_written_by_the_previous_core_executor() {
     let fixture = service_fixture();
-    handle_request(
+    initialize_test_database(
         &fixture.state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
+        fixture.db_path().to_string_lossy().into_owned(),
     )
     .await
     .unwrap();
@@ -159,14 +152,9 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
 async fn clear_all_removes_operation_receipts_and_objects() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     handle_request(&state, upsert_request("Private note payload"))
         .await

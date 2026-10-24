@@ -54,45 +54,11 @@ pub fn apply_canonical_object_entity(
         data.insert("id".into(), Value::String(entity.id.clone()));
         let input: ArkObjectWrite = serde_json::from_value(Value::Object(data.clone()))
             .map_err(|error| error.to_string())?;
-        let input_type_id = input.type_id.clone();
         let input_type_version = input.type_version.clone();
-        let canonical_alias = match input_type_id.as_str() {
-            "note_obj" => Some("com.kosmos.note"),
-            "task_obj" => Some("core.task"),
-            "project_obj" => Some("com.kosmos.project"),
-            "tag_obj" => Some("com.kosmos.tag"),
-            "person_obj" => Some("com.kosmos.person"),
-            "image_obj" => Some("com.kosmos.image"),
-            "time_entry_obj" => Some("com.kosmos.time-entry"),
-            "game_obj" => Some("com.kosmos.game"),
-            "book_obj" => Some("com.kosmos.book"),
-            _ => None,
-        };
-        let object = if let Some(canonical_type_id) = canonical_alias {
-            let source = serde_json::json!({
-                "id": input.id,
-                "legacy_type_id": input.type_id,
-                "title": input.title,
-                "content": input.content_json,
-                "props": input.props_json,
-                "created_at": input.created_at,
-                "updated_at": input.updated_at,
-                "deleted_at": input.deleted_at,
-            });
-            let mapped = ark_application::canonical_compatibility::map_legacy_source(
-                ark_application::canonical_compatibility::LegacySource {
-                    source_kind: "object",
-                    source_id: &entity.id,
-                    raw_json: source.to_string().as_bytes(),
-                },
-            )
-            .map_err(|error| format!("{} at {}", error.code(), error.pointer()))?;
-            debug_assert_eq!(mapped.object.type_id, canonical_type_id);
-            mapped.object
-        } else if ark_domain::canonical_type::definitions::canonical_type_registrations()
+        let object = if ark_domain::canonical_type::definitions::canonical_type_registrations()
             .map_err(|error| error.to_string())?
             .iter()
-            .any(|registration| registration.type_id == input_type_id)
+            .any(|registration| registration.type_id == input.type_id)
         {
             crate::object_write::prepare_object(connection, input)
                 .map_err(|error| error.to_string())?

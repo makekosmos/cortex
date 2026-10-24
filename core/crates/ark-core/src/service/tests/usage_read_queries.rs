@@ -4,14 +4,9 @@ use super::*;
 async fn usage_read_rpcs_return_empty_database_results() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     assert_eq!(
         handle_request(

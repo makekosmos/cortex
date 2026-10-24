@@ -207,14 +207,6 @@ pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String
         .map_err(|error| error.to_string())
 }
 
-pub(super) async fn delete_trashed(state: &Arc<ServiceState>) -> Result<Value, String> {
-    get_db_handle(state)?
-        .submit_delete_trashed(db::CommandContext::engine(), local_write_device_id(None))
-        .await
-        .map(|count| json!(count))
-        .map_err(|error| error.to_string())
-}
-
 pub(super) async fn db_backup(
     state: &Arc<ServiceState>,
     dest_path: String,

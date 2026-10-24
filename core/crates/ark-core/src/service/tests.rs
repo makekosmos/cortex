@@ -30,6 +30,38 @@ pub(super) fn service_fixture() -> ServiceFixture {
     }
 }
 
+pub(super) async fn initialize_test_database(
+    state: &Arc<ServiceState>,
+    db_path: String,
+) -> Result<(), String> {
+    handle_stop_sync(state).await;
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    let owner = state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take();
+    if let Some(mut owner) = owner {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .map_err(|error| format!("database owner shutdown failed: {error}"))?;
+    }
+    let (db, owner) = db::DbHandle::open(db_path.clone(), "ark-core".to_string())
+        .await
+        .map_err(|error| error.to_string())?;
+    *state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(owner);
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = Some(db);
+    *state
+        .db_path
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(db_path);
+    Ok(())
+}
+
 pub(super) fn received_upsert_for(
     receiver: &mut tokio::sync::broadcast::Receiver<serde_json::Value>,
     object_id: &str,
@@ -102,8 +134,6 @@ impl Drop for ServiceFixture {
 
 mod api_wire_compat;
 mod data_volume;
-mod legacy_writes;
-mod load_all_query;
 mod local_writes;
 mod object_revision_compat;
 mod object_validation;
@@ -132,7 +162,7 @@ async fn setup_sync_with_capturing_transport(
 
     let captured: Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
-    let transport = Arc::new(legacy_writes::CapturingTransport {
+    let transport = Arc::new(CapturingSyncTransport {
         sent: captured.clone(),
     });
 
@@ -194,6 +224,117 @@ async fn setup_sync_with_capturing_transport(
     *state.sync.lock().await = Some(Arc::new(runtime));
 
     captured
+}
+
+struct CapturingSyncTransport {
+    sent: Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>>,
+}
+
+#[async_trait::async_trait]
+impl crate::sync_transport::SyncTransport for CapturingSyncTransport {
+    async fn start(
+        &self,
+        _event_tx: tokio::sync::mpsc::UnboundedSender<crate::sync_transport::TransportEvent>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn send(&self, message: ark_sync_contracts::wire::LanSyncMessage) -> Result<(), String> {
+        self.sent
+            .try_lock()
+            .expect("no concurrent capture lock")
+            .push(message);
+        Ok(())
+    }
+
+    async fn stop(&self) {}
+}
+
+#[async_trait::async_trait]
+impl crate::sync_transport::IrohSessionTransport for CapturingSyncTransport {
+    async fn send_to(
+        &self,
+        _device_id: &str,
+        message: ark_sync_contracts::wire::LanSyncMessage,
+    ) -> Result<(), String> {
+        crate::sync_transport::SyncTransport::send(self, message)
+    }
+
+    fn set_outbound_authorizer(
+        &self,
+        _authorizer: Arc<dyn ark_sync_contracts::transport::OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn bind_peer_for_control(&self, _device_id: &str, _key: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn mark_peer_data_ready(&self, _device_id: &str, _key: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn unbind_peer(&self, _device_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn send_to_transport_peer(
+        &self,
+        _key: &str,
+        message: ark_sync_contracts::wire::LanSyncMessage,
+    ) -> Result<ark_sync_contracts::transport::AddressedSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(ark_sync_contracts::transport::AddressedSendOutcome::Sent)
+    }
+
+    fn disconnect_peer(
+        &self,
+        _device_id: &str,
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+
+    fn disconnect_transport_peer(
+        &self,
+        _key: &str,
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_sync_contracts::peer_control::PeerSessionControl for CapturingSyncTransport {
+    async fn send_control_to_endpoint(
+        &self,
+        _endpoint: &str,
+        message: ark_sync_contracts::wire::LanSyncMessage,
+    ) -> Result<ark_sync_contracts::peer_control::PeerControlSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(ark_sync_contracts::peer_control::PeerControlSendOutcome::Sent)
+    }
+
+    fn mark_peer_data_ready(&self, _device_id: &str, _key: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn unbind_peer(&self, _device_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn disconnect_peer(
+        &self,
+        _device_id: &str,
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+
+    fn disconnect_transport_endpoint(
+        &self,
+        _endpoint: &str,
+    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    }
 }
 
 fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkObjectWrite {

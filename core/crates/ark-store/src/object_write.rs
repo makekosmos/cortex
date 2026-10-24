@@ -1,7 +1,5 @@
 use ark_application::object_write::{NewObjectReceipt, ObjectWriteSession, StoredObjectReceipt};
-use ark_domain::canonical_type::{
-    prepare_resolved_object, CanonicalIngressError, LEGACY_TASK_TYPE,
-};
+use ark_domain::canonical_type::{prepare_resolved_object, CanonicalIngressError};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
@@ -14,9 +12,6 @@ pub fn prepare_object(
     input: ArkObjectWrite,
 ) -> Result<ArkObject, CanonicalIngressError> {
     let input_type_id = input.type_id.clone();
-    if input_type_id == LEGACY_TASK_TYPE {
-        return Err(CanonicalIngressError::invalid("legacy_task_type_retired"));
-    }
     let requested_version = input.type_version.clone();
     let (canonical_type_id, resolved_version) = crate::type_registry::resolve_object_type_identity(
         connection,
@@ -316,22 +311,22 @@ mod tests {
     }
 
     #[test]
-    fn prepare_object_rejects_a_new_write_of_the_legacy_task_type() {
+    fn prepare_object_rejects_an_unknown_type() {
         let connection = Connection::open_in_memory().expect("database opens");
         crate::open::init_schema(&connection).expect("database schema initializes");
         let write = ArkObjectWrite {
-            id: "new-legacy-task".into(),
-            type_id: "com.kosmos.task".into(),
-            type_version: Some("1.1.0".into()),
-            title: "Old writer".into(),
-            content_json: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            props_json: json!({"status":"todo"}),
+            id: "unknown-type-object".into(),
+            type_id: "missing.type".into(),
+            type_version: Some("0.1.0".into()),
+            title: "Unknown type".into(),
+            content_json: json!({}),
+            props_json: json!({}),
             created_at: "2026-10-13T00:00:00.000Z".into(),
             updated_at: "2026-10-13T00:00:00.000Z".into(),
             deleted_at: None,
         };
 
-        let error = prepare_object(&connection, write).expect_err("legacy writes are retired");
-        assert!(error.to_string().contains("legacy_task_type_retired"));
+        let error = prepare_object(&connection, write).expect_err("unknown type is rejected");
+        assert!(error.to_string().contains("unknown_type_or_version"));
     }
 }

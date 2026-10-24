@@ -1,15 +1,13 @@
 use super::*;
 
 #[tokio::test]
-async fn legacy_alias_object_write_read_and_filter_is_canonical() {
+async fn canonical_object_write_read_and_filter_uses_core_type() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
+    initialize_test_database(
         &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
-        },
+        dir.path().join("ark.db").to_string_lossy().into_owned(),
     )
     .await
     .unwrap();
@@ -19,8 +17,8 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
         Request::UpsertObject {
             object: ArkObjectWrite {
                 id: "alias-note".into(),
-                type_id: "com.kosmos.note".into(),
-                type_version: Some("1.0.0".into()),
+                type_id: "core.note".into(),
+                type_version: Some("0.1.0".into()),
                 title: "Alias note".into(),
                 content_json: json!({"type":"doc","content":[]}),
                 props_json: json!({"description":null,"extensions":{}}),
@@ -44,9 +42,9 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
     )
     .await
     .unwrap();
-    assert_eq!(object["typeId"], "com.kosmos.note");
-    assert_eq!(object["typeVersion"], "1.0.0");
-    for type_id in ["note_obj", "com.kosmos.note"] {
+    assert_eq!(object["typeId"], "core.note");
+    assert_eq!(object["typeVersion"], "0.1.0");
+    for type_id in ["core.note"] {
         let objects = handle_request(
             &state,
             Request::ListObjectsByType {
@@ -68,14 +66,9 @@ async fn upsert_object_with_invalid_type_id_is_err() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     // type_id "nonexistent_type" не существует → FK violation в db::upsert_object
     let object = ArkObjectWrite {
@@ -117,14 +110,9 @@ async fn failed_upsert_object_persists_nothing() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     // type_id "ghost_type" не существует → upsert упадёт на FK
     let object = ArkObjectWrite {

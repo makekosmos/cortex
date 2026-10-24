@@ -32,11 +32,11 @@ fn expect_feed_deliveries(
 #[tokio::test]
 async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_next_page() {
     let backend = make_backend().await;
-    let entity = sync_object("snapshot-policy-page", "note_obj", "Pinned selection");
+    let entity = sync_object("snapshot-policy-page", "core.note", "Pinned selection");
     backend.apply_entity(&entity).await.unwrap();
     let full_rule = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
-        resource_id: "note_obj".into(),
+        resource_id: "core.note".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };

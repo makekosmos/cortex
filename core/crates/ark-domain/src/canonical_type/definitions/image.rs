@@ -1,13 +1,13 @@
 pub(crate) const IMAGE_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.image",
+  "typeId": "core.image",
   "name": "Изображение",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["image_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",

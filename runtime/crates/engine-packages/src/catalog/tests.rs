@@ -17,7 +17,7 @@ fn document_json() -> serde_json::Value {
                     "categories": ["integrations"],
                     "connects_to": "external.demo",
                     "data_compatibility": [{
-                        "type": "com.kosmos.note", "versions": "*",
+                        "type": "core.note", "versions": "*",
                         "roles": ["import"], "via": "external.demo",
                         "fidelity": "lossless"
                     }]

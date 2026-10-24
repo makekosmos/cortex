@@ -34,10 +34,9 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
     let path = std::env::temp_dir().join(format!("ark-phase2-rpc-{}.db", std::process::id()));
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
-        let init = Request::Init {
-            db_path: path.to_string_lossy().into_owned(),
-        };
-        handle_request(&state, init).await.unwrap();
+        initialize_test_database(&state, path.to_string_lossy().into_owned())
+            .await
+            .unwrap();
         let type_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object_type",
             "object_type": {
@@ -154,14 +153,9 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
         std::env::temp_dir().join(format!("ark-phase2-rpc-matrix-{}.db", std::process::id()));
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
-        handle_request(
-            &state,
-            Request::Init {
-                db_path: path.to_string_lossy().into_owned(),
-            },
-        )
-        .await
-        .unwrap();
+        initialize_test_database(&state, path.to_string_lossy().into_owned())
+            .await
+            .unwrap();
         for id in ["rpc-z", "rpc-a"] {
             handle_request(
                 &state,
@@ -303,14 +297,9 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
     let result = handle_request(
         &state,
         Request::UpsertObject {
@@ -332,21 +321,15 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
     );
     fixture.shutdown().await;
 }
-
 #[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutation() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let mut props = canonical_task_props();
     props["unexpected"] = json!(true);
@@ -380,40 +363,6 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         .unwrap(),
         Value::Null,
         "invalid canonical payload does not create sync state"
-    );
-    fixture.shutdown().await;
-}
-
-#[tokio::test]
-async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    let dir = &fixture.dir;
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
-    object.type_id = "note_obj".to_string();
-    object.type_version = Some("1.0.0".to_string());
-    let result = handle_request(
-        &state,
-        Request::UpsertObject {
-            object,
-            expected_snapshot: None,
-            operation_id: None,
-            device_id: None,
-        },
-    )
-    .await;
-    assert_eq!(
-        result.unwrap_err(),
-        "canonical_ingress:invalid_request:legacy_alias_new_write"
     );
     fixture.shutdown().await;
 }

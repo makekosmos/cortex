@@ -53,10 +53,8 @@ impl Drop for TestTempDir {
 
 mod actor_capabilities;
 mod actor_log;
-mod blocked_write;
 mod book_cover_rollback;
 mod canonical_task_idempotency;
-mod core_task_cutover;
 mod data_volume;
 mod device_registry;
 mod external_ref;
@@ -64,7 +62,6 @@ mod foreign_schema;
 mod inbox;
 mod integration_replication;
 mod integration_replication_snapshot;
-mod legacy_writes;
 mod object_mutation_replay;
 mod object_revision;
 mod object_validation;
@@ -74,21 +71,18 @@ mod registry_enrollment;
 mod replace_object_link;
 mod snapshot;
 mod sync_test_state;
+mod task_merge_fixture;
 mod task_merge_inbound;
-mod task_merge_legacy;
-mod trashed_todo;
 mod type_mutation;
 mod usage_event_recovery;
 mod usage_rollback;
 
 pub use actor_capabilities::{ActorTestReads, ActorTestWriterMaintenance, ActorTestWrites};
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
-pub use blocked_write::create_blocked_write_legacy_fixture;
 pub use book_cover_rollback::{BookCoverRollbackFixture, BookCoverRollbackState};
 pub use canonical_task_idempotency::{
     CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,
 };
-pub use core_task_cutover::LegacyTaskCutoverFixture;
 pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
@@ -100,9 +94,6 @@ pub use integration_replication::{
     publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
 };
 pub use integration_replication_snapshot::IntegrationReplicationReadSnapshot;
-pub use legacy_writes::{
-    LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
-};
 pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationReplayState};
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,
@@ -114,9 +105,8 @@ pub use registry_enrollment::{reject_device_registry_projection, reject_remote_d
 pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
 pub use snapshot::SnapshotTestFixture;
 pub use sync_test_state::SyncTestState;
+pub use task_merge_fixture::{TaskMergeFixture, TaskMergeState};
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
-pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
-pub use trashed_todo::TrashedTodoFixture;
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
 pub use usage_event_recovery::{
     CommittedFeedWatermarks, UsageEventRecoveryFixture, UsageEventRecoveryState,

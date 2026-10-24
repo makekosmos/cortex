@@ -288,14 +288,6 @@ mod tests {
         let db_path = dir.path().join("ark.db");
         let host = ArkHost::open(db_path.to_str().unwrap()).await.unwrap();
 
-        let ok = host
-            .request("load_all", serde_json::json!({}))
-            .await
-            .unwrap();
-        assert!(ok.ok);
-        assert!(ok.error.is_none());
-        assert!(ok.data.is_object());
-
         let failed = host
             .request("get_object", serde_json::json!({"id": "missing"}))
             .await

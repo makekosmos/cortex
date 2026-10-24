@@ -38,7 +38,7 @@ async fn stale_policy_at_receipt_transaction_rejects_before_inbox_write() {
     let old_policy = test_policy_identity(&save_test_local_policy(backend.database().path(), None));
     let current_policy =
         test_policy_identity(&save_test_local_policy(backend.database().path(), Some(1)));
-    let entity = sync_object("stale-receipt", "note_obj", "Must not persist");
+    let entity = sync_object("stale-receipt", "core.note", "Must not persist");
 
     let error = backend
         .receive_authenticated_entity_with_policy(
@@ -80,7 +80,7 @@ async fn stale_policy_after_receipt_rejects_apply_without_advancing_inbox_or_obj
     let backend = make_backend().await;
     admit_test_registry_peer(&backend, "peer-a").await;
     let old_policy = test_policy_identity(&save_test_local_policy(backend.database().path(), None));
-    let entity = sync_object("stale-apply", "note_obj", "Must remain unapplied");
+    let entity = sync_object("stale-apply", "core.note", "Must remain unapplied");
     assert!(backend
         .receive_authenticated_entity_with_policy(
             &entity,

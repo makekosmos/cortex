@@ -5,14 +5,9 @@ async fn canonical_task_write_keeps_legacy_local_hlc_fallback() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = fixture.dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
     let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
     object.id = "canonical-task-hlc-fallback".into();
     handle_request(

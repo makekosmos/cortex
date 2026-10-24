@@ -6,7 +6,6 @@ mod device_registry_sync;
 mod integration_admin;
 mod integration_read;
 mod integration_replication;
-mod legacy_mutation;
 mod object_read;
 mod sync_mutation;
 mod sync_policy;
@@ -38,7 +37,6 @@ pub(crate) use integration_read::IntegrationReadQuery;
 pub(crate) use integration_replication::{
     ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };
-pub(crate) use legacy_mutation::{LegacyDeleteCommand, LegacyGraphWriteCommand};
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{CommittedFeedProgress, CommittedFeedProgressCommand};
 pub(crate) use sync_policy::{

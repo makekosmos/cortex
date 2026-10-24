@@ -6,19 +6,14 @@ async fn local_object_and_usage_writes_record_sync_state() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let object = ArkObjectWrite {
         id: "obj-local-write".to_string(),
-        type_id: "com.kosmos.game".to_string(),
-        type_version: Some("1.0.0".to_string()),
+        type_id: "core.game".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: "Local Game".to_string(),
         content_json: json!({}),
         props_json: json!({
@@ -168,14 +163,9 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let timestamp = "2026-04-24T00:00:00.000Z".to_string();
     let object_type = ObjectType {

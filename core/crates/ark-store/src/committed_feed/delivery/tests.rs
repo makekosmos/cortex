@@ -20,7 +20,7 @@ fn projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
             "INSERT INTO object_types(
                  id, name, schema_json, ui_schema_json, created_at, updated_at
              )
-             VALUES ('note_obj', 'Note', '{}', '{}', '2026-10-16T00:00:00.000Z',
+             VALUES ('core.note', 'Note', '{}', '{}', '2026-10-16T00:00:00.000Z',
                      '2026-10-16T00:00:00.000Z')",
             [],
         )
@@ -31,8 +31,8 @@ fn projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
         .expect("writer schema initializes");
     let initial = ArkObject {
         id: "snapshot-object".into(),
-        type_id: "note_obj".into(),
-        type_version: "0.0.0-legacy".into(),
+        type_id: "core.note".into(),
+        type_version: "0.1.0".into(),
         title: "Selected payload".into(),
         content_json: serde_json::json!({"type":"doc","content":[]}),
         props_json: serde_json::json!({}),

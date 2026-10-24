@@ -74,7 +74,7 @@ fn open_database(path: &Path) -> Result<rusqlite::Connection, String> {
 fn book() -> ArkObject {
     test_object(
         "book",
-        "com.kosmos.book",
+        "core.book",
         json!({
             "author": null,
             "isbn": null,
@@ -91,7 +91,7 @@ fn book() -> ArkObject {
 fn image() -> ArkObject {
     test_object(
         "image",
-        "com.kosmos.image",
+        "core.image",
         json!({
             "fileName": null,
             "mimeType": null,
@@ -109,7 +109,7 @@ fn test_object(id: &str, type_id: &str, props_json: serde_json::Value) -> ArkObj
     ArkObject {
         id: id.into(),
         type_id: type_id.into(),
-        type_version: "1.0.0".into(),
+        type_version: "0.1.0".into(),
         title: "test".into(),
         content_json: json!({"type":"doc","content":[]}),
         props_json,

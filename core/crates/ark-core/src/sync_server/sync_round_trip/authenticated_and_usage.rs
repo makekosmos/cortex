@@ -13,7 +13,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
     )
     .await;
     storage_a
-        .apply_entity(&todo_entity("hmac-entity-a", "Protected", "device-a", 1))
+        .apply_entity(&task_object_entity("hmac-entity-a", "Protected", "device-a", 1))
         .await
         .unwrap();
 
@@ -59,7 +59,11 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let loaded = storage_b.load_entities(&HashMap::new()).await.unwrap();
-            if loaded.iter().any(|entity| entity.id == "hmac-entity-a")
+            if loaded.iter().any(|entity| {
+                entity.entity_type == "object"
+                    && entity.id == "hmac-entity-a"
+                    && entity.data.get("typeId") == Some(&json!("core.task"))
+            })
                 && server_a.connected_peer_count().await == 1
             {
                 break;
@@ -72,7 +76,11 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
 
     let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
-        loaded_b.iter().any(|e| e.id == "hmac-entity-a"),
+        loaded_b.iter().any(|entity| {
+            entity.entity_type == "object"
+                && entity.id == "hmac-entity-a"
+                && entity.data.get("typeId") == Some(&json!("core.task"))
+        }),
         "matching HMAC secret should allow initial sync; got {:?}",
         loaded_b.iter().map(|e| &e.id).collect::<Vec<_>>(),
     );
@@ -93,7 +101,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
     let storage_a = make_storage("device-a").await;
     let storage_b = make_storage("device-b").await;
     storage_a
-        .apply_entity(&todo_entity("hmac-denied-a", "Denied", "device-a", 1))
+        .apply_entity(&task_object_entity("hmac-denied-a", "Denied", "device-a", 1))
         .await
         .unwrap();
 

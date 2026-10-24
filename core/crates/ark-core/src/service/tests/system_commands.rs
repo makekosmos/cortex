@@ -4,14 +4,9 @@ use super::*;
 async fn set_sync_kv_request_uses_interactive_db_command() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let request: Request = serde_json::from_value(json!({
         "operation": "set_sync_kv",
