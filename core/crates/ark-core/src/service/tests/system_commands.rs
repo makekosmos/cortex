@@ -4,12 +4,7 @@ use super::*;
 async fn set_sync_kv_request_uses_interactive_db_command() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
 

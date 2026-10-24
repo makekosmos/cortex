@@ -114,9 +114,6 @@ fn apply_core_task_write(
         Some(&registration),
     )
     .map_err(|error| error.to_string())?;
-    if source_hlc.is_some() {
-        task_session.ensure_legacy_task_write_allowed(&object.id)?;
-    }
     let (payload_json, payload_sha256) =
         ark_domain::object_write::canonical_payload_digest(&object, &links)?;
     let representation_kind = "full";

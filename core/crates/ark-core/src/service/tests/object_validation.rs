@@ -5,12 +5,7 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().into_owned(),)
     .await
     .unwrap();
 
@@ -68,12 +63,7 @@ async fn upsert_object_with_invalid_type_id_is_err() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -117,12 +107,7 @@ async fn failed_upsert_object_persists_nothing() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
     .await
     .unwrap();
 

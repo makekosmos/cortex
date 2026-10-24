@@ -17,8 +17,6 @@ fn ark_api_v1_requests_remain_deserializable() {
         let request: Request = serde_json::from_str(&fixture.request)
             .unwrap_or_else(|error| panic!("{} did not decode: {error}", fixture.name));
         match fixture.name.as_str() {
-            "load-all" => assert!(matches!(request, Request::LoadAll)),
-            "legacy-upsert-todo" => assert!(matches!(request, Request::UpsertTodo { .. })),
             "canonical-object-upsert" => match request {
                 Request::UpsertObject {
                     object,
@@ -66,8 +64,6 @@ fn ark_api_v1_requests_remain_deserializable() {
     assert_eq!(
         seen,
         [
-            "load-all",
-            "legacy-upsert-todo",
             "canonical-object-upsert",
             "canonical-object-delete",
             "pairing-code-alias",

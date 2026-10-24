@@ -30,6 +30,38 @@ pub(super) fn service_fixture() -> ServiceFixture {
     }
 }
 
+pub(super) async fn initialize_test_database(
+    state: &Arc<ServiceState>,
+    db_path: String,
+) -> Result<(), String> {
+    handle_stop_sync(state).await;
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    if let Some(mut owner) = state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take()
+    {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .map_err(|error| format!("database owner shutdown failed: {error}"))?;
+    }
+    let (db, owner) = db::DbHandle::open(db_path.clone(), "ark-core".to_string())
+        .await
+        .map_err(|error| error.to_string())?;
+    *state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(owner);
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = Some(db);
+    *state
+        .db_path
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(db_path);
+    Ok(())
+}
+
 pub(super) fn received_upsert_for(
     receiver: &mut tokio::sync::broadcast::Receiver<serde_json::Value>,
     object_id: &str,
@@ -102,8 +134,6 @@ impl Drop for ServiceFixture {
 
 mod api_wire_compat;
 mod data_volume;
-mod legacy_writes;
-mod load_all_query;
 mod local_writes;
 mod object_revision_compat;
 mod object_validation;

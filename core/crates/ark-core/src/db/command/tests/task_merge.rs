@@ -38,8 +38,8 @@ async fn open_merge_fixture() -> (
     (database, path, handle, owner)
 }
 
-fn inspect(path: &str) -> ark_store::test_support::LegacyTaskMergeState {
-    ark_store::test_support::LegacyTaskMergeFixture::open(std::path::Path::new(path))
+fn inspect(path: &str) -> ark_store::test_support::TaskMergeState {
+    ark_store::test_support::TaskMergeFixture::open(std::path::Path::new(path))
         .unwrap()
         .inspect("task-1")
         .unwrap()
@@ -247,7 +247,7 @@ async fn invalid_parent_shape_is_rejected_before_persisting_pending_operation() 
 #[tokio::test]
 async fn failed_sqlite_insert_leaves_no_merge_operation() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    ark_store::test_support::LegacyTaskMergeFixture::open(std::path::Path::new(&_path))
+    ark_store::test_support::TaskMergeFixture::open(std::path::Path::new(&_path))
         .unwrap()
         .reject_all_journal_writes()
         .unwrap();

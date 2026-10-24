@@ -17,7 +17,7 @@ mod policy_bound;
 mod versioned_object_matrix_tests;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
 pub use canonical_apply::{apply_canonical_object_entity, apply_remote_task_delete};
-pub use inbound::{apply_inbound_entity, apply_legacy_compat_entity};
+pub use inbound::apply_inbound_entity;
 pub use policy_bound::read_policy_bound_page;
 
 fn load_usage_sequence_page(
@@ -273,9 +273,6 @@ pub fn collect_entities_page(
         };
     }
     if offset < fixed_count {
-        add_entities!(crate::legacy_entities::load_all_todos(conn), "todo");
-        add_entities!(crate::legacy_entities::load_all_projects(conn), "project");
-        add_entities!(crate::legacy_entities::load_all_tags(conn), "tag");
         add_entities!(crate::usage::load_all_tracked_apps(conn), "tracked_app");
         add_entities!(crate::object_types::list(conn), "object_type");
         let objects = crate::objects::list_objects(conn).map(|objects| {

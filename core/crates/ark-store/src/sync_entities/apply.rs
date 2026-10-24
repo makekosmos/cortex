@@ -2,13 +2,11 @@ use ark_domain::hlc::HLC;
 use ark_domain::types::{ArkObject, ObjectLink};
 use rusqlite::Connection;
 
-/// Selects the revision source used by the existing inbound compatibility path.
+/// Selects the revision source used by canonical inbound sync.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InboundObjectRevision {
     /// Canonical object sync considers the object row, sync vector, and tombstone.
     Canonical,
-    /// Legacy compatibility sync historically compares only object_sync_versions.
-    LegacyCompatibility,
 }
 
 /// Applies one fresh object snapshot and its links within the caller's transaction.
@@ -25,9 +23,6 @@ pub fn apply_inbound_object_snapshot(
     let current = match revision {
         InboundObjectRevision::Canonical => {
             crate::sync_versions::object_revision(connection, &object.id)?
-        }
-        InboundObjectRevision::LegacyCompatibility => {
-            crate::sync_versions::stored_object_revision(connection, &object.id)?
         }
     };
     if current

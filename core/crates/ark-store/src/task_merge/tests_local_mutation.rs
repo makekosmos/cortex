@@ -7,7 +7,7 @@ use ark_domain::task_merge::TaskMergeUnit;
 use rusqlite::params;
 
 #[test]
-fn local_mutation_state_loads_projection_links_and_legacy_revision() {
+fn local_mutation_state_loads_projection_and_links() {
     let connection = connection();
     let task = bootstrap().object;
     crate::objects::upsert_object(&connection, &task).expect("task projection persists");
@@ -25,12 +25,6 @@ fn local_mutation_state_loads_projection_links_and_legacy_revision() {
             params!["link-a", task.id, "target", "task.project", "2026-10-17T00:00:00Z"],
         )
         .expect("second source link persists");
-    connection
-        .execute(
-            "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)",
-            params![task.id, "2026-10-17T00:00:00.000Z:000001:device-a"],
-        )
-        .expect("legacy revision persists");
 
     let state = load_local_mutation_state(&connection, &task.id)
         .expect("local task state loads from Store");
@@ -45,10 +39,7 @@ fn local_mutation_state_loads_projection_links_and_legacy_revision() {
             .collect::<Vec<_>>(),
         ["link-a", "link-z"]
     );
-    assert_eq!(
-        state.snapshot.revision.as_deref(),
-        state.legacy_revision.as_deref()
-    );
+    assert_eq!(state.snapshot.revision, None);
     assert_eq!(state.snapshot.type_id.as_deref(), Some("core.task"));
     assert_eq!(state.snapshot.type_version.as_deref(), Some("0.1.0"));
     assert!(state.snapshot.exists);

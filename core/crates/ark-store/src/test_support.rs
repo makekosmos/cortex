@@ -75,8 +75,7 @@ mod replace_object_link;
 mod snapshot;
 mod sync_test_state;
 mod task_merge_inbound;
-mod task_merge_legacy;
-mod trashed_todo;
+mod task_merge_fixture;
 mod type_mutation;
 mod usage_event_recovery;
 mod usage_rollback;
@@ -100,9 +99,6 @@ pub use integration_replication::{
     publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
 };
 pub use integration_replication_snapshot::IntegrationReplicationReadSnapshot;
-pub use legacy_writes::{
-    LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
-};
 pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationReplayState};
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,
@@ -115,8 +111,7 @@ pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
 pub use snapshot::SnapshotTestFixture;
 pub use sync_test_state::SyncTestState;
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
-pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
-pub use trashed_todo::TrashedTodoFixture;
+pub use task_merge_fixture::{TaskMergeFixture, TaskMergeState};
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
 pub use usage_event_recovery::{
     CommittedFeedWatermarks, UsageEventRecoveryFixture, UsageEventRecoveryState,

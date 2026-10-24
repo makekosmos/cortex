@@ -98,16 +98,7 @@ fn commit_local_task_upsert_with_existence(
         } else {
             links.to_vec()
         };
-        let source_hlc = previous
-            .as_ref()
-            .map(|_| {
-                state.legacy_revision.clone().unwrap_or_else(|| {
-                    ark_domain::hlc::HLC::now(normalized_device_id(device_id)).to_string()
-                })
-            })
-            .unwrap_or_else(|| {
-                ark_domain::hlc::HLC::now(normalized_device_id(device_id)).to_string()
-            });
+        let source_hlc = ark_domain::hlc::HLC::now(normalized_device_id(device_id)).to_string();
         let bootstrap = TaskMergeBootstrap {
             id: next_operation_id(),
             object: baseline,

@@ -5,12 +5,7 @@ async fn estimate_data_volume_preserves_request_and_result_contract_through_acto
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = fixture.db_path();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, db_path.to_string_lossy().into_owned(),)
     .await
     .expect("service database should open");
 

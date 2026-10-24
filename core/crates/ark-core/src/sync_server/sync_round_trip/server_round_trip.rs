@@ -3,8 +3,7 @@ use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort, Sy
 
 async fn round_trip_sync_between_two_servers() {
     // ---------------------------------------------------------------------
-    // Server A — holds one todo already; Server B — empty.
-    // After sync, B should contain the todo.
+    // Server A holds one core.task object; Server B starts empty.
     // ---------------------------------------------------------------------
     let (storage_a, endpoint_a) = make_storage_with_identity("device-a").await;
     let (storage_b, endpoint_b) = make_storage_with_identity("device-b").await;
@@ -18,8 +17,7 @@ async fn round_trip_sync_between_two_servers() {
     )
     .await;
 
-    // Seed one todo on side A.
-    let seed = todo_entity("entity-a-1", "Seeded on A", "device-a", 1);
+    let seed = task_object_entity("entity-a-1", "Seeded on A", "device-a", 1);
     storage_a.apply_entity(&seed).await.unwrap();
 
     // Also stamp it into the local version vector so load_entities emits the
@@ -128,8 +126,12 @@ async fn round_trip_sync_between_two_servers() {
     })
     .await;
     assert!(
-        loaded_b.iter().any(|e| e.id == "entity-a-1"),
-        "side B should have received seeded todo after initial sync; got {:?}",
+        loaded_b.iter().any(|entity| {
+            entity.entity_type == "object"
+                && entity.id == "entity-a-1"
+                && entity.data.get("typeId") == Some(&json!("core.task"))
+        }),
+        "side B should receive a core.task object during initial sync; got {:?}",
         loaded_b.iter().map(|e| &e.id).collect::<Vec<_>>(),
     );
 
@@ -142,7 +144,7 @@ async fn round_trip_sync_between_two_servers() {
     // ---------------------------------------------------------------------
     // Live change: broadcast from server A → should appear on B.
     // ---------------------------------------------------------------------
-    let live = todo_entity("entity-a-2", "Live from A", "device-a", 2);
+    let live = task_object_entity("entity-a-2", "Live from A", "device-a", 2);
     storage_a.apply_entity(&live).await.unwrap();
     server_a.broadcast_live_change(None).await;
 
@@ -151,8 +153,12 @@ async fn round_trip_sync_between_two_servers() {
     })
     .await;
     assert!(
-        loaded_b_after.iter().any(|e| e.id == "entity-a-2"),
-        "side B should have received live change; got {:?}",
+        loaded_b_after.iter().any(|entity| {
+            entity.entity_type == "object"
+                && entity.id == "entity-a-2"
+                && entity.data.get("typeId") == Some(&json!("core.task"))
+        }),
+        "side B should receive a live core.task object; got {:?}",
         loaded_b_after.iter().map(|e| &e.id).collect::<Vec<_>>(),
     );
 

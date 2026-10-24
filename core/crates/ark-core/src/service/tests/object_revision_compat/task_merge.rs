@@ -1,8 +1,5 @@
 use super::*;
 
-#[path = "task_merge/legacy_bootstrap.rs"]
-mod legacy_bootstrap;
-
 async fn object_snapshot(
     state: &Arc<ServiceState>,
     id: &str,
@@ -19,12 +16,7 @@ async fn object_snapshot(
 async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
 
@@ -42,7 +34,7 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     .unwrap();
 
     let storage =
-        ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path()).unwrap();
+        ark_store::test_support::TaskMergeFixture::open(&fixture.db_path()).unwrap();
     let baseline = storage.inspect(id).unwrap();
     let bootstrap_id = baseline.bootstrap.as_ref().unwrap().id.as_str().to_owned();
     let baseline_ids = baseline
@@ -98,15 +90,53 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
 }
 
 #[tokio::test]
+async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
+
+    let id = "rollback-task-mutation";
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object: task(id, "before"),
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("rollback-test-device".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let storage = ark_store::test_support::TaskMergeFixture::open(&fixture.db_path()).unwrap();
+    let before = storage.inspect(id).unwrap();
+    storage.reject_operation_journal_writes().unwrap();
+
+    assert!(handle_request(
+        &state,
+        Request::UpsertObject {
+            object: task(id, "failed"),
+            expected_snapshot: Some(object_snapshot(&state, id).await),
+            operation_id: None,
+            device_id: Some("rollback-test-device".into()),
+        },
+    )
+    .await
+    .is_err());
+
+    let after = storage.inspect(id).unwrap();
+    assert_eq!(after.object.as_ref().map(|object| object.title.as_str()), Some("before"));
+    assert_eq!(after.bootstrap, before.bootstrap);
+    assert_eq!(after.operation_count, before.operation_count);
+}
+
+#[tokio::test]
 async fn task_snapshot_token_changes_when_causal_heads_arrive() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
 
@@ -183,12 +213,7 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
 async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
 
@@ -274,12 +299,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
 async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
     admit_inbound_peer(&state).await;
@@ -358,17 +378,6 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     .unwrap_err();
     assert_eq!(local_error, "object_conflict:expected_snapshot_required");
 
-    let object = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path())
-        .unwrap()
-        .prepare_object(task("snapshot-with-merge-history", "legacy snapshot"))
-        .unwrap();
-    let snapshot = full_task_entity(&object, "2990-01-01T00:00:00.000Z:000001:inbound-peer");
-    let error = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap())
-        .apply_authenticated_entity_with_id(&snapshot, "inbound-peer", "merge-history-snapshot")
-        .await
-        .unwrap_err();
-    assert_eq!(error, "task_merge_operation_mode_requires_upgrade");
-
     let conflicts = handle_request(
         &state,
         Request::TaskMergeConflicts {
@@ -392,7 +401,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
             .len(),
         2
     );
-    let stored = ark_store::test_support::LegacyTaskMergeFixture::open(&fixture.db_path())
+    let stored = ark_store::test_support::TaskMergeFixture::open(&fixture.db_path())
         .unwrap()
         .inspect(&object.id)
         .unwrap();

@@ -3,11 +3,11 @@ use std::path::Path;
 use ark_domain::task_merge::{
     TaskConflictSet, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit,
 };
-use ark_domain::types::{ArkObject, ArkObjectWrite};
+use ark_domain::types::ArkObject;
 use rusqlite::Connection;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct LegacyTaskMergeState {
+pub struct TaskMergeState {
     pub object: Option<ArkObject>,
     pub bootstrap: Option<TaskMergeBootstrap>,
     pub title_conflicts: Option<TaskConflictSet>,
@@ -25,32 +25,18 @@ pub struct LegacyTaskMergeState {
     pub version_vector_has_object: bool,
 }
 
-/// Owns legacy task setup, storage fault injection, and persistence inspection
-/// for service-level task-merge tests.
-pub struct LegacyTaskMergeFixture {
+/// Owns storage fault injection and persistence inspection for task-merge tests.
+pub struct TaskMergeFixture {
     connection: Connection,
 }
 
-impl LegacyTaskMergeFixture {
+impl TaskMergeFixture {
     pub fn open(path: &Path) -> Result<Self, String> {
         let path = path
             .to_str()
             .ok_or_else(|| "task-merge database path is not UTF-8".to_string())?;
         let connection = crate::open::open_db(path)?;
         Ok(Self { connection })
-    }
-
-    pub fn seed_legacy_task(&self, object: ArkObjectWrite, source_hlc: &str) -> Result<(), String> {
-        let prepared = crate::object_write::prepare_object(&self.connection, object)
-            .map_err(|error| error.to_string())?;
-        crate::objects::upsert_object_compat(&self.connection, &prepared)?;
-        crate::sync_versions::write_object_sync_version(
-            &self.connection,
-            &prepared.id,
-            source_hlc,
-            false,
-        )?;
-        Ok(())
     }
 
     pub fn reject_operation_journal_writes(&self) -> Result<(), String> {
@@ -74,7 +60,7 @@ impl LegacyTaskMergeFixture {
             .map_err(|error| error.to_string())
     }
 
-    pub fn inspect(&self, object_id: &str) -> Result<LegacyTaskMergeState, String> {
+    pub fn inspect(&self, object_id: &str) -> Result<TaskMergeState, String> {
         let object = crate::objects::get_object(&self.connection, object_id)?;
         let bootstrap = crate::task_merge::has_bootstrap(&self.connection, object_id)
             .map_err(|error| error.to_string())?
@@ -193,7 +179,7 @@ impl LegacyTaskMergeFixture {
             .map_err(|error| error.to_string())?
             .is_some_and(|value| value.contains_key(object_id));
 
-        Ok(LegacyTaskMergeState {
+        Ok(TaskMergeState {
             object,
             bootstrap,
             title_conflicts,

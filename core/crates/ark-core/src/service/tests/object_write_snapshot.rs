@@ -92,12 +92,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().to_string(),)
     .await
     .unwrap();
 
@@ -241,12 +236,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().to_string(),)
     .await
     .unwrap();
     handle_request(
@@ -311,12 +301,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: dir.path().join("ark.db").to_string_lossy().to_string(),
-        },
-    )
+    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().to_string(),)
     .await
     .unwrap();
     handle_request(

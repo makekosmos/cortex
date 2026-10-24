@@ -39,12 +39,7 @@ async fn write_snapshot(state: &Arc<ServiceState>) -> serde_json::Value {
 async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
     ark_store::test_support::ObjectMutationReplayFixture::install_write_probe(&fixture.db_path())
@@ -110,12 +105,7 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
 #[tokio::test]
 async fn production_store_replays_receipt_written_by_the_previous_core_executor() {
     let fixture = service_fixture();
-    handle_request(
-        &fixture.state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&fixture.state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
     handle_request(&fixture.state, upsert_request("Note"))
@@ -159,12 +149,7 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
 async fn clear_all_removes_operation_receipts_and_objects() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
-        },
-    )
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
     .await
     .unwrap();
 

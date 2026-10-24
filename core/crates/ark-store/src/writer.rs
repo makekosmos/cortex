@@ -7,7 +7,6 @@ mod device_registry;
 mod error;
 mod inbound_entity;
 mod integration_admin;
-mod legacy_mutation;
 mod registry_local_mutation;
 mod snapshot_restore;
 pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
@@ -348,19 +347,6 @@ impl SqliteWriter {
     ) -> Result<(), TransactionFailure<String>> {
         Self::immediate_on_connection(connection, |transaction| {
             crate::load_all::clear_all(transaction)
-        })
-    }
-
-    pub fn delete_trashed(&mut self, device_id: &str) -> Result<usize, TransactionFailure<String>> {
-        self.immediate(|transaction| crate::load_all::delete_trashed(transaction, device_id))
-    }
-
-    pub fn delete_trashed_on_connection(
-        connection: &mut Connection,
-        device_id: &str,
-    ) -> Result<usize, TransactionFailure<String>> {
-        Self::immediate_on_connection(connection, |transaction| {
-            crate::load_all::delete_trashed(transaction, device_id)
         })
     }
 

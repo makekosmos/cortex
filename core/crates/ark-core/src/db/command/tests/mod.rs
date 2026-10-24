@@ -381,32 +381,6 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
 }
 
 #[tokio::test]
-async fn delete_trashed_runs_through_an_interactive_database_command() {
-    let directory = crate::test_support::temp_dir();
-    let db_path = directory.path().join("delete-trashed.db");
-    let (handle, mut owner) = DbHandle::open(
-        db_path.to_string_lossy().into_owned(),
-        "delete-trashed-device".into(),
-    )
-    .await
-    .unwrap();
-    ark_store::test_support::TrashedTodoFixture::insert(&db_path, "trashed").unwrap();
-
-    let deleted = handle
-        .submit_delete_trashed(CommandContext::engine(), "device-under-test".into())
-        .await
-        .unwrap();
-
-    let remains = ark_store::test_support::TrashedTodoFixture::exists(&db_path, "trashed").unwrap();
-    assert_eq!(deleted, 1);
-    assert!(!remains);
-    owner
-        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
-        .await
-        .unwrap();
-}
-
-#[tokio::test]
 async fn submit_rejects_more_work_than_one_source_can_admit() {
     let (_directory, handle, mut owner) = production_actor::open_actor_fixture().await;
     let (entered, received) = std::sync::mpsc::channel();
