@@ -197,7 +197,8 @@ fn compact_usage_span_splits_at_utc_midnight_and_syncs() {
 #[test]
 fn ac8_local_state_is_device_scoped_and_never_exported_or_synced() {
     let source = setup_db();
-    let mut object = make_object("ac8-object", "note_obj", "AC8 object");
+    let mut object = make_object("ac8-object", "core.note", "AC8 object");
+    object.type_version = "0.1.0".into();
     object.props_json = json!({"description": "SHARED_MARKER", "extensions": {}});
     crate::objects::upsert_object_compat(&source, &object).unwrap();
     source

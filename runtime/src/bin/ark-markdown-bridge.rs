@@ -21,20 +21,16 @@ const MAX_FILES: usize = 4096;
 // gate's polling loops observe changes in tens of milliseconds, not seconds.
 const TICK: Duration = Duration::from_millis(100);
 const BRIDGE_FORMAT_VERSION: u64 = 1;
-const CANONICAL_VERSION: &str = "1.0.0";
+const CANONICAL_VERSION: &str = "0.1.0";
 
-/// Newest contract per canonical type; core.task 0.1.0 is past the shared 1.0.0.
-fn canonical_version(canonical: &str) -> &'static str {
-    match canonical {
-        "core.task" => "0.1.0",
-        _ => CANONICAL_VERSION,
-    }
+fn canonical_version(_canonical: &str) -> &'static str {
+    CANONICAL_VERSION
 }
 
 fn canonical_type(kind: &str) -> Option<&'static str> {
     match kind {
-        "com.kosmos.note" | "note_obj" => Some("com.kosmos.note"),
-        "com.kosmos.task" | "task_obj" => Some("core.task"),
+        "core.note" => Some("core.note"),
+        "core.task" => Some("core.task"),
         _ => None,
     }
 }
@@ -1025,7 +1021,7 @@ mod tests {
         Config {
             vault_root: "C:\\vault".into(),
             state_root: "C:\\state".into(),
-            selected_types: vec!["com.kosmos.note".into()],
+            selected_types: vec!["core.note".into()],
             editable_fields: vec!["title".into(), "body".into()],
             readonly_fields: vec![],
         }
@@ -1035,8 +1031,8 @@ mod tests {
     fn format_keeps_stable_identity_and_rejects_other_types() {
         let object = json!(
             {"id":"id-1",
-            "type_id":"com.kosmos.note",
-            "type_version":"1.0.0",
+            "type_id":"core.note",
+            "type_version":"0.1.0",
             "title":"Hello",
             "props_json":{"description":null,
             "extensions":{}},
@@ -1055,7 +1051,7 @@ mod tests {
     #[test]
     fn import_requires_version_and_editable_allowlist() {
         let valid = concat!(
-            "---\nark_id: \"id-1\"\nark_type: \"com.kosmos.note\"\nark_version: ",
+            "---\nark_id: \"id-1\"\nark_type: \"core.note\"\nark_version: ",
             "\"1.0.0\"\nbridge_version: 1\nreadonly: \"changed\"\n---\nbody"
         );
         let parsed = parse(valid, &config()).expect("valid bridge file");
@@ -1087,21 +1083,9 @@ mod tests {
     }
 
     #[test]
-    fn legacy_reserved_alias_is_normalized_at_import_boundary() {
-        let markdown = concat!(
-            "---\nark_id: \"legacy-1\"\nark_type: \"note_obj\"\nark_version: ",
-            "\"1.0.0\"\nbridge_version: 1\n---\nbody"
-        );
-        let (id, kind, _, body) = parse(markdown, &config()).expect("legacy alias accepted");
-        assert_eq!(id, "legacy-1");
-        assert_eq!(kind, "com.kosmos.note");
-        assert_eq!(body, "body");
-    }
-
-    #[test]
     fn reserved_wrong_version_is_rejected_before_edit() {
         let markdown = concat!(
-            "---\nark_id: \"note-1\"\nark_type: \"com.kosmos.note\"\nark_version: ",
+            "---\nark_id: \"note-1\"\nark_type: \"core.note\"\nark_version: ",
             "\"2.0.0\"\nbridge_version: 1\n---\nchanged"
         );
         assert!(parse(markdown, &config()).is_none());
@@ -1141,8 +1125,8 @@ mod tests {
     fn canonical_body_survives_import_and_export_byte_roundtrip() {
         let object = json!(
             {"id":"note-1",
-            "type_id":"com.kosmos.note",
-            "type_version":"1.0.0",
+            "type_id":"core.note",
+            "type_version":"0.1.0",
             "title":"One",
             "props_json":{"description":null,
             "extensions":{}},
@@ -1154,7 +1138,7 @@ mod tests {
         let edited = markdown.replace("From ARK", "From server");
         let (id, kind, fields, body) = parse(&edited, &config()).unwrap();
         assert_eq!(id, "note-1");
-        assert_eq!(kind, "com.kosmos.note");
+        assert_eq!(kind, "core.note");
         assert_eq!(body, "From server");
         let imported = apply_editable(object, fields, body, &config()).expect("body edit");
         let exported = render(&imported, &config()).unwrap();
@@ -1184,8 +1168,8 @@ mod tests {
     fn canonical_markdown_roundtrip_preserves_paragraph_boundaries() {
         let object = json!(
             {"id":"note-1",
-            "type_id":"com.kosmos.note",
-            "type_version":"1.0.0",
+            "type_id":"core.note",
+            "type_version":"0.1.0",
             "title":"One",
             "props_json":{"description":null},
             "content_json":{"type":"doc",

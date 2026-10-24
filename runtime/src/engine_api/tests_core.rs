@@ -46,8 +46,8 @@
             package_version: "1.0.0".into(),
             manifest_digest: "digest".into(),
             rules: vec![crate::runtime_grants::GrantRule {
-                type_id: "com.kosmos.note".into(),
-                versions: vec!["1.0.0".into()],
+                type_id: "core.note".into(),
+                versions: vec!["0.1.0".into()],
                 actions: ["read", "create", "update", "delete", "subscribe", "link"]
                     .into_iter()
                     .map(str::to_owned)
@@ -255,7 +255,7 @@
             package_version: "1.0.0".into(),
             manifest_digest: "digest".into(),
             rules: vec![crate::runtime_grants::GrantRule {
-                type_id: "com.kosmos.task".into(),
+                type_id: "core.task".into(),
                 versions: vec![version.into()],
                 actions: ["create"].into_iter().map(str::to_owned).collect(),
                 fields_read: vec![],
@@ -275,20 +275,20 @@
         let client = DispatchClient::default();
         let explicit = authorize_app_request(
             "upsert_object",
-            json!({"object": {"typeId":"task_obj", "typeVersion":"1.0.0", "title":"ok"}}),
-            &task_test_grant("=1.0.0"),
+            json!({"object": {"typeId":"core.task", "typeVersion":"0.1.0", "title":"ok"}}),
+            &task_test_grant("=0.1.0"),
             &dispatcher,
             &client,
         )
         .await
         .expect("exact version is authorized");
-        assert_eq!(explicit["object"]["typeId"], "com.kosmos.task");
-        assert_eq!(explicit["object"]["typeVersion"], "1.0.0");
+        assert_eq!(explicit["object"]["typeId"], "core.task");
+        assert_eq!(explicit["object"]["typeVersion"], "0.1.0");
 
         assert!(authorize_app_request(
             "upsert_object",
-            json!({"object": {"typeId":"task_obj", "title":"missing version"}}),
-            &task_test_grant(">=1.0.0"),
+            json!({"object": {"typeId":"core.task", "title":"missing version"}}),
+            &task_test_grant(">=0.1.0"),
             &dispatcher,
             &client,
         )
@@ -303,13 +303,13 @@
         }));
         let client = DispatchClient::default();
         let params = json!({
-            "object": {"typeId":"task_obj", "typeVersion":"2.0.0", "title":"wrong"}
+            "object": {"typeId":"core.task", "typeVersion":"0.2.0", "title":"wrong"}
         });
         let original = params.clone();
         assert!(authorize_app_request(
             "upsert_object",
             params.clone(),
-            &task_test_grant("=1.0.0"),
+            &task_test_grant("=0.1.0"),
             &dispatcher,
             &client,
         )
@@ -327,7 +327,7 @@
         let client = DispatchClient::default();
         assert!(authorize_app_request(
             "list_objects_by_type",
-            json!({"type_id":"note_obj"}),
+            json!({"type_id":"core.note"}),
             &grant,
             &dispatcher,
             &client,
@@ -336,7 +336,7 @@
         .is_ok());
         assert!(authorize_app_request(
             "list_objects_by_type",
-            json!({"type_id":"com.kosmos.game"}),
+            json!({"type_id":"core.game"}),
             &grant,
             &dispatcher,
             &client,
@@ -346,7 +346,7 @@
         assert!(authorize_app_request(
             "upsert_object",
             json!({"object": {
-                "id":"n1", "typeId":"com.kosmos.note", "typeVersion":"1.0.0",
+                "id":"n1", "typeId":"core.note", "typeVersion":"0.1.0",
                 "title":"ok", "propsJson":{"secret":"no"}
             }}),
             &grant,
@@ -370,12 +370,12 @@
             Box::pin(async move {
                 if request.operation.as_str() == "get_object_write_snapshot" {
                     Ok(json!({"ok": true, "data": {
-                        "exists":true, "typeId":"com.kosmos.note",
-                        "typeVersion":"1.0.0", "revision":"revision-1"
+                        "exists":true, "typeId":"core.note",
+                        "typeVersion":"0.1.0", "revision":"revision-1"
                     }}))
                 } else if request.operation.as_str() == "get_object" {
                     Ok(json!({"ok": true, "data": {
-                        "id":"n1", "typeId":"com.kosmos.note", "typeVersion":"1.0.0"
+                        "id":"n1", "typeId":"core.note", "typeVersion":"0.1.0"
                     }}))
                 } else {
                     Ok(json!({"ok": true, "data": true}))
@@ -385,7 +385,7 @@
         assert!(authorize_app_request(
             "upsert_object",
             json!({"object": {
-                "id":"n1", "typeId":"com.kosmos.note", "typeVersion":"1.0.0",
+                "id":"n1", "typeId":"core.note", "typeVersion":"0.1.0",
                 "title":"overwrite"
             }}),
             &grant,
@@ -412,7 +412,7 @@
         let params = authorize_app_request(
             "upsert_object",
             json!({"expectedSnapshot":{"exists":true,"revision":"forged"}, "object": {
-                "id":"n2", "typeId":"com.kosmos.note", "typeVersion":"1.0.0",
+                "id":"n2", "typeId":"core.note", "typeVersion":"0.1.0",
                 "title":"ok", "propsJson":{"description":"allowed"},
                 "createdAt":"forged", "deletedAt":"forged", "unexpected":"forged"
             }}),
@@ -442,8 +442,8 @@
             Box::pin(async move {
                 assert_eq!(request.operation.as_str(), "get_object_write_snapshot");
                 Ok(json!({"ok": true, "data": {
-                    "exists":true, "typeId":"com.kosmos.note",
-                    "typeVersion":"1.0.0", "revision":"trusted"
+                    "exists":true, "typeId":"core.note",
+                    "typeVersion":"0.1.0", "revision":"trusted"
                 }}))
             })
         }));
@@ -464,7 +464,7 @@
         let dispatcher = crate::engine_dispatch::EngineDispatcher::new(Arc::new(|_| {
             Box::pin(async {
                 Ok(json!({"ok": true, "data": {
-                    "id":"n1", "typeId":"com.kosmos.note", "typeVersion":"1.0.0",
+                    "id":"n1", "typeId":"core.note", "typeVersion":"0.1.0",
                     "title":"allowed", "contentJson":"private"
                 }}))
             })
@@ -615,16 +615,16 @@
         let mut response = json!({"ok":true,"data":[
             {
                 "id":"n1",
-                "typeId":"com.kosmos.note",
-                "typeVersion":"1.0.0",
+                "typeId":"core.note",
+                "typeVersion":"0.1.0",
                 "title":"title",
                 "contentJson":{"secret":true},
                 "propsJson":{"description":"ok","secret":"no"},
             },
             {
                 "id":"g1",
-                "typeId":"com.kosmos.game",
-                "typeVersion":"1.0.0",
+                "typeId":"core.game",
+                "typeVersion":"0.1.0",
                 "title":"private",
                 "propsJson":{},
             }
@@ -704,7 +704,7 @@
                     name: "Demo".into(),
                     version: "1.0.0".into(),
                     kind: crate::package_manifest::PackageKind::App,
-                    engine_api: ">=1.0.0".into(),
+                    engine_api: ">=0.1.0".into(),
                     entrypoint: "index.html".into(),
                     publisher: "kosmos".into(),
                     permissions: vec![],
@@ -743,7 +743,7 @@
                     name: "Daedalus".into(),
                     version: "0.1.0".into(),
                     kind: crate::package_manifest::PackageKind::App,
-                    engine_api: ">=1.0.0".into(),
+                    engine_api: ">=0.1.0".into(),
                     entrypoint: "index.html".into(),
                     publisher: "kosmos".into(),
                     permissions: vec![],
@@ -865,7 +865,7 @@
                     name: "Demo".into(),
                     version: "1.0.0".into(),
                     kind: crate::package_manifest::PackageKind::App,
-                    engine_api: ">=1.0.0".into(),
+                    engine_api: ">=0.1.0".into(),
                     entrypoint: "index.html".into(),
                     publisher: "kosmos".into(),
                     permissions: vec![],
@@ -910,7 +910,7 @@
                     name: "Demo".into(),
                     version: "1.0.0".into(),
                     kind: crate::package_manifest::PackageKind::App,
-                    engine_api: ">=1.0.0".into(),
+                    engine_api: ">=0.1.0".into(),
                     entrypoint: "index.html".into(),
                     publisher: "kosmos".into(),
                     permissions: vec![],

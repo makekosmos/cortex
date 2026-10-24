@@ -70,7 +70,7 @@ fn manifest_v2_with_canonical_access() -> ManifestV2 {
         }],
         data: crate::package_manifest::ManifestData {
             access: vec![crate::package_manifest::DataAccessRule {
-                type_id: "com.kosmos.note".into(),
+                type_id: "core.note".into(),
                 versions: "^1.0.0".into(),
                 actions: vec![crate::package_manifest::DataAction::Read],
                 fields: crate::package_manifest::FieldAccess {
@@ -319,7 +319,7 @@ pub fn enabled_filesystem_app_service(dir: &Path) -> PackageService {
     service
 }
 
-/// Enabled app whose manifest grants read+create on `com.kosmos.note`
+/// Enabled app whose manifest grants read+create on `core.note`
 /// — lets app-RPC tests drive a real write past authorize into dispatch.
 pub fn enabled_note_write_app_service(dir: &Path) -> PackageService {
     let mut package_manifest = manifest_v2_with_canonical_access();

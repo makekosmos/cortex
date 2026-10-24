@@ -33,7 +33,7 @@
   "data": {
     "access": [
       {
-        "type": "time_entry_obj",
+        "type": "core.time-entry",
         "versions": "*",
         "actions": ["create", "update", "delete"],
         "fields": {
@@ -45,7 +45,7 @@
     "defines": [],
     "mappings": [
       {
-        "type": "time_entry_obj",
+        "type": "core.time-entry",
         "versions": "*",
         "direction": "import",
         "fidelity": "lossless"

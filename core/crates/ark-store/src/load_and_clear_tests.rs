@@ -124,7 +124,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT name FROM object_types WHERE id='com.kosmos.note'",
+            "SELECT name FROM object_types WHERE id='core.note'",
             [],
             |r| r.get::<_, String>(0)
         )
@@ -133,12 +133,12 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT canonical_type_id FROM object_type_aliases WHERE alias='note_obj'",
+            "SELECT COUNT(*) FROM object_type_aliases WHERE canonical_type_id='core.note'",
             [],
-            |r| r.get::<_, String>(0)
+            |r| r.get::<_, i64>(0)
         )
         .unwrap(),
-        "com.kosmos.note"
+        0
     );
     assert_eq!(
         conn.query_row(

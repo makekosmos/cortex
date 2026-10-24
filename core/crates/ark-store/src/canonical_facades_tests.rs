@@ -13,8 +13,8 @@ fn setup() -> Connection {
 fn image(id: &str) -> ArkObject {
     ArkObject {
         id: id.into(),
-        type_id: "com.kosmos.image".into(),
-        type_version: "1.0.0".into(),
+        type_id: "core.image".into(),
+        type_version: "0.1.0".into(),
         title: "".into(),
         content_json: json!({}),
         props_json: json!(
@@ -34,8 +34,8 @@ fn image(id: &str) -> ArkObject {
 fn book(id: &str) -> ArkObject {
     ArkObject {
         id: id.into(),
-        type_id: "com.kosmos.book".into(),
-        type_version: "1.0.0".into(),
+        type_id: "core.book".into(),
+        type_version: "0.1.0".into(),
         title: "Book".into(),
         content_json: json!({"type":"doc","content":[]}),
         props_json: json!(
@@ -83,7 +83,7 @@ fn asset_sources_prefers_local_and_orders_rich_text_without_legacy_props() {
     )
     .unwrap();
     let mut note = book("note-like");
-    note.type_id = "com.kosmos.note".into();
+    note.type_id = "core.note".into();
     note.props_json = json!({"description":null,"extensions":{}});
     crate::objects::upsert_object_compat(&conn, &note).unwrap();
     conn.execute(
@@ -123,7 +123,7 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
         &conn,
         "object",
         "book-1",
-        Some("com.kosmos.book"),
+        Some("core.book"),
         "2020-01-01T00:00:00.000Z:000000:device",
     )
     .unwrap();
@@ -131,7 +131,7 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
         &conn,
         "object",
         "image-1",
-        Some("com.kosmos.image"),
+        Some("core.image"),
         "2020-01-01T00:00:00.000Z:000000:device",
     )
     .unwrap();

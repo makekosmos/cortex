@@ -112,11 +112,11 @@ fn validate_game_links(
     targets: &HashMap<String, GameLinkTarget>,
 ) -> Result<(), GameUpsertError> {
     let definitions = [
-        ("cover-image", "com.kosmos.image", 1usize),
-        ("background-image", "com.kosmos.image", 1usize),
-        ("note", "com.kosmos.note", usize::MAX),
+        ("cover-image", "core.image", 1usize),
+        ("background-image", "core.image", 1usize),
+        ("note", "core.note", usize::MAX),
         ("task", "core.task", usize::MAX),
-        ("tag", "com.kosmos.tag", usize::MAX),
+        ("tag", "core.tag", usize::MAX),
     ];
     let mut counts = HashMap::<&str, usize>::new();
     for link in links {

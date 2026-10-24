@@ -1004,7 +1004,7 @@ mod tests {
         let long = base.replace(
             "\"access\":[]",
             &format!(
-                "\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\
+                "\"access\":[{{\"type\":\"core.note\",\"versions\":\"{}\",\
                     \"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]",
                 "x".repeat(129)
             ),
@@ -1018,9 +1018,9 @@ mod tests {
             r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
             r#""kind":"app","engine_api":"*","entrypoint":"index.html","#,
             r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"#,
-            r#""data":{"access":[],"defines":[],"mappings":[{"type":"com.kosmos.note","#,
+            r#""data":{"access":[],"defines":[],"mappings":[{"type":"core.note","#,
             r#""versions":"*","direction":"import","fidelity":"native"},"#,
-            r#"{"type":"com.kosmos.note","versions":"*","direction":"export","#,
+            r#"{"type":"core.note","versions":"*","direction":"export","#,
             r#""fidelity":"native"}]}}"#
         );
         assert!(PackageManifest::parse(s).is_err());
@@ -1052,7 +1052,7 @@ mod tests {
             r#""publisher":"kosmos","targets":[{"runtime":"worker","os":["windows"]}],"#,
             r#""data":{"access":[],"defines":[],"mappings":[]},"#,
             r#""store":{"description":"d","categories":["integrations"],"#,
-            r#""connects_to":"external.demo","data_compatibility":[{"type":"com.kosmos.note","#,
+            r#""connects_to":"external.demo","data_compatibility":[{"type":"core.note","#,
             r#""versions":"*","roles":["import"],"via":"com.kosmos.demo","#,
             r#""fidelity":"lossless"}]}}"#
         );
@@ -1061,7 +1061,7 @@ mod tests {
             r#""connects_to":"not-external""#,
             r#""categories":["UPPER"]"#,
             concat!(
-                r#""data_compatibility":[{"type":"com.kosmos.note","versions":"*","#,
+                r#""data_compatibility":[{"type":"core.note","versions":"*","#,
                 r#""roles":[],"via":"com.kosmos.demo","fidelity":"lossless"}]"#
             ),
         ] {

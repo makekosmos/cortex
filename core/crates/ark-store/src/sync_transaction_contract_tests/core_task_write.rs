@@ -99,7 +99,7 @@ fn clear_all_removes_persisted_object_write_receipts() {
         representation_kind: "full".into(),
         source_hlc: "2026-10-15T00:00:00.000Z:000001:device-a".into(),
         source_origin_device_id: Some("device-a".into()),
-        type_id: "com.kosmos.note".into(),
+        type_id: "core.note".into(),
         payload_sha256: "digest".into(),
         payload_json: "{}".into(),
         outcome: ReceiptOutcome::Applied,

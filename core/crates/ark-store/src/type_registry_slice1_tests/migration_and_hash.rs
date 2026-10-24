@@ -146,7 +146,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     conn.execute(
         concat!(
             "UPDATE object_types SET name='user-owned', schema_json='{\"custom\":true}', ",
-            "updated_at='kept' WHERE id='com.kosmos.note'"
+            "updated_at='kept' WHERE id='core.note'"
         ),
         [],
     )
@@ -155,7 +155,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
         concat!(
             "UPDATE object_type_versions SET schema_json='{\"custom\":true}', ",
             "schema_hash='kept-hash', created_at='kept-created' WHERE ",
-            "type_id='com.kosmos.note' AND version='1.0.0'"
+            "type_id='core.note' AND version='0.1.0'"
         ),
         [],
     )
@@ -163,7 +163,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     crate::open::init_schema_prerequisites(&conn).unwrap();
     assert_eq!(
         conn.query_row(
-            "SELECT name FROM object_types WHERE id='com.kosmos.note'",
+            "SELECT name FROM object_types WHERE id='core.note'",
             [],
             |r| r.get::<_, String>(0)
         )
@@ -172,7 +172,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT updated_at FROM object_types WHERE id='com.kosmos.note'",
+            "SELECT updated_at FROM object_types WHERE id='core.note'",
             [],
             |r| r.get::<_, String>(0)
         )
@@ -181,8 +181,8 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT schema_hash FROM object_type_versions WHERE type_id='com.kosmos.note' AND
-             version='1.0.0'",
+            "SELECT schema_hash FROM object_type_versions WHERE type_id='core.note' AND
+             version='0.1.0'",
             [],
             |r| r.get::<_, String>(0)
         )

@@ -171,7 +171,7 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
     let error = register_type(
         &conn,
         &TypeRegistration {
-            type_id: "com.kosmos.note".into(),
+            type_id: "core.note".into(),
             name: "Must Not Replace".into(),
             schema_json: "{\"changed\":true}".into(),
             ui_schema_json: "{\"changed\":true}".into(),
@@ -186,7 +186,7 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
             base_type_id: None,
             aliases: vec![AliasRecord {
                 alias: "must-not-exist".into(),
-                canonical_type_id: "com.kosmos.note".into(),
+                canonical_type_id: "core.note".into(),
                 created_at: "later".into(),
             }],
             created_at: "replacement-time".into(),

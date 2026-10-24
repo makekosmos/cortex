@@ -682,7 +682,7 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
     let note_registration = ark_core::canonical_types::definitions::canonical_type_registrations()
         .expect("canonical registrations")
         .into_iter()
-        .find(|registration| registration.type_id == "com.kosmos.note")
+        .find(|registration| registration.type_id == "core.note")
         .expect("note registration");
     assert!(
         ark.request(
@@ -698,8 +698,8 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
         "data.request",
         serde_json::json!({
             "kind":"create_object",
-            "type_id":"com.kosmos.note",
-            "type_version":"1.0.0",
+            "type_id":"core.note",
+            "type_version":"0.1.0",
             "object_id":"typed-worker-note",
             "fields":[
                 {"field_id":"title","value":"Typed worker note"},
@@ -717,7 +717,7 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
         &ark,
         "data.request",
         serde_json::json!({
-            "kind":"read_object","type_id":"com.kosmos.note","type_version":"1.0.0",
+            "kind":"read_object","type_id":"core.note","type_version":"0.1.0",
             "object_id":"typed-worker-note","fields":["title"],"relations":[]
         }),
     )
@@ -730,7 +730,7 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
         &ark,
         "data.request",
         serde_json::json!({
-            "kind":"create_object","type_id":"com.kosmos.game","type_version":"1.0.0",
+            "kind":"create_object","type_id":"core.game","type_version":"0.1.0",
             "object_id":"typed-worker-note","fields":[],"links":[]
         }),
     )
@@ -740,7 +740,7 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
         &ark,
         "data.request",
         serde_json::json!({
-            "kind":"delete_object","type_id":"com.kosmos.game","type_version":"1.0.0",
+            "kind":"delete_object","type_id":"core.game","type_version":"0.1.0",
             "object_id":"typed-worker-note","expected_hlc":null
         }),
     )
@@ -753,7 +753,7 @@ async fn typed_data_request_translates_to_canonical_ark_operations() {
         .expect("get object");
     assert!(object.ok);
     assert_eq!(object.data["title"], "Typed worker note");
-    assert_eq!(object.data["typeId"], "com.kosmos.note");
+    assert_eq!(object.data["typeId"], "core.note");
     ark.shutdown(Instant::now() + Duration::from_secs(30))
         .await
         .unwrap();

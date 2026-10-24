@@ -4,8 +4,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
 
-pub const GAME_TYPE_ID: &str = "com.kosmos.game";
-pub const GAME_VERSION: &str = "1.0.0";
+pub const GAME_TYPE_ID: &str = "core.game";
+pub const GAME_VERSION: &str = "0.1.0";
 pub const GAME_QUARANTINE_CONTRACT: &str = "game-rpc-v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

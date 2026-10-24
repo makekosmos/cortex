@@ -138,7 +138,7 @@ mod tests {
         connection
             .execute_batch(
                 "INSERT INTO objects(id, type_id, title, created_at, updated_at)
-                 VALUES ('note-1', 'com.kosmos.note', 'Before', 'now', 'now');",
+                 VALUES ('note-1', 'core.note', 'Before', 'now', 'now');",
             )
             .expect("object mutation fixture is created");
         connection

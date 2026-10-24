@@ -174,8 +174,8 @@ fn object_summary_queries_skip_body_and_filter_by_type() {
 fn make_time_entry(id: &str, started_at: &str, ended_at: Option<&str>, source: &str) -> ArkObject {
     ArkObject {
         id: id.to_string(),
-        type_id: "time_entry_obj".to_string(),
-        type_version: "0.0.0-legacy".to_string(),
+        type_id: "core.time-entry".to_string(),
+        type_version: "0.1.0".to_string(),
         title: format!("entry {id}"),
         content_json: json!({}),
         props_json: json!({
@@ -391,11 +391,11 @@ fn test_clear_all() {
     assert!(data
         .object_types
         .iter()
-        .any(|item| item.id == "com.kosmos.note"));
+        .any(|item| item.id == "core.note"));
     assert!(data
         .object_types
         .iter()
-        .any(|item| item.id == "com.kosmos.game"));
+        .any(|item| item.id == "core.game"));
     assert_eq!(crate::sync_kv::get_sync_kv(&conn, "k").unwrap(), None);
 }
 
@@ -418,57 +418,20 @@ fn test_delete_trashed() {
 }
 
 #[test]
-fn by_type_queries_match_objects_stored_under_legacy_alias() {
+fn by_type_queries_match_core_type_ids() {
     let conn = setup_db();
-    // Rows written before the type registry existed keep `task_obj` in
-    // objects.type_id, which never was a row in object_types. Seeding the
-    // row directly avoids the compatibility writer canonicalising the ID,
-    // so this connection disables FK checks for the fixture.
-    conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
-    for (id, deleted) in [
-        ("legacy-task-1", None),
-        ("legacy-task-2", None),
-        ("legacy-task-gone", Some("2026-02-01T00:00:00.000Z")),
-    ] {
-        conn.execute(
-            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,
-                 created_at,updated_at,deleted_at)
-                 VALUES (?1,'task_obj','0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',
-                 '2026-01-02T00:00:00.000Z',?2)",
-            params![id, deleted],
-        )
-        .unwrap();
+    for id in ["task-1", "task-2"] {
+        let mut task = make_object(id, "core.task", id);
+        task.type_version = "0.1.0".into();
+        crate::objects::upsert_object(&conn, &task).unwrap();
     }
-    for queried in ["com.kosmos.task", "task_obj"] {
-        let summaries = list_object_summaries_by_type(&conn, queried).unwrap();
-        assert_eq!(
-            summaries.len(),
-            3,
-            "{queried} must see alias-stored objects"
-        );
-        let objects = list_objects_by_type(&conn, queried).unwrap();
-        assert_eq!(objects.len(), 3);
-    }
+    let summaries = list_object_summaries_by_type(&conn, "core.task").unwrap();
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(list_objects_by_type(&conn, "core.task").unwrap().len(), 2);
 
-    // Same contract for the running-time-entry hot path.
-    let running = make_time_entry("entry-legacy", "2026-03-01T10:00:00.000Z", None, "manual");
-    conn.execute(
-        "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,
-             updated_at,deleted_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
-        params![
-            running.id,
-            running.type_id,
-            running.type_version,
-            running.title,
-            serde_json::to_string(&running.content_json).unwrap(),
-            serde_json::to_string(&running.props_json).unwrap(),
-            running.created_at,
-            running.updated_at,
-        ],
-    )
-    .unwrap();
+    let running = make_time_entry("entry-1", "2026-03-01T10:00:00.000Z", None, "manual");
+    crate::objects::upsert_object(&conn, &running).unwrap();
     let running_entries = list_running_time_entries(&conn, Some("manual")).unwrap();
     assert_eq!(running_entries.len(), 1);
-    assert_eq!(running_entries[0].id, "entry-legacy");
+    assert_eq!(running_entries[0].id, "entry-1");
 }

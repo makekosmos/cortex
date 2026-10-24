@@ -5,7 +5,7 @@ fn bridge_config_requires_one_real_vault_and_persists_owner_state() {
     fs::create_dir(&vault).expect("vault");
     let config = BridgeConfig {
         vault_root: vault.to_string_lossy().into_owned(),
-        selected_types: vec!["com.kosmos.note".into()],
+        selected_types: vec!["core.note".into()],
         editable_fields: vec!["title".into(), "body".into()],
         readonly_fields: vec!["machine_output".into()],
     };
@@ -113,7 +113,7 @@ async fn catalog_bridge_runs_through_service() {
     let note_registration = ark_core::canonical_types::definitions::canonical_type_registrations()
         .unwrap()
         .into_iter()
-        .find(|registration| registration.type_id == "com.kosmos.note")
+        .find(|registration| registration.type_id == "core.note")
         .unwrap();
     assert!(
         ark.request(
@@ -129,8 +129,8 @@ async fn catalog_bridge_runs_through_service() {
             "upsert_object",
             serde_json::json!(
                     {"object":{"id":"service-note",
-                    "typeId":"com.kosmos.note",
-                    "typeVersion":"1.0.0",
+                    "typeId":"core.note",
+                    "typeVersion":"0.1.0",
                     "title":"Service note",
                     "contentJson":{"type":"doc",
                     "content":[{"type":"paragraph",
@@ -156,7 +156,7 @@ async fn catalog_bridge_runs_through_service() {
         .as_array()
         .and_then(|objects| objects.iter().find(|object| object["id"] == "service-note"))
         .expect("created note must be visible to the bridge");
-    assert_eq!(note["typeId"], "com.kosmos.note");
+    assert_eq!(note["typeId"], "core.note");
     let supervisor = PackageWorkerSupervisor::with_ark(1, ark.clone());
     service.configure_workers(supervisor.clone(), vec![], "bridge-service".into());
     service
@@ -165,7 +165,7 @@ async fn catalog_bridge_runs_through_service() {
             &manifest.version,
             BridgeConfig {
                 vault_root: vault.to_string_lossy().into_owned(),
-                selected_types: vec!["com.kosmos.note".into()],
+                selected_types: vec!["core.note".into()],
                 editable_fields: vec!["title".into(), "body".into()],
                 readonly_fields: vec![],
             },
