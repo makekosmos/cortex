@@ -40,12 +40,11 @@ impl SqliteWriter {
             stage: StoreBootstrapStage::Open,
             message: error.to_string(),
         })?;
-        crate::core_migration::backup_before_migration(&connection, migration_backup_path).map_err(
-            |message| StoreBootstrapError {
+        crate::core_migration::backup_before_migration(&connection, migration_backup_path)
+            .map_err(|message| StoreBootstrapError {
                 stage: StoreBootstrapStage::Migration,
                 message,
-            },
-        )?;
+            })?;
         connection
             .execute_batch(
                 "PRAGMA journal_mode = WAL;
@@ -62,12 +61,12 @@ impl SqliteWriter {
             message,
         })?;
         let mut connection = connection;
-        crate::core_migration::migrate(&mut connection, bootstrap_device_id).map_err(|message| {
-            StoreBootstrapError {
-            stage: StoreBootstrapStage::Migration,
-            message,
-            }
-        })?;
+        crate::core_migration::migrate(&mut connection, bootstrap_device_id).map_err(
+            |message| StoreBootstrapError {
+                stage: StoreBootstrapStage::Migration,
+                message,
+            },
+        )?;
         Ok(Self::from_connection(connection))
     }
 }

@@ -1,2 +1,2 @@
 {"operation":"list_objects","params":{},"response":"{\"ok\":true,\"data\":[],\"error\":null}"}
-{"operation":"delete_todo","params":{},"response":"{\"ok\":false,\"data\":null,\"error\":\"missing field `id`\"}"}
+{"operation":"delete_object","params":{},"response":"{\"ok\":false,\"data\":null,\"error\":\"missing field `id`\"}"}

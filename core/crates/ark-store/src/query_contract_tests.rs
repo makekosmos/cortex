@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use ark_domain::types::{ArkObject, ObjectType, TrackedApp, UsageEvent, UsageSession};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde_json::json;
 
 use crate::objects::{
@@ -357,14 +357,8 @@ fn test_clear_all() {
     assert_eq!(data.usage_events.len(), 0);
     assert_eq!(data.objects.len(), 0);
     assert_eq!(data.object_links.len(), 0);
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "core.note"));
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "core.game"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.note"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.game"));
     assert_eq!(crate::sync_kv::get_sync_kv(&conn, "k").unwrap(), None);
 }
 

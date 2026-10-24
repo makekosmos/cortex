@@ -71,7 +71,7 @@ fn manifest_v2_with_canonical_access() -> ManifestV2 {
         data: crate::package_manifest::ManifestData {
             access: vec![crate::package_manifest::DataAccessRule {
                 type_id: "core.note".into(),
-                versions: "^1.0.0".into(),
+                versions: "^0.1.0".into(),
                 actions: vec![crate::package_manifest::DataAction::Read],
                 fields: crate::package_manifest::FieldAccess {
                     read: vec!["props.description".into()],

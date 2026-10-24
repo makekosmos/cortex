@@ -15,5 +15,4 @@ impl DbHandle {
             response.await.unwrap_or(Err(DbError::OutcomeUnknown))
         }
     }
-
 }

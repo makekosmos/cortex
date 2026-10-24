@@ -11,11 +11,7 @@ const CORE_TYPES: &[(&str, &str, &str)] = &[
     ("com.kosmos.tag", "tag_obj", "core.tag"),
     ("com.kosmos.person", "person_obj", "core.person"),
     ("com.kosmos.image", "image_obj", "core.image"),
-    (
-        "com.kosmos.time-entry",
-        "time_entry_obj",
-        "core.time-entry",
-    ),
+    ("com.kosmos.time-entry", "time_entry_obj", "core.time-entry"),
     ("com.kosmos.game", "game_obj", "core.game"),
     ("com.kosmos.book", "book_obj", "core.book"),
 ];

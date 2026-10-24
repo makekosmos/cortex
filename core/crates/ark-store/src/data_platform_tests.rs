@@ -10,7 +10,7 @@ fn external_refs_are_additive_and_unique() {
     conn.execute(
         concat!(
             "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
-            "VALUES('note-1','core.note','1.0.0','Note','now','now')"
+            "VALUES('note-1','core.note','0.1.0','Note','now','now')"
         ),
         [],
     )

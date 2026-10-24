@@ -33,9 +33,9 @@ fn replay_event_for(
 async fn package_type_registration_rolls_back_the_whole_batch() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let first = package_registration("test.package.first");
     let mut invalid = package_registration("test.package.invalid");
@@ -67,9 +67,9 @@ async fn package_type_registration_rolls_back_the_whole_batch() {
 async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     const TYPE_ID: &str = "test.replay.type";
     const ENTITY_ID: &str = "test.replay.object";

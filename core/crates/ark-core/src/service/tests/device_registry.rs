@@ -29,7 +29,10 @@ fn device_registry_operations_have_a_stable_wire_shape() {
 #[tokio::test]
 async fn engine_registry_operations_read_and_commit_signed_device_state() {
     let fixture = service_fixture();
-    initialize_test_database(&fixture.state, fixture.db_path().to_string_lossy().into_owned(),)
+    initialize_test_database(
+        &fixture.state,
+        fixture.db_path().to_string_lossy().into_owned(),
+    )
     .await
     .expect("initialize service database");
     let db = get_db_handle(&fixture.state).expect("service database handle");

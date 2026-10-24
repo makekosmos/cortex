@@ -163,7 +163,7 @@ async fn iroh_ticket_pairing_round_trip() {
     // from_device_id обязан прийти из реестра (EndpointId пира → device_id из
     // Hello), а не из самого сообщения и не быть пустым/fallback.
     let test_entity = ark_core::types::SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "test-entity-iroh-ticket-001".to_string(),
         data: {
             let mut m = serde_json::Map::new();
@@ -171,6 +171,8 @@ async fn iroh_ticket_pairing_round_trip() {
                 "title".to_string(),
                 serde_json::Value::String("Iroh ticket pairing test task".to_string()),
             );
+            m.insert("typeId".to_string(), serde_json::json!("core.note"));
+            m.insert("typeVersion".to_string(), serde_json::json!("0.1.0"));
             m
         },
         hlc: "2026-06-16T00:00:00.000Z:000001:device-A".to_string(),

@@ -5,7 +5,10 @@ async fn canonical_object_write_read_and_filter_uses_core_type() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().into_owned(),)
+    initialize_test_database(
+        &state,
+        dir.path().join("ark.db").to_string_lossy().into_owned(),
+    )
     .await
     .unwrap();
 
@@ -63,9 +66,9 @@ async fn upsert_object_with_invalid_type_id_is_err() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     // type_id "nonexistent_type" не существует → FK violation в db::upsert_object
     let object = ArkObjectWrite {
@@ -107,9 +110,9 @@ async fn failed_upsert_object_persists_nothing() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     // type_id "ghost_type" не существует → upsert упадёт на FK
     let object = ArkObjectWrite {

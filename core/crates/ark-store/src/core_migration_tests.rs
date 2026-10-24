@@ -8,11 +8,7 @@ const OLD_TYPES: &[(&str, &str, &str)] = &[
     ("com.kosmos.tag", "tag_obj", "core.tag"),
     ("com.kosmos.person", "person_obj", "core.person"),
     ("com.kosmos.image", "image_obj", "core.image"),
-    (
-        "com.kosmos.time-entry",
-        "time_entry_obj",
-        "core.time-entry",
-    ),
+    ("com.kosmos.time-entry", "time_entry_obj", "core.time-entry"),
     ("com.kosmos.game", "game_obj", "core.game"),
     ("com.kosmos.book", "book_obj", "core.book"),
 ];
@@ -57,6 +53,16 @@ fn seed_old_database(path: &str) -> Result<(), String> {
         }
     });
     for &(legacy_id, alias, _) in OLD_TYPES {
+        for type_id in [legacy_id, alias] {
+            connection
+                .execute(
+                    "INSERT INTO object_types
+                     (id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked)
+                     VALUES(?1,?1,'{}','{}','2026-10-04','2026-10-04',0)",
+                    [type_id],
+                )
+                .map_err(|error| error.to_string())?;
+        }
         for (prefix, type_id) in [("canonical", legacy_id), ("alias", alias)] {
             let id = format!("{prefix}:{type_id}");
             let version = if legacy_id == "com.kosmos.task" {
@@ -91,12 +97,9 @@ fn startup_migrates_legacy_types_once_and_keeps_the_first_backup() -> Result<(),
     seed_old_database(database_path)?;
 
     {
-        let _writer = crate::writer::SqliteWriter::open_initialized(
-            database_path,
-            backup_path,
-            "device-a",
-        )
-        .map_err(|error| error.to_string())?;
+        let _writer =
+            crate::writer::SqliteWriter::open_initialized(database_path, backup_path, "device-a")
+                .map_err(|error| error.to_string())?;
     }
     let first_backup = std::fs::read(&backup).map_err(|error| error.to_string())?;
     let backup_connection = Connection::open(backup_path).map_err(|error| error.to_string())?;
@@ -114,18 +117,27 @@ fn startup_migrates_legacy_types_once_and_keeps_the_first_backup() -> Result<(),
         let mut statement = connection
             .prepare("SELECT id,type_id,type_version FROM objects ORDER BY id")
             .map_err(|error| error.to_string())?;
-        statement
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        let rows = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
             .map_err(|error| error.to_string())?
             .collect::<Result<_, _>>()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())?;
+        rows
     };
     let mut expected: Vec<_> = OLD_TYPES
         .iter()
         .flat_map(|(legacy_id, alias, core_id)| {
             [
-                (format!("canonical:{legacy_id}"), (*core_id).to_string(), "0.1.0".to_string()),
-                (format!("alias:{alias}"), (*core_id).to_string(), "0.1.0".to_string()),
+                (
+                    format!("canonical:{legacy_id}"),
+                    (*core_id).to_string(),
+                    "0.1.0".to_string(),
+                ),
+                (
+                    format!("alias:{alias}"),
+                    (*core_id).to_string(),
+                    "0.1.0".to_string(),
+                ),
             ]
         })
         .collect();
@@ -173,18 +185,17 @@ fn startup_migrates_legacy_types_once_and_keeps_the_first_backup() -> Result<(),
     let mapped_note_props: serde_json::Value =
         serde_json::from_str(&mapped_note_props).map_err(|error| error.to_string())?;
     assert_eq!(mapped_note_props, json!({"preserve": "com.kosmos.note"}));
-    let first_sync_vector = serde_json::to_string(&sync_vector).map_err(|error| error.to_string())?;
     drop(connection);
 
     {
-        let _writer = crate::writer::SqliteWriter::open_initialized(
-            database_path,
-            backup_path,
-            "device-a",
-        )
-        .map_err(|error| error.to_string())?;
+        let _writer =
+            crate::writer::SqliteWriter::open_initialized(database_path, backup_path, "device-a")
+                .map_err(|error| error.to_string())?;
     }
-    assert_eq!(std::fs::read(&backup).map_err(|error| error.to_string())?, first_backup);
+    assert_eq!(
+        std::fs::read(&backup).map_err(|error| error.to_string())?,
+        first_backup
+    );
     let connection = Connection::open(database_path).map_err(|error| error.to_string())?;
     let applied: i64 = connection
         .query_row(
@@ -203,9 +214,6 @@ fn startup_migrates_legacy_types_once_and_keeps_the_first_backup() -> Result<(),
         .map_err(|error| error.to_string())?;
     let second_sync_vector: ark_domain::types::VersionVector =
         serde_json::from_str(&second_sync_vector).map_err(|error| error.to_string())?;
-    assert_eq!(
-        serde_json::to_string(&second_sync_vector).map_err(|error| error.to_string())?,
-        first_sync_vector
-    );
+    assert_eq!(second_sync_vector, sync_vector);
     Ok(())
 }

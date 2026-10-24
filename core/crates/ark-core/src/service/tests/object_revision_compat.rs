@@ -76,9 +76,9 @@ fn remote_entity(object: &ArkObject, title: &str) -> SyncEntity {
 async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
     let vector_object = storage
@@ -141,7 +141,10 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().to_string(),)
+    initialize_test_database(
+        &state,
+        dir.path().join("ark.db").to_string_lossy().to_string(),
+    )
     .await
     .unwrap();
     handle_request(
@@ -205,9 +208,9 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
 async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
     admit_inbound_peer(&state).await;
 
     let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();

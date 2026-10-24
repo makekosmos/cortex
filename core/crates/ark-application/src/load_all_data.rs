@@ -1,7 +1,5 @@
 use ark_domain::canonical_type::{AliasRecord, TypeSummary, TypeVersion};
-use ark_domain::types::{
-    ArkObject, ObjectLink, ObjectType, TrackedApp, UsageEvent, UsageSession,
-};
+use ark_domain::types::{ArkObject, ObjectLink, ObjectType, TrackedApp, UsageEvent, UsageSession};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]

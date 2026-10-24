@@ -240,9 +240,6 @@ pub fn collect_entities_page(
     let fixed_count: usize = conn
         .query_row(
             "SELECT
-                    (SELECT COUNT(*) FROM todos) +
-                    (SELECT COUNT(*) FROM projects) +
-                    (SELECT COUNT(*) FROM tags) +
                     (SELECT COUNT(*) FROM tracked_apps) +
                     (SELECT COUNT(*) FROM object_types) +
                     (SELECT COUNT(*) FROM objects AS object

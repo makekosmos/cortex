@@ -77,15 +77,22 @@ pub(super) fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
     ArkObject {
         id: id.to_string(),
         type_id: type_id.to_string(),
-        type_version: "0.0.0-legacy".to_string(),
+        type_version: if type_id.starts_with("core.") {
+            "0.1.0"
+        } else {
+            "0.0.0-legacy"
+        }
+        .to_string(),
         title: title.to_string(),
         content_json: json!({
             "type": "doc",
             "content": [{ "type": "paragraph" }]
         }),
-        props_json: json!({
-            "description": format!("Description for {title}")
-        }),
+        props_json: if type_id == "core.note" {
+            json!({"description": format!("Description for {title}"), "extensions": {}})
+        } else {
+            json!({"description": format!("Description for {title}")})
+        },
         created_at: "2026-01-01T00:00:00.000Z".to_string(),
         updated_at: "2026-01-01T00:00:00.000Z".to_string(),
         deleted_at: None,

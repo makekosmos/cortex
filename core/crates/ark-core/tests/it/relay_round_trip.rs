@@ -166,7 +166,7 @@ async fn relay_round_trip() {
 
     // 5. Instance A broadcasts a live_change entity.
     let test_entity = ark_core::types::SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "test-entity-relay-001".to_string(),
         data: {
             let mut m = serde_json::Map::new();
@@ -174,6 +174,8 @@ async fn relay_round_trip() {
                 "title".to_string(),
                 serde_json::Value::String("Relay test task".to_string()),
             );
+            m.insert("typeId".to_string(), serde_json::json!("core.note"));
+            m.insert("typeVersion".to_string(), serde_json::json!("0.1.0"));
             m
         },
         hlc: "2026-04-09T00:00:00.000Z:000001:device-A".to_string(),
@@ -204,8 +206,8 @@ async fn relay_round_trip() {
         matches!(
             &received,
             LanSyncMessage::LiveChange { entity, .. }
-                if entity.id == "test-entity-relay-001" && entity.entity_type == "todo"
+                if entity.id == "test-entity-relay-001" && entity.entity_type == "object"
         ),
-        "expected LiveChange for todo test-entity-relay-001, got {received:?}"
+        "expected LiveChange for object test-entity-relay-001, got {received:?}"
     );
 }

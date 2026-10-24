@@ -2,12 +2,10 @@
 
 use ark_domain::hlc::HLC;
 use ark_domain::types::{
-    ArkObject, ObjectType, SyncEntity, UsageDay, UsageSpanWrite, UsageTitleTotal,
-    VersionVector,
+    ArkObject, ObjectType, SyncEntity, UsageDay, UsageSpanWrite, UsageTitleTotal, VersionVector,
 };
 use rusqlite::Connection;
 use serde_json::json;
-
 
 fn setup_db() -> Connection {
     let connection = Connection::open_in_memory().unwrap();

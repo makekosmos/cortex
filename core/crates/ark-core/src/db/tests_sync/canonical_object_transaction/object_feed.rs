@@ -189,7 +189,7 @@ async fn feed_delivery_coalesces_entity_and_keeps_payload_revision_consistent_wi
 }
 
 #[tokio::test]
-async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
+async fn authenticated_core_note_update_is_durable_and_relayable() {
     let source_test = make_backend().await;
     let relay_test = make_backend().await;
     let _source_database = source_test._database;
@@ -199,7 +199,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     admit_test_registry_peer(&source, "origin-peer").await;
     admit_test_registry_peer(&source, "another-peer").await;
     admit_test_registry_peer(&relay, "source-peer").await;
-    let snapshot_row = sync_todo("old-feed-row", "Covered by initial snapshot");
+    let snapshot_row = sync_object("old-feed-row", "core.note", "Covered by initial snapshot");
     source.apply_entity(&snapshot_row).await.unwrap();
     let generation = source.selective_sync_policy_generation();
     let baseline = source
@@ -208,20 +208,20 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
         .unwrap()
         .initial_snapshot
         .through();
-    let mut legacy = sync_todo("legacy-feed-relay", "First title");
+    let mut note = sync_object("core-note-feed-relay", "core.note", "First title");
     source
-        .apply_authenticated_entity(&legacy, "origin-peer")
+        .apply_authenticated_entity(&note, "origin-peer")
         .await
         .unwrap();
-    legacy.hlc = "2026-10-16T00:00:01.000Z:000001:origin-peer".into();
-    legacy
+    note.hlc = "2026-10-16T00:00:01.000Z:000001:origin-peer".into();
+    note
         .data
         .insert("title".into(), json!("Live updated title"));
     source
-        .apply_authenticated_entity(&legacy, "origin-peer")
+        .apply_authenticated_entity(&note, "origin-peer")
         .await
         .unwrap();
-    let mut stale = legacy.clone();
+    let mut stale = note.clone();
     stale.hlc = "2026-10-15T23:59:59.000Z:000001:origin-peer".into();
     stale.data.insert("title".into(), json!("Stale title"));
     source
@@ -238,10 +238,10 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     );
     let delivery = page
         .iter()
-        .find(|delivery| delivery.entry.entity_id == legacy.id)
-        .expect("accepted legacy update must append canonical feed entry");
+        .find(|delivery| delivery.entry.entity_id == note.id)
+        .expect("accepted core.note update must append a feed entry");
     assert_eq!(delivery.entry.entity_type, "object");
-    assert_eq!(delivery.entry.revision, legacy.hlc);
+    assert_eq!(delivery.entry.revision, note.hlc);
     assert_eq!(
         delivery.entity.data.get("title"),
         Some(&json!("Live updated title"))
@@ -253,7 +253,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     assert_eq!(
         raw_page
             .iter()
-            .filter(|entry| entry.entity_id == legacy.id)
+            .filter(|entry| entry.entity_id == note.id)
             .count(),
         2,
         "stale apply must not append another feed position"
@@ -301,10 +301,10 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     assert!(
         relayed.iter().any(|item| {
             item.entry.entity_type == "object"
-                && item.entry.entity_id == legacy.id
+                && item.entry.entity_id == note.id
                 && item.entity.data.get("title") == Some(&json!("Live updated title"))
         }),
-        "inbound legacy update must enter relay's durable outbound feed"
+        "inbound core.note update must enter the relay's durable outbound feed"
     );
     source
         .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))

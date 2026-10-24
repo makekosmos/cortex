@@ -14,12 +14,7 @@ fn seed_object(connection: &Connection, id: &str, type_id: &str, title: &str, hl
     let object = ArkObject {
         id: id.to_owned(),
         type_id: type_id.to_owned(),
-        type_version: if type_id == "core.note" {
-            "1.0.0"
-        } else {
-            "0.1.0"
-        }
-        .to_owned(),
+        type_version: "0.1.0".to_owned(),
         title: title.to_owned(),
         content_json: json!({}),
         props_json: json!({}),

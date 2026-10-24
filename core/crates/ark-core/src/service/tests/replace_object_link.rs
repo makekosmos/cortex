@@ -19,9 +19,7 @@ fn project_link(id: &str, source: &str, target: &str) -> ObjectLink {
 
 /// Opens the DB and creates one task and two project objects.
 async fn setup(state: &Arc<ServiceState>, db_path: String) {
-    initialize_test_database(state, db_path)
-        .await
-        .unwrap();
+    initialize_test_database(state, db_path).await.unwrap();
     let object_type = ObjectType {
         id: "replace-link-type".to_string(),
         name: "Replace link".to_string(),

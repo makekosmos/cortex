@@ -39,9 +39,9 @@ fn live_change(id: &str) -> LanSyncMessage {
         policy_identity: None,
         change_id: format!("change-{id}"),
         entity: SyncEntity {
-            entity_type: "todo".to_string(),
+            entity_type: "object".to_string(),
             id: id.to_string(),
-            data: serde_json::Map::new(),
+            data: serde_json::Map::from_iter([("typeId".into(), serde_json::json!("core.note"))]),
             hlc: "2026-10-16T00:00:00.000Z:000001:device-A".to_string(),
             deleted: None,
             origin_device_id: None,

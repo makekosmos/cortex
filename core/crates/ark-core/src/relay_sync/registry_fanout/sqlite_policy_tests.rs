@@ -285,13 +285,13 @@ async fn write_note(peer: &ActorPeer, id: &str, title: &str) {
     let object = ArkObject {
         id: id.into(),
         type_id: "core.note".into(),
-        type_version: "0.0.0-legacy".into(),
+        type_version: "0.1.0".into(),
         title: title.into(),
         content_json: serde_json::json!({
             "type": "doc",
             "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": title }] }]
         }),
-        props_json: serde_json::json!({"description": title}),
+        props_json: serde_json::json!({"description": title, "extensions": {}}),
         created_at: "2026-10-17T00:00:00.000Z".into(),
         updated_at: "2026-10-17T00:00:00.000Z".into(),
         deleted_at: None,

@@ -106,9 +106,9 @@ async fn direct_server_sends_no_data_or_ack_before_registry_admission() {
     assert_no_data_frame(&mut socket).await;
 
     let entity = SyncEntity {
-        entity_type: "todo".into(),
+        entity_type: "object".into(),
         id: "pre-admission-object".into(),
-        data: serde_json::Map::new(),
+        data: serde_json::Map::from_iter([("typeId".into(), serde_json::json!("core.note"))]),
         hlc: "2026-10-16T00:00:00.000Z:000001:client-device".into(),
         deleted: None,
         origin_device_id: None,

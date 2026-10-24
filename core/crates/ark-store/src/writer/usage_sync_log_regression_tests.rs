@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use ark_domain::types::{SyncEntity, TrackedApp, UsageSession, VersionVector};
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use super::SqliteWriter;

@@ -4,9 +4,9 @@ use super::*;
 async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fails() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     ark_store::test_support::BookCoverRollbackFixture::prepare(&fixture.db_path())
         .expect("book and image fixtures seed, then revision writes are rejected");

@@ -1,12 +1,12 @@
 #[tokio::test]
 async fn storage_backend_delete_removes_entity() {
     let backend = make_backend().await;
-    let entity = sync_todo("tbk2", "To delete");
+    let entity = sync_object("tbk2", "core.note", "To delete");
     backend.apply_entity(&entity).await.unwrap();
 
     // Now apply a tombstone.
     let tombstone = SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "tbk2".to_string(),
         data: serde_json::Map::new(),
         hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
@@ -40,7 +40,7 @@ async fn storage_backend_tombstone_survives_backend_recreation() {
     let backend = test_backend.backend;
 
     let tombstone = SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "tbk-recreated".to_string(),
         data: serde_json::Map::new(),
         hlc: "2026-01-02T00:00:00.000Z:000002:peer-a".to_string(),
@@ -76,7 +76,7 @@ async fn storage_backend_tombstone_survives_backend_recreation() {
 async fn storage_backend_live_entity_clears_tombstone() {
     let backend = make_backend().await;
     let tombstone = SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "tbk-resurrected".to_string(),
         data: serde_json::Map::new(),
         hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
@@ -86,7 +86,7 @@ async fn storage_backend_live_entity_clears_tombstone() {
     };
     backend.apply_entity(&tombstone).await.unwrap();
 
-    let mut live = sync_todo("tbk-resurrected", "Live again");
+    let mut live = sync_object("tbk-resurrected", "core.note", "Live again");
     live.hlc = "2026-01-03T00:00:00.000Z:000001:peer-a".to_string();
     backend.apply_entity(&live).await.unwrap();
 
@@ -177,7 +177,7 @@ async fn storage_backend_persists_version_vector_progress() {
 #[tokio::test]
 async fn storage_backend_uses_stored_hlc_when_present() {
     let backend = make_backend().await;
-    let entity = sync_todo("tbk3", "With HLC");
+    let entity = sync_object("tbk3", "core.note", "With HLC");
     backend.apply_entity(&entity).await.unwrap();
 
     let mut vector: VersionVector = std::collections::HashMap::new();

@@ -6,9 +6,9 @@ async fn integration_rpc_rejects_revocation_without_local_authorization() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    initialize_test_database(&state, db_path.to_string_lossy().to_string(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let request: Request = serde_json::from_value(json!({
         "operation": "integration.persist_node_authorization",
@@ -40,9 +40,9 @@ async fn integration_rpc_rejects_stale_refresh_lease_fence() {
     let state = fixture.state.clone();
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
-    initialize_test_database(&state, db_path.to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, db_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let node = serde_json::from_value(json!({
         "operation": "integration.persist_node_authorization",
@@ -128,11 +128,13 @@ async fn integration_issuer_key_lookup_rejects_wrong_space() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
-    initialize_test_database(&state, dir.path().join("ark.db").to_string_lossy().into_owned(),)
+    initialize_test_database(
+        &state,
+        dir.path().join("ark.db").to_string_lossy().into_owned(),
+    )
     .await
     .unwrap();
     setup_sync_with_capturing_transport(&state).await;
-
     let error = handle_request(
         &state,
         Request::IntegrationLookupIssuerEncryptionKey {

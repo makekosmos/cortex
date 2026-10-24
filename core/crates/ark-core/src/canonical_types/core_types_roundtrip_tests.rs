@@ -16,18 +16,12 @@ fn core_types() -> Vec<(&'static str, Value)> {
                 "extensions": {}
             }),
         ),
-        (
-            "core.note",
-            json!({"description":null, "extensions":{}}),
-        ),
+        ("core.note", json!({"description":null, "extensions":{}})),
         (
             "core.project",
             json!({"status":"active", "scheduledAt":null, "dueAt":null, "color":null, "extensions":{}}),
         ),
-        (
-            "core.tag",
-            json!({"color":null, "extensions":{}}),
-        ),
+        ("core.tag", json!({"color":null, "extensions":{}})),
         (
             "core.person",
             json!({"firstName":null, "lastName":null, "patronymic":null, "birthDate":null, "extensions":{}}),
@@ -90,7 +84,7 @@ async fn every_core_type_round_trips_through_upsert_get_and_list() {
         assert_eq!(stored["propsJson"], props);
 
         let listed = service
-            .call("list_objects_by_type", json!({"typeId": type_id}))
+            .call("list_objects_by_type", json!({"type_id": type_id}))
             .await
             .expect("core type list succeeds");
         assert_eq!(listed.as_array().map(Vec::len), Some(1));

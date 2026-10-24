@@ -34,9 +34,9 @@ fn merge_operation(
 }
 
 async fn init(state: &Arc<ServiceState>, path: &std::path::Path) {
-    initialize_test_database(state, path.to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(state, path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

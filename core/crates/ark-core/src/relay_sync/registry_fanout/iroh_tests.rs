@@ -336,8 +336,29 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
     relay_a
         .broadcast_live_change(crate::types::SyncEntity {
             id: "after-disable".into(),
-            entity_type: "todo".into(),
-            data: serde_json::Map::new(),
+            entity_type: "object".into(),
+            data: serde_json::Map::from_iter([
+                ("typeId".into(), serde_json::json!("core.note")),
+                ("typeVersion".into(), serde_json::json!("0.1.0")),
+                ("title".into(), serde_json::json!("After disable")),
+                (
+                    "contentJson".into(),
+                    serde_json::json!({"type":"doc", "content":[{"type":"paragraph"}]}),
+                ),
+                (
+                    "propsJson".into(),
+                    serde_json::json!({"description":null, "extensions":{}}),
+                ),
+                (
+                    "createdAt".into(),
+                    serde_json::json!("2026-10-24T00:00:00Z"),
+                ),
+                (
+                    "updatedAt".into(),
+                    serde_json::json!("2026-10-24T00:00:00Z"),
+                ),
+                ("deletedAt".into(), serde_json::Value::Null),
+            ]),
             hlc: crate::hlc::HLC::now("device-A").to_string(),
             deleted: None,
             origin_device_id: Some("device-A".into()),

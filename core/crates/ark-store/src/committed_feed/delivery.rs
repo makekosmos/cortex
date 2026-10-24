@@ -67,49 +67,6 @@ fn project_feed_entity(
                         std::mem::take(map)
                     })
                 }),
-            "todo" => json_data_by_locator(
-                conn,
-                "SELECT json_object(
-                    'id', id, 'title', title, 'notes', notes, 'priority', priority,
-                    'scheduledDate', scheduled_date, 'deadline', deadline,
-                    'reminderDate', reminder_date,
-                    'isToday', json(CASE WHEN is_today != 0 THEN 'true' ELSE 'false' END),
-                    'isEvening', json(CASE WHEN is_evening != 0 THEN 'true' ELSE 'false' END),
-                    'isSomeday', json(CASE WHEN is_someday != 0 THEN 'true' ELSE 'false' END),
-                    'isCompleted', json(CASE WHEN is_completed != 0 THEN 'true' ELSE 'false' END),
-                    'completedAt', completed_at,
-                    'isCancelled', json(CASE WHEN is_cancelled != 0 THEN 'true' ELSE 'false' END),
-                    'cancelledAt', cancelled_at,
-                    'isTrashed', json(CASE WHEN is_trashed != 0 THEN 'true' ELSE 'false' END),
-                    'sortOrder', sort_order, 'headingId', heading_id, 'projectId', project_id,
-                    'areaId', area_id,
-                    'tagIds', CASE WHEN json_valid(tag_ids) THEN json(tag_ids) ELSE json('[]') END,
-                    'checklistItems', CASE WHEN json_valid(checklist_items)
-                        THEN json(checklist_items) ELSE json('[]') END,
-                    'recurrenceRule', CASE WHEN json_valid(recurrence_rule)
-                        THEN json(recurrence_rule) ELSE NULL END,
-                    'createdAt', created_at
-                 ) FROM todos WHERE id = ?1",
-                &entry.entity_id,
-            )?,
-            "project" => json_data_by_locator(
-                conn,
-                "SELECT json_object(
-                    'id', id, 'title', title, 'notes', notes, 'status', status,
-                    'scheduledDate', scheduled_date, 'deadline', deadline,
-                    'sortOrder', sort_order, 'colorTag', color_tag, 'areaId', area_id,
-                    'createdAt', created_at
-                 ) FROM projects WHERE id = ?1",
-                &entry.entity_id,
-            )?,
-            "tag" => json_data_by_locator(
-                conn,
-                "SELECT json_object(
-                    'id', id, 'title', title, 'color', color, 'createdAt', created_at
-                 )
-                 FROM tags WHERE id = ?1",
-                &entry.entity_id,
-            )?,
             "tracked_app" => json_data_by_locator(
                 conn,
                 "SELECT json_object(

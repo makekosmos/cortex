@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn test_sync_changes_serialization() {
         let entity = SyncEntity {
-            entity_type: "todo".to_string(),
+            entity_type: "object".to_string(),
             id: "t1".to_string(),
             data: serde_json::Map::new(),
             hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(parsed["type"], "sync_changes");
         assert_eq!(parsed["batch_id"], "123-abc");
         assert_eq!(parsed["is_last"], true);
-        assert_eq!(parsed["entities"][0]["type"], "todo");
+        assert_eq!(parsed["entities"][0]["type"], "object");
         // deleted should be omitted when None
         assert!(parsed["entities"][0].get("deleted").is_none());
     }
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_sync_entity_deleted_field() {
         let entity = SyncEntity {
-            entity_type: "todo".to_string(),
+            entity_type: "object".to_string(),
             id: "t1".to_string(),
             data: serde_json::Map::new(),
             hlc: "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
@@ -232,7 +232,7 @@ mod tests {
         let json_str = serde_json::to_string(&entity).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert_eq!(parsed["deleted"], true);
-        assert_eq!(parsed["type"], "todo");
+        assert_eq!(parsed["type"], "object");
     }
 
     #[test]

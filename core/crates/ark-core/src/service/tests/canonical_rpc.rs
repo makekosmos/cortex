@@ -154,8 +154,8 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
         initialize_test_database(&state, path.to_string_lossy().into_owned())
-        .await
-        .unwrap();
+            .await
+            .unwrap();
         for id in ["rpc-z", "rpc-a"] {
             handle_request(
                 &state,
@@ -298,8 +298,8 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     initialize_test_database(&state, db_path.to_string_lossy().to_string())
-    .await
-    .unwrap();
+        .await
+        .unwrap();
     let result = handle_request(
         &state,
         Request::UpsertObject {
@@ -328,8 +328,8 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
     let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     initialize_test_database(&state, db_path.to_string_lossy().to_string())
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     let mut props = canonical_task_props();
     props["unexpected"] = json!(true);
@@ -366,4 +366,3 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
     );
     fixture.shutdown().await;
 }
-

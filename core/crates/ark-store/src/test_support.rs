@@ -62,7 +62,6 @@ mod foreign_schema;
 mod inbox;
 mod integration_replication;
 mod integration_replication_snapshot;
-mod legacy_writes;
 mod object_mutation_replay;
 mod object_revision;
 mod object_validation;
@@ -72,8 +71,8 @@ mod registry_enrollment;
 mod replace_object_link;
 mod snapshot;
 mod sync_test_state;
-mod task_merge_inbound;
 mod task_merge_fixture;
+mod task_merge_inbound;
 mod type_mutation;
 mod usage_event_recovery;
 mod usage_rollback;
@@ -106,8 +105,8 @@ pub use registry_enrollment::{reject_device_registry_projection, reject_remote_d
 pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
 pub use snapshot::SnapshotTestFixture;
 pub use sync_test_state::SyncTestState;
-pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_fixture::{TaskMergeFixture, TaskMergeState};
+pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
 pub use usage_event_recovery::{
     CommittedFeedWatermarks, UsageEventRecoveryFixture, UsageEventRecoveryState,

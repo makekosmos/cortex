@@ -136,14 +136,8 @@ fn test_object_model_crud() {
     upsert_object_link(&conn, &link).unwrap();
 
     let data = crate::load_all::load_all(&conn).unwrap();
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "core.note"));
-    assert!(data
-        .object_types
-        .iter()
-        .any(|item| item.id == "core.game"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.note"));
+    assert!(data.object_types.iter().any(|item| item.id == "core.game"));
     assert!(data
         .object_types
         .iter()

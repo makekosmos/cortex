@@ -61,7 +61,10 @@ fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
 #[tokio::test]
 async fn engine_sync_policy_api_round_trips_active_device_policy() {
     let fixture = service_fixture();
-    initialize_test_database(&fixture.state, fixture.db_path().to_string_lossy().into_owned(),)
+    initialize_test_database(
+        &fixture.state,
+        fixture.db_path().to_string_lossy().into_owned(),
+    )
     .await
     .expect("initialize service database");
     get_db_handle(&fixture.state)
@@ -142,9 +145,9 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
 async fn sync_selection_does_not_revoke_an_application_grant() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .expect("initialize service database");
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .expect("initialize service database");
     get_db_handle(&state)
         .unwrap()
         .set_local_sync_key_value(

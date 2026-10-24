@@ -91,7 +91,7 @@ fn disclosure_projects_the_catalog_manifest_contract() {
         disclosure.volume_scopes,
         Some(vec![DisclosureVolumeScope {
             type_id: "core.note".into(),
-            type_version: "1.0.0".into(),
+            type_version: "0.1.0".into(),
             fields: vec!["props.description".into()],
         }])
     );

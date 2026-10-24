@@ -16,9 +16,9 @@ async fn object_snapshot(
 async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let id = "ordinary-task-mutation";
     handle_request(
@@ -33,8 +33,7 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     .await
     .unwrap();
 
-    let storage =
-        ark_store::test_support::TaskMergeFixture::open(&fixture.db_path()).unwrap();
+    let storage = ark_store::test_support::TaskMergeFixture::open(&fixture.db_path()).unwrap();
     let baseline = storage.inspect(id).unwrap();
     let bootstrap_id = baseline.bootstrap.as_ref().unwrap().id.as_str().to_owned();
     let baseline_ids = baseline
@@ -127,7 +126,10 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
     .is_err());
 
     let after = storage.inspect(id).unwrap();
-    assert_eq!(after.object.as_ref().map(|object| object.title.as_str()), Some("before"));
+    assert_eq!(
+        after.object.as_ref().map(|object| object.title.as_str()),
+        Some("before")
+    );
     assert_eq!(after.bootstrap, before.bootstrap);
     assert_eq!(after.operation_count, before.operation_count);
 }
@@ -136,9 +138,9 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
 async fn task_snapshot_token_changes_when_causal_heads_arrive() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let id = "task-snapshot-token";
     handle_request(
@@ -213,9 +215,9 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
 async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let id = "causal-hard-delete-restore";
     handle_request(
@@ -299,9 +301,9 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
 async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
     admit_inbound_peer(&state).await;
 
     let mut initial = canonical_task_object(Some("0.1.0"), canonical_task_props());
@@ -368,7 +370,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     let local_error = handle_request(
         &state,
         Request::UpsertObject {
-            object: task("snapshot-with-merge-history", "local legacy overwrite"),
+            object: task("snapshot-with-merge-history", "local overwrite"),
             expected_snapshot: None,
             operation_id: None,
             device_id: Some("merge-test-device".into()),
@@ -403,7 +405,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     );
     let stored = ark_store::test_support::TaskMergeFixture::open(&fixture.db_path())
         .unwrap()
-        .inspect(&object.id)
+        .inspect("snapshot-with-merge-history")
         .unwrap();
     assert_eq!(stored.object.unwrap().title, "left edit");
     assert_eq!(stored.receipt_count, 1);

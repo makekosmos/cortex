@@ -1,10 +1,6 @@
 use super::*;
 
-async fn fixture() -> (
-    tempfile::TempDir,
-    Arc<ArkHost>,
-    ManagerState,
-) {
+async fn fixture() -> (tempfile::TempDir, Arc<ArkHost>, ManagerState) {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("ark.db");
     let ark = Arc::new(ArkHost::open(db_path.to_str().unwrap()).await.unwrap());

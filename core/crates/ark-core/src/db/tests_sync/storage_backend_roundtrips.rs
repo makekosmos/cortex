@@ -37,24 +37,6 @@ async fn make_backend() -> TestBackend {
     }
 }
 
-fn sync_todo(id: &str, title: &str) -> SyncEntity {
-    let todo = make_todo(id, title);
-    let value = serde_json::to_value(&todo).unwrap();
-    let Value::Object(mut map) = value else {
-        panic!("expected JSON object, got {value:?}")
-    };
-    map.remove("id");
-    SyncEntity {
-        entity_type: "todo".to_string(),
-        id: id.to_string(),
-        data: map,
-        hlc: "2026-01-01T00:00:00.000Z:000001:peer-a".to_string(),
-        deleted: None,
-        origin_device_id: None,
-        origin_seq: None,
-    }
-}
-
 fn sync_tracked_app(id: &str) -> SyncEntity {
     let tracked_app = make_tracked_app(id);
     let value = serde_json::to_value(&tracked_app).unwrap();
@@ -127,28 +109,10 @@ fn sync_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
     }
 }
 
-fn sync_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> SyncEntity {
-    let object_link = make_object_link(id, source_object_id, target_object_id);
-    let value = serde_json::to_value(&object_link).unwrap();
-    let Value::Object(mut map) = value else {
-        panic!("expected JSON object, got {value:?}")
-    };
-    map.remove("id");
-    SyncEntity {
-        entity_type: "object_link".to_string(),
-        id: id.to_string(),
-        data: map,
-        hlc: "2026-01-01T00:00:00.000Z:000011:peer-a".to_string(),
-        deleted: None,
-        origin_device_id: None,
-        origin_seq: None,
-    }
-}
-
 #[tokio::test]
-async fn storage_backend_roundtrip_todo() {
+async fn storage_backend_roundtrip_core_note() {
     let backend = make_backend().await;
-    let entity = sync_todo("tbk1", "Roundtrip");
+    let entity = sync_object("tbk1", "core.note", "Roundtrip");
     backend.apply_entity(&entity).await.unwrap();
 
     let empty_vector: VersionVector = std::collections::HashMap::new();
@@ -156,7 +120,7 @@ async fn storage_backend_roundtrip_todo() {
     let found = loaded
         .iter()
         .find(|e| e.id == "tbk1")
-        .expect("inserted todo should be loaded");
+        .expect("inserted core.note should be loaded");
     assert_eq!(found.entity_type, "object");
     assert_eq!(
         found.data.get("title").and_then(|v| v.as_str()),
@@ -172,7 +136,7 @@ async fn storage_backend_roundtrip_todo() {
 #[tokio::test]
 async fn storage_backend_rejects_invalid_sync_payload() {
     let backend = make_backend().await;
-    let mut entity = sync_todo("tbk-invalid", "Invalid");
+    let mut entity = sync_object("tbk-invalid", "core.note", "Invalid");
     entity.data.insert("title".to_string(), json!(123));
 
     let err = backend
@@ -193,7 +157,7 @@ async fn storage_backend_rejects_invalid_sync_payload() {
 #[tokio::test]
 async fn storage_backend_rejects_unknown_sync_entity_type() {
     let backend = make_backend().await;
-    let mut entity = sync_todo("tbk-unknown", "Unknown");
+    let mut entity = sync_object("tbk-unknown", "core.note", "Unknown");
     entity.entity_type = "unknown_entity".to_string();
 
     let err = backend
@@ -319,11 +283,6 @@ async fn storage_backend_roundtrip_object_entities() {
         .apply_entity(&sync_object("obj-sync-b", "core.game", "Ark game"))
         .await
         .unwrap();
-    backend
-        .apply_entity(&sync_object_link("link-sync", "obj-sync-a", "obj-sync-b"))
-        .await
-        .unwrap();
-
     let empty_vector: VersionVector = std::collections::HashMap::new();
     let loaded = backend.load_entities(&empty_vector).await.unwrap();
 
@@ -336,14 +295,6 @@ async fn storage_backend_roundtrip_object_entities() {
         Some("Ark note")
     );
 
-    let link = loaded
-        .iter()
-        .find(|e| e.entity_type == "object_link" && e.id == "link-sync")
-        .expect("inserted object link should be loaded");
-    assert_eq!(
-        link.data.get("sourceObjectId").and_then(|v| v.as_str()),
-        Some("obj-sync-a")
-    );
     backend
         .backend
         .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))

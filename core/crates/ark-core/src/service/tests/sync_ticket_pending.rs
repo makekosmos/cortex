@@ -21,9 +21,9 @@ fn free_port() -> u16 {
 async fn start_sync_with_unreachable_relay_does_not_block_the_worker() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string(),)
-    .await
-    .unwrap();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let started = std::time::Instant::now();
     handle_request(

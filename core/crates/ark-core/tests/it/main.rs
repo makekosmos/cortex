@@ -18,4 +18,3 @@ mod phase3_game_rpc;
 mod phase3_registry_definition_authority;
 mod phase3_validation;
 mod relay_round_trip;
-mod support;

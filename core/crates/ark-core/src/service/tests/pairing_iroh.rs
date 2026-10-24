@@ -15,7 +15,10 @@ fn free_port() -> u16 {
 }
 
 async fn init_device(state: &Arc<ServiceState>, dir: &crate::test_support::TestTempDir) {
-    initialize_test_database(state, dir.path().join("ark.db").to_string_lossy().to_string(),)
+    initialize_test_database(
+        state,
+        dir.path().join("ark.db").to_string_lossy().to_string(),
+    )
     .await
     .unwrap();
 }

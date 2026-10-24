@@ -152,7 +152,7 @@ async fn iroh_round_trip() {
 
     // 4. A отправляет live_change с тестовой entity.
     let test_entity = ark_core::types::SyncEntity {
-        entity_type: "todo".to_string(),
+        entity_type: "object".to_string(),
         id: "test-entity-iroh-001".to_string(),
         data: {
             let mut m = serde_json::Map::new();
@@ -160,6 +160,8 @@ async fn iroh_round_trip() {
                 "title".to_string(),
                 serde_json::Value::String("Iroh test task".to_string()),
             );
+            m.insert("typeId".to_string(), serde_json::json!("core.note"));
+            m.insert("typeVersion".to_string(), serde_json::json!("0.1.0"));
             m
         },
         hlc: "2026-06-16T00:00:00.000Z:000001:device-A".to_string(),
@@ -194,9 +196,9 @@ async fn iroh_round_trip() {
         matches!(
             &received,
             LanSyncMessage::LiveChange { entity, .. }
-                if entity.id == "test-entity-iroh-001" && entity.entity_type == "todo"
+                if entity.id == "test-entity-iroh-001" && entity.entity_type == "object"
         ),
-        "expected LiveChange for todo test-entity-iroh-001, got {received:?}"
+        "expected LiveChange for object test-entity-iroh-001, got {received:?}"
     );
 
     transport_a.stop().await;

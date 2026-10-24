@@ -182,12 +182,12 @@ fn task_roundtrip_survives_reopen() {
 const PROJECT_A: &str = "project-mobile-a";
 const PROJECT_B: &str = "project-mobile-b";
 
-/// A `core.project` 1.0.0 object: the target of a task's project link.
+/// A `core.project` 0.1.0 object: the target of a task's project link.
 fn project_object(id: &str) -> Value {
     json!({
         "id": id,
         "typeId": "core.project",
-        "typeVersion": "1.0.0",
+        "typeVersion": "0.1.0",
         "title": id,
         "createdAt": "2026-10-10T12:00:00.000Z",
         "updatedAt": "2026-10-10T12:00:00.000Z",

@@ -147,7 +147,6 @@ pub(in crate::db::command) struct ClearAllTask {
     pub reply: oneshot::Sender<Result<(), DbError>>,
 }
 
-
 pub(in crate::db::command) struct UpsertObjectLinkTask {
     pub object_link: ark_domain::types::ObjectLink,
     pub device_id: Option<String>,

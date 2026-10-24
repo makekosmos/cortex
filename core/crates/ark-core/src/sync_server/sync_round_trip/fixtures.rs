@@ -134,6 +134,31 @@ fn task_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> S
     }
 }
 
+fn note_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+    let data = json!({
+        "typeId": "core.note",
+        "typeVersion": "0.1.0",
+        "title": title,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {"description": null, "extensions": {}},
+        "createdAt": "2026-04-01T00:00:00.000Z",
+        "updatedAt": "2026-04-01T00:00:00.000Z",
+        "deletedAt": null
+    })
+    .as_object()
+    .expect("canonical note payload is an object")
+    .clone();
+    SyncEntity {
+        entity_type: "object".to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
+    }
+}
+
 fn sync_entity_from_value(
     entity_type: &str,
     id: &str,

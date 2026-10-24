@@ -16,15 +16,14 @@ pub(crate) use command::{
     CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
     CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand, DbError, DbHandle, DbOwner,
     EnrollPairedDeviceCommand, GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand,
-    IntegrationAdminOutput, IntegrationReadQuery,
-    LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
-    LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery,
-    LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
-    PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery,
-    RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, RestoreSnapshotCommand,
-    SaveLocalSyncProfileCommand, SystemReadQuery, TaskConflictSetQuery, TypeReadQuery,
-    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
-    VerifyRegistryHandshakeQuery,
+    IntegrationAdminOutput, IntegrationReadQuery, LoadAcceptedPeerSyncPolicyQuery,
+    LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery, LoadEntitiesQuery,
+    LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
+    LocalCoreTaskWrite, ObjectReadQuery, PolicyBoundFeedDeliveryPageQuery,
+    PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
+    RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SystemReadQuery,
+    TaskConflictSetQuery, TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{InboxState, MAX_FEED_DELIVERY_BYTES};
 

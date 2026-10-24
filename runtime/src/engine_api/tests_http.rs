@@ -1438,7 +1438,7 @@
                     "object": {
                         "id": "log-test-object",
                         "typeId": "core.note",
-                        "typeVersion": "1.0.0",
+                        "typeVersion": "0.1.0",
                         "title": "SECRET-TITLE-456",
                         "propsJson": {
                             "description": ["SECRET-VALUE-123"],
