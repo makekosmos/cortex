@@ -3,8 +3,6 @@
 // ---------------------------------------------------------------------------
 
 use ark_application::load_all_data::LoadAllData;
-use ark_domain::canonical_type::definitions::is_canonical_version;
-use ark_domain::types::{Area, ArkObject, Heading};
 use rusqlite::Connection;
 
 pub fn clear_all(conn: &Connection) -> Result<(), String> {
@@ -100,28 +98,18 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
 // ---------------------------------------------------------------------------
 
 pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
-    let mut todos = crate::legacy_entities::load_all_todos(conn)?;
-    let mut projects = crate::legacy_entities::load_all_projects(conn)?;
-    let mut tags = crate::legacy_entities::load_all_tags(conn)?;
     let mut tracked_apps = crate::usage::load_all_tracked_apps(conn)?;
     let mut usage_sessions = crate::usage_history::load_all_usage_sessions(conn)?;
     let mut usage_events = crate::usage_history::load_all_usage_events(conn)?;
     let mut objects = crate::objects::list_objects(conn)?;
-    let (mut areas, mut headings) = compatibility_planning_views(&objects);
     let mut object_types = crate::object_types::list(conn)?;
     let mut object_type_summaries = crate::type_registry::list_type_summaries(conn)?;
     let mut object_type_versions = crate::type_registry::list_all_type_versions(conn)?;
     let mut object_type_aliases = crate::type_registry::list_aliases(conn)?;
     let mut object_links = crate::objects::list_object_links(conn)?;
 
-    // The export contract is deterministic even when SQLite's query planner or
-    // insertion order changes.  Keep the legacy collections and the additive
-    // registry collections stable by their primary-key tuples.
-    todos.sort_by(|a, b| a.id.cmp(&b.id));
-    projects.sort_by(|a, b| a.id.cmp(&b.id));
-    areas.sort_by(|a, b| a.id.cmp(&b.id));
-    tags.sort_by(|a, b| a.id.cmp(&b.id));
-    headings.sort_by(|a, b| a.id.cmp(&b.id));
+    // Keep exported collections stable when SQLite's query plan or insertion
+    // order changes.
     tracked_apps.sort_by(|a, b| a.id.cmp(&b.id));
     usage_sessions.sort_by(|a, b| a.id.cmp(&b.id));
     usage_events.sort_by(|a, b| a.id.cmp(&b.id));
@@ -137,11 +125,6 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
     object_links.sort_by(|a, b| a.id.cmp(&b.id));
 
     Ok(LoadAllData {
-        todos,
-        projects,
-        areas,
-        tags,
-        headings,
         tracked_apps,
         usage_sessions,
         usage_events,
@@ -152,58 +135,4 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
         object_type_aliases,
         object_links,
     })
-}
-
-fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Heading>) {
-    let mut areas = Vec::new();
-    let mut headings = Vec::new();
-    for object in objects {
-        if object.type_id != "com.kosmos.project"
-            || !is_canonical_version(&object.type_id, &object.type_version)
-        {
-            continue;
-        }
-        let Some(compatibility) = object
-            .props_json
-            .get("extensions")
-            .and_then(|value| value.get("compatibility"))
-            .and_then(serde_json::Value::as_object)
-        else {
-            continue;
-        };
-        let Some(kind) = compatibility
-            .get("legacyKind")
-            .and_then(serde_json::Value::as_str)
-        else {
-            continue;
-        };
-        let sort_order = compatibility
-            .get("sortOrder")
-            .and_then(serde_json::Value::as_i64)
-            .unwrap_or(0);
-        match kind {
-            "area" => areas.push(Area {
-                id: object.id.clone(),
-                title: object.title.clone(),
-                sort_order,
-                created_at: object.created_at.clone(),
-            }),
-            "heading" => {
-                let Some(project_id) = compatibility
-                    .get("legacyParentProjectId")
-                    .and_then(serde_json::Value::as_str)
-                else {
-                    continue;
-                };
-                headings.push(Heading {
-                    id: object.id.clone(),
-                    title: object.title.clone(),
-                    sort_order,
-                    project_id: project_id.to_string(),
-                });
-            }
-            _ => {}
-        }
-    }
-    (areas, headings)
 }
