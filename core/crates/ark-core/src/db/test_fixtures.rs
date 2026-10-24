@@ -83,7 +83,7 @@ fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) ->
 }
 
 fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
-    ArkObject {
+    let mut object = ArkObject {
         id: id.to_string(),
         type_id: type_id.to_string(),
         type_version: "0.0.0-legacy".to_string(),
@@ -98,7 +98,12 @@ fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
         created_at: "2026-01-01T00:00:00.000Z".to_string(),
         updated_at: "2026-01-01T00:00:00.000Z".to_string(),
         deleted_at: None,
+    };
+    if type_id == "core.note" {
+        object.type_version = "0.1.0".into();
+        object.props_json["extensions"] = json!({});
     }
+    object
 }
 
 fn make_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> ObjectLink {
