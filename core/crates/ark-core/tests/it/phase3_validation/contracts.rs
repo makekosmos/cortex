@@ -12,9 +12,10 @@ fn registration(type_id: &str) -> ark_core::type_registry::TypeRegistration {
 
 fn valid_task_props() -> Value {
     json!({
-        "status": "todo", "priority": "medium", "scheduledAt": null,
-        "dueAt": null, "reminderAt": null, "completedAt": null,
-        "canceledAt": null, "recurrence": null, "checklist": [],
+        "state": {"kind":"open", "at":null},
+        "planning": {"kind":"inbox", "period":"any", "date":null},
+        "deadline": null, "reminders": [], "recurrence": null,
+        "priority": "none", "checklist": [],
         "extensions": { "vendor": { "opaque": true } }
     })
 }
@@ -48,7 +49,7 @@ fn content_contract_error(
     contract: Value,
 ) -> ark_core::canonical_types::validation::CanonicalValidationError {
     validate_canonical(
-        &with_contract(registration("com.kosmos.note"), contract),
+        &with_contract(registration("core.note"), contract),
         &json!({"description":null,"extensions":{}}),
         &valid_doc(),
     )
@@ -57,7 +58,7 @@ fn content_contract_error(
 
 #[test]
 fn malformed_content_contract_is_an_invariant_at_stable_pointer() {
-    let mut malformed_registration = registration("com.kosmos.note");
+    let mut malformed_registration = registration("core.note");
     malformed_registration.content_contract_json = "{".into();
     let failure = validate_canonical(
         &malformed_registration,
@@ -70,7 +71,7 @@ fn malformed_content_contract_is_an_invariant_at_stable_pointer() {
     assert_eq!(failure.keyword.as_deref(), Some("contentContract"));
 
     let mut contract: Value =
-        serde_json::from_str(&registration("com.kosmos.note").content_contract_json).unwrap();
+        serde_json::from_str(&registration("core.note").content_contract_json).unwrap();
     contract["mediaType"] = json!("application/vnd.kosmos.unknown");
     let failure = content_contract_error(contract);
     assert_eq!(failure.code, CanonicalValidationCode::InvariantViolation);
@@ -80,7 +81,7 @@ fn malformed_content_contract_is_an_invariant_at_stable_pointer() {
 #[test]
 fn content_contract_shape_and_parity_fail_closed_before_payload_validation() {
     let base: Value =
-        serde_json::from_str(&registration("com.kosmos.note").content_contract_json).unwrap();
+        serde_json::from_str(&registration("core.note").content_contract_json).unwrap();
     for (field, value) in [
         ("mediaType", json!(4)),
         ("version", json!("1")),
@@ -137,7 +138,7 @@ fn content_contract_shape_and_parity_fail_closed_before_payload_validation() {
 fn schema_keyword_values_are_definition_invariants_recursively() {
     let cases = [
         ("$schema", json!("wrong"), "/$schema"),
-        ("type", json!(123), "/properties/status/type"),
+        ("type", json!(123), "/properties/state/properties/kind/type"),
         ("required", json!("description"), "/required"),
         ("required", json!([4]), "/required"),
         ("properties", json!([]), "/properties"),
@@ -146,13 +147,13 @@ fn schema_keyword_values_are_definition_invariants_recursively() {
             json!("false"),
             "/additionalProperties",
         ),
-        ("enum", json!("todo"), "/properties/status/enum"),
+        ("enum", json!("todo"), "/properties/state/properties/kind/enum"),
         (
             "minimum",
             json!("1"),
             "/properties/recurrence/properties/interval/minimum",
         ),
-        ("maximum", json!([]), "/properties/status/maximum"),
+        ("maximum", json!([]), "/properties/priority/maximum"),
         (
             "minLength",
             json!(-1),
@@ -164,10 +165,10 @@ fn schema_keyword_values_are_definition_invariants_recursively() {
             json!("true"),
             "/properties/checklist/items/uniqueItems",
         ),
-        ("format", json!(false), "/properties/scheduledAt/format"),
+        ("format", json!(false), "/properties/planning/properties/date/format"),
     ];
     for (keyword, value, expected_pointer) in cases {
-        let mut registration = registration("com.kosmos.task");
+        let mut registration = registration("core.task");
         let mut schema: Value = serde_json::from_str(&registration.schema_json).unwrap();
         let target = if expected_pointer.starts_with("/properties/checklist") {
             &mut schema["properties"]["checklist"]["items"]
@@ -175,10 +176,12 @@ fn schema_keyword_values_are_definition_invariants_recursively() {
             &mut schema["properties"]["recurrence"]["properties"]["interval"]
         } else if expected_pointer.contains("userRating") {
             &mut schema["properties"]["userRating"]
-        } else if expected_pointer.contains("status") {
-            &mut schema["properties"]["status"]
-        } else if expected_pointer.contains("scheduledAt") {
-            &mut schema["properties"]["scheduledAt"]
+        } else if expected_pointer.contains("state/properties/kind") {
+            &mut schema["properties"]["state"]["properties"]["kind"]
+        } else if expected_pointer.contains("priority") {
+            &mut schema["properties"]["priority"]
+        } else if expected_pointer.contains("planning/properties/date") {
+            &mut schema["properties"]["planning"]["properties"]["date"]
         } else {
             &mut schema
         };
@@ -234,7 +237,7 @@ fn rich_text_uses_contract_for_nodes_marks_and_attributes() {
         ),
     ];
     for (doc, pointer, keyword) in cases {
-        let failure = error("com.kosmos.note", base.clone(), doc);
+        let failure = error("core.note", base.clone(), doc);
         assert_eq!(failure.code, CanonicalValidationCode::InvalidField);
         assert_eq!(failure.pointer, pointer);
         assert_eq!(failure.keyword.as_deref(), Some(keyword));
@@ -244,14 +247,14 @@ fn rich_text_uses_contract_for_nodes_marks_and_attributes() {
 #[test]
 fn validates_frozen_task_props_and_open_extensions() {
     assert!(validate_canonical(
-        &registration("com.kosmos.task"),
+        &registration("core.task"),
         &valid_task_props(),
         &valid_doc()
     )
     .is_ok());
     let mut props = valid_task_props();
     props["unexpected"] = json!(true);
-    let failure = error("com.kosmos.task", props, valid_doc());
+    let failure = error("core.task", props, valid_doc());
     assert_eq!(failure.code, CanonicalValidationCode::InvalidField);
     assert_eq!(failure.pointer, "/unexpected");
 }
@@ -261,22 +264,22 @@ fn reports_required_type_enum_and_rfc6901_pointers() {
     let mut props = valid_task_props();
     props.as_object_mut().unwrap().remove("priority");
     assert_eq!(
-        error("com.kosmos.task", props, valid_doc()).pointer,
+        error("core.task", props, valid_doc()).pointer,
         "/priority"
     );
     let mut props = valid_task_props();
     props["priority"] = json!(4);
     assert_eq!(
-        error("com.kosmos.task", props, valid_doc()).pointer,
+        error("core.task", props, valid_doc()).pointer,
         "/priority"
     );
     let mut props = valid_task_props();
-    props["status"] = json!("unknown");
+    props["state"]["kind"] = json!("unknown");
     assert_eq!(
-        error("com.kosmos.task", props, valid_doc()).pointer,
-        "/status"
+        error("core.task", props, valid_doc()).pointer,
+        "/state/kind"
     );
     let mut props = valid_task_props();
     props["extensions"] = json!({"a/b": {"~key": false}});
-    assert!(validate_canonical(&registration("com.kosmos.task"), &props, &valid_doc()).is_ok());
+    assert!(validate_canonical(&registration("core.task"), &props, &valid_doc()).is_ok());
 }

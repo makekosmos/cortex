@@ -14,7 +14,6 @@ mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_ticket_pairing;
 mod phase3_agenda_contract;
-mod phase3_canonical_types;
 mod phase3_delphi_projection;
 mod phase3_game_rpc;
 mod phase3_registry_definition_authority;

@@ -29,11 +29,11 @@ fn object_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
         entity_type: "object".into(),
         id: id.into(),
         data: serde_json::from_value::<Map<String, serde_json::Value>>(json!({
-            "typeId": "note_obj",
-            "typeVersion": "0.0.0-legacy",
+            "typeId": "core.note",
+            "typeVersion": "0.1.0",
             "title": title,
             "contentJson": {"type": "doc", "content": []},
-            "propsJson": {},
+            "propsJson": {"description":null,"extensions":{}},
             "createdAt": "2026-10-15T00:00:00.000Z",
             "updatedAt": "2026-10-15T00:00:00.000Z",
             "deletedAt": null
