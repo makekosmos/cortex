@@ -46,7 +46,6 @@ pub use replication_storage::{
 };
 pub use sync_bind::SyncBind;
 pub use types::{
-    Area, ArkObject, ArkObjectSummary, ArkObjectWrite, Heading, LoadAllData, ObjectLink,
-    ObjectType, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent,
-    UsageSession, VersionVector,
+    ArkObject, ArkObjectSummary, ArkObjectWrite, LoadAllData, ObjectLink, ObjectType, PeerRecord,
+    Project, SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent, UsageSession, VersionVector,
 };
