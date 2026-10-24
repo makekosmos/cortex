@@ -52,7 +52,7 @@ const UNSUPPORTED_EXTENSION_KEYS: [&str; 7] = [
 
 /// Поля, которые перезапись отбрасывает намеренно: топливо (`fuel_cost`) удалено
 /// из продукта. Это не «неподдерживаемые» поля, их значение не останавливает
-/// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core-task.bak`.
+/// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core.bak`.
 const REMOVED_EXTENSION_KEYS: [&str; 1] = ["fuel_cost"];
 #[derive(Debug, Clone)]
 pub(super) struct LegacyTask {
