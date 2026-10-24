@@ -10,9 +10,6 @@ use rusqlite::Connection;
 use std::fs;
 use std::io::Write;
 
-#[path = "legacy_startup_restore.rs"]
-mod legacy_startup_restore;
-
 fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
     let dir = crate::test_support::test_temp_dir().unwrap();
     let db_path = dir.path().join("ark.db");
