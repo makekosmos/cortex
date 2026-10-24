@@ -1,13 +1,13 @@
 pub(crate) const GAME_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.game",
+  "typeId": "core.game",
   "name": "Игра",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["game_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -82,35 +82,35 @@ pub(crate) const GAME_DEFINITION: &str = r###"{
     {
       "type": "cover-image",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.image",
+      "targetTypeId": "core.image",
       "min": 0,
       "max": 1
     },
     {
       "type": "background-image",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.image",
+      "targetTypeId": "core.image",
       "min": 0,
       "max": 1
     },
     {
       "type": "note",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.note",
+      "targetTypeId": "core.note",
       "min": 0,
       "max": null
     },
     {
       "type": "task",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.task",
+      "targetTypeId": "core.task",
       "min": 0,
       "max": null
     },
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     }
@@ -120,5 +120,5 @@ pub(crate) const GAME_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "de41b108ef21958b901851a92561dfb046cffcedf29e6cb7c355d97396f1ba99"
+  "schemaHash": "37c858f0ba362a4df247f50b4955ae9b92961671664b66314f019ac06e8f420c"
 }"###;

@@ -28,6 +28,34 @@ fn default_props() -> Value {
 }
 
 #[test]
+fn core_types_are_the_only_registered_first_party_versions() -> Result<(), String> {
+    let registrations = canonical_type_registrations()?;
+    let type_ids: Vec<_> = registrations
+        .iter()
+        .map(|registration| registration.type_id.as_str())
+        .collect();
+    assert_eq!(
+        type_ids,
+        vec![
+            "core.task",
+            "core.note",
+            "core.project",
+            "core.tag",
+            "core.person",
+            "core.image",
+            "core.time-entry",
+            "core.game",
+            "core.book",
+        ]
+    );
+    for registration in registrations {
+        assert_eq!(registration.version, "0.1.0", "{}", registration.type_id);
+        assert!(registration.aliases.is_empty(), "{}", registration.type_id);
+    }
+    Ok(())
+}
+
+#[test]
 fn core_task_is_the_current_version_and_claims_no_legacy_alias() -> Result<(), String> {
     let registration = core_task()?;
     assert!(registration.aliases.is_empty());

@@ -17,8 +17,8 @@ async fn local_object_and_usage_writes_record_sync_state() {
 
     let object = ArkObjectWrite {
         id: "obj-local-write".to_string(),
-        type_id: "com.kosmos.game".to_string(),
-        type_version: Some("1.0.0".to_string()),
+        type_id: "core.game".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: "Local Game".to_string(),
         content_json: json!({}),
         props_json: json!({

@@ -16,14 +16,14 @@ async fn sync_policy_generation_changes_when_only_filter_changes() {
     let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
     profile.set_rule(
         "type",
-        "com.kosmos.note",
+        "core.note",
         ark_domain::selective_sync::SyncMode::Full,
     );
     backend.set_selective_sync_profile(Some(profile.clone()));
     let unfiltered = backend.selective_sync_policy_generation();
     profile.set_rule_with_filter(
         "type",
-        "com.kosmos.note",
+        "core.note",
         ark_domain::selective_sync::SyncMode::Full,
         ark_domain::selective_sync::FilterV1::parse(
             r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#,

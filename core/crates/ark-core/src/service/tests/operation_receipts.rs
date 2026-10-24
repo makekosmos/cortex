@@ -4,8 +4,8 @@ fn upsert_params(title: &str) -> serde_json::Value {
     json!({
         "object": {
             "id": "operation-receipt-note",
-            "typeId": "com.kosmos.note",
-            "typeVersion": "1.0.0",
+            "typeId": "core.note",
+            "typeVersion": "0.1.0",
             "title": title,
             "contentJson": {"type":"doc","content":[]},
             "propsJson": {"description":null,"extensions":{}},

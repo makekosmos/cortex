@@ -1,13 +1,13 @@
 pub(crate) const PERSON_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.person",
+  "typeId": "core.person",
   "name": "Человек",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["person_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -134,7 +134,7 @@ pub(crate) const PERSON_DEFINITION: &str = r###"{
     {
       "type": "photo",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.image",
+      "targetTypeId": "core.image",
       "min": 0,
       "max": 1
     }
@@ -144,5 +144,5 @@ pub(crate) const PERSON_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "664f5f1858db443e53c0d304c29822a00fa862c48e361fca455350adc64372c3"
+  "schemaHash": "232e97b6c807e0d5c0c4b243b77109a3ea521ee5e047d913d8132d74bc65a9ce"
 }"###;

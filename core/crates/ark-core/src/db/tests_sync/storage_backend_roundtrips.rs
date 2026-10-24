@@ -312,11 +312,11 @@ async fn storage_backend_pages_large_usage_history() {
 async fn storage_backend_roundtrip_object_entities() {
     let backend = make_backend().await;
     backend
-        .apply_entity(&sync_object("obj-sync-a", "note_obj", "Ark note"))
+        .apply_entity(&sync_object("obj-sync-a", "core.note", "Ark note"))
         .await
         .unwrap();
     backend
-        .apply_entity(&sync_object("obj-sync-b", "game_obj", "Ark game"))
+        .apply_entity(&sync_object("obj-sync-b", "core.game", "Ark game"))
         .await
         .unwrap();
     backend

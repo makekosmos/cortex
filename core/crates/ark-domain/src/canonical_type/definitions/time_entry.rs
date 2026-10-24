@@ -1,13 +1,13 @@
 pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
-  "typeId": "com.kosmos.time-entry",
+  "typeId": "core.time-entry",
   "name": "Запись времени",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "aliases": ["time_entry_obj"],
+  "aliases": [],
   "schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -139,14 +139,14 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
     {
       "type": "for-task",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.task",
+      "targetTypeId": "core.task",
       "min": 0,
       "max": 1
     },
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     }
@@ -156,5 +156,5 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "e455f5ef3e0b60bcd5097488c2e8ccdbf8c58ace92d02a22d94f8496ff5ed4b5"
+  "schemaHash": "84c8bebd6e44a635879c32a57f6a1dc3e69a46bce08f43a410efffe5140735e9"
 }"###;

@@ -9,7 +9,6 @@ mod person;
 mod project;
 mod registrations;
 mod tag;
-mod task;
 mod time_entry;
 
 pub(crate) use book::BOOK_DEFINITION;
@@ -23,5 +22,4 @@ pub use registrations::{
     canonical_type_registrations, current_canonical_version, is_canonical_version,
 };
 pub(crate) use tag::TAG_DEFINITION;
-pub(crate) use task::TASK_DEFINITION;
 pub(crate) use time_entry::TIME_ENTRY_DEFINITION;

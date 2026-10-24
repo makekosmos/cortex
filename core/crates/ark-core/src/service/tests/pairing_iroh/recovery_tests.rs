@@ -17,8 +17,8 @@ async fn upsert_note(state: &Arc<ServiceState>, id: &str, title: &str) {
         Request::UpsertObject {
             object: ArkObjectWrite {
                 id: id.into(),
-                type_id: "com.kosmos.note".into(),
-                type_version: Some("1.0.0".into()),
+                type_id: "core.note".into(),
+                type_version: Some("0.1.0".into()),
                 title: title.into(),
                 content_json: json!({"type": "doc", "content": []}),
                 props_json: json!({"description": null, "extensions": {}}),

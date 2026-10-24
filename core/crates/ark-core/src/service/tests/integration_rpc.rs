@@ -296,8 +296,8 @@ async fn production_writer_object_mutations_replay_receipts_without_new_revision
             "deviceId": "ignored-for-principal",
             "object": {
                 "id": "production-upsert-note",
-                "typeId": "com.kosmos.note",
-                "typeVersion": "1.0.0",
+                "typeId": "core.note",
+                "typeVersion": "0.1.0",
                 "title": title,
                 "contentJson": {"type":"doc","content":[]},
                 "propsJson": {"description":null,"extensions":{}},

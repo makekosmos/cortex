@@ -31,8 +31,8 @@ fn task(id: &str, title: &str) -> ArkObjectWrite {
 fn project(id: &str, title: &str) -> ArkObjectWrite {
     ArkObjectWrite {
         id: id.to_string(),
-        type_id: "com.kosmos.project".to_string(),
-        type_version: Some("1.0.0".to_string()),
+        type_id: "core.project".to_string(),
+        type_version: Some("0.1.0".to_string()),
         title: title.to_string(),
         content_json: json!({
             "type": "doc",
@@ -185,7 +185,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
 
     let stale_identity = snapshot(&state, "guarded-task").await;
     storage
-        .set_object_type_identity("guarded-task", "com.kosmos.note", "1.0.0")
+        .set_object_type_identity("guarded-task", "core.note", "0.1.0")
         .unwrap();
     assert_eq!(
         guarded_upsert(&state, task("guarded-task", "wrong-type"), stale_identity)

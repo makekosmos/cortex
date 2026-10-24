@@ -1,11 +1,10 @@
-// KOS-397: `core.task` 0.1.0 — the new task contract. Registered next to the
-// legacy `com.kosmos.task` 1.1.0, which stays until the one-off rewrite runs.
+// `core.task` 0.1.0 is the canonical task contract.
 pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
   "typeId": "core.task",
   "name": "Задача",
   "version": "0.1.0",
   "ownerKind": "core",
-  "ownerId": "com.kosmos.core",
+  "ownerId": "core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",
@@ -424,14 +423,14 @@ pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
     {
       "type": "project",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.project",
+      "targetTypeId": "core.project",
       "min": 0,
       "max": 1
     },
     {
       "type": "tag",
       "direction": "outbound",
-      "targetTypeId": "com.kosmos.tag",
+      "targetTypeId": "core.tag",
       "min": 0,
       "max": null
     }
@@ -452,5 +451,5 @@ pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
       "secrets"
     ]
   },
-  "schemaHash": "20fbcf5ec311b37563d2b18bf29fb79c781b3eaa9fb28cca76620678f1f8abb1"
+  "schemaHash": "7deaeac7698789a497fdb17f2e005c3b8f6c2d046576685173fe8b6467fbefef"
 }"###;
