@@ -26,7 +26,12 @@ fn fresh_init_registers_core_canonical_authority_without_aliases() {
 
     for registration in registrations {
         assert!(registration.type_id.starts_with("core."));
-        assert_eq!(registration.version, "0.1.0");
+        let expected_version = if registration.type_id == "core.task" {
+            "0.2.0"
+        } else {
+            "0.1.0"
+        };
+        assert_eq!(registration.version, expected_version);
         assert!(registration.aliases.is_empty());
         let versions = list_type_versions(&connection, &registration.type_id).unwrap();
         assert!(versions.iter().any(|version| {
@@ -56,7 +61,7 @@ fn inbound_legacy_object_type_entity_cannot_mutate_canonical_row() {
     let canonical = get_type(&connection, "core.task", None)
         .unwrap()
         .expect("canonical type remains registered");
-    assert_eq!(canonical.summary.current_version, "0.1.0");
+    assert_eq!(canonical.summary.current_version, "0.2.0");
     assert_eq!(canonical.summary.status, "active");
     assert!(list_type_versions(&connection, "core.task")
         .unwrap()
