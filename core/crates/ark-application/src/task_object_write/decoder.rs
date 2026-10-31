@@ -1,4 +1,4 @@
-use super::{CORE_TASK_ID, CORE_TASK_VERSION};
+use super::CORE_TASK_ID;
 use ark_domain::object_write::RemoteObjectWrite;
 use ark_domain::types::ObjectLink;
 use serde_json::{Map, Value};
@@ -31,7 +31,10 @@ pub fn decode_remote_core_task_write(
         }
     }
     if data.get("typeId").and_then(Value::as_str) != Some(CORE_TASK_ID)
-        || data.get("typeVersion").and_then(Value::as_str) != Some(CORE_TASK_VERSION)
+        || !data
+            .get("typeVersion")
+            .and_then(Value::as_str)
+            .is_some_and(ark_domain::canonical_type::definitions::is_supported_core_task_version)
     {
         return Err(RemoteCoreTaskWriteDecodeError::UnsupportedType);
     }
