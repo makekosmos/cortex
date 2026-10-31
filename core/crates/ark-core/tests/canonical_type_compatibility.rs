@@ -9,9 +9,7 @@ fn canonical_definitions_and_validation_remain_available_from_ark_core() {
     let registrations = canonical_type_registrations().expect("canonical definitions are valid");
     let registration = registrations
         .iter()
-        .find(|registration| {
-            registration.type_id == "core.task" && registration.version == "0.2.0"
-        })
+        .find(|registration| registration.type_id == "core.task" && registration.version == "0.2.0")
         .expect("core.task is registered");
 
     assert_eq!(
