@@ -26,8 +26,10 @@ fn fresh_init_registers_core_canonical_authority_without_aliases() {
 
     for registration in registrations {
         assert!(registration.type_id.starts_with("core."));
-        assert!(registration.version == "0.1.0"
-            || registration.type_id == "core.task" && registration.version == "0.2.0");
+        assert!(
+            registration.version == "0.1.0"
+                || registration.type_id == "core.task" && registration.version == "0.2.0"
+        );
         assert!(registration.aliases.is_empty());
         let versions = list_type_versions(&connection, &registration.type_id).unwrap();
         assert!(versions.iter().any(|version| {
