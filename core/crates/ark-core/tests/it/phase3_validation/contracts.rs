@@ -147,7 +147,11 @@ fn schema_keyword_values_are_definition_invariants_recursively() {
             json!("false"),
             "/additionalProperties",
         ),
-        ("enum", json!("todo"), "/properties/state/properties/kind/enum"),
+        (
+            "enum",
+            json!("todo"),
+            "/properties/state/properties/kind/enum",
+        ),
         (
             "minimum",
             json!("1"),
@@ -165,7 +169,11 @@ fn schema_keyword_values_are_definition_invariants_recursively() {
             json!("true"),
             "/properties/checklist/items/uniqueItems",
         ),
-        ("format", json!(false), "/properties/planning/properties/date/format"),
+        (
+            "format",
+            json!(false),
+            "/properties/planning/properties/date/format",
+        ),
     ];
     for (keyword, value, expected_pointer) in cases {
         let mut registration = registration("core.task");
@@ -263,16 +271,10 @@ fn validates_frozen_task_props_and_open_extensions() {
 fn reports_required_type_enum_and_rfc6901_pointers() {
     let mut props = valid_task_props();
     props.as_object_mut().unwrap().remove("priority");
-    assert_eq!(
-        error("core.task", props, valid_doc()).pointer,
-        "/priority"
-    );
+    assert_eq!(error("core.task", props, valid_doc()).pointer, "/priority");
     let mut props = valid_task_props();
     props["priority"] = json!(4);
-    assert_eq!(
-        error("core.task", props, valid_doc()).pointer,
-        "/priority"
-    );
+    assert_eq!(error("core.task", props, valid_doc()).pointer, "/priority");
     let mut props = valid_task_props();
     props["state"]["kind"] = json!("unknown");
     assert_eq!(

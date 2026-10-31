@@ -1,10 +1,10 @@
-// `core.task` 0.1.0 is the canonical task contract.
+// 0.2.0 retargets task relations to the canonical core project/tag types.
 pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
   "typeId": "core.task",
   "name": "Задача",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "ownerKind": "core",
-  "ownerId": "core",
+  "ownerId": "com.kosmos.core",
   "status": "active",
   "baseTypeId": null,
   "createdAt": "1970-01-01T00:00:00.000Z",

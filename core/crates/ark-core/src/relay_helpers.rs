@@ -270,7 +270,12 @@ mod tests {
         let (storage_a, _database_a) = make_storage("device-a").await;
         let (storage_b, _database_b) = make_storage("device-b").await;
         storage_a
-            .apply_entity(&core_note_entity("relay-existing", "Existing", "device-a", 1))
+            .apply_entity(&core_note_entity(
+                "relay-existing",
+                "Existing",
+                "device-a",
+                1,
+            ))
             .await
             .unwrap();
         let relay_a = relay_sync(

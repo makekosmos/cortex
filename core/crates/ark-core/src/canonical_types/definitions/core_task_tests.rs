@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 fn core_task() -> Result<TypeRegistration, String> {
     canonical_type_registrations()?
         .into_iter()
-        .find(|r| r.type_id == "core.task" && r.version == "0.1.0")
-        .ok_or_else(|| "core.task 0.1.0 is not registered".to_owned())
+        .find(|r| r.type_id == "core.task" && r.version == "0.2.0")
+        .ok_or_else(|| "core.task 0.2.0 is not registered".to_owned())
 }
 
 fn empty_doc() -> Value {
@@ -30,25 +30,16 @@ fn default_props() -> Value {
 #[test]
 fn core_types_are_the_only_registered_first_party_versions() -> Result<(), String> {
     let registrations = canonical_type_registrations()?;
-    let type_ids: Vec<_> = registrations
+    let task_versions: Vec<_> = registrations
         .iter()
-        .map(|registration| registration.type_id.as_str())
+        .filter(|registration| registration.type_id == "core.task")
+        .map(|registration| registration.version.as_str())
         .collect();
-    assert_eq!(
-        type_ids,
-        vec![
-            "core.task",
-            "core.note",
-            "core.project",
-            "core.tag",
-            "core.person",
-            "core.image",
-            "core.time-entry",
-            "core.game",
-            "core.book",
-        ]
-    );
-    for registration in registrations {
+    assert_eq!(task_versions, vec!["0.1.0", "0.2.0"]);
+    for registration in registrations
+        .into_iter()
+        .filter(|registration| registration.type_id != "core.task")
+    {
         assert_eq!(registration.version, "0.1.0", "{}", registration.type_id);
         assert!(registration.aliases.is_empty(), "{}", registration.type_id);
     }
@@ -61,7 +52,22 @@ fn core_task_is_the_current_version_and_claims_no_legacy_alias() -> Result<(), S
     assert!(registration.aliases.is_empty());
     assert_eq!(
         current_canonical_version("core.task")?,
-        Some("0.1.0".to_owned())
+        Some("0.2.0".to_owned())
+    );
+    Ok(())
+}
+
+#[test]
+fn core_task_010_preserves_legacy_relation_targets() -> Result<(), String> {
+    let registration = canonical_type_registrations()?
+        .into_iter()
+        .find(|r| r.type_id == "core.task" && r.version == "0.1.0")
+        .ok_or_else(|| "core.task 0.1.0 is not registered".to_owned())?;
+    assert!(registration.relations_json.contains("com.kosmos.project"));
+    assert!(registration.relations_json.contains("com.kosmos.tag"));
+    assert_eq!(
+        registration.schema_hash,
+        "20fbcf5ec311b37563d2b18bf29fb79c781b3eaa9fb28cca76620678f1f8abb1"
     );
     Ok(())
 }

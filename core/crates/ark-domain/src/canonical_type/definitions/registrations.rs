@@ -3,7 +3,7 @@ use serde_json::Value;
 
 /// Return the current first-party registrations.
 pub fn canonical_type_registrations() -> Result<Vec<TypeRegistration>, String> {
-    [
+    let mut registrations: Vec<_> = [
         CORE_TASK_DEFINITION,
         NOTE_DEFINITION,
         PROJECT_DEFINITION,
@@ -16,7 +16,57 @@ pub fn canonical_type_registrations() -> Result<Vec<TypeRegistration>, String> {
     ]
     .into_iter()
     .map(registration_from_literal)
-    .collect()
+    .collect::<Result<_, _>>()?;
+    let task_index = registrations
+        .iter()
+        .position(|registration| registration.type_id == "core.task")
+        .ok_or_else(|| "core.task is not registered".to_owned())?;
+    let mut previous_task = registrations[task_index].clone();
+    previous_task.version = "0.1.0".into();
+    let mut relations: Value =
+        serde_json::from_str(&previous_task.relations_json).map_err(|error| error.to_string())?;
+    let relations = relations
+        .as_array_mut()
+        .ok_or_else(|| "core.task relations must be an array".to_owned())?;
+    for (relation, target) in relations
+        .iter_mut()
+        .zip(["com.kosmos.project", "com.kosmos.tag"])
+    {
+        let target_type = relation
+            .get("targetTypeId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "core.task relation target is missing".to_owned())?;
+        if !matches!(target_type, "core.project" | "core.tag") {
+            return Err("unexpected current core.task relation target".into());
+        }
+        relation["targetTypeId"] = Value::String(target.into());
+    }
+    previous_task.relations_json =
+        serde_json::to_string(&relations).map_err(|error| error.to_string())?;
+    let schema: Value =
+        serde_json::from_str(&previous_task.schema_json).map_err(|error| error.to_string())?;
+    let ui_schema: Value =
+        serde_json::from_str(&previous_task.ui_schema_json).map_err(|error| error.to_string())?;
+    let content_contract: Value = serde_json::from_str(&previous_task.content_contract_json)
+        .map_err(|error| error.to_string())?;
+    let relations: Value =
+        serde_json::from_str(&previous_task.relations_json).map_err(|error| error.to_string())?;
+    let sync_policy: Value =
+        serde_json::from_str(&previous_task.sync_policy_json).map_err(|error| error.to_string())?;
+    previous_task.schema_hash = canonical_schema_hash(
+        &schema,
+        &ui_schema,
+        &content_contract,
+        &relations,
+        &sync_policy,
+    )?;
+    if previous_task.schema_hash
+        != "20fbcf5ec311b37563d2b18bf29fb79c781b3eaa9fb28cca76620678f1f8abb1"
+    {
+        return Err("frozen core.task 0.1.0 hash mismatch".into());
+    }
+    registrations.insert(task_index, previous_task);
+    Ok(registrations)
 }
 
 /// Newest registered version of a canonical type. `None` for unknown types.
