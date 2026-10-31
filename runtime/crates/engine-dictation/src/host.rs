@@ -20,7 +20,7 @@ use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 
 use super::config::{
-    self, has_api_key, DictationConfig, InjectMode, NetworkProfile, PillStyle, TriggerMode,
+    self, has_api_key, DictationConfig, InjectMode, NetworkProfile, TriggerMode,
 };
 use super::groq::{self, GroqError};
 #[cfg(windows)]

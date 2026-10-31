@@ -248,7 +248,11 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
                 .await
                 .ok();
             let mut state = host.state.lock().await;
-            *state = HostState::idle();
+            let prev_hwnd = state.prev_hwnd;
+            *state = HostState {
+                prev_hwnd,
+                ..HostState::idle()
+            };
             let snapshot = state.clone();
             drop(state);
             host.emit_state(&snapshot).await;
