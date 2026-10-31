@@ -5,7 +5,11 @@ pub(super) fn is_full_core_task(entity: &SyncEntity) -> bool {
     entity.entity_type == "object"
         && entity.deleted != Some(true)
         && entity.data.get("typeId").and_then(Value::as_str) == Some("core.task")
-        && entity.data.get("typeVersion").and_then(Value::as_str) == Some("0.1.0")
+        && entity
+            .data
+            .get("typeVersion")
+            .and_then(Value::as_str)
+            .is_some_and(ark_domain::canonical_type::definitions::is_supported_core_task_version)
         && entity.data.contains_key("contentJson")
         && entity.data.contains_key("propsJson")
 }

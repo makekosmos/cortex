@@ -109,7 +109,12 @@ fn is_generated_legacy_definition(
 pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryError> {
     let registrations = canonical_type_registrations()
         .map_err(|detail| RegistryError::InvariantViolation { detail })?;
-    let canonical_ids: Vec<_> = registrations.iter().map(|r| r.type_id.clone()).collect();
+    let mut canonical_ids = Vec::new();
+    for registration in &registrations {
+        if !canonical_ids.contains(&registration.type_id) {
+            canonical_ids.push(registration.type_id.clone());
+        }
+    }
     // A type may be registered at several versions; `object_types.current_version`
     // must name one of them — a superseded registration still on disk is a
     // pending upgrade installed by `ensure_canonical_type_versions`, not a

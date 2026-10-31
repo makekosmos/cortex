@@ -152,4 +152,59 @@ mod tests {
             assert!(exists, "Store bootstrap creates {table}");
         }
     }
+
+    #[test]
+    fn core_task_relation_change_preserves_010_and_promotes_to_020() -> Result<(), String> {
+        let connection = Connection::open_in_memory().map_err(|error| error.to_string())?;
+        init_schema_prerequisites(&connection)?;
+        let previous = ark_domain::canonical_type::definitions::canonical_type_registrations()?
+            .into_iter()
+            .find(|registration| {
+                registration.type_id == "core.task" && registration.version == "0.1.0"
+            })
+            .ok_or_else(|| "core.task 0.1.0 registration is missing".to_owned())?;
+        crate::canonical_migrations::registry::install_definition(&connection, &previous)
+            .map_err(|error| format!("installing historical type failed: {error}"))?;
+
+        let plan = crate::canonical_migrations::registry::preflight_registry(&connection)
+            .map_err(|error| format!("historical registry preflight failed: {error}"))?;
+        assert_eq!(
+            plan.canonical_type_ids
+                .iter()
+                .filter(|type_id| type_id.as_str() == "core.task")
+                .count(),
+            1
+        );
+        crate::canonical_migrations::registry::prepare_registry_for_objects(&connection)
+            .map_err(|error| format!("historical registry upgrade failed: {error}"))?;
+
+        let current: String = connection
+            .query_row(
+                "SELECT current_version FROM object_types WHERE id='core.task'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(current, "0.2.0");
+        let old_relations: String = connection
+            .query_row(
+                concat!(
+                    "SELECT relations_json FROM object_type_versions ",
+                    "WHERE type_id='core.task' AND version='0.1.0'"
+                ),
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(old_relations, previous.relations_json);
+        let versions: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM object_type_versions WHERE type_id='core.task'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(versions, 2);
+        Ok(())
+    }
 }

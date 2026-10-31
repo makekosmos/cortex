@@ -214,8 +214,7 @@ async fn authenticated_core_note_update_is_durable_and_relayable() {
         .await
         .unwrap();
     note.hlc = "2026-10-16T00:00:01.000Z:000001:origin-peer".into();
-    note
-        .data
+    note.data
         .insert("title".into(), json!("Live updated title"));
     source
         .apply_authenticated_entity(&note, "origin-peer")

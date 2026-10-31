@@ -5,16 +5,25 @@ fn enforces_task_recurrence_and_checklist_bounds() {
         "kind":"calendar", "frequency":"weekly", "interval":0,
         "daysOfWeek":[1], "timeZone":null, "end":null
     });
-    assert_eq!(error("core.task", props, valid_doc()).pointer, "/recurrence/interval");
+    assert_eq!(
+        error("core.task", props, valid_doc()).pointer,
+        "/recurrence/interval"
+    );
     let mut props = valid_task_props();
     props["recurrence"] = json!({
         "kind":"calendar", "frequency":"weekly", "interval":1,
         "daysOfWeek":[1,1], "timeZone":null, "end":null
     });
-    assert_eq!(error("core.task", props, valid_doc()).pointer, "/recurrence/daysOfWeek");
+    assert_eq!(
+        error("core.task", props, valid_doc()).pointer,
+        "/recurrence/daysOfWeek"
+    );
     let mut props = valid_task_props();
     props["checklist"] = json!([{"id":"","text":"x","done":false,"rank":"a"}]);
-    assert_eq!(error("core.task", props, valid_doc()).pointer, "/checklist/0/id");
+    assert_eq!(
+        error("core.task", props, valid_doc()).pointer,
+        "/checklist/0/id"
+    );
 }
 
 #[test]
@@ -67,9 +76,7 @@ fn format_is_annotation_but_rich_text_is_strict() {
         "source":"manual",
         "taskTitle":null,
         "extensions":{}});
-    assert!(
-        validate_canonical(&registration("core.time-entry"), &props, &valid_doc()).is_ok()
-    );
+    assert!(validate_canonical(&registration("core.time-entry"), &props, &valid_doc()).is_ok());
     let mut doc = valid_doc();
     doc["content"][0]["content"][0]["marks"][0] = json!({"type":"unknown"});
     let failure = error(
@@ -154,7 +161,12 @@ fn day_fields_enforce_date_on_the_core_contract() {
     props["planning"]["kind"] = json!("date");
     props["planning"]["date"] = json!("2026-05-15");
     assert!(validate_canonical(&task, &props, &valid_doc()).is_ok());
-    for bad in ["2026-05-15T08:00:00.000Z", "2026-13-40", "2026-5-15", "next friday"] {
+    for bad in [
+        "2026-05-15T08:00:00.000Z",
+        "2026-13-40",
+        "2026-5-15",
+        "next friday",
+    ] {
         props["planning"]["date"] = json!(bad);
         let failure = validate_canonical(&task, &props, &valid_doc()).unwrap_err();
         assert_eq!(failure.pointer, "/planning/date", "{bad}");
@@ -168,7 +180,6 @@ fn day_fields_enforce_date_on_the_core_contract() {
     let failure = validate_canonical(&project, &props, &valid_doc()).unwrap_err();
     assert_eq!(failure.pointer, "/scheduledAt");
 }
-
 
 #[test]
 fn unknown_format_name_is_an_invariant_violation() {

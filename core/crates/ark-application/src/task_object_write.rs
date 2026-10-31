@@ -19,7 +19,6 @@ pub use decoder::{decode_remote_core_task_write, RemoteCoreTaskWriteDecodeError}
 pub use local::{LocalCoreTaskWrite, LocalCoreTaskWriteCommit, TaskWriteOperationResult};
 
 const CORE_TASK_ID: &str = "core.task";
-const CORE_TASK_VERSION: &str = "0.1.0";
 
 enum Input {
     Local {
@@ -104,7 +103,11 @@ fn apply_core_task_write(
             ark_domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
                 .to_string()
         })?;
-    if resolved_type_id != CORE_TASK_ID || resolved_version != CORE_TASK_VERSION {
+    if resolved_type_id != CORE_TASK_ID
+        || !ark_domain::canonical_type::definitions::is_supported_core_task_version(
+            &resolved_version,
+        )
+    {
         return Err("object_write_slice_unsupported_type".into());
     }
     let object = ark_domain::canonical_type::prepare_resolved_object(

@@ -101,7 +101,11 @@ pub fn apply_inbound_task_mutation(
 }
 
 fn validate_task(object: &ArkObject) -> Result<(), String> {
-    if object.type_id != "core.task" || object.type_version != "0.1.0" {
+    if object.type_id != "core.task"
+        || !ark_domain::canonical_type::definitions::is_supported_core_task_version(
+            &object.type_version,
+        )
+    {
         return Err("object_write_slice_unsupported_type".into());
     }
     Ok(())
@@ -134,7 +138,11 @@ pub fn apply_task_upsert(
     device_id: &str,
     expected_snapshot: Option<&ObjectWriteSnapshot>,
 ) -> Result<Vec<SyncEntity>, String> {
-    if object.type_id != "core.task" || object.type_version != "0.1.0" {
+    if object.type_id != "core.task"
+        || !ark_domain::canonical_type::definitions::is_supported_core_task_version(
+            &object.type_version,
+        )
+    {
         return Err("object_write_slice_unsupported_type".into());
     }
     session.commit_local_task_upsert(object, links, device_id, expected_snapshot)

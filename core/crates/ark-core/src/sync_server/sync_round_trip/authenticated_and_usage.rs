@@ -13,7 +13,12 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
     )
     .await;
     storage_a
-        .apply_entity(&task_object_entity("hmac-entity-a", "Protected", "device-a", 1))
+        .apply_entity(&task_object_entity(
+            "hmac-entity-a",
+            "Protected",
+            "device-a",
+            1,
+        ))
         .await
         .unwrap();
 
@@ -63,8 +68,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
                 entity.entity_type == "object"
                     && entity.id == "hmac-entity-a"
                     && entity.data.get("typeId") == Some(&json!("core.task"))
-            })
-                && server_a.connected_peer_count().await == 1
+            }) && server_a.connected_peer_count().await == 1
             {
                 break;
             }
@@ -101,7 +105,12 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
     let storage_a = make_storage("device-a").await;
     let storage_b = make_storage("device-b").await;
     storage_a
-        .apply_entity(&task_object_entity("hmac-denied-a", "Denied", "device-a", 1))
+        .apply_entity(&task_object_entity(
+            "hmac-denied-a",
+            "Denied",
+            "device-a",
+            1,
+        ))
         .await
         .unwrap();
 

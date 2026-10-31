@@ -634,6 +634,11 @@ async fn setup() -> Result<SetupState, DynError> {
                         },
                         || dictation_packages.dictation_app_running(),
                         |event| {
+                            if event.get("event").and_then(serde_json::Value::as_str)
+                                == Some("dictation.trigger")
+                            {
+                                dictation_packages.ensure_dictation_running();
+                            }
                             let host = &dictation_host_for_triggers;
                             async move { dictation::handle_engine_trigger(host, &event).await }
                         },
