@@ -23,6 +23,61 @@ pub(super) async fn types_register_package_definitions(
     Ok(json!(true))
 }
 
+/// Register a type supplied by an application through `types.register`.
+/// `schema` is either the JSON schema object or its serialized form; the type
+/// is stored in ARK and survives Engine restarts.
+pub(super) async fn types_register(
+    state: &Arc<ServiceState>,
+    type_id: String,
+    version: String,
+    schema: Value,
+    name: Option<String>,
+    app_id: Option<String>,
+) -> Result<Value, String> {
+    let schema_json = match schema {
+        Value::Object(_) => serde_json::to_string(&schema).map_err(|error| error.to_string())?,
+        Value::String(raw) => {
+            let parsed: Value = serde_json::from_str(&raw)
+                .map_err(|error| format!("invalid schema JSON: {error}"))?;
+            serde_json::to_string(&parsed).map_err(|error| error.to_string())?
+        }
+        _ => return Err("schema must be a JSON object".into()),
+    };
+    let owner_id = app_id
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            type_id
+                .rsplit_once('.')
+                .map(|(namespace, _)| namespace.to_owned())
+        })
+        .ok_or_else(|| format!("type id '{type_id}' has no namespace"))?;
+    let registration = crate::type_registry::TypeRegistration {
+        name: name
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| type_id.clone()),
+        type_id: type_id.clone(),
+        schema_json,
+        ui_schema_json: "{}".into(),
+        content_contract_json: "{}".into(),
+        relations_json: "[]".into(),
+        sync_policy_json: "{}".into(),
+        version: version.clone(),
+        schema_hash: String::new(),
+        owner_kind: "app".into(),
+        owner_id: Some(owner_id),
+        status: "active".into(),
+        base_type_id: None,
+        aliases: Vec::new(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let replay_notices = get_db_handle(state)?
+        .submit_register_application_type(db::CommandContext::engine(), registration)
+        .await
+        .map_err(|error| error.to_string())?;
+    emit_replay_notices(replay_notices);
+    Ok(json!({ "typeId": type_id, "version": version }))
+}
+
 pub(super) async fn types_get(
     state: &Arc<ServiceState>,
     type_id: String,

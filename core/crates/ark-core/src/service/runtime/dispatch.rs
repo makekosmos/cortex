@@ -131,6 +131,13 @@ pub(crate) async fn handle_request(
         Request::TypesRegisterPackageDefinitions { registrations } => {
             types::types_register_package_definitions(state, registrations).await
         }
+        Request::TypesRegister {
+            type_id,
+            version,
+            schema,
+            name,
+            app_id,
+        } => types::types_register(state, type_id, version, schema, name, app_id).await,
         Request::TypesGet { type_id, version } => types::types_get(state, type_id, version).await,
         Request::TypesListVersions { type_id } => types::types_list_versions(state, type_id).await,
         Request::TypesResolveAlias { alias } => types::types_resolve_alias(state, alias).await,

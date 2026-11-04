@@ -12,6 +12,17 @@ impl SqliteWriter {
         })
     }
 
+    pub fn register_application_type(
+        &mut self,
+        registration: ark_domain::canonical_type::TypeRegistration,
+    ) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, StoreTransactionFailure<String>>
+    {
+        self.write_with_capabilities(|capabilities| {
+            let session = type_mutation_session(capabilities);
+            ark_application::type_mutation::register_application_type(&session, &registration)
+        })
+    }
+
     pub fn upsert_object_type(
         &mut self,
         object_type: ark_domain::types::ObjectType,

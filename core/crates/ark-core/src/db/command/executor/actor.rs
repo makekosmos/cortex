@@ -41,9 +41,10 @@ pub(in crate::db::command) use task::{
     ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
     ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask,
     LocalObjectDeleteTask, LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask,
-    Publish, RegisterPackageTypesTask, ReplaceObjectLinkTask, SyncPolicyWriteTask,
-    SyncProgressWriteTask, TrackedAppMutationTask, TypedMaintenance, UpsertObjectLinkTask,
-    UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
+    Publish, RegisterApplicationTypeTask, RegisterPackageTypesTask, ReplaceObjectLinkTask,
+    SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask, TypedMaintenance,
+    UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask,
+    WriterTask,
 };
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 

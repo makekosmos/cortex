@@ -90,6 +90,36 @@ pub fn validate_type_id(value: &str, kind: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A type belongs to the owner whose id prefixes it: `owner.type.name`.
+/// Empty path segments are rejected so `owner..name` cannot widen a namespace.
+pub fn validate_type_namespace(type_id: &str, owner_id: &str) -> Result<(), String> {
+    validate_type_id(type_id, "type id")?;
+    validate_type_id(owner_id, "owner id")?;
+    let prefix = format!("{owner_id}.");
+    let belongs = type_id
+        .strip_prefix(&prefix)
+        .is_some_and(|rest| !rest.is_empty() && rest.split('.').all(|segment| !segment.is_empty()));
+    if !belongs {
+        return Err(format!(
+            "type id '{type_id}' is outside namespace '{owner_id}'"
+        ));
+    }
+    Ok(())
+}
+
+/// First-party core types (and their aliases) are system-owned and immutable
+/// through application registration.
+pub fn is_system_type(type_id: &str) -> Result<bool, String> {
+    let canonical = crate::canonical_type::definitions::canonical_type_registrations()?;
+    Ok(canonical.iter().any(|registration| {
+        registration.type_id == type_id
+            || registration
+                .aliases
+                .iter()
+                .any(|alias| alias.alias == type_id)
+    }))
+}
+
 pub fn validate_version(value: &str) -> Result<Version, String> {
     if value == LEGACY_VERSION {
         return Err("reserved legacy version".into());

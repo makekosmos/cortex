@@ -149,6 +149,7 @@ mod sync_lifecycle;
 mod sync_ticket_pending;
 mod task_merge;
 mod type_mutation_commands;
+mod type_registration;
 mod usage_commands;
 mod usage_read_queries;
 

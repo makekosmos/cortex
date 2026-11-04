@@ -5,6 +5,11 @@ pub(in crate::db::command) struct RegisterPackageTypesTask {
     pub reply: oneshot::Sender<Result<Vec<ark_application::sync_storage::ReplayNotice>, DbError>>,
 }
 
+pub(in crate::db::command) struct RegisterApplicationTypeTask {
+    pub registration: ark_domain::canonical_type::TypeRegistration,
+    pub reply: oneshot::Sender<Result<Vec<ark_application::sync_storage::ReplayNotice>, DbError>>,
+}
+
 pub(in crate::db::command) struct UpsertObjectTypeTask {
     pub object_type: ark_domain::types::ObjectType,
     pub device_id: Option<String>,
@@ -47,6 +52,12 @@ impl_type_mutation_task!(
     Vec<ark_application::sync_storage::ReplayNotice>,
     register_package_types,
     { registrations }
+);
+impl_type_mutation_task!(
+    RegisterApplicationTypeTask,
+    Vec<ark_application::sync_storage::ReplayNotice>,
+    register_application_type,
+    { registration }
 );
 impl_type_mutation_task!(
     UpsertObjectTypeTask,

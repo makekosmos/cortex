@@ -20,6 +20,10 @@ impl TypeEntityKind {
 
 pub trait TypeMutationSession {
     fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String>;
+    fn register_application_type(
+        &self,
+        registration: &TypeRegistration,
+    ) -> Result<Vec<ReplayNotice>, String>;
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String>;
     fn delete_object_type(&self, id: &str) -> Result<(), String>;
     fn record_local_revision(
@@ -69,6 +73,13 @@ pub fn register_package_types(
         notices.extend(session.register_type(registration)?);
     }
     Ok(notices)
+}
+
+pub fn register_application_type(
+    session: &dyn TypeMutationSession,
+    registration: &TypeRegistration,
+) -> Result<Vec<ReplayNotice>, String> {
+    session.register_application_type(registration)
 }
 
 pub fn upsert_object_type(

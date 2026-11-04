@@ -11,6 +11,12 @@ const SCHEMA_TYPES: &[&str] = &[
     "object", "array", "string", "number", "integer", "boolean", "null",
 ];
 
+/// Validate a standalone type schema used by `types.register`, before it has
+/// a registration row or an object to validate against.
+pub fn validate_type_schema(schema: &Value) -> Result<(), CanonicalValidationError> {
+    check_schema(schema, "", true)
+}
+
 pub fn validate_canonical(
     registration: &TypeRegistration,
     props: &Value,
@@ -18,7 +24,7 @@ pub fn validate_canonical(
 ) -> Result<(), CanonicalValidationError> {
     let schema: Value =
         serde_json::from_str(&registration.schema_json).map_err(|_| invariant("", "schema"))?;
-    check_schema(&schema, "", true)?;
+    validate_type_schema(&schema)?;
     validate_schema(&schema, props, "", false)?;
 
     let contract: Value = serde_json::from_str(&registration.content_contract_json)
