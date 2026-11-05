@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { aliasGateTmp, openGateTmp, reportGateTmpSweep } from "./gate-tmp.mjs";
@@ -7,9 +6,6 @@ const cortex = resolve(import.meta.dirname, "..", "..");
 const target = process.env.CARGO_TARGET_DIR
   ? resolve(process.env.CARGO_TARGET_DIR)
   : resolve(cortex, "target");
-const executable = (name) =>
-  resolve(target, "debug", `${name}${process.platform === "win32" ? ".exe" : ""}`);
-const bridge = executable("ark-markdown-bridge");
 // Tests must not write to the user's %TEMP% (KOS-270): every cargo
 // invocation gets a fresh per-run scratch dir as TMP/TEMP/TMPDIR, swept and
 // reported once the test processes have exited and released their handles.
@@ -40,26 +36,17 @@ function run(cwd, args) {
 
 // One feature set for the whole gate (KOS-270): the gate must test exactly
 // what ships, so every crate is compiled once with the same flags.
-// The engine features below enable the two test-only fixture binaries and
-// the loopback-origin broker path the engine integration tests exercise;
-// the compile_error in runtime/src/lib.rs keeps them out of release builds.
 // ark-core needs no feature flags: iroh is a regular dependency now.
 const GATE_FEATURES = [
   "--features",
   // KOS-337: engine/local-dictation — the gate must test what ships, and
   // release builds compile the local dictation backend in.
-  "engine/package-worker-fixture,engine/markdown-bridge-fixture,engine/local-dictation",
+  "engine/local-dictation",
 ];
 
-// These are integration-test fixtures, not production dependencies. Build
-// them explicitly with the same feature set so the test run reuses the
-// artifacts instead of recompiling, and so `-p engine` alone has the
-// same prerequisites in the standalone Makekosmos layout as in CI.
+// Build the engine binaries explicitly with the same feature set so the test
+// run reuses the artifacts instead of recompiling.
 run(cortex, ["build", "-p", "engine", "--bins", ...GATE_FEATURES]);
-
-if (!existsSync(bridge)) {
-  throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
-}
 
 // Tests run through cargo-nextest, one process per test, in parallel across
 // every test binary: `cargo test` runs the binaries one after another, so the
