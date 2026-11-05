@@ -43,14 +43,32 @@ fn request_deserialization_accepts_iroh_config() {
 fn request_deserialization_accepts_code_alias_for_pairing() {
     let request = serde_json::from_value::<Request>(json!({
         "operation": "connect_with_pairing_code",
-        "code": "endpointdemo123"
+        "code": "endpointdemo123",
+        "bind": "loopback"
     }))
     .expect("code alias should deserialize for pairing requests");
 
-    let Request::ConnectWithPairingCode { pairing_code, .. } = request else {
+    let Request::ConnectWithPairingCode { pairing_code, bind } = request else {
         panic!("expected connect_with_pairing_code, got {request:?}");
     };
     assert_eq!(pairing_code, "endpointdemo123");
+    assert_eq!(bind, SyncBind::Loopback);
+}
+
+#[test]
+fn pairing_requests_require_an_explicit_bind() {
+    let missing_bind = json!({
+        "operation": "connect_with_pairing_code",
+        "pairing_code": "endpointdemo123"
+    });
+    assert!(
+        serde_json::from_value::<Request>(missing_bind).is_err(),
+        "connect_with_pairing_code must not default to all-interfaces"
+    );
+    assert!(
+        serde_json::from_value::<Request>(json!({"operation": "show_pairing_code"})).is_err(),
+        "show_pairing_code must not default to all-interfaces"
+    );
 }
 
 async fn test_storage(

@@ -30,12 +30,6 @@ fn default_sync_filter() -> Value {
     json!({})
 }
 
-/// Pairing is an explicit LAN opt-in, so callers that omit a bind keep the
-/// production all-interfaces behaviour; tests pin `loopback` instead.
-fn default_pairing_bind() -> SyncBind {
-    SyncBind::AllInterfaces
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
@@ -346,7 +340,6 @@ pub(crate) enum Request {
     ConnectWithPairingCode {
         #[serde(alias = "code")]
         pairing_code: String,
-        #[serde(default = "default_pairing_bind")]
         bind: SyncBind,
     },
     /// KOS-369 consent decisions on the receiving side. `accept_pairing`
@@ -381,7 +374,6 @@ pub(crate) enum Request {
     /// that owns the firewall prompt; `get_own_iroh_ticket` stays a passive
     /// read and never changes the bind.
     ShowPairingCode {
-        #[serde(default = "default_pairing_bind")]
         bind: SyncBind,
     },
 

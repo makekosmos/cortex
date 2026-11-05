@@ -199,7 +199,7 @@ impl MobileEngine {
     /// (the desktop-side user action for pairing; `show_pairing_code` in
     /// ark terms).
     pub fn show_pairing_code(&self) -> Result<String, EngineError> {
-        self.call_service("show_pairing_code", json!({}))
+        self.call_service("show_pairing_code", json!({"bind": "all_interfaces"}))
     }
 
     /// Passive read of our iroh ticket — `null` inside `data` until sync is
@@ -210,7 +210,10 @@ impl MobileEngine {
 
     /// Pair with a peer by its ticket/pairing code.
     pub fn connect_with_pairing_code(&self, code: String) -> Result<String, EngineError> {
-        self.call_service("connect_with_pairing_code", json!({"pairing_code": code}))
+        self.call_service(
+            "connect_with_pairing_code",
+            json!({"pairing_code": code, "bind": "all_interfaces"}),
+        )
     }
 
     /// Shut the ark worker down. Idempotent; further calls return
