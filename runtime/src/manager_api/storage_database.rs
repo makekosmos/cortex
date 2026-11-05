@@ -14,12 +14,10 @@ fn table_group(table: &str) -> (&'static str, String) {
         ("sync", "Данные синхронизации")
     } else if table.contains("migration") || table.starts_with("legacy_type") {
         ("migrations", "История обновлений базы")
-    } else if matches!(table, "object_links" | "external_refs") {
+    } else if table == "object_links" {
         ("links", "Связи между записями")
     } else if table == "object_local_state" {
         ("local_state", "Состояние записей на этом компьютере")
-    } else if table.starts_with("integration_") || table == "authorized_nodes" {
-        ("integrations", "Настройки и разрешения интеграций")
     } else if table == "sqlite_schema" {
         ("schema", "Структура базы данных")
     } else {
@@ -91,7 +89,11 @@ fn read_detail(db_path: &Path, immutable: bool) -> Result<Value, String> {
         .query_row("PRAGMA page_size", [], |row| row.get(0))
         .map_err(|e| e.to_string())?;
     if pages > 0 {
-        parts.push(json!({"id":"free_pages","label":"Свободное место внутри базы","bytes":pages*page_size}));
+        parts.push(json!({
+            "id": "free_pages",
+            "label": "Свободное место внутри базы",
+            "bytes": pages * page_size,
+        }));
     }
     Ok(json!(parts))
 }

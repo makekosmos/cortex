@@ -1,5 +1,4 @@
 use super::*;
-use ark_application::external_ref::ExternalRefUpsert;
 
 async fn publish_registry_event(
     state: &Arc<ServiceState>,
@@ -183,17 +182,6 @@ pub(super) async fn set_sync_kv(
 ) -> Result<Value, String> {
     get_db_handle(state)?
         .set_local_sync_key_value(db::CommandContext::engine(), key, value)
-        .await
-        .map(|()| json!(true))
-        .map_err(|error| error.to_string())
-}
-
-pub(super) async fn external_refs_upsert(
-    state: &Arc<ServiceState>,
-    params: ExternalRefUpsert,
-) -> Result<Value, String> {
-    get_db_handle(state)?
-        .submit_external_ref_upsert(db::CommandContext::engine(), params)
         .await
         .map(|()| json!(true))
         .map_err(|error| error.to_string())

@@ -98,7 +98,6 @@ pub trait SyncRuntimeStorage:
     + TaskMergeDeliveryPort
     + crate::replication_storage::AuthenticatedEntityBackend
     + crate::replication_storage::PeerIdentityBackend
-    + crate::replication_storage::IntegrationReplicationBackend
 {
 }
 
@@ -111,7 +110,6 @@ impl<T> SyncRuntimeStorage for T where
         + TaskMergeDeliveryPort
         + crate::replication_storage::AuthenticatedEntityBackend
         + crate::replication_storage::PeerIdentityBackend
-        + crate::replication_storage::IntegrationReplicationBackend
         + ?Sized
 {
 }

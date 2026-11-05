@@ -210,45 +210,6 @@ impl ConnectedServerSession {
         }
     }
 
-    pub(super) async fn handle_signed_integration_frame(
-        &self,
-        actor: &ServerSessionActor,
-        frame: crate::SignedSyncEnvelope,
-        sender: &SessionIoSender,
-    ) -> bool {
-        let Some(authenticated_peer_id) = self.peer.device_id.as_deref() else {
-            return false;
-        };
-        if frame.space_id != self.request.space_id
-            || frame.origin_node_id != authenticated_peer_id
-            || frame.recipient_node_id != self.request.device_id
-        {
-            return true;
-        }
-        if self
-            .storage
-            .apply_signed_integration_frame(
-                &frame,
-                &self.request.space_id,
-                authenticated_peer_id,
-                &self.request.device_id,
-            )
-            .await
-            .is_err()
-            || actor.is_revoked()
-        {
-            return !actor.is_revoked();
-        }
-        sender
-            .send(LanSyncMessage::SignedIntegrationAck {
-                message_id: frame.message_id,
-                accepted: true,
-            })
-            .await
-            .is_ok()
-            && !actor.is_revoked()
-    }
-
     pub(super) async fn handle_peer_list(
         &self,
         actor: &ServerSessionActor,

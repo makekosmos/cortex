@@ -13,7 +13,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::agents::AgentsService;
 use crate::app_index::AppIndex;
 use crate::ark_host::ArkHost;
 use crate::auth;

@@ -1,5 +1,3 @@
-use crate::integration_replication::SignedSyncEnvelope;
-
 impl RelaySync {
     fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
         if self.transport.session().is_none() {
@@ -43,62 +41,6 @@ impl RelaySync {
                 app_version: peer.app_version.clone(),
             })
         })
-    }
-
-    /// Route an addressed integration frame through the configured transport.
-    /// Broadcast transports reject this message class; addressed transports
-    /// such as Iroh enforce authenticated recipient and writer-time authority.
-    pub async fn send_signed_integration_frame(
-        &self,
-        frame: SignedSyncEnvelope,
-    ) -> Result<(), String> {
-        self.storage
-            .validate_outbound_signed_integration_frame(
-                &frame,
-                &self.config.space_id,
-                &self.config.device_id,
-            )
-            .await?;
-        let recipient = frame.recipient_node_id.clone();
-        self.transport
-            .session()
-            .ok_or_else(|| "addressed transport is not supported".to_owned())?
-            .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
-            .await
-    }
-
-    async fn handle_signed_integration_frame(
-        &self,
-        from_device_id: String,
-        frame: SignedSyncEnvelope,
-        transport_public_key: Option<String>,
-    ) {
-        let accepted = frame.space_id == self.config.space_id
-            && frame.origin_node_id == from_device_id
-            && frame.recipient_node_id == self.config.device_id
-            && self.is_authenticated_peer(&from_device_id).await
-            && self
-                .storage
-                .apply_signed_integration_frame_with_transport(
-                    &frame,
-                    &self.config.space_id,
-                    &from_device_id,
-                    &self.config.device_id,
-                    transport_public_key.as_deref(),
-                )
-                .await
-                .is_ok();
-        if let Some(session) = self.transport.session() {
-            let _ = session
-                .send_to(
-                    &from_device_id,
-                    LanSyncMessage::SignedIntegrationAck {
-                        message_id: frame.message_id,
-                        accepted,
-                    },
-                )
-                .await;
-        }
     }
 
     fn make_hello(&self) -> LanSyncMessage {

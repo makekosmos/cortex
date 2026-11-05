@@ -8,8 +8,6 @@ pub struct WsServer {
     pub(super) command_bus: Arc<CommandBus>,
     pub(super) pomodoro_host: Arc<PomodoroHost>,
     pub(super) dictation_host: Arc<DictationHost>,
-    pub(super) agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    pub(super) agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     pub(super) protocol_usage: Arc<ProtocolUsageStore>,
     pub(super) correlation_id: Arc<String>,
     pub(super) lifecycle: Arc<WsLifecycle>,
@@ -63,11 +61,8 @@ impl WsServer {
             .parse()
             .expect("hardcoded socket literal is always valid");
         let listener = TcpListener::bind(addr).await?;
-        let (agent_events, _) = tokio::sync::broadcast::channel(512);
         let command_bus = Arc::new(CommandBus::new());
         let pomodoro_host = PomodoroHost::new(data_dir.clone());
-        let agents = Arc::new(tokio::sync::OnceCell::new());
-        let agents_data_dir = Arc::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
         let desktop_authority = Arc::new(crate::desktop_authority::DesktopAuthorityRegistry::new());
         let dispatcher = make_dispatcher(
@@ -77,9 +72,6 @@ impl WsServer {
             dictation_host.clone(),
             app_index.clone(),
             file_index.clone(),
-            agents.clone(),
-            agents_data_dir.clone(),
-            agent_events.clone(),
             usage_diagnostics.clone(),
             rpc_diagnostics.clone(),
             protocol_usage.clone(),
@@ -95,8 +87,6 @@ impl WsServer {
             command_bus,
             pomodoro_host,
             dictation_host,
-            agents,
-            agent_events,
             protocol_usage,
             correlation_id: Arc::new(correlation_id),
             lifecycle,
@@ -128,10 +118,6 @@ impl WsServer {
             .local_addr()
             .map(|a| a.port())
             .unwrap_or_default()
-    }
-
-    pub fn agents_handle(&self) -> Arc<tokio::sync::OnceCell<Arc<AgentsService>>> {
-        self.agents.clone()
     }
 
     pub fn dispatcher(&self) -> crate::engine_dispatch::EngineDispatcher {
@@ -166,9 +152,6 @@ fn make_dispatcher(
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
-    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    agents_data_dir: Arc<std::path::PathBuf>,
-    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
@@ -184,9 +167,6 @@ fn make_dispatcher(
             let dictation_host = dictation_host.clone();
             let app_index = app_index.clone();
             let file_index = file_index.clone();
-            let agents = agents.clone();
-            let agents_data_dir = agents_data_dir.clone();
-            let agent_events = agent_events.clone();
             let usage_diagnostics = usage_diagnostics.clone();
             let rpc_diagnostics = rpc_diagnostics.clone();
             let protocol_usage = protocol_usage.clone();
@@ -202,9 +182,6 @@ fn make_dispatcher(
                     dictation_host,
                     app_index,
                     file_index,
-                    agents,
-                    agents_data_dir,
-                    agent_events,
                     usage_diagnostics,
                     rpc_diagnostics,
                     protocol_usage,

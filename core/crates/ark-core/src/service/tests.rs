@@ -261,13 +261,6 @@ impl crate::sync_transport::IrohSessionTransport for CapturingSyncTransport {
         crate::sync_transport::SyncTransport::send(self, message)
     }
 
-    fn set_outbound_authorizer(
-        &self,
-        _authorizer: Arc<dyn ark_sync_contracts::transport::OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
     fn bind_peer_for_control(&self, _device_id: &str, _key: &str) -> Result<(), String> {
         Ok(())
     }
@@ -370,8 +363,6 @@ fn canonical_task_props() -> Value {
 
 mod canonical_rpc;
 mod device_registry;
-mod external_ref_commands;
-mod integration_rpc;
 mod object_mutation_commands;
 mod operation_receipts;
 mod sync_policy;

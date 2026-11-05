@@ -28,8 +28,6 @@ pub fn requires_registry_admission(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::LiveReceiptAck { .. }
             | LanSyncMessage::TaskMergeBatch { .. }
             | LanSyncMessage::TaskMergeBatchAck { .. }
-            | LanSyncMessage::SignedIntegrationFrame { .. }
-            | LanSyncMessage::SignedIntegrationAck { .. }
             | LanSyncMessage::PeerList { .. }
     )
 }

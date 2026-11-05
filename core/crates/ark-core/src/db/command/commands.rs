@@ -3,9 +3,6 @@ mod device_registry_admission;
 mod device_registry_command;
 mod device_registry_handshake;
 mod device_registry_sync;
-mod integration_admin;
-mod integration_read;
-mod integration_replication;
 mod object_read;
 mod sync_mutation;
 mod sync_policy;
@@ -31,11 +28,6 @@ pub(crate) use device_registry_command::AppendLocalRegistryEventCommand;
 pub(crate) use device_registry_handshake::VerifyRegistryHandshakeQuery;
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
-};
-pub(crate) use integration_admin::{IntegrationAdminCommand, IntegrationAdminOutput};
-pub(crate) use integration_read::IntegrationReadQuery;
-pub(crate) use integration_replication::{
-    ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{CommittedFeedProgress, CommittedFeedProgressCommand};

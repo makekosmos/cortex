@@ -8,9 +8,6 @@ pub(super) async fn dispatch_standard(
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
-    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    agents_data_dir: Arc<std::path::PathBuf>,
-    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
@@ -32,7 +29,7 @@ pub(super) async fn dispatch_standard(
                 &app_index,
                 &protocol_usage,
                 &correlation_id,
-                &agents_data_dir,
+                manager_state.data_dir(),
             )
             .await,
         )
@@ -48,20 +45,6 @@ pub(super) async fn dispatch_standard(
         result
             .map(LocalResponse::ok)
             .unwrap_or_else(LocalResponse::err)
-    } else if let Some(rest) = operation.strip_prefix("agents.") {
-        match agents
-            .get_or_try_init(|| async {
-                AgentsService::new_with_events(&agents_data_dir, agent_events.clone())
-            })
-            .await
-        {
-            Ok(service) => service
-                .handle(rest, params, client)
-                .await
-                .map(LocalResponse::ok)
-                .unwrap_or_else(LocalResponse::err),
-            Err(error) => LocalResponse::err(error.to_string()),
-        }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
             let result = if rest == "lifecycle.set_autostart" {

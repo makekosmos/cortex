@@ -19,8 +19,6 @@ pub struct IrohTransport {
     /// dial loop must not resurrect them on its own: a declined or
     /// cancelled pairing attempt would re-prompt the responder forever.
     suppressed_endpoints: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<EndpointId>>>,
-    outbound_authorizer:
-        Arc<tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>>,
     /// Every spawned task (relay watch, accept/dial loops, per-connection
     /// pumps) — aborted and joined by `stop()`.
     tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
@@ -42,7 +40,6 @@ impl IrohTransport {
             suppressed_endpoints: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
-            outbound_authorizer: Arc::new(tokio::sync::RwLock::new(None)),
             tasks: Arc::new(Mutex::new(Vec::new())),
         }
     }

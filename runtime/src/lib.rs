@@ -29,10 +29,8 @@ pub use engine_base::*;
 // worker processes, grants or the package store. The in-process ARK host and
 // the native-app registry stay in the Engine.
 pub mod ark_host;
-pub mod background_task;
 pub mod native_apps;
 
-pub mod agents;
 pub mod appearance;
 pub mod backend_tray;
 pub mod command_bus;

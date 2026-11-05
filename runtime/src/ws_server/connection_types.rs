@@ -12,7 +12,6 @@ pub(super) struct ConnectionLoopArgs {
     pub(super) pomodoro_host: Arc<PomodoroHost>,
     pub(super) dictation_host: Arc<DictationHost>,
     pub(super) ark_host: Arc<ArkHost>,
-    pub(super) agent_events: tokio::sync::broadcast::Sender<Value>,
     pub(super) correlation_id: Arc<String>,
     pub(super) client_id: ClientId,
     pub(super) desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,

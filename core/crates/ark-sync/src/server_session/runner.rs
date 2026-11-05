@@ -43,20 +43,6 @@ pub(super) async fn run_connected_server_session_controlled(
                         return DirectServerSessionEnd::Closed;
                     }
                 }
-                Some(super::ServerSessionIntent::SendSignedFrame(frame)) => {
-                    if actor.is_revoked() {
-                        return close_for_control(session_io, actor.control());
-                    }
-                    if session_io
-                        .sender()
-                        .send_bulk_wait(LanSyncMessage::SignedIntegrationFrame { frame })
-                        .await
-                        .is_err()
-                        || actor.is_revoked()
-                    {
-                        return DirectServerSessionEnd::Closed;
-                    }
-                }
                 Some(super::ServerSessionIntent::WakeCommittedFeed) => {
                     let Some(mut connected) = actor.connected.take() else {
                         return DirectServerSessionEnd::Failed(

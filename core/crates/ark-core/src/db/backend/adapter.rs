@@ -1,13 +1,11 @@
 use super::core_task::is_full_core_task;
 use super::SqliteStorageBackend;
 use crate::db::{
-    ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
-    CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
-    LoadPolicyBoundEntitiesPageQuery, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery, CommandClass, CommandContext,
+    GetSyncKeyValueQuery, LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery,
+    UsageCompleteThroughQuery,
 };
-use crate::replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
-};
+use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
 use crate::types::{SyncEntity, VersionVector};
 use ark_application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
@@ -348,107 +346,3 @@ impl PeerProgressPort for SqliteStorageBackend {
 }
 
 // ---------------------------------------------------------------------------
-
-#[async_trait::async_trait]
-impl IntegrationReplicationBackend for SqliteStorageBackend {
-    async fn validate_outbound_signed_integration_frame(
-        &self,
-        frame: &crate::integration_replication::SignedSyncEnvelope,
-        expected_space_id: &str,
-        expected_origin_node_id: &str,
-    ) -> Result<(), String> {
-        self.db
-            .query_with_store(
-                CommandContext::sync_system(CommandClass::SyncLive),
-                ValidateOutboundSignedFrameQuery::Authorized {
-                    frame: frame.clone(),
-                    expected_space_id: expected_space_id.to_owned(),
-                    expected_origin_node_id: expected_origin_node_id.to_owned(),
-                },
-            )
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn validate_outbound_signed_integration_frame_with_transport(
-        &self,
-        frame: &crate::integration_replication::SignedSyncEnvelope,
-        expected_space_id: &str,
-        expected_origin_node_id: &str,
-        transport_public_key: &str,
-    ) -> Result<(), String> {
-        self.db
-            .query_with_store(
-                CommandContext::sync_system(CommandClass::SyncLive),
-                ValidateOutboundSignedFrameQuery::BoundTransport {
-                    frame: frame.clone(),
-                    expected_space_id: expected_space_id.to_owned(),
-                    expected_origin_node_id: expected_origin_node_id.to_owned(),
-                    transport_public_key: transport_public_key.to_owned(),
-                },
-            )
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn apply_signed_integration_frame(
-        &self,
-        frame: &crate::integration_replication::SignedSyncEnvelope,
-        expected_space_id: &str,
-        authenticated_peer_id: &str,
-        expected_recipient_node_id: &str,
-    ) -> Result<(), String> {
-        if frame.space_id != expected_space_id {
-            return Err("signed integration frame has the wrong space".into());
-        }
-        if frame.origin_node_id != authenticated_peer_id {
-            return Err("signed integration frame origin is not the authenticated peer".into());
-        }
-        if frame.recipient_node_id != expected_recipient_node_id {
-            return Err("signed integration frame is addressed to another node".into());
-        }
-
-        self.db
-            .submit_signed_integration_frame(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                ApplySignedIntegrationFrameCommand::new(
-                    frame.clone(),
-                    expected_space_id.to_owned(),
-                    expected_recipient_node_id.to_owned(),
-                    None,
-                    IdentityErrorStyle::Detailed,
-                ),
-            )
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn apply_signed_integration_frame_with_transport(
-        &self,
-        frame: &crate::integration_replication::SignedSyncEnvelope,
-        expected_space_id: &str,
-        authenticated_peer_id: &str,
-        expected_recipient_node_id: &str,
-        authenticated_transport_public_key: Option<&str>,
-    ) -> Result<(), String> {
-        if frame.space_id != expected_space_id
-            || frame.origin_node_id != authenticated_peer_id
-            || frame.recipient_node_id != expected_recipient_node_id
-        {
-            return Err("signed integration frame identity mismatch".into());
-        }
-        self.db
-            .submit_signed_integration_frame(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                ApplySignedIntegrationFrameCommand::new(
-                    frame.clone(),
-                    expected_space_id.to_owned(),
-                    expected_recipient_node_id.to_owned(),
-                    authenticated_transport_public_key.map(str::to_owned),
-                    IdentityErrorStyle::Generic,
-                ),
-            )
-            .await
-            .map_err(|error| error.to_string())
-    }
-}

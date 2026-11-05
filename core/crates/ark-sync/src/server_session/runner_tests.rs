@@ -295,68 +295,6 @@ async fn full_peer_list_queue_services_malformed_input_then_retries_once() {
     handle.revoke();
 }
 
-#[tokio::test]
-async fn signed_frame_waits_for_bulk_capacity_without_being_dropped() {
-    use crate::server_session::{ServerSessionHandle, ServerSessionIntent};
-
-    let (handle, mut actor, _, mut activation) =
-        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
-    activation.activate().unwrap();
-    let first_frame = signed_frame("first");
-    let second_frame = signed_frame("second");
-    let (first_seen_tx, first_seen_rx) = oneshot::channel();
-    let (release_tx, release_rx) = oneshot::channel();
-    let (frames_tx, frames_rx) = oneshot::channel();
-    let mut session_io = SessionIo::start_transport(1, |mut driver| {
-        tokio::spawn(async move {
-            let first = driver.outgoing.recv().await;
-            let _ = first_seen_tx.send(first);
-            let _ = release_rx.await;
-            let second = driver.outgoing.recv().await;
-            let _ = frames_tx.send(second);
-            let _ = driver.incoming.send(SessionIoEvent::Closed).await;
-            driver.worker_completion.complete();
-        })
-    })
-    .unwrap();
-    session_io
-        .sender()
-        .try_send(LanSyncMessage::SignedIntegrationFrame { frame: first_frame })
-        .unwrap();
-    handle
-        .try_send(ServerSessionIntent::SendSignedFrame(second_frame))
-        .unwrap();
-
-    let run = tokio::spawn(async move {
-        let end = run_connected_server_session_controlled(&mut session_io, &mut actor).await;
-        session_io.finish().await.unwrap();
-        end
-    });
-    assert!(matches!(
-        first_seen_rx.await.unwrap(),
-        Some(LanSyncMessage::SignedIntegrationFrame { frame }) if frame.message_id == "first"
-    ));
-    release_tx.send(()).unwrap();
-    assert!(matches!(
-        frames_rx.await.unwrap(),
-        Some(LanSyncMessage::SignedIntegrationFrame { frame }) if frame.message_id == "second"
-    ));
-    assert_eq!(run.await.unwrap(), DirectServerSessionEnd::Closed);
-    handle.revoke();
-}
-
-fn signed_frame(message_id: &str) -> ark_domain::integration_replication::SignedSyncEnvelope {
-    ark_domain::integration_replication::SignedSyncEnvelope::new(
-        "space",
-        "origin",
-        "recipient",
-        1,
-        message_id,
-        Vec::new(),
-        "signature",
-    )
-}
-
 fn test_peer_record() -> ark_domain::types::PeerRecord {
     ark_domain::types::PeerRecord {
         device_id: "peer".to_owned(),

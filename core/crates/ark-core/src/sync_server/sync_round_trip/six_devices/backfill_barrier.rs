@@ -289,32 +289,6 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl IntegrationReplicationBackend for BackfillBarrier {
-    async fn validate_outbound_signed_integration_frame(
-        &self,
-        frame: &ark_core::integration_replication::SignedSyncEnvelope,
-        space: &str,
-        origin: &str,
-    ) -> Result<(), String> {
-        self.inner
-            .validate_outbound_signed_integration_frame(frame, space, origin)
-            .await
-    }
-
-    async fn apply_signed_integration_frame(
-        &self,
-        frame: &ark_core::integration_replication::SignedSyncEnvelope,
-        space: &str,
-        peer: &str,
-        recipient: &str,
-    ) -> Result<(), String> {
-        self.inner
-            .apply_signed_integration_frame(frame, space, peer, recipient)
-            .await
-    }
-}
-
-#[async_trait::async_trait]
 impl PeerIdentityBackend for BackfillBarrier {
     async fn load_local_sync_profile(
         &self,

@@ -10,7 +10,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
         pomodoro_host,
         dictation_host,
         ark_host,
-        agent_events,
         correlation_id,
         client_id,
         desktop_authority,
@@ -22,7 +21,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
     let mut pomo_rx = pomodoro_host.subscribe();
     let mut dict_rx = dictation_host.subscribe();
     let mut ark_evt_rx = ark_host.subscribe_events();
-    let mut agents_rx = agent_events.subscribe();
 
     loop {
         tokio::select! {
@@ -64,18 +62,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-
-            // Daedalus events are already flat wire envelopes.
-            agent_evt = agents_rx.recv() => {
-                match agent_evt {
-                    Ok(payload) => {
-                        let text = Message::Text(payload.to_string().into());
-                        if send_message(&mut sink, text, &shutdown).await.is_err() { break; }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,

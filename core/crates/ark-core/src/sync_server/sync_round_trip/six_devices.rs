@@ -3,9 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort};
-use ark_core::sync_server::{
-    IntegrationReplicationBackend, PeerIdentityBackend, SyncRuntimeStorage,
-};
+use ark_core::sync_server::{PeerIdentityBackend, SyncRuntimeStorage};
 use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
 use tokio::sync::{watch, Notify};

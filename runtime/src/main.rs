@@ -182,7 +182,6 @@ async fn run_core_worker() -> ExitCode {
     let desktop_authority = ws.desktop_authority();
 
     let supervised = std::env::var("MUNDUS_ENGINE_SUPERVISED").as_deref() == Ok("1");
-    let agents_shutdown = ws.agents_handle();
     let ws_task = tokio::spawn(async move {
         if let Err(e) = ws.run().await {
             observability::stderr(format!("[mundus-engine] WS server exited: {e}"));
@@ -322,10 +321,6 @@ async fn run_core_worker() -> ExitCode {
     let _ = ws_task.await;
     let http_shutdown_result = api_shutdown.shutdown().await;
     let ws_shutdown_result = ws_shutdown.shutdown().await;
-
-    if let Some(agents) = agents_shutdown.get() {
-        agents.shutdown().await;
-    }
 
     if matches!(
         requested_control,

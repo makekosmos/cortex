@@ -1,8 +1,8 @@
 /// KOS-370 regression: a pull-side vector snapshot is stale by the time
 /// `is_last` persists it — the incoming session loads it at the first
 /// batch and keeps it in memory for the whole exchange. Keys written
-/// concurrently (local mutations, integration-replication bumps like
-/// `integration_credential_envelope:*`) must survive the save.
+/// concurrently (local mutations, other concurrent bumps like
+/// `concurrent:key`) must survive the save.
 #[tokio::test]
 async fn persist_pull_vector_preserves_concurrent_keys() {
     let test_backend = make_backend().await;
@@ -18,10 +18,7 @@ async fn persist_pull_vector_preserves_concurrent_keys() {
 
     let mut stored_vector = pull_vector.clone();
     for (key, hlc) in [
-        (
-            "integration_credential_envelope:integration-a:node-b:1",
-            "2026-01-03T00:00:00.000Z:000000:local",
-        ),
+        ("concurrent:key", "2026-01-03T00:00:00.000Z:000000:local"),
         ("entity-b", "2026-01-02T00:00:00.000Z:000000:local"),
     ] {
         stored_vector.insert(key.to_string(), hlc.to_string());
@@ -39,7 +36,7 @@ async fn persist_pull_vector_preserves_concurrent_keys() {
             .unwrap();
     let get = |key: &str| stored.get(key).map(String::as_str);
     assert_eq!(
-        get("integration_credential_envelope:integration-a:node-b:1"),
+        get("concurrent:key"),
         Some("2026-01-03T00:00:00.000Z:000000:local"),
     );
     assert_eq!(

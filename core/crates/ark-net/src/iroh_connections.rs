@@ -11,8 +11,6 @@ struct ConnectionParams {
     registry: Arc<DeviceRegistry>,
     connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
     connection_generation: Arc<std::sync::atomic::AtomicU64>,
-    outbound_authorizer:
-        Arc<tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>>,
 }
 
 fn is_current_connection(
@@ -42,28 +40,6 @@ fn take_current_connection<T>(
     } else {
         None
     }
-}
-
-async fn authorize_signed_integration_frame(
-    registry: &DeviceRegistry,
-    outbound_authorizer: &tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>,
-    frame: &SignedSyncEnvelope,
-    remote_endpoint_id: &EndpointId,
-) -> Result<(), String> {
-    let target_is_current = registry
-        .data_ready_endpoint(&frame.recipient_node_id)
-        .is_some_and(|endpoint| endpoint == *remote_endpoint_id);
-    if !target_is_current {
-        return Err("iroh addressed transport peer is no longer authorized".into());
-    }
-    let authorizer = outbound_authorizer
-        .read()
-        .await
-        .clone()
-        .ok_or_else(|| "iroh outbound integration authorization is unavailable".to_string())?;
-    authorizer
-        .authorize(frame, &remote_endpoint_id.to_string())
-        .await
 }
 
 fn is_pre_admission_control_message(message: &LanSyncMessage) -> bool {
@@ -99,7 +75,6 @@ async fn handle_connection(params: ConnectionParams) {
         registry,
         connections,
         connection_generation,
-        outbound_authorizer,
     } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
@@ -228,31 +203,6 @@ async fn handle_connection(params: ConnectionParams) {
                                 continue;
                             }
                             let variant = message_variant_name(&outgoing.msg);
-                            let authorization = if let LanSyncMessage::SignedIntegrationFrame {
-                                frame
-                            } = &outgoing.msg {
-                                authorize_signed_integration_frame(
-                                    &writer_registry,
-                                    &outbound_authorizer,
-                                    frame,
-                                    &remote_endpoint_id,
-                                )
-                                .await
-                            } else {
-                                Ok(())
-                            };
-                            if let Err(error) = authorization {
-                                if let Some(completion) = outgoing.completion {
-                                    if let Some(
-                                        tx
-                                    ) = completion.lock().unwrap_or_else(
-                                        |e| e.into_inner()
-                                    ).take() {
-                                        let _ = tx.send(Err(error));
-                                    }
-                                }
-                                continue;
-                            }
                             if !is_current_connection(
                                 &writer_connections,
                                 &remote_endpoint_id,

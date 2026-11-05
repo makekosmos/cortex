@@ -86,4 +86,3 @@ impl From<Arc<dyn SyncTransport>> for SyncTransportHandle {
         Self::Relay(transport)
     }
 }
-pub use ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer;

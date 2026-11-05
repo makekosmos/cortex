@@ -18,8 +18,6 @@ mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
 mod authenticated_inbound_entity;
 pub(in crate::db::command) use authenticated_inbound_entity::AuthenticatedInboundEntityTask;
-mod external_ref;
-pub(in crate::db::command) use external_ref::ExternalRefUpsertTask;
 mod iroh_identity;
 pub(in crate::db::command) use iroh_identity::IrohIdentityKeyTask;
 mod local_sync_key_value_write;

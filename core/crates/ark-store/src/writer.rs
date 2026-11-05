@@ -6,22 +6,14 @@ mod committed_feed;
 mod device_registry;
 mod error;
 mod inbound_entity;
-mod integration_admin;
 mod registry_local_mutation;
 mod snapshot_restore;
 pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
-#[cfg(debug_assertions)]
-pub use integration_admin::apply_integration_admin_on_connection;
-pub use integration_admin::IntegrationAdminWrites;
 pub use registry_local_mutation::{
     DeviceEnrollmentOutcome, RegistryLocalMutationError, RegistryLocalWrites,
 };
 mod iroh_identity;
-mod signed_integration_frame;
 mod sync_key_value;
-pub use signed_integration_frame::{
-    SignedIntegrationFrameWriteError, SignedIntegrationFrameWrites,
-};
 mod sync_policy;
 mod task_merge;
 pub use task_merge::TaskMergeWrites;
@@ -441,26 +433,6 @@ impl SqliteWriter {
                 object_link,
                 device_id.as_deref(),
             )
-        })
-    }
-
-    pub fn upsert_external_ref(
-        &mut self,
-        request: ark_application::external_ref::ExternalRefUpsert,
-    ) -> Result<(), TransactionFailure<String>> {
-        self.immediate(|transaction| {
-            crate::data_platform::ensure_schema(transaction)?;
-            crate::data_platform::upsert_external_ref(transaction, &request)
-        })
-    }
-
-    pub fn upsert_external_ref_on_connection(
-        connection: &mut Connection,
-        request: ark_application::external_ref::ExternalRefUpsert,
-    ) -> Result<(), TransactionFailure<String>> {
-        Self::immediate_on_connection(connection, |transaction| {
-            crate::data_platform::ensure_schema(transaction)?;
-            crate::data_platform::upsert_external_ref(transaction, &request)
         })
     }
 }

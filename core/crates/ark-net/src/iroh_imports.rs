@@ -16,13 +16,10 @@ use iroh_tickets::Ticket;
 use tokio::sync::{broadcast, mpsc, watch, Notify};
 
 use crate::sync_bind::SyncBind;
-use ark_domain::integration_replication::SignedSyncEnvelope;
 use ark_sync_contracts::protocol_negotiation::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret,
 };
-use ark_sync_contracts::transport::{
-    OutboundIntegrationFrameAuthorizer, SyncTransport, TransportEvent,
-};
+use ark_sync_contracts::transport::{SyncTransport, TransportEvent};
 use ark_sync_contracts::wire::{
     deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
     PROTOCOL_VERSION,

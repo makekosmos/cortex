@@ -269,8 +269,6 @@ pub(crate) enum Request {
         key: String,
         value: String,
     },
-    #[serde(rename = "external_refs.upsert")]
-    ExternalRefsUpsert(ark_application::external_ref::ExternalRefUpsert),
     ClearAll,
 
     /// SQLite Online Backup в указанный path. Source DB остаётся live —
@@ -385,88 +383,6 @@ pub(crate) enum Request {
     ShowPairingCode {
         #[serde(default = "default_pairing_bind")]
         bind: SyncBind,
-    },
-
-    #[serde(rename = "integration.persist_node_authorization")]
-    IntegrationPersistNodeAuthorization {
-        authorization_operation: String,
-        node: AuthorizedNode,
-        #[serde(default)]
-        grant: Option<IntegrationNodeGrant>,
-        device_id: String,
-    },
-    #[serde(rename = "integration.persist_integration_grant")]
-    IntegrationPersistIntegrationGrant {
-        grant: IntegrationNodeGrant,
-        device_id: String,
-    },
-    #[serde(rename = "integration.prepare_signed_sync")]
-    IntegrationPrepareSignedSync {
-        space_id: String,
-        origin_node_id: String,
-        integration_id: String,
-        recipient_node_id: String,
-        message_id: String,
-    },
-    #[serde(rename = "integration.validate_outbound_signed_sync")]
-    IntegrationValidateOutboundSignedSync {
-        space_id: String,
-        origin_node_id: String,
-        frame: SignedSyncEnvelope,
-    },
-    #[serde(rename = "integration.send_signed_sync")]
-    IntegrationSendSignedSync {
-        frame: SignedSyncEnvelope,
-    },
-    #[serde(rename = "integration.acquire_refresh_lease")]
-    IntegrationAcquireRefreshLease(crate::db::RefreshLeaseAcquireParams),
-    #[serde(rename = "integration.publish_credential_envelope")]
-    IntegrationPublishCredentialEnvelope {
-        envelope: IntegrationCredentialEnvelope,
-        device_id: String,
-        now_ms: u64,
-    },
-    #[serde(rename = "integration.load_latest_credential_envelope")]
-    IntegrationLoadLatestCredentialEnvelope {
-        integration_id: String,
-        recipient_node_id: String,
-    },
-    #[serde(rename = "integration.lookup_issuer_encryption_key")]
-    IntegrationLookupIssuerEncryptionKey {
-        space_id: String,
-        integration_id: String,
-        recipient_node_id: String,
-        issuer_node_id: String,
-        credential_generation: u64,
-        expected_issuer_key_id: String,
-    },
-    /// Storage-time fence check for a received credential envelope: the
-    /// issuer binding is revalidated and the fence the envelope was minted
-    /// under must still be the current refresh lease (see
-    /// `db::check_integration_credential_fence`).
-    #[serde(rename = "integration.check_credential_fence")]
-    IntegrationCheckCredentialFence {
-        space_id: String,
-        integration_id: String,
-        recipient_node_id: String,
-        issuer_node_id: String,
-        credential_generation: u64,
-        refresh_fencing_token: u64,
-        expected_issuer_key_id: String,
-    },
-    #[serde(rename = "integration.lookup_issuer_encryption_key_for_publish")]
-    IntegrationLookupIssuerEncryptionKeyForPublish {
-        space_id: String,
-        integration_id: String,
-        recipient_node_id: String,
-        issuer_node_id: String,
-        expected_issuer_key_id: String,
-    },
-    #[serde(rename = "integration.verification_status")]
-    IntegrationVerificationStatus {
-        integration_id: String,
-        local_node_id: String,
-        now_ms: u64,
     },
 
     /// Test-only fault-injection op: the service worker panics on it so tests

@@ -13,7 +13,6 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
         vec![
             View::About,
             View::Appearance,
-            View::Connections,
             View::Storage,
             View::Usage,
             View::Sync,
@@ -40,8 +39,6 @@ fn relocated_controls_load_their_data_on_their_own_pages(cx: &mut TestAppContext
         assert!(app.slots.contains_key("browser.persist"));
         views::storage::load(app);
         assert!(app.slots.contains_key("data.storage"));
-        views::connections::load(app);
-        assert!(app.slots.contains_key("conn.list"));
         assert!(!app.slots.contains_key("secrets.config"));
         views::secrets::load(app);
         assert!(app.slots.contains_key("secrets.config"));

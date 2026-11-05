@@ -47,11 +47,6 @@ impl ConnectedServerSession {
                 self.handle_snapshot_ack(actor, batch_id, policy_identity, sender)
                     .await
             }
-            LanSyncMessage::SignedIntegrationFrame { frame } => {
-                self.handle_signed_integration_frame(actor, frame, sender)
-                    .await
-            }
-            LanSyncMessage::SignedIntegrationAck { .. } => true,
             LanSyncMessage::LiveChange {
                 change_id,
                 entity,

@@ -47,16 +47,6 @@ fn ark_api_v1_requests_remain_deserializable() {
                 }
                 other => panic!("expected ConnectWithPairingCode, got {other:?}"),
             },
-            "integration-send-signed-sync" => match request {
-                Request::IntegrationSendSignedSync { frame } => {
-                    assert_eq!(frame.space_id, "space-a");
-                    assert_eq!(frame.origin_node_id, "node-a");
-                    assert_eq!(frame.recipient_node_id, "node-b");
-                    assert_eq!(frame.message_id, "message-a");
-                    assert_eq!(frame.signature, "00");
-                }
-                other => panic!("expected IntegrationSendSignedSync, got {other:?}"),
-            },
             other => panic!("unknown fixture {other}"),
         }
         assert!(seen.insert(fixture.name), "duplicate request fixture");
@@ -67,7 +57,6 @@ fn ark_api_v1_requests_remain_deserializable() {
             "canonical-object-upsert",
             "canonical-object-delete",
             "pairing-code-alias",
-            "integration-send-signed-sync",
         ]
         .into_iter()
         .map(str::to_owned)

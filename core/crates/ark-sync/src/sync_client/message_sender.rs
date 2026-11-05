@@ -24,8 +24,6 @@ enum ClientMessageTransport {
         sender: SessionIoSender,
         storage: Arc<dyn SyncRuntimeStorage>,
         peer: Arc<RwLock<PeerRecord>>,
-        space_id: String,
-        device_id: String,
     },
     Test(mpsc::Sender<LanSyncMessage>),
 }
@@ -35,16 +33,12 @@ impl ClientMessageSender {
         transport: SessionIoSender,
         storage: Arc<dyn SyncRuntimeStorage>,
         peer: Arc<RwLock<PeerRecord>>,
-        space_id: String,
-        device_id: String,
     ) -> Self {
         Self {
             transport: ClientMessageTransport::Session {
                 sender: transport,
                 storage,
                 peer,
-                space_id,
-                device_id,
             },
             authenticated_peer_id: Arc::new(RwLock::new(None)),
         }
@@ -72,8 +66,6 @@ impl ClientMessageSender {
                 sender,
                 storage,
                 peer,
-                space_id,
-                device_id,
             } => {
                 if ark_sync_contracts::wire::requires_registry_admission(&message) {
                     let authenticated_peer_id = self.authenticated_peer_id.read().await.clone();
@@ -85,15 +77,6 @@ impl ClientMessageSender {
                         storage.sync_session_is_admitted(&peer_device_id).await,
                         Ok(true)
                     ) {
-                        return Ok(());
-                    }
-                }
-                if let LanSyncMessage::SignedIntegrationFrame { frame } = &message {
-                    if storage
-                        .validate_outbound_signed_integration_frame(frame, space_id, device_id)
-                        .await
-                        .is_err()
-                    {
                         return Ok(());
                     }
                 }

@@ -14,7 +14,6 @@ fn all_pages_share_centered_width_with_sidebar_open_or_closed(cx: &mut TestAppCo
                 View::Settings,
                 View::Appearance,
                 View::Browser,
-                View::Connections,
                 View::Keys,
                 View::About,
             ] {

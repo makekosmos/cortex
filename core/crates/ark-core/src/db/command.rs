@@ -12,20 +12,18 @@ pub(crate) use handle::{DbHandle, DbOwner};
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand, AppendLocalRegistryEventCommand,
-    AppendTaskMergeOperationRequest, ApplyRegistryEventsCommand,
-    ApplySignedIntegrationFrameCommand, ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite,
-    AuthenticatedCoreTaskWriteError, AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery,
-    CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
-    CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand, EnrollPairedDeviceCommand,
-    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand, IntegrationAdminOutput,
-    IntegrationReadQuery, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
-    LoadDeviceRegistryQuery, LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery,
-    LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
-    PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery,
-    RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, RestoreSnapshotCommand,
-    SaveLocalSyncProfileCommand, SystemReadQuery, TaskConflictSetQuery, TaskWriteOperationResult,
-    TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
-    VerifyRegistryHandshakeQuery,
+    AppendTaskMergeOperationRequest, ApplyRegistryEventsCommand, ApplyTaskMergeBatchCommand,
+    AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError, AuthorizedTransportKeyQuery,
+    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
+    EnrollPairedDeviceCommand, GetSyncKeyValueQuery, LoadAcceptedPeerSyncPolicyQuery,
+    LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery, LoadEntitiesQuery,
+    LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
+    LocalCoreTaskWrite, ObjectReadQuery, PolicyBoundFeedDeliveryPageQuery,
+    PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
+    RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SystemReadQuery,
+    TaskConflictSetQuery, TaskWriteOperationResult, TypeReadQuery, UsageCompleteThroughQuery,
+    UsageReadQuery, VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;
