@@ -54,8 +54,6 @@ pub mod installer;
 pub mod macos_dock;
 pub mod manager_api;
 pub mod markdown_vault;
-pub mod pomodoro;
-pub mod pomodoro_host;
 pub mod protocol_usage;
 pub mod storage_maintenance;
 pub mod sync;

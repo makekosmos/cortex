@@ -1,8 +1,7 @@
 // DictationHost — singleton в mundus-engine. State machine + broadcast events
 // + dispatch для `dictation.*` operations.
 //
-// Аналогично PomodoroHost (`pomodoro_host.rs:48-380`) — Arc<Mutex<State>> +
-// `broadcast::Sender<Value>` для wire events. Разница: dictation stateless
+// Arc<Mutex<State>> + `broadcast::Sender<Value>` для wire events.
 // между сессиями (нет persistence — нечего сохранять между рестартами кроме
 // конфига).
 //

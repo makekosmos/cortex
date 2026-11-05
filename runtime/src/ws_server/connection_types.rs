@@ -9,7 +9,6 @@ pub(super) struct ConnectionLoopArgs {
         tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     >,
     pub(super) command_bus: Arc<CommandBus>,
-    pub(super) pomodoro_host: Arc<PomodoroHost>,
     pub(super) dictation_host: Arc<DictationHost>,
     pub(super) ark_host: Arc<ArkHost>,
     pub(super) correlation_id: Arc<String>,

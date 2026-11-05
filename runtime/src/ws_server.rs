@@ -23,7 +23,6 @@ use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};
 use crate::focus::handle_focus_op;
 use crate::manager_api::ManagerState;
-use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_usage::{ProtocolUsageStore, TransportKind};
 use crate::protocol_version::{Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT};
 use crate::usage_tracker::UsageTrackerDiagnosticsState;

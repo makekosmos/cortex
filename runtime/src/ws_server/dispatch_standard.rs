@@ -4,7 +4,6 @@ pub(super) async fn dispatch_standard(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
     command_bus: Arc<CommandBus>,
-    pomodoro_host: Arc<PomodoroHost>,
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
@@ -66,15 +65,6 @@ pub(super) async fn dispatch_standard(
             } else {
                 handle_dictation_op(rest, params, &dictation_host).await
             };
-            LocalResponse {
-                ok: result.ok,
-                data: result.data,
-                error: result.error,
-            }
-        }
-    } else if let Some(rest) = operation.strip_prefix("pomodoro.") {
-        {
-            let result = handle_pomodoro_op(rest, params, &pomodoro_host).await;
             LocalResponse {
                 ok: result.ok,
                 data: result.data,

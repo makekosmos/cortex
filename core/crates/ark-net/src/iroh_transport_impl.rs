@@ -93,7 +93,7 @@ impl IrohTransport {
             .ok_or_else(|| "iroh transport: our_ticket() called before start()".to_string())?;
 
         // Wait for relay homing with an 8-second timeout to avoid blocking
-        // unrelated RPC calls (e.g. app_index.list_all, pomodoro.get_state)
+        // unrelated RPC calls (e.g. app_index.list_all)
         // which would time out at 30s if our_ticket() hangs here for ~50s.
         match tokio::time::timeout(Duration::from_secs(8), endpoint.online()).await {
             Ok(()) => {

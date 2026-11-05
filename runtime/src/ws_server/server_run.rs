@@ -46,7 +46,6 @@ impl WsServer {
                     let ark_host = self.ark_host.clone();
                     let token = self.auth_token.clone();
                     let bus = self.command_bus.clone();
-                    let pomo = self.pomodoro_host.clone();
                     let dict = self.dictation_host.clone();
                     let protocol_usage = self.protocol_usage.clone();
                     let correlation_id = self.correlation_id.clone();
@@ -92,7 +91,7 @@ impl WsServer {
                         // The task cannot execute any connection code until its
                         // JoinHandle has replaced the Reserved slot below.
                         if let Err(e) = handle_connection(
-                            stream, ark_host, token, bus, pomo, dict,
+                            stream, ark_host, token, bus, dict,
                             protocol_usage, correlation_id, dispatcher, owner_lease,
                             desktop_authority, task_shutdown,
                         ).await {

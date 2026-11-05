@@ -28,7 +28,7 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
       },
       "source": {
         "type": "string",
-        "enum": ["manual", "pomodoro", "imported"],
+        "enum": ["manual", "imported"],
         "default": "manual"
       },
       "taskTitle": {

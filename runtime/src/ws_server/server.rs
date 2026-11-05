@@ -6,7 +6,6 @@ pub struct WsServer {
     pub(super) ark_host: Arc<ArkHost>,
     pub(super) auth_token: Arc<String>,
     pub(super) command_bus: Arc<CommandBus>,
-    pub(super) pomodoro_host: Arc<PomodoroHost>,
     pub(super) dictation_host: Arc<DictationHost>,
     pub(super) protocol_usage: Arc<ProtocolUsageStore>,
     pub(super) correlation_id: Arc<String>,
@@ -15,7 +14,6 @@ pub struct WsServer {
 }
 impl WsServer {
     /// Биндит TcpListener на 127.0.0.1 + случайный свободный порт.
-    /// `data_dir` — куда писать persisted pomodoro state.
     #[allow(clippy::too_many_arguments)]
     pub async fn bind(
         ark_host: Arc<ArkHost>,
@@ -30,7 +28,6 @@ impl WsServer {
         Self::bind_with_hosts(
             ark_host,
             auth_token,
-            data_dir.clone(),
             app_index,
             file_index,
             usage_diagnostics,
@@ -42,13 +39,12 @@ impl WsServer {
         .await
     }
 
-    /// Binds with Engine-owned Dictation and manager instances shared by the
-    /// package-worker supervisor and Host WebSocket clients.
+    /// Binds with Engine-owned Dictation and manager instances shared by
+    /// Host WebSocket clients.
     #[allow(clippy::too_many_arguments)]
     pub async fn bind_with_hosts(
         ark_host: Arc<ArkHost>,
         auth_token: String,
-        data_dir: std::path::PathBuf,
         app_index: Arc<AppIndex>,
         file_index: Arc<FileIndex>,
         usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
@@ -62,13 +58,11 @@ impl WsServer {
             .expect("hardcoded socket literal is always valid");
         let listener = TcpListener::bind(addr).await?;
         let command_bus = Arc::new(CommandBus::new());
-        let pomodoro_host = PomodoroHost::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
         let desktop_authority = Arc::new(crate::desktop_authority::DesktopAuthorityRegistry::new());
         let dispatcher = make_dispatcher(
             ark_host.clone(),
             command_bus.clone(),
-            pomodoro_host.clone(),
             dictation_host.clone(),
             app_index.clone(),
             file_index.clone(),
@@ -85,7 +79,6 @@ impl WsServer {
             ark_host,
             auth_token: Arc::new(auth_token),
             command_bus,
-            pomodoro_host,
             dictation_host,
             protocol_usage,
             correlation_id: Arc::new(correlation_id),
@@ -148,7 +141,6 @@ impl WsServer {
 fn make_dispatcher(
     ark_host: Arc<ArkHost>,
     command_bus: Arc<CommandBus>,
-    pomodoro_host: Arc<PomodoroHost>,
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
@@ -163,7 +155,6 @@ fn make_dispatcher(
         Arc::new(move |request: crate::engine_dispatch::DispatchRequest| {
             let ark_host = ark_host.clone();
             let command_bus = command_bus.clone();
-            let pomodoro_host = pomodoro_host.clone();
             let dictation_host = dictation_host.clone();
             let app_index = app_index.clone();
             let file_index = file_index.clone();
@@ -178,7 +169,6 @@ fn make_dispatcher(
                     request,
                     ark_host,
                     command_bus,
-                    pomodoro_host,
                     dictation_host,
                     app_index,
                     file_index,

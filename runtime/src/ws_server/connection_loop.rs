@@ -7,7 +7,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
         mut sink,
         mut stream,
         command_bus,
-        pomodoro_host,
         dictation_host,
         ark_host,
         correlation_id,
@@ -18,7 +17,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
         hello,
     } = args;
     let mut bus_rx = command_bus.subscribe();
-    let mut pomo_rx = pomodoro_host.subscribe();
     let mut dict_rx = dictation_host.subscribe();
     let mut ark_evt_rx = ark_host.subscribe_events();
 
@@ -58,20 +56,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             aevt = ark_evt_rx.recv() => {
                 match aevt {
                     Ok((_name, payload)) => {
-                        let text = Message::Text(payload.to_string().into());
-                        if send_message(&mut sink, text, &shutdown).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-
-            // 2a'. Pomodoro events → forward as wire-formatted JSON.
-            pevt = pomo_rx.recv() => {
-                match pevt {
-                    Ok(payload) => {
                         let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;

@@ -44,7 +44,7 @@ This repository owns the Engine and everything around it.
 
 |                  | Path                    | What it is                                                                                                                                                                               |
 | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚙️ **Engine**    | `runtime/`              | `mundus-engine`: Engine API (`/v1/rpc`, WebSocket), package host and supervisor, focus and pomodoro, dictation, updater, tray, autostart. Privileged ops sit behind a one-time UAC grant |
+| ⚙️ **Engine**    | `runtime/`              | `mundus-engine`: Engine API (`/v1/rpc`, WebSocket), package host and supervisor, focus, dictation, updater, tray, autostart. Privileged ops sit behind a one-time UAC grant |
 | 🗄️ **ARK**       | `core/crates/ark-core/` | Rust + SQLite data core, hosted in-process by the Engine. Append-only schema, HLC clocks, p2p sync over iroh, relay, or LAN beacon                                                       |
 | 🖥️ **Manager**   | `manager-gpui/`         | The GPUI control panel for the Engine. A separate Cargo workspace with its own `Cargo.lock`                                                                                              |
 | 📦 **Packaging** | `desktop/`              | NSIS installer, macOS DMG, release BOM, manifest, and publishing                                                                                                                         |
@@ -326,7 +326,7 @@ The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 | ARK data core             | [`docs/ark-core.md`](docs/ark-core.md)                           |
 | Sync: iroh, relay, beacon | [`docs/sync.md`](docs/sync.md)                                   |
 | Write boundary            | [`docs/write-boundary.md`](docs/write-boundary.md)               |
-| Focus and pomodoro        | [`docs/focus.md`](docs/focus.md)                                 |
+| Focus                     | [`docs/focus.md`](docs/focus.md)                                 |
 | Dictation dev loop        | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | ONNX Runtime              | [`docs/onnxruntime.md`](docs/onnxruntime.md)                     |
 | Linux development         | [`docs/linux-dev.md`](docs/linux-dev.md)                         |

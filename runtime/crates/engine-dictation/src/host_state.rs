@@ -337,7 +337,8 @@ fn network_profile_to_value(profile: &NetworkProfile) -> Value {
 }
 
 // ---------------------------------------------------------------------------
-// Response wrapper — та же форма что в pomodoro_host для unifrom dispatch.
+// Response wrapper — same shape as the other host dispatchers for a uniform
+// wire response.
 // ---------------------------------------------------------------------------
 
 pub struct DictationResponse {

@@ -12,7 +12,7 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
 ## Карта
 
 - `runtime/` — крейт `engine` (бинарь `mundus-engine`): Engine API
-  (`/v1/rpc`, WebSocket), `focus.*`/`pomodoro.*`, диктовка, апдейтер, трей.
+  (`/v1/rpc`, WebSocket), `focus.*`, диктовка, апдейтер, трей.
   Подкрейты: `runtime/crates/{engine-base,engine-dictation,engine-indexes,
   pe-version-info}`. ARK работает внутри процесса: `runtime/src/ark_host.rs`.
 - `core/crates/ark-core/` — Rust + SQLite, контракт и инварианты в

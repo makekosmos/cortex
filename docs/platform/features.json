@@ -54,19 +54,6 @@
           ]
         },
         {
-          "id": "pomodoro",
-          "name": "Pomodoro timer",
-          "status": {
-            "windows": "yes",
-            "macos": "yes",
-            "linux": "yes",
-            "android": "no",
-            "ios": "no"
-          },
-          "boundary": "portable",
-          "code": ["runtime/src/pomodoro_host.rs"]
-        },
-        {
           "id": "db-backup",
           "name": "Database backup",
           "status": {

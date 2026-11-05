@@ -534,7 +534,6 @@ async fn setup() -> Result<SetupState, DynError> {
     let ws = WsServer::bind_with_hosts(
         ark.clone(),
         token.clone(),
-        lock_dir.clone(),
         app_index.clone(),
         file_index.clone(),
         usage_diagnostics.clone(),
