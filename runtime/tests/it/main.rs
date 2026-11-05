@@ -9,4 +9,5 @@
 //! shared across processes, such as the OS keyring, is serialized by a test
 //! group in .config/nextest.toml.
 
+mod atlas_ops;
 mod engine_control_protocol;
