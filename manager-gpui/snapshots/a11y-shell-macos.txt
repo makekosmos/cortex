@@ -1,8 +1,6 @@
 Window ""
   Button "О приложении" selected=true
   Button "Внешний вид" selected=false
-  Button "Приложения" selected=false
-  Button "Интеграции" selected=false
   Button "Хранилище" selected=false
   Button "Активность" selected=false
   Button "Девайсы" selected=false
@@ -10,7 +8,6 @@ Window ""
   Button "Ключи" selected=false
   Button "Модели" selected=false
   Button "Настройки" selected=false
-  Button "Разработчикам" selected=false
   Button "Проверить обновления"
   Button "Показать"
   Switch "Боковая панель" toggled=True
