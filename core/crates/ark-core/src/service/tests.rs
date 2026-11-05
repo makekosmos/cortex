@@ -211,7 +211,7 @@ async fn setup_sync_with_capturing_transport(
             iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
-            bind: SyncBind::AllInterfaces,
+            bind: SyncBind::Loopback,
             app_version: None,
         },
         iroh_our_ticket: watch::channel(None).1,

@@ -42,7 +42,7 @@ fn ark_api_v1_requests_remain_deserializable() {
                 other => panic!("expected DeleteObject, got {other:?}"),
             },
             "pairing-code-alias" => match request {
-                Request::ConnectWithPairingCode { pairing_code } => {
+                Request::ConnectWithPairingCode { pairing_code, .. } => {
                     assert_eq!(pairing_code, "ABCD-EFGH");
                 }
                 other => panic!("expected ConnectWithPairingCode, got {other:?}"),

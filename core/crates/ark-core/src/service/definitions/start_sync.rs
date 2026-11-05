@@ -44,8 +44,8 @@ pub(crate) struct StartSyncParams {
     pub(crate) discovery_enabled: bool,
     /// Where the sync stack binds its listeners. `loopback` binds every
     /// socket to 127.0.0.1 / ::1 (tests, single-machine pairing);
-    /// `all_interfaces` (default) keeps LAN behaviour.
-    #[serde(default)]
+    /// `all_interfaces` keeps LAN behaviour. Required: a caller must choose
+    /// explicitly, so a test can never inherit the LAN bind by accident.
     pub(crate) bind: SyncBind,
     /// Product version label the embedder advertises in Hello frames
     /// (shown to peers in their device list). `None` omits the field.

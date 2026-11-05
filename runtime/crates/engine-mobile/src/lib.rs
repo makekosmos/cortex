@@ -174,6 +174,12 @@ impl MobileEngine {
         params.entry("port").or_insert(Value::Null);
         params.entry("seed_addresses").or_insert(Value::Null);
         params.entry("use_iroh").or_insert_with(|| json!(true));
+        // `start_sync` requires an explicit bind. Mobile callers default to
+        // the production LAN bind; tests and single-host callers can pass
+        // `"loopback"` in `config_json`.
+        params
+            .entry("bind")
+            .or_insert_with(|| json!("all_interfaces"));
         params
             .entry("app_version")
             .or_insert_with(|| json!(concat!("engine-mobile/", env!("CARGO_PKG_VERSION"))));

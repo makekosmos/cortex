@@ -14,13 +14,12 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 /// Carried typed through `Request::StartSync` / `SyncStartParams` — never a
 /// string flag — so every bind site resolves its address from the same
 /// value instead of re-deriving it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncBind {
-    /// Production default. LAN sync and beacon discovery must be reachable
-    /// by other machines, so the WS server and the iroh endpoint listen on
-    /// all interfaces and the beacon binds the wildcard UDP address.
-    #[default]
+    /// LAN sync and beacon discovery must be reachable by other machines, so
+    /// the WS server and the iroh endpoint listen on all interfaces and the
+    /// beacon binds the wildcard UDP address.
     AllInterfaces,
     /// Every listener binds loopback only (127.0.0.1, ::1 where IPv6 is
     /// used). Advertised own addresses and iroh tickets point at loopback

@@ -21,8 +21,10 @@ fn request_deserialization_accepts_iroh_config() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "use_iroh": true,
-        "iroh_peer_ticket": "endpointsometicketvalue"
+        "iroh_peer_ticket": "endpointsometicketvalue",
+        "bind": "loopback"
     }))
     .expect("iroh config should be accepted by the request schema");
 
@@ -45,7 +47,7 @@ fn request_deserialization_accepts_code_alias_for_pairing() {
     }))
     .expect("code alias should deserialize for pairing requests");
 
-    let Request::ConnectWithPairingCode { pairing_code } = request else {
+    let Request::ConnectWithPairingCode { pairing_code, .. } = request else {
         panic!("expected connect_with_pairing_code, got {request:?}");
     };
     assert_eq!(pairing_code, "endpointdemo123");
@@ -123,7 +125,8 @@ async fn pairing_restart_params_force_iroh_and_replace_ticket() {
         own_addresses: Arc::new(TokioMutex::new(Vec::new())),
     };
 
-    let params = build_pairing_restart_params(&runtime, "  endpointdemo123  ");
+    let params =
+        build_pairing_restart_params(&runtime, "  endpointdemo123  ", SyncBind::AllInterfaces);
     assert!(params.use_iroh);
     assert_eq!(params.iroh_peer_ticket.as_deref(), Some("endpointdemo123"));
     assert_eq!(params.relay_url.as_deref(), Some("ws://relay.example"));
@@ -185,9 +188,14 @@ async fn loopback_runtime_fixture() -> (SyncRuntime, ark_store::test_support::Te
 #[tokio::test]
 async fn show_pairing_code_errors_when_sync_is_not_running() {
     let state = test_state();
-    let err = handle_request(&state, Request::ShowPairingCode)
-        .await
-        .expect_err("show_pairing_code must fail without a running sync");
+    let err = handle_request(
+        &state,
+        Request::ShowPairingCode {
+            bind: SyncBind::Loopback,
+        },
+    )
+    .await
+    .expect_err("show_pairing_code must fail without a running sync");
     assert!(err.contains("Sync not running"), "unexpected error: {err}");
 }
 
@@ -318,7 +326,8 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     let request = serde_json::from_value::<Request>(json!({
         "operation": "start_sync",
         "space_id": "space",
-        "device_id": "device"
+        "device_id": "device",
+        "bind": "loopback"
     }))
     .expect("start_sync without iroh fields should still deserialize");
 
@@ -328,7 +337,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     assert!(!params.use_iroh);
     assert_eq!(params.iroh_peer_ticket, None);
     assert!(params.discovery_enabled);
-    assert_eq!(params.bind, SyncBind::AllInterfaces);
+    assert_eq!(params.bind, SyncBind::Loopback);
 }
 
 #[test]
@@ -337,6 +346,7 @@ fn request_deserialization_accepts_discovery_opt_out() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "discovery_enabled": false
     }))
     .expect("discovery opt-out should deserialize");
@@ -353,6 +363,7 @@ fn request_deserialization_accepts_relay_and_auth_config() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "relay_url": "ws://127.0.0.1:8765",
         "relay_api_key": "key",
         "auth_secret": "secret"
@@ -375,6 +386,7 @@ fn params_struct_variants_keep_their_wire_format() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "device_name": "Laptop",
         "port": 21531,
         "seed_addresses": ["10.0.0.1:21531"],

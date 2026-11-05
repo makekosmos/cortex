@@ -197,8 +197,8 @@ pub(crate) async fn handle_request(
             system::device_registry_disable(state, target_device_id).await
         }
         Request::DisconnectPeer { device_id } => system::disconnect_peer(state, device_id).await,
-        Request::ConnectWithPairingCode { pairing_code } => {
-            system::connect_with_pairing_code(state, pairing_code).await
+        Request::ConnectWithPairingCode { pairing_code, bind } => {
+            system::connect_with_pairing_code(state, pairing_code, bind).await
         }
         Request::AcceptPairing { device_id } => system::accept_pairing(state, device_id).await,
         Request::DeclinePairing { device_id } => system::decline_pairing(state, device_id).await,
@@ -208,7 +208,7 @@ pub(crate) async fn handle_request(
         Request::GetOwnAddresses { port } => system::own_addresses(state, port).await,
         Request::GetHostDeviceName => system::host_device_name(state).await,
         Request::GetOwnIrohTicket => system::get_own_iroh_ticket(state).await,
-        Request::ShowPairingCode => system::show_pairing_code(state).await,
+        Request::ShowPairingCode { bind } => system::show_pairing_code(state, bind).await,
 
         Request::IntegrationPersistNodeAuthorization {
             authorization_operation,
