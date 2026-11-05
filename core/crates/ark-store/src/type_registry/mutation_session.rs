@@ -19,6 +19,13 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
         crate::type_registry::register_type(self.transaction, registration)
     }
 
+    fn register_application_type(
+        &self,
+        registration: &TypeRegistration,
+    ) -> Result<Vec<ReplayNotice>, String> {
+        crate::type_registry::register_application_type(self.transaction, registration)
+    }
+
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String> {
         crate::type_registry::upsert_object_type(self.transaction, object_type)
     }

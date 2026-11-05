@@ -34,7 +34,8 @@ mod usage_sequence_migration;
 pub(in crate::db::command) use usage_sequence_migration::UsageSequenceMigrationTask;
 mod type_mutation;
 pub(in crate::db::command) use type_mutation::{
-    DeleteObjectTypeTask, RegisterPackageTypesTask, UpsertObjectTypeTask,
+    DeleteObjectTypeTask, RegisterApplicationTypeTask, RegisterPackageTypesTask,
+    UpsertObjectTypeTask,
 };
 pub(in crate::db::command) mod task_merge_append;
 mod tracked_app_mutation;

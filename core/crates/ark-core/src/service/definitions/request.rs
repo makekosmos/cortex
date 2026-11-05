@@ -208,6 +208,26 @@ pub(crate) enum Request {
     TypesRegisterPackageDefinitions {
         registrations: Vec<crate::type_registry::TypeRegistration>,
     },
+    /// Register an application-owned type from a bare JSON schema, without a
+    /// `.kspkg` archive. A new version must be an additive schema change.
+    #[serde(rename = "types.register")]
+    TypesRegister {
+        #[serde(rename = "typeId")]
+        type_id: String,
+        version: String,
+        #[serde(alias = "schemaJson", alias = "schema_json")]
+        schema: Value,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(
+            default,
+            rename = "appId",
+            alias = "ownerId",
+            alias = "app_id",
+            alias = "owner_id"
+        )]
+        app_id: Option<String>,
+    },
     ListObjectTypes,
     GetObjectType {
         id: String,

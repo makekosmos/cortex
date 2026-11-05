@@ -1,6 +1,6 @@
 use crate::runtime_grants::RegisteredType;
 use crate::{lock_file::write_owner_only_json, package_manifest::ManifestV2};
-use ark_core::type_registry::TypeRegistration;
+use ark_core::type_registry::{is_system_type, validate_type_namespace, TypeRegistration};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, path::PathBuf};
@@ -102,23 +102,9 @@ impl PackageRegistrationRegistry {
     ) -> Result<Vec<(String, RegisteredDefinition)>, RegistrationError> {
         let mut additions = Vec::new();
         for definition in &manifest.data.defines {
-            let prefix = format!("{}.", manifest.id);
-            if !definition.type_id.starts_with(&prefix)
-                || definition.type_id[prefix.len()..]
-                    .split('.')
-                    .any(|part| part.is_empty())
-            {
-                return Err(RegistrationError::Namespace);
-            }
-            let canonical = ark_core::canonical_types::definitions::canonical_type_registrations()
-                .map_err(|_| RegistrationError::SystemOwned)?;
-            if canonical.iter().any(|registration| {
-                registration.type_id == definition.type_id
-                    || registration
-                        .aliases
-                        .iter()
-                        .any(|alias| alias.alias == definition.type_id)
-            }) {
+            validate_type_namespace(&definition.type_id, &manifest.id)
+                .map_err(|_| RegistrationError::Namespace)?;
+            if is_system_type(&definition.type_id).map_err(|_| RegistrationError::SystemOwned)? {
                 return Err(RegistrationError::SystemOwned);
             }
             let schema = documents
