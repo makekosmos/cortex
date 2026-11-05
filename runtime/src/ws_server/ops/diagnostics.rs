@@ -7,7 +7,6 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
     usage_diagnostics: &Arc<UsageTrackerDiagnosticsState>,
     app_index: &Arc<AppIndex>,
     protocol_usage: &Arc<ProtocolUsageStore>,
-    package_service: &Arc<PackageService>,
     correlation_id: &str,
     data_dir: &std::path::Path,
 ) -> serde_json::Value {
@@ -19,7 +18,6 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
         "usage_tracker": usage_diagnostics.snapshot(),
         "app_index": app_index_snapshot,
           "protocol_usage": protocol_usage.snapshot(),
-          "package_workers": package_service.worker_diagnostics(),
         "correlation_id": correlation_id,
         "ark_core": {
             "mode": "in-process",

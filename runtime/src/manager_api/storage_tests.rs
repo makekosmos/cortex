@@ -37,7 +37,7 @@ fn storage_breakdown_splits_known_dirs_and_buckets_the_rest() {
     put(root, "backups/ark.db-shm", 5);
     put(root, "models/dictation/ggml.bin", 2200);
     put(root, "models/other.bin", 30);
-    put(root, "packages/blobs/deadbeef.kspkg", 400);
+    put(root, "packages/blobs/deadbeef.bin", 400);
     put(root, "updates/Mundus-Setup-0.9.37.exe", 317);
     put(root, "file-index.db", 120);
     put(root, "app-index.db-wal", 18);

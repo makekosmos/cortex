@@ -1,4 +1,5 @@
 use super::*;
+
 pub(super) async fn dispatch_operation(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
@@ -13,10 +14,6 @@ pub(super) async fn dispatch_operation(
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
-    package_service: Arc<PackageService>,
-    snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
-    desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     manager_state: ManagerState,
     correlation_id: Arc<String>,
     client_id: ClientId,
@@ -28,42 +25,25 @@ pub(super) async fn dispatch_operation(
     if operation == "test.stall" {
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
-    let response = if operation.starts_with("package.snapshot.") || operation.starts_with("grant.")
-    {
-        dispatch_special::dispatch_special(
-            request,
-            package_service.clone(),
-            snapshots.clone(),
-            grants.clone(),
-            desktop_authority.clone(),
-            client_id,
-        )
-        .await
-    } else {
-        dispatch_standard::dispatch_standard(
-            request,
-            ark_host,
-            command_bus,
-            pomodoro_host,
-            dictation_host,
-            app_index,
-            file_index,
-            agents,
-            agents_data_dir,
-            agent_events,
-            usage_diagnostics,
-            rpc_diagnostics.clone(),
-            protocol_usage,
-            package_service,
-            snapshots,
-            grants,
-            desktop_authority,
-            manager_state,
-            correlation_id,
-            client_id,
-        )
-        .await
-    };
+    let response = dispatch_standard::dispatch_standard(
+        request,
+        ark_host,
+        command_bus,
+        pomodoro_host,
+        dictation_host,
+        app_index,
+        file_index,
+        agents,
+        agents_data_dir,
+        agent_events,
+        usage_diagnostics,
+        rpc_diagnostics.clone(),
+        protocol_usage,
+        manager_state,
+        correlation_id,
+        client_id,
+    )
+    .await;
     let mut envelope = serde_json::Map::new();
     if let Some(id) = req_id {
         envelope.insert("id".into(), Value::String(id));

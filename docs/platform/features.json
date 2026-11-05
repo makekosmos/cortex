@@ -304,46 +304,6 @@
       ]
     },
     {
-      "name": "Packages",
-      "features": [
-        {
-          "id": "package-workers",
-          "name": "Package workers (supervised, grant-gated)",
-          "status": {
-            "windows": "yes",
-            "macos": "yes",
-            "linux": "no",
-            "android": "no",
-            "ios": "no"
-          },
-          "note": { "linux": "Returns unsupported-platform" },
-          "boundary": "scattered",
-          "code": [
-            "runtime/crates/engine-packages/src/package_worker_supervisor/mod.rs",
-            "runtime/crates/engine-packages/src/package_worker_process/mod.rs"
-          ]
-        },
-        {
-          "id": "native-app-store",
-          "name": "Install and launch native apps from the Store",
-          "status": {
-            "windows": "yes",
-            "macos": "partial",
-            "linux": "unverified",
-            "android": "no",
-            "ios": "n/a"
-          },
-          "note": { "macos": "No shortcuts; foreground grant is a no-op" },
-          "boundary": "scattered",
-          "code": [
-            "runtime/crates/engine-packages/src/native_apps.rs",
-            "runtime/crates/engine-packages/src/native_apps/launch.rs",
-            "runtime/crates/engine-packages/src/native_apps/shortcuts.rs"
-          ]
-        }
-      ]
-    },
-    {
       "name": "Desktop shell",
       "features": [
         {

@@ -16,8 +16,6 @@ pub(super) struct ConnectionLoopArgs {
     pub(super) correlation_id: Arc<String>,
     pub(super) client_id: ClientId,
     pub(super) desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    pub(super) snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    pub(super) grants: Arc<GrantAuthorityRegistry>,
     pub(super) shutdown: WsShutdownHandle,
     pub(super) dispatcher: crate::engine_dispatch::EngineDispatcher,
     pub(super) hello: HelloMessage,

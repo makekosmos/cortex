@@ -128,9 +128,6 @@ pub(crate) async fn handle_request(
         } => objects::delete_object(state, id, expected_snapshot, operation_id, device_id).await,
 
         Request::TypesList => types::types_list(state).await,
-        Request::TypesRegisterPackageDefinitions { registrations } => {
-            types::types_register_package_definitions(state, registrations).await
-        }
         Request::TypesRegister {
             type_id,
             version,

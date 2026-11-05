@@ -16,7 +16,6 @@ mod tests;
 pub fn load(app: &mut ManagerApp) {
     super::updates::load(app);
     app.status("about.health", "health");
-    app.call("about.catalog", "packages.catalog_status", json!({}));
 }
 
 pub fn render(
@@ -225,30 +224,14 @@ enum Diag {
 type Check = (&'static str, Diag);
 
 fn render_diagnostics(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
-    let checks: Vec<Check> = vec![
-        (
-            "Engine",
-            match app.slots.get("about.health") {
-                Some(Slot::Ready(v)) if vstr(v, "status") == "ready" => Diag::Ok,
-                Some(Slot::Ready(_)) | Some(Slot::Failed(_)) => Diag::Fail,
-                _ => Diag::Pending,
-            },
-        ),
-        (
-            "Каталог интеграций",
-            match app.slots.get("about.catalog") {
-                Some(Slot::Ready(v))
-                    if vget(v, "catalog").is_object()
-                        && vopt(v, "fault").unwrap_or_default().is_empty() =>
-                {
-                    Diag::Ok
-                }
-                Some(Slot::Ready(_)) => Diag::Fail,
-                Some(Slot::Failed(_)) => Diag::Fail,
-                _ => Diag::Pending,
-            },
-        ),
-    ];
+    let checks: Vec<Check> = vec![(
+        "Engine",
+        match app.slots.get("about.health") {
+            Some(Slot::Ready(v)) if vstr(v, "status") == "ready" => Diag::Ok,
+            Some(Slot::Ready(_)) | Some(Slot::Failed(_)) => Diag::Fail,
+            _ => Diag::Pending,
+        },
+    )];
     let (bad, good): (Vec<Check>, Vec<Check>) = checks
         .into_iter()
         .partition(|(_, d)| matches!(d, Diag::Fail));

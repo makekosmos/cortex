@@ -11,18 +11,6 @@ pub(super) async fn types_list(state: &Arc<ServiceState>) -> Result<Value, Strin
     type_read(state, db::TypeReadQuery::ListSummaries).await
 }
 
-pub(super) async fn types_register_package_definitions(
-    state: &Arc<ServiceState>,
-    registrations: Vec<crate::type_registry::TypeRegistration>,
-) -> Result<Value, String> {
-    let replay_notices = get_db_handle(state)?
-        .submit_register_package_types(db::CommandContext::engine(), registrations)
-        .await
-        .map_err(|error| error.to_string())?;
-    emit_replay_notices(replay_notices);
-    Ok(json!(true))
-}
-
 /// Register a type supplied by an application through `types.register`.
 /// `schema` is either the JSON schema object or its serialized form; the type
 /// is stored in ARK and survives Engine restarts.

@@ -14,8 +14,6 @@ pub struct WsServer {
     pub(super) correlation_id: Arc<String>,
     pub(super) lifecycle: Arc<WsLifecycle>,
     pub(super) desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    pub(super) snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    pub(super) grants: Arc<GrantAuthorityRegistry>,
 }
 impl WsServer {
     /// Биндит TcpListener на 127.0.0.1 + случайный свободный порт.
@@ -29,7 +27,6 @@ impl WsServer {
         file_index: Arc<FileIndex>,
         usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
         protocol_usage: Arc<ProtocolUsageStore>,
-        package_service: Arc<PackageService>,
         correlation_id: String,
     ) -> Result<Self, WsServerError> {
         Self::bind_with_hosts(
@@ -40,7 +37,6 @@ impl WsServer {
             file_index,
             usage_diagnostics,
             protocol_usage,
-            package_service,
             correlation_id,
             DictationHost::new(data_dir.clone()),
             ManagerState::new(data_dir),
@@ -59,7 +55,6 @@ impl WsServer {
         file_index: Arc<FileIndex>,
         usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
         protocol_usage: Arc<ProtocolUsageStore>,
-        package_service: Arc<PackageService>,
         correlation_id: String,
         dictation_host: Arc<DictationHost>,
         manager_state: ManagerState,
@@ -74,8 +69,6 @@ impl WsServer {
         let agents = Arc::new(tokio::sync::OnceCell::new());
         let agents_data_dir = Arc::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
-        let snapshots = Arc::new(crate::package_worker_broker::SnapshotRegistry::new());
-        let grants = package_service.grant_authority();
         let desktop_authority = Arc::new(crate::desktop_authority::DesktopAuthorityRegistry::new());
         let dispatcher = make_dispatcher(
             ark_host.clone(),
@@ -90,10 +83,6 @@ impl WsServer {
             usage_diagnostics.clone(),
             rpc_diagnostics.clone(),
             protocol_usage.clone(),
-            package_service.clone(),
-            snapshots.clone(),
-            grants.clone(),
-            desktop_authority.clone(),
             manager_state.clone(),
             Arc::new(correlation_id.clone()),
         );
@@ -112,8 +101,6 @@ impl WsServer {
             correlation_id: Arc::new(correlation_id),
             lifecycle,
             desktop_authority,
-            snapshots,
-            grants,
         })
     }
 
@@ -163,26 +150,6 @@ impl WsServer {
         self.desktop_authority.clone()
     }
 
-    pub fn grant_authority(&self) -> Arc<GrantAuthorityRegistry> {
-        self.grants.clone()
-    }
-
-    pub fn snapshot_count(&self) -> usize {
-        self.snapshots.len()
-    }
-
-    pub fn grant_count(&self) -> usize {
-        self.grants.len()
-    }
-
-    pub fn snapshots_handle(&self) -> Arc<crate::package_worker_broker::SnapshotRegistry> {
-        self.snapshots.clone()
-    }
-
-    pub fn grants_handle(&self) -> Arc<GrantAuthorityRegistry> {
-        self.grants.clone()
-    }
-
     pub fn shutdown_handle(&self) -> WsShutdownHandle {
         WsShutdownHandle {
             lifecycle: self.lifecycle.clone(),
@@ -205,10 +172,6 @@ fn make_dispatcher(
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
-    package_service: Arc<PackageService>,
-    snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
-    desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     manager_state: ManagerState,
     correlation_id: Arc<String>,
 ) -> crate::engine_dispatch::EngineDispatcher {
@@ -227,10 +190,6 @@ fn make_dispatcher(
             let usage_diagnostics = usage_diagnostics.clone();
             let rpc_diagnostics = rpc_diagnostics.clone();
             let protocol_usage = protocol_usage.clone();
-            let package_service = package_service.clone();
-            let snapshots = snapshots.clone();
-            let grants = grants.clone();
-            let desktop_authority = desktop_authority.clone();
             let manager_state = manager_state.clone();
             let correlation_id = correlation_id.clone();
             let connection_id = request.client.connection_id.unwrap_or(0);
@@ -249,10 +208,6 @@ fn make_dispatcher(
                     usage_diagnostics,
                     rpc_diagnostics,
                     protocol_usage,
-                    package_service,
-                    snapshots,
-                    grants,
-                    desktop_authority,
                     manager_state,
                     correlation_id,
                     connection_id,

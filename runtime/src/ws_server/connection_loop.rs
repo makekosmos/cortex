@@ -14,8 +14,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
         correlation_id,
         client_id,
         desktop_authority,
-        snapshots,
-        grants,
         shutdown,
         dispatcher,
         hello,
@@ -355,17 +353,6 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
         }
     }
 
-    let grant_owner = desktop_authority
-        .owner(client_id)
-        .map(|(session_id, generation)| GrantOwner {
-            session_id,
-            generation,
-            connection_id: client_id,
-        });
-    snapshots.close_owner(&format!("desktop-connection-{client_id}"));
-    if let Some(owner) = grant_owner {
-        grants.close_owner(owner);
-    }
     desktop_authority.disconnect(client_id);
     Ok(())
 }

@@ -115,8 +115,6 @@ async function installerAssets() {
 
 await Promise.all([
   icon("mundus", "mundus.png"),
-  icon("memoria", "memoria.png"),
-  icon("agenda", "agenda.png"),
   icon("dictation", "dictation.png"),
   // Installer + uninstaller icon and the Engine tray icon.
   toIco("mundus.png", path.join(root, "build", "icon.ico")),

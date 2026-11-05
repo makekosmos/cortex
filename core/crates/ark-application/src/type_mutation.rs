@@ -19,7 +19,6 @@ impl TypeEntityKind {
 }
 
 pub trait TypeMutationSession {
-    fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String>;
     fn register_application_type(
         &self,
         registration: &TypeRegistration,
@@ -62,17 +61,6 @@ pub struct TypeMutationCommit {
 pub struct ReplaceObjectLinkCommit {
     pub object_link: ObjectLink,
     pub mutation: TypeMutationCommit,
-}
-
-pub fn register_package_types(
-    session: &dyn TypeMutationSession,
-    registrations: &[TypeRegistration],
-) -> Result<Vec<ReplayNotice>, String> {
-    let mut notices = Vec::new();
-    for registration in registrations {
-        notices.extend(session.register_type(registration)?);
-    }
-    Ok(notices)
 }
 
 pub fn register_application_type(

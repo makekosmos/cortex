@@ -70,21 +70,6 @@ impl ManagerApp {
                 self.refresh("models.list", "dictation.list_local_models", json!({}));
             }
         }
-        // Native app installs run as Engine-side background jobs.
-        if self.view == View::Packages && Instant::now() >= self.next_store_poll {
-            self.next_store_poll = Instant::now() + std::time::Duration::from_secs(1);
-            let installing = self
-                .data("store.apps")
-                .get("apps")
-                .and_then(Value::as_array)
-                .is_some_and(|apps| {
-                    apps.iter()
-                        .any(|a| a.get("state").and_then(Value::as_str) == Some("installing"))
-                });
-            if installing {
-                self.refresh("store.apps", "apps.list", json!({}));
-            }
-        }
         // App-wide (KOS-355): the update overlay must see `updater.status`
         // from any page, not just About.
         if !cfg!(debug_assertions) && Instant::now() >= self.next_updater_poll {

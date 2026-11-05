@@ -15,7 +15,7 @@
     },
     {
       "pattern": "[\"']kosmos[\"']",
-      "reason": "`publisher: \"kosmos\"` field of signed package manifests (package_manifest.rs validates it) and the `extensions.kosmos` key persisted in user ARK objects. KOS-265."
+      "reason": "`publisher: \"kosmos\"` field persisted in package manifests of old installs and the `extensions.kosmos` key persisted in user ARK objects. KOS-265."
     },
     {
       "pattern": "x-kosmos-",
@@ -87,7 +87,7 @@
     },
     {
       "pattern": "kosmosApp|window\\.kepler|`kepler`",
-      "reason": "The window.kosmosApp / window.kepler page globals are the persisted host API that shipped .kspkg apps (Arcadia) call — the launch shim must expose the same names until packaged apps move."
+      "reason": "The window.kosmosApp / window.kepler page globals persisted in pinned component builds; the Engine no longer serves pages."
     }
   ],
   "files": [

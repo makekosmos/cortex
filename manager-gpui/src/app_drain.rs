@@ -30,18 +30,8 @@ impl ManagerApp {
                     }
                 }
                 "@action" => self.action_reply(result),
-                "pkg.open" => self.open_reply(result),
                 "conn.login" => self.login_reply(result),
                 "store.ext" => self.external_url_reply(result),
-                // Pull fresh app rows after background install/update starts.
-                "apps.op" => match result {
-                    Ok(_) => self.refresh("store.apps", "apps.list", json!({})),
-                    Err(e) => self.error = Some(e),
-                },
-                "disclosure" => match result {
-                    Ok(v) => self.disclosure = Some(v),
-                    Err(e) => self.error = Some(e),
-                },
                 _ => {
                     let background = self.background_slots.remove(&slot);
                     let previous_error = self.error.clone();

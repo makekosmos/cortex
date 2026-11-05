@@ -10,7 +10,7 @@ use gpui_component::input::InputState;
 use serde_json::{json, Value};
 
 use crate::fps::FpsOverlay;
-use crate::views::{self, StoreTab, View};
+use crate::views::{self, View};
 use crate::worker::{Command, Worker};
 
 pub use mundus_gpui_kit::fields::Slot;
@@ -84,7 +84,6 @@ pub struct ManagerApp {
     pub notice: Option<String>,
     /// Persistent Engine error (banner until a retry succeeds).
     pub error: Option<String>,
-    pub store_tab: StoreTab,
     pub sync_pairing_open: bool,
     pub sync_code_copied: bool,
     pub about_support_open: bool,
@@ -120,13 +119,6 @@ pub struct ManagerApp {
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
     pub key_checked: Option<String>,
-    /// packages.disclosure payload waiting for install consent.
-    pub disclosure: Option<Value>,
-    /// (package_id, version) the disclosure was fetched for — install
-    /// proceeds on consent. `packages.install` requires both.
-    pub pending_install: Option<(String, String)>,
-    /// Store listing shown in the detail overlay.
-    pub detail: Option<Value>,
     /// Usage view state: column sort, system-process filter, virtual list scroll.
     pub usage_sort: views::usage::UsageSort,
     pub usage_show_system: bool,
@@ -144,7 +136,6 @@ pub struct ManagerApp {
     worker_dead: bool,
     next_updater_poll: Instant,
     next_models_poll: Instant,
-    next_store_poll: Instant,
     next_sync_poll: Instant,
     next_about_poll: Instant,
     next_storage_poll: Instant,
@@ -185,7 +176,6 @@ impl ManagerApp {
             inputs: HashMap::new(),
             notice: None,
             error: None,
-            store_tab: StoreTab::Installed,
             sync_pairing_open: false,
             sync_code_copied: false,
             about_support_open: false,
@@ -205,9 +195,6 @@ impl ManagerApp {
             _window_visibility: None,
             key_editor: None,
             key_checked: None,
-            disclosure: None,
-            pending_install: None,
-            detail: None,
             usage_sort: views::usage::UsageSort::default(),
             usage_show_system: false,
             usage_scroll: gpui_component::VirtualListScrollHandle::new(),
@@ -219,7 +206,6 @@ impl ManagerApp {
             worker_dead: false,
             next_updater_poll: Instant::now(),
             next_models_poll: Instant::now(),
-            next_store_poll: Instant::now(),
             next_sync_poll: Instant::now(),
             next_about_poll: Instant::now(),
             next_storage_poll: Instant::now() + std::time::Duration::from_secs(5),
@@ -371,17 +357,6 @@ impl ManagerApp {
         self.call("@action", op, params);
     }
 
-    /// «Открыть» on a .kspkg app row: `packages.open` mints (or reuses) the
-    /// launch lease; the `pkg.open` reply carries the launch URL which
-    /// `open_reply` hands to the system browser.
-    pub fn open_package(&mut self, id: String, version: String) {
-        self.call(
-            "pkg.open",
-            "packages.open",
-            json!({ "package_id": id, "version": version }),
-        );
-    }
-
     /// Destructive op behind the confirm modal.
     pub fn ask_confirm(
         &mut self,
@@ -410,8 +385,6 @@ impl ManagerApp {
             return;
         }
         self.view = view;
-        self.detail = None;
-        self.disclosure = None;
         self.confirm = None;
         self.notice = None;
         self.navigation_load = true;

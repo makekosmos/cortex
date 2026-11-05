@@ -2,11 +2,9 @@
 resolver = "2"
 members = [
   "runtime",
-  "runtime/crates/package-protocol",
   "runtime/crates/pe-version-info",
   "runtime/crates/engine-base",
   "runtime/crates/engine-dictation",
-  "runtime/crates/engine-packages",
   "runtime/crates/engine-indexes",
   "runtime/crates/engine-mobile",
   "core/crates/ark-domain",

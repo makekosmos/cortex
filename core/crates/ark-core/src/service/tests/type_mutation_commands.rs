@@ -1,16 +1,6 @@
 use super::*;
 use serde_json::json;
 
-fn package_registration(type_id: &str) -> crate::type_registry::TypeRegistration {
-    let mut registration = crate::canonical_types::definitions::canonical_type_registrations()
-        .expect("canonical registrations should load")
-        .remove(0);
-    registration.type_id = type_id.to_string();
-    registration.name = format!("Test package type {type_id}");
-    registration.aliases.clear();
-    registration
-}
-
 fn replay_event_for(
     receiver: &mut tokio::sync::broadcast::Receiver<Value>,
     entity_id: &str,
@@ -27,40 +17,6 @@ fn replay_event_for(
         }
     }
     events
-}
-
-#[tokio::test]
-async fn package_type_registration_rolls_back_the_whole_batch() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
-        .await
-        .unwrap();
-
-    let first = package_registration("test.package.first");
-    let mut invalid = package_registration("test.package.invalid");
-    invalid.status = "not-a-status".into();
-    let result = handle_request(
-        &state,
-        Request::TypesRegisterPackageDefinitions {
-            registrations: vec![first, invalid],
-        },
-    )
-    .await;
-    assert!(result.is_err(), "invalid package definition must fail");
-
-    assert!(
-        handle_request(
-            &state,
-            Request::GetObjectType {
-                id: "test.package.first".into(),
-            },
-        )
-        .await
-        .unwrap()
-        .is_null(),
-        "earlier registrations must roll back with the batch"
-    );
 }
 
 #[tokio::test]

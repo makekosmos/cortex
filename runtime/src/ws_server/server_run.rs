@@ -53,8 +53,6 @@ impl WsServer {
                     let correlation_id = self.correlation_id.clone();
                     let dispatcher = self.dispatcher.clone();
                     let desktop_authority = self.desktop_authority.clone();
-                    let snapshots = self.snapshots.clone();
-                    let grants = self.grants.clone();
                     let task_shutdown = shutdown.clone();
                     let resources = Arc::new(Mutex::new(Some(WsConnectionResources {
                         stream: Some(stream),
@@ -97,7 +95,7 @@ impl WsServer {
                         if let Err(e) = handle_connection(
                             stream, ark_host, token, bus, pomo, dict, agent_events,
                             protocol_usage, correlation_id, dispatcher, owner_lease,
-                            desktop_authority, snapshots, grants, task_shutdown,
+                            desktop_authority, task_shutdown,
                         ).await {
                             eprintln!("[mundus.ws] connection error: {e}");
                         }

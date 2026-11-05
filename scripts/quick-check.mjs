@@ -20,8 +20,6 @@ const CRATE_MAP = [
   { prefix: "runtime/crates/engine-base/", packages: ["engine-base", "engine"] },
   { prefix: "runtime/crates/engine-dictation/", packages: ["engine-dictation", "engine"] },
   { prefix: "runtime/crates/engine-indexes/", packages: ["engine-indexes", "engine"] },
-  { prefix: "runtime/crates/engine-packages/", packages: ["engine-packages", "engine"] },
-  { prefix: "runtime/crates/package-protocol/", packages: ["package-protocol"] },
   { prefix: "runtime/crates/pe-version-info/", packages: ["pe-version-info"] },
   { prefix: "core/crates/ark-domain/", packages: ["ark-domain"] },
   { prefix: "core/crates/ark-application/", packages: ["ark-application"] },

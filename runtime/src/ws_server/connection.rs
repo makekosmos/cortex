@@ -50,8 +50,6 @@ pub(super) async fn handle_connection(
     dispatcher: crate::engine_dispatch::EngineDispatcher,
     owner_lease: crate::engine_dispatch::OwnerLease,
     desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
     shutdown: WsShutdownHandle,
 ) -> Result<(), WsServerError> {
     let owner_guard = WsConnectionOwnerGuard::new(dispatcher.clone(), owner_lease);
@@ -136,8 +134,6 @@ pub(super) async fn handle_connection(
         correlation_id,
         client_id,
         desktop_authority,
-        snapshots,
-        grants,
         shutdown,
         dispatcher,
         hello,

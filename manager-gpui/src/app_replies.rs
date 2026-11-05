@@ -27,16 +27,6 @@ impl ManagerApp {
         }
     }
 
-    /// The `pkg.open` reply: open the launch URL or surface the typed
-    /// Engine error (already a Russian line — `worker::package_open_message`).
-    pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
-        self.open_reply_url(
-            result,
-            |v| v.get("launch_url")?.as_str(),
-            "Engine не вернул адрес приложения.",
-        );
-    }
-
     /// The `@action` reply: a mutation finished — reload the current view.
     /// `connect_with_pairing_code` answers `{"status":"connected", …}` once
     /// the peer's Hello completed, so the notice names the device instead of

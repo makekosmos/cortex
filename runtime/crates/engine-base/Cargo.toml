@@ -8,8 +8,6 @@ description = "Engine base — brand, data_dir, file hashing, process tree, lock
 default = []
 # Mirrors the engine feature: serde impls for handle_relative_fs types.
 handle-relative-fs-serde = []
-# Test-only escape hatch mirroring the engine feature of the same name.
-package-worker-fixture = []
 # Exposes #[cfg(test)]-style helpers (e.g. observability::app_rpc::tests) to
 # downstream crates' test builds via dev-dependency feature unification.
 test-support = []

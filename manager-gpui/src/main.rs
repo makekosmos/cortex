@@ -10,9 +10,7 @@ mod assets;
 mod async_fields;
 mod boot;
 mod button;
-mod consent;
 mod device_info;
-mod devpkg;
 mod fps;
 mod logo_anim;
 #[cfg(feature = "logo-gpu")]

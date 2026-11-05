@@ -16,7 +16,6 @@ pub(super) async fn production_ws_fixture(
         Arc::new(crate::file_index::FileIndex::new_disabled(dir.path()).unwrap()),
         Arc::new(crate::usage_tracker::UsageTrackerDiagnosticsState::default()),
         Arc::new(crate::protocol_usage::ProtocolUsageStore::open(dir.path()).unwrap()),
-        Arc::new(crate::package_service::PackageService::open(dir.path()).unwrap()),
         "00000000-0000-4000-8000-000000000001".into(),
     )
     .await

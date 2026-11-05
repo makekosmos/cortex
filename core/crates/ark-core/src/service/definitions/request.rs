@@ -210,12 +210,8 @@ pub(crate) enum Request {
     TypesResolveAlias {
         alias: String,
     },
-    #[serde(rename = "types.registerPackageDefinitions")]
-    TypesRegisterPackageDefinitions {
-        registrations: Vec<crate::type_registry::TypeRegistration>,
-    },
-    /// Register an application-owned type from a bare JSON schema, without a
-    /// `.kspkg` archive. A new version must be an additive schema change.
+    /// Register an application-owned type from a bare JSON schema. A new
+    /// version must be an additive schema change.
     #[serde(rename = "types.register")]
     TypesRegister {
         #[serde(rename = "typeId")]

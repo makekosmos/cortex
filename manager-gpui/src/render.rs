@@ -1,5 +1,5 @@
-//! Root layout: sidebar + titlebar + active view, with the Engine banner,
-//! confirm modal and disclosure/detail overlays layered on top.
+//! Root layout: sidebar + titlebar + active view, with the Engine banner and
+//! confirm modal layered on top.
 use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
@@ -7,7 +7,7 @@ use gpui_component::scroll::ScrollableElement;
 use serde_json::Value;
 
 use crate::app::ManagerApp;
-use crate::modals::{render_confirm, render_overlay, render_pairing_prompt};
+use crate::modals::{render_confirm, render_pairing_prompt};
 use crate::theme::*;
 use crate::views;
 use crate::widgets::*;
@@ -117,9 +117,6 @@ impl Render for ManagerApp {
         }
         if self.key_editor.is_some() {
             root = root.child(views::secrets::render_modal(self, window, cx));
-        }
-        if self.disclosure.is_some() || self.detail.is_some() {
-            root = root.child(render_overlay(self, cx));
         }
         // KOS-369: an unanswered pairing request pops on top of any view.
         let pairing_request = self
