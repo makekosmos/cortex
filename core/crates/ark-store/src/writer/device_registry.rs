@@ -141,20 +141,4 @@ impl SqliteWriter {
                 .apply_events(sender_device_id, events)
         })
     }
-
-    #[cfg(debug_assertions)]
-    pub fn apply_device_registry_events_on_connection(
-        connection: &mut Connection,
-        sender_device_id: &str,
-        events: &[RegistryEvent],
-    ) -> Result<
-        ark_application::replication_storage::RegistryPageApply,
-        StoreTransactionFailure<RegistryEventApplyError>,
-    > {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
-            capabilities
-                .device_registry()
-                .apply_events(sender_device_id, events)
-        })
-    }
 }

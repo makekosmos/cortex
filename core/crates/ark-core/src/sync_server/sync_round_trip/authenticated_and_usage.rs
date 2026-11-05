@@ -26,7 +26,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         storage_a.arc() as Arc<dyn SyncRuntimeStorage>
     ));
     server_a
-        .set_auth_secret(Some("mesh-secret".to_string()))
+        .set_auth_secret(Some("sync-secret".to_string()))
         .await;
 
     let port_a = pick_port().await;
@@ -57,7 +57,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         "Beta".to_string(),
         "space-hmac".to_string(),
         vec![],
-        Some("mesh-secret".to_string()),
+        Some("sync-secret".to_string()),
     ));
     client.start();
 

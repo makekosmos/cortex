@@ -69,23 +69,6 @@ impl SqliteWriter {
         })
     }
 
-    #[cfg(debug_assertions)]
-    pub fn prepare_outbound_task_merge_batch_on_connection(
-        connection: &mut super::Connection,
-        peer_device_id: &str,
-        identity: PolicyIdentity,
-        limit: usize,
-    ) -> Result<
-        Option<TaskMergeBatch>,
-        StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>,
-    > {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
-            capabilities
-                .task_merge()
-                .prepare_outbound_batch(peer_device_id, &identity, limit)
-        })
-    }
-
     pub fn acknowledge_outbound_task_merge_batch(
         &mut self,
         peer_device_id: &str,
@@ -94,24 +77,6 @@ impl SqliteWriter {
         through_position: i64,
     ) -> Result<i64, StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>> {
         self.write_with_capabilities(|capabilities| {
-            capabilities.task_merge().acknowledge_outbound_batch(
-                peer_device_id,
-                &identity,
-                batch_id,
-                through_position,
-            )
-        })
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn acknowledge_outbound_task_merge_batch_on_connection(
-        connection: &mut super::Connection,
-        peer_device_id: &str,
-        identity: PolicyIdentity,
-        batch_id: &str,
-        through_position: i64,
-    ) -> Result<i64, StoreTransactionFailure<crate::task_merge::TaskMergeOutboundError>> {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
             capabilities.task_merge().acknowledge_outbound_batch(
                 peer_device_id,
                 &identity,
@@ -132,26 +97,6 @@ impl SqliteWriter {
         super::TransactionFailure<crate::task_merge::TaskMergeInboundError>,
     > {
         self.immediate(|transaction| {
-            crate::task_merge::apply_inbound_task_merge_batch(
-                transaction,
-                peer_device_id,
-                local_device_id,
-                &identity,
-                &batch,
-            )
-        })
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn apply_inbound_task_merge_batch_on_connection(
-        connection: &mut Connection,
-        peer_device_id: &str,
-        local_device_id: &str,
-        identity: PolicyIdentity,
-        batch: TaskMergeBatch,
-    ) -> Result<TaskMergeBatchAck, TransactionFailure<crate::task_merge::TaskMergeInboundError>>
-    {
-        Self::immediate_on_connection(connection, |transaction| {
             crate::task_merge::apply_inbound_task_merge_batch(
                 transaction,
                 peer_device_id,

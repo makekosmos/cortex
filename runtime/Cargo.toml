@@ -52,10 +52,8 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
-regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rand.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
@@ -69,13 +67,6 @@ image.workspace = true
 tar.workspace = true
 flate2.workspace = true
 lnk.workspace = true
-# Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
-# enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
-# keyring stays: package_service/integrations/secret_store.rs also uses it —
-#   без backend-feature для платформы keyring молча использует mock store —
-#   запись «успешна», но ключ не персистит.
-# base64 — encode/decode WAV bytes между renderer и backend (shared).
-keyring.workspace = true
 base64.workspace = true
 semver.workspace = true
 # Phase 4 bug-detection: structured logging.
@@ -86,9 +77,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-# File identity by volume serial + file index — the /v1/rpc Manager check
-# must not rely on path spelling (KOS-269 round 4).
-same-file.workspace = true
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -126,11 +114,6 @@ engine-base = { path = "crates/engine-base", features = ["test-support"] }
 engine-dictation = { path = "crates/engine-dictation", features = ["test-support"] }
 tempfile.workspace = true
 httpmock.workspace = true
-# Test-only: the replication fixtures sign their own documents; the package
-# catalog path carries no Ed25519 code. Pinned to the same release as
-# ark-core so tests do not pull a second ed25519/curve25519 stack.
-ed25519-dalek.workspace = true
-ark-store = { path = "../core/crates/ark-store", features = ["test-support"] }
 
 [lints]
 workspace = true
