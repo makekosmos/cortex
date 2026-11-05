@@ -361,7 +361,7 @@ impl NativeAppStore {
     /// override wins (unit tests never honor it), else the recorded install
     /// path. Shared by `apps.launch` and the tray so both agree.
     pub fn executable_for(&self, desc: &NativeAppDescriptor) -> Option<PathBuf> {
-        #[cfg(not(any(test, feature = "test-support")))]
+        #[cfg(not(test))]
         if let Some(path) = crate::brand::env_os(desc.env_override).map(PathBuf::from) {
             if path.is_file() {
                 return Some(path);

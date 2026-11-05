@@ -37,6 +37,10 @@ impl Drop for WsConnectionOwnerGuard {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "connection wiring shares the server's host handles"
+)]
 pub(super) async fn handle_connection(
     stream: tokio::net::TcpStream,
     ark_host: Arc<ArkHost>,

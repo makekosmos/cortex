@@ -315,16 +315,6 @@ mod imp {
         Ok(report)
     }
 
-    /// Kill every process whose image name is in `names`. Returns the
-    /// per-name result.
-    pub fn kill_by_names(names: &[&str]) -> Result<KillReport, String> {
-        let targets: Vec<KillTarget> = names
-            .iter()
-            .map(|name| KillTarget { name, under: None })
-            .collect();
-        kill_by_targets_with(&targets, &terminate_and_wait)
-    }
-
     /// All `kill-product-processes` targets: product names plus the
     /// path-scoped whisper-server.
     pub fn kill_product_targets() -> Result<KillReport, String> {

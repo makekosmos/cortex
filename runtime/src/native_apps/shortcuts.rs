@@ -90,7 +90,7 @@ fn same_path(left: &Path, right: &Path) -> bool {
 fn path_key(path: &Path) -> String {
     #[cfg(windows)]
     {
-        return crate::win32::windows_path_key(path);
+        crate::win32::windows_path_key(path)
     }
     #[cfg(not(windows))]
     {

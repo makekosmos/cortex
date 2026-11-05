@@ -1,5 +1,3 @@
-#[cfg(debug_assertions)]
-use super::Connection;
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 use ark_domain::device_registry::{RegistryApplyOutcome, RegistryEvent};
 use rusqlite::Transaction;

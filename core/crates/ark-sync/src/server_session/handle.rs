@@ -16,7 +16,7 @@ const CLOSE_NOW: u8 = 3;
 pub enum ServerSessionIntent {
     WakeCommittedFeed,
     WakeTaskMerge,
-    BroadcastRegistryEvent(RegistryEvent),
+    BroadcastRegistryEvent(Box<RegistryEvent>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

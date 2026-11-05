@@ -31,7 +31,7 @@ impl SyncServer {
                 .session
                 .try_send(
                     ark_sync::server_session::ServerSessionIntent::BroadcastRegistryEvent(
-                        event.clone(),
+                        Box::new(event.clone()),
                     ),
                 )
                 .is_err()

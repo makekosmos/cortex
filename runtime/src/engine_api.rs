@@ -22,7 +22,6 @@ use tokio::sync::oneshot;
 use tokio::sync::Notify;
 
 use crate::auth;
-use crate::engine_dispatch::{DispatchClient, DispatchRequest, Operation};
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::protocol_version::{
     Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION,

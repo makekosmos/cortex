@@ -138,6 +138,10 @@ impl WsServer {
 
 /// The accept loop is itself joined by the runtime owner; every connection
 /// task is inserted into the server registry before admission is released.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "dispatcher wiring shares the server's host handles"
+)]
 fn make_dispatcher(
     ark_host: Arc<ArkHost>,
     command_bus: Arc<CommandBus>,

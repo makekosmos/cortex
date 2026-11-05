@@ -1,4 +1,4 @@
-use super::{Connection, SqliteWriter, StoreTransactionFailure, WriteCapabilities};
+use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 
 const IROH_SECRET_KEY_KV_KEY: &str = "iroh.secret_key";
 

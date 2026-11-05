@@ -1,5 +1,3 @@
-#[cfg(debug_assertions)]
-use super::Connection;
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, RegistryCommand, RegistryEvent,

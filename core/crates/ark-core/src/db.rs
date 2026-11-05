@@ -29,7 +29,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::hlc::HLC;
     use crate::types::*;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use serde_json::{json, Value};

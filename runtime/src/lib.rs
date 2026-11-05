@@ -3,8 +3,6 @@
 // Windows callers reach is dead elsewhere, so the lint is silenced off-Windows
 // and in test builds, which carry platform-gated fixtures.
 #![cfg_attr(any(test, not(windows)), allow(dead_code))]
-// Remaining debt: these signatures need context structs / boxed errors.
-#![allow(clippy::too_many_arguments, clippy::result_large_err)]
 
 // Mundus backend — headless ARK host runtime.
 //

@@ -4,7 +4,6 @@
     windows_subsystem = "windows"
 )]
 #![cfg_attr(any(test, not(windows)), allow(dead_code))]
-#![allow(clippy::useless_conversion)]
 
 // Mundus backend — native runtime and Windows tray owner.
 //

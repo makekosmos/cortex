@@ -30,7 +30,6 @@ pub use inbound_entity::{
     PendingObjectType,
 };
 pub use iroh_identity::IrohIdentityWrites;
-use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
 pub use tracked_app_mutation::TrackedAppMutationWrites;
 

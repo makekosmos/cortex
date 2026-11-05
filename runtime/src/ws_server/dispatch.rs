@@ -1,5 +1,9 @@
 use super::*;
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "dispatch wiring shares the server's host handles"
+)]
 pub(super) async fn dispatch_operation(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,

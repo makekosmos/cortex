@@ -1,4 +1,4 @@
-use super::{Connection, SqliteWriter, StoreTransactionFailure, WriteCapabilities};
+use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 
 impl SqliteWriter {
     pub fn register_application_type(

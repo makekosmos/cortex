@@ -196,7 +196,7 @@ impl NativeAppStore {
             let Some(enclosed) = file.enclosed_name() else {
                 return Err(NativeAppError::Archive("unsafe path"));
             };
-            let Some(normalized) = normalize_path(&enclosed) else {
+            let Some(normalized) = normalize_path(enclosed) else {
                 return Err(NativeAppError::Archive("unsafe path"));
             };
             if !seen.insert(normalized.to_lowercase()) {

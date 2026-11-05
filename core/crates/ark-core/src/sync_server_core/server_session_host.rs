@@ -30,7 +30,9 @@ impl ConnectedServerSessionHost for ServerSessionHostAdapter {
             for event in &events {
                 if peer
                     .session
-                    .try_send(ServerSessionIntent::BroadcastRegistryEvent(event.clone()))
+                    .try_send(ServerSessionIntent::BroadcastRegistryEvent(Box::new(
+                        event.clone(),
+                    )))
                     .is_err()
                 {
                     peer.session.revoke();

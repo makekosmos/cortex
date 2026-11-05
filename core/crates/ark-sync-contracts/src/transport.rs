@@ -1,5 +1,4 @@
 use crate::wire::LanSyncMessage;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 #[derive(Debug)]

@@ -36,7 +36,7 @@ pub(super) async fn run_connected_server_session_controlled(
                         );
                     };
                     let keep_running = connected
-                        .send_registry_event(actor, event, &session_io.sender())
+                        .send_registry_event(actor, *event, &session_io.sender())
                         .await;
                     actor.connected = Some(connected);
                     if !keep_running {

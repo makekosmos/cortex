@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::System::Registry::{
-    RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_BINARY, REG_SZ,
-    RRF_RT_ANY, RRF_RT_REG_BINARY,
+    RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_BINARY, REG_SZ, RRF_RT_ANY,
+    RRF_RT_REG_BINARY,
 };
 
 // Shared with the installer's post-install subcommand (KOS-306).
@@ -130,18 +130,6 @@ fn write_sz(subkey: &str, name: &str, value: &str) -> Result<(), String> {
             (data.len() * 2) as u32,
         )
     })
-}
-
-fn delete_value(subkey: &str, name: &str) {
-    let subkey = wide(subkey);
-    let name = wide(name);
-    unsafe {
-        let _ = RegDeleteKeyValueW(
-            HKEY_CURRENT_USER,
-            PCWSTR(subkey.as_ptr()),
-            PCWSTR(name.as_ptr()),
-        );
-    }
 }
 
 /// Enabled = Run value present AND no disabled StartupApproved marker —

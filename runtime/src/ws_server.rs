@@ -4,7 +4,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -26,7 +25,6 @@ use crate::manager_api::ManagerState;
 use crate::protocol_usage::{ProtocolUsageStore, TransportKind};
 use crate::protocol_version::{Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT};
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
-use base64::Engine as _;
 
 mod connection;
 mod connection_loop;

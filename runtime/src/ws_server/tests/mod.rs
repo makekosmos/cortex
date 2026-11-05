@@ -1,5 +1,4 @@
 use super::*;
-use crate::app_index::{App, AppKind};
 use tokio::io::AsyncReadExt;
 
 mod handshake;

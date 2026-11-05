@@ -124,7 +124,6 @@ fn install_never_downgrades_a_newer_verified_engine() {
     let older_options = install::Options {
         manifest,
         target_root: target_root.clone(),
-        ..options
     };
     assert_eq!(install::install(&older_options).unwrap()["action"], "kept");
     assert_eq!(current_version(&target_root), "2.0.0");

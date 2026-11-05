@@ -9,8 +9,6 @@ struct ServerPeerOutboundGuard {
     storage: Arc<dyn SyncRuntimeStorage>,
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     peer_id: usize,
-    space_id: Arc<RwLock<String>>,
-    device_id: Arc<RwLock<String>>,
 }
 
 #[async_trait::async_trait]
@@ -33,15 +31,11 @@ impl ServerPeerOutboundGuard {
         storage: Arc<dyn SyncRuntimeStorage>,
         peers: Arc<Mutex<HashMap<usize, PeerState>>>,
         peer_id: usize,
-        space_id: Arc<RwLock<String>>,
-        device_id: Arc<RwLock<String>>,
     ) -> Self {
         Self {
             storage,
             peers,
             peer_id,
-            space_id,
-            device_id,
         }
     }
 }
@@ -154,8 +148,6 @@ impl SyncServer {
                                     storage.clone(),
                                     peers.clone(),
                                     peer_id,
-                                    space_id.clone(),
-                                    device_id.clone(),
                                 ));
                                 let mut session_io =
                                     match ark_net::websocket::session_io_with_guard(
