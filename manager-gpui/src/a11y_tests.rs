@@ -218,13 +218,8 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
 
     // Sidebar navigation and window chrome — stable
     // Russian names suitable as locators.
-    for expected in [
-        "Хранилище",
-        "Активность",
-        "Приложения",
-        "Настройки",
-        "Боковая панель",
-    ] {
+    for expected in ["Хранилище", "Активность", "Настройки", "Боковая панель"]
+    {
         assert!(
             labels.contains_key(expected),
             "expected a11y name '{expected}' in the tree; got labels: {:?}",

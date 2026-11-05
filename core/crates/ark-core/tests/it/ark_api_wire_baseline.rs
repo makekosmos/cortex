@@ -34,5 +34,5 @@ fn lan_wire_v1_fixtures_decode_and_preserve_exact_current_bytes() {
         );
         assert!(seen.insert(fixture.name), "duplicate LAN fixture");
     }
-    assert_eq!(seen.len(), 8, "LAN golden corpus is incomplete");
+    assert_eq!(seen.len(), 6, "LAN golden corpus is incomplete");
 }

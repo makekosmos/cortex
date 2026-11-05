@@ -156,5 +156,5 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "84c8bebd6e44a635879c32a57f6a1dc3e69a46bce08f43a410efffe5140735e9"
+  "schemaHash": "ce74959de1f8c3099cef88440e9cc40d2e7442d1320cd7ad42c385a577ebc77b"
 }"###;

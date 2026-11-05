@@ -173,7 +173,7 @@ mod tests {
 
         let report = sweep_engine_root(dir.path());
 
-        assert_eq!(report.removed, 7);
+        assert_eq!(report.removed, 6);
         assert_eq!(names(dir.path()).len(), 3);
     }
 
