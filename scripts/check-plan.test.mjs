@@ -106,7 +106,11 @@ test("docs and isolated assets are a safe no-op", () => {
     assert.equal(result.full, false, file);
     assert.deepEqual(result.checks, [], file);
   }
-  for (const file of ["host/notes.txt", "runtime/native/CMakeLists.txt", "shared/requirements.txt"])
+  for (const file of [
+    "tools/notes.txt",
+    "runtime/native/CMakeLists.txt",
+    "shared/requirements.txt",
+  ])
     assert.equal(plan("--files", file).json.full, true, file);
   for (const file of ["shared/icon.svg", "packages/foo/logo.png"]) {
     assert.equal(plan("--files", file).json.full, true, file);
