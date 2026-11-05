@@ -7,7 +7,7 @@ use ::gpui::{prelude::*, *};
 use gpui_component::InteractiveElementExt;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
-pub use crate::button::{btn, btn_id};
+pub use crate::button::btn;
 pub use crate::page_layout::{
     card, empty, input_field, kv, page_sections, page_stack, row, row_copy, section, section_group,
 };
@@ -40,11 +40,6 @@ pub fn icon_file(path: Option<String>) -> Option<ImageSource> {
         .map(|p| ImageSource::from(std::path::PathBuf::from(p)))
 }
 
-/// Icon from a remote image URL (store catalog `icon_url`).
-pub fn icon_url(url: Option<String>) -> Option<ImageSource> {
-    url.filter(|u| !u.is_empty()).map(ImageSource::from)
-}
-
 /// 20px icon slot: the letter badge always renders underneath, so a missing
 /// or unloadable image degrades to a neutral placeholder — never an empty
 /// hole in the row.
@@ -66,20 +61,6 @@ pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
             .child(icon_letter(name));
     }
     icon
-}
-
-/// Icon + primary display name + muted secondary caption (usually the
-/// package id) — the shared row head for every store-style list.
-pub fn entry_row(icon: Option<ImageSource>, title: String, caption: String) -> Div {
-    div()
-        .w_full()
-        .min_w_0()
-        .min_h(px(36.))
-        .flex()
-        .items_center()
-        .gap(px(crate::page_layout::GAP))
-        .child(app_icon(icon, &title))
-        .child(row_copy(title, caption))
 }
 
 // --- Chrome -----------------------------------------------------------------
