@@ -44,5 +44,3 @@ routable-address filtering (`sync_server_peers.rs`, `net.rs`).
   break.
 - Never bypass `record_local_*` / `ark_store::sync_versions::bump_sync_version_vector` with a bare
   `conn.execute(INSERT/UPDATE/DELETE)` on syncable tables.
-- Integration replication (`integration_replication`) uses signed envelopes
-  (`SignedSyncEnvelope`) and explicit node grants — do not auto-trust peers.

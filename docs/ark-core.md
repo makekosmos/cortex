@@ -38,8 +38,6 @@ Engine request contract.
   `usage_days` — sequenced entities with their own sync machinery
   (`usage_sync_versions/heads/log`).
 - KV + sync metadata: `sync_kv`, `sync_tombstones`, version vectors.
-- Integration replication tables: `authorized_nodes`,
-  `integration_node_grants`, `integration_credential_envelopes`, etc.
 - Schema evolution is **additive by default**: `CREATE TABLE IF NOT EXISTS`,
   additive columns/indexes. No `DROP TABLE`, no incompatible `ALTER`. A one-off
   object rewrite needs an explicit approval per issue, a transaction and a
