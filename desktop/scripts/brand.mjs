@@ -33,12 +33,8 @@ export const MANAGER_EXE = "Mundus Manager.exe";
 export const AUTOSTART_RUN_VALUE = "Mundus Engine";
 export const UNINSTALL_KEY_NAME = "Mundus";
 
-/** Read env var `MUNDUS_<suffix>` with legacy `KOSMOS_`/`KEPLER_` fallback. */
-// MIGRATION(KOS-267): remove the legacy-prefix fallbacks after 2026-11-01.
+/** Read env var `MUNDUS_<suffix>`. */
 export function env(suffix, env = process.env) {
-  for (const prefix of ["MUNDUS_", "KOSMOS_", "KEPLER_"]) {
-    const value = env[`${prefix}${suffix}`];
-    if (value !== undefined && value !== "") return value;
-  }
-  return undefined;
+  const value = env[`MUNDUS_${suffix}`];
+  return value === undefined || value === "" ? undefined : value;
 }

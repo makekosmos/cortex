@@ -60,23 +60,13 @@ pub const KEYRING_SERVICE: &str = "kosmos-kepler";
 /// New environment-variable prefix for everything the product reads.
 pub const ENV_PREFIX: &str = "MUNDUS_";
 
-/// Read an environment variable by suffix, trying the current `MUNDUS_`
-/// prefix first and the legacy `KOSMOS_`/`KEPLER_` prefixes as fallbacks.
-/// The legacy fallbacks exist because users/devs may still have the old
-/// names exported; they do not change on-disk state.
-// MIGRATION(KOS-267): remove the legacy-prefix fallbacks after 2026-11-01.
+/// Read an environment variable by suffix.
 pub fn env(suffix: &str) -> Option<String> {
     env_os(suffix).and_then(|v| v.into_string().ok())
 }
 
 /// [`env`] for values that may not be valid UTF-8.
 pub fn env_os(suffix: &str) -> Option<std::ffi::OsString> {
-    for prefix in [ENV_PREFIX, "KOSMOS_", "KEPLER_"] {
-        if let Some(value) = std::env::var_os(format!("{prefix}{suffix}")) {
-            if !value.is_empty() {
-                return Some(value);
-            }
-        }
-    }
-    None
+    let value = std::env::var_os(format!("{ENV_PREFIX}{suffix}"))?;
+    (!value.is_empty()).then_some(value)
 }

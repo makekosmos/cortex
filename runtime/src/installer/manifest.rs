@@ -7,9 +7,7 @@ use std::path::Path;
 
 use semver::Version;
 
-// MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
-// roots written by 0.9.x installers; accept both until cleanup.
-const PRODUCTS: [&str; 2] = ["mundus-engine", "kosmos-engine"];
+const PRODUCTS: [&str; 1] = ["mundus-engine"];
 
 #[derive(Debug)]
 pub struct ManifestFile {

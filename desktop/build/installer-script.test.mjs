@@ -107,55 +107,6 @@ test("only removes the shipped payload, not the whole $INSTDIR recursively", () 
   expect(installer).toContain('RMDir "$INSTDIR"');
 });
 
-test("cleans up the old Electron-era payloads and their GUID keys", () => {
-  expect(installSection).toContain('RMDir /r "$LOCALAPPDATA\\Programs\\kepler-shell"');
-  // The Kosmos-era Programs payload goes too.
-  expect(installSection).toContain('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
-  // The real 0.9.x uninstall keys are bare GUIDs — no braces.
-  expect(installer).toContain("Uninstall\\4fe2b964-4d0e-5a72-8728-cca14468c9f0");
-  expect(installer).toContain("Uninstall\\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d");
-  expect(installer).not.toContain("{4fe2b964");
-  expect(installer).not.toContain("{af85bd72");
-});
-
-test("deletes the brace-less Electron uninstall keys unconditionally", () => {
-  // MIGRATION(KOS-267): the legacy keys must keep being deleted whether or
-  // not the old payload dir survived.
-  for (const guid of [
-    "4fe2b964-4d0e-5a72-8728-cca14468c9f0",
-    "af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d",
-  ]) {
-    expect(installSection).toContain(
-      `DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${guid}"`,
-    );
-  }
-});
-
-test("removes old autostart Run values unconditionally on install", () => {
-  // MIGRATION(KOS-267): the legacy names must keep being deleted.
-  const names = [
-    "com.kazui.kosmos",
-    "electron.app.Kosmos",
-    "Kosmos",
-    "Kosmos Engine",
-    "com.kazui.kepler",
-    "Kepler",
-    "KeplerKosmos",
-    "KosmosKepler",
-  ];
-  for (const name of names) {
-    expect(installer).toContain(`DeleteRegValue HKCU "${runKey}" "${name}"`);
-  }
-  // Deletion happens before the legacy program-dir cleanup, not only inside it.
-  const insertAt = installSection.indexOf("!insertmacro DeleteOldRunValues");
-  const legacyProgramDirAt = installSection.indexOf(
-    'RMDir /r "$LOCALAPPDATA\\Programs\\kepler-shell"',
-  );
-  expect(insertAt >= 0).toBeTruthy();
-  expect(legacyProgramDirAt >= 0).toBeTruthy();
-  expect(insertAt).toBeLessThan(legacyProgramDirAt);
-});
-
 // KOS-306: a single staged-engine call stops the product — graceful
 // `--shutdown` first, then the `kill-product-processes` subcommand for the
 // leftovers (store apps, 0.9.x/Electron-era names). No taskkill, no
@@ -265,40 +216,6 @@ test("the Install section never writes or shortcuts a bundled app component", ()
     expect(installSection).not.toContain(`CreateShortCut "$SMPROGRAMS\\${component}`);
   }
   expect(installSection).toContain('Rename "$INSTDIR\\resources.next" "$INSTDIR\\resources"');
-});
-
-// MIGRATION(KOS-267): remove after 2026-11-01.
-test("removes the 0.9.x host's per-app Start Menu links without a recursive delete", () => {
-  for (const name of ["Agenda", "Memoria", "Dictation", "Ordo"]) {
-    expect(installSection).toContain(`Delete "$SMPROGRAMS\\Kosmos\\${name}.lnk"`); // MIGRATION(KOS-267): remove after 2026-11-01
-  }
-  expect(installSection).toContain('RMDir "$SMPROGRAMS\\Kosmos"'); // MIGRATION(KOS-267): remove after 2026-11-01
-  expect(installSection).not.toContain('RMDir /r "$SMPROGRAMS\\Kosmos"'); // MIGRATION(KOS-267): remove after 2026-11-01
-});
-
-// The migration marker must be recorded before the payloads it describes
-// are deleted — a marker written after the wipe would always read "absent".
-test("records bundled components before wiping the old payloads", () => {
-  const marker = installer.split("Function RecordLegacyComponents")[1] ?? "";
-  expect(marker).toContain("legacy-components.json");
-  for (const component of ["agenda", "memoria", "dictation"]) {
-    expect(marker).toContain(`components\\${component}`);
-    expect(marker).toContain(`"${component}":$`);
-  }
-  // An all-false result must leave an earlier marker alone (installer re-run
-  // before the Engine's first start).
-  const skipAt = marker.indexOf('"falsefalsefalse" record_done');
-  expect(skipAt >= 0).toBeTruthy();
-  expect(skipAt).toBeLessThan(marker.indexOf("FileOpen"));
-  const recordAt = installSection.indexOf("Call RecordLegacyComponents");
-  const kosmosWipeAt = installSection.indexOf('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
-  // KOS-306 round 2: the payload is swapped in by rename, not wiped.
-  const resourcesSwapAt = installSection.indexOf('Rename "$INSTDIR\\resources"');
-  expect(recordAt >= 0).toBeTruthy();
-  expect(kosmosWipeAt >= 0).toBeTruthy();
-  expect(resourcesSwapAt >= 0).toBeTruthy();
-  expect(recordAt).toBeLessThan(kosmosWipeAt);
-  expect(recordAt).toBeLessThan(resourcesSwapAt);
 });
 
 test("uninstall removes the store payload dir but never user data", () => {

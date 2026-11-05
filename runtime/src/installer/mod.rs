@@ -24,7 +24,6 @@
 
 mod autostart;
 mod install;
-mod legacy;
 mod manifest;
 mod post_install;
 mod processes;
@@ -84,10 +83,6 @@ fn install_cli(args: &[String]) -> ExitCode {
     print_outcome(install::install(&install::Options {
         manifest: PathBuf::from(manifest),
         target_root: PathBuf::from(target_root),
-        legacy_registry_key: flag_value(args, "--legacy-registry-key")
-            .map(str::to_owned)
-            .unwrap_or_else(|| legacy::LEGACY_UNINSTALL_KEY.to_owned()),
-        legacy_shortcut: flag_value(args, "--legacy-shortcut").map(PathBuf::from),
     }))
 }
 

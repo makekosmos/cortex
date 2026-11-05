@@ -172,12 +172,5 @@ pub(super) fn set(enabled: bool) -> Result<(), String> {
         // The Run value stays: this is exactly Task Manager's Disable,
         // so the entry remains visible (and re-enableable) in the OS UI.
     }
-    // MIGRATION(KOS-267): remove after 2026-11-01. A stale legacy Run
-    // value would resurrect the old engine binary; drop the known old
-    // names whenever the autostart preference is touched.
-    for legacy in ["Kosmos Engine", "Kosmos"] {
-        // MIGRATION(KOS-267)
-        delete_value(RUN_SUBKEY, legacy);
-    }
     Ok(())
 }

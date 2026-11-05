@@ -111,16 +111,6 @@ pub fn install(grant_sid: &str) -> Outcome {
     };
     let service_exe = dir.join(brand::SERVICE_BINARY_NAME);
 
-    // MIGRATION(KOS-267): remove after 2026-11-01 — drop pre-Engine services.
-    for legacy in brand::LEGACY_SERVICE_NAMES {
-        if let Ok(svc) = scm.open_service(
-            legacy,
-            ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
-        ) {
-            let _ = stop_and_delete_service(&svc, legacy);
-        }
-    }
-
     // Reinstall path: a running service locks its binary — stop and delete it
     // before overwriting the copy.
     if let Ok(existing) = scm.open_service(
@@ -206,8 +196,8 @@ pub fn install(grant_sid: &str) -> Outcome {
     }
 }
 
-/// Elevated uninstall: stop + delete the service (and legacy leftovers), then
-/// remove the `%ProgramFiles%` binary copy and directory.
+/// Elevated uninstall: stop + delete the service, then remove the
+/// `%ProgramFiles%` binary copy and directory.
 pub fn uninstall() -> Outcome {
     let scm = match open_scm(false) {
         Ok(s) => s,
@@ -215,9 +205,7 @@ pub fn uninstall() -> Outcome {
     };
 
     let mut deleted_any = false;
-    let mut names: Vec<&str> = vec![brand::SERVICE_NAME];
-    // MIGRATION(KOS-267): remove after 2026-11-01.
-    names.extend(brand::LEGACY_SERVICE_NAMES);
+    let names: Vec<&str> = vec![brand::SERVICE_NAME];
     for name in names {
         match scm.open_service(
             name,

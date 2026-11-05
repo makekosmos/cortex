@@ -18,14 +18,12 @@ test("Mundus Start Menu shortcut opens the packaged Manager GPUI", () => {
 });
 
 // The GPUI apps are store-installed — the installer never creates their
-// shortcuts, but an upgrade must delete the dead ones: the bundled-era
-// "Agenda.lnk"-style names (which point at the wiped components dir) and the
-// legacy "Kosmos Agenda.lnk" names (MIGRATION(KOS-267)).
+// shortcuts, but an upgrade must delete the dead bundled-era "Agenda.lnk"
+// names (which point at the wiped components dir).
 for (const app of ["Agenda", "Memoria", "Dictation"]) {
-  test(`${app} gets no new shortcut; both stale names are removed on install`, () => {
+  test(`${app} gets no new shortcut; the stale name is removed on install`, () => {
     expect(installer).not.toContain(`CreateShortCut "$SMPROGRAMS\\${app}.lnk"`);
     expect(installSection).toContain(`Delete "$SMPROGRAMS\\${app}.lnk"`);
-    expect(installSection).toContain(`Delete "$SMPROGRAMS\\Kosmos ${app}.lnk"`); // MIGRATION(KOS-267)
   });
 }
 

@@ -30,21 +30,15 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `kepler-fallback`                                                          | fallback device id written into `*-device-id.txt`                                                                                                               | Existing installs persist this value in sync identity.                                           |
 | `window.kosmosApp` / `window.kepler`                                       | legacy page globals read by pinned component builds                                                                                                            | Renaming breaks already-built clients; the Engine no longer serves pages.                         |
 
-## Legacy install state (consumed by the KOS-267 migration)
+## Legacy data-dir move
 
-These names exist on machines that ran 0.9.x/Electron-era installs. The
-migration code paths that read or remove them are marked
-`MIGRATION(KOS-267): remove after 2026-11-01`.
+The only remaining install-time migration is the Kosmos→Mundus data-dir move:
+`%APPDATA%\Kosmos` and `%LOCALAPPDATA%\Kosmos` are renamed on first start so
+existing user data is not orphaned.
 
-| Identifier                                                                                                                         | Where it lives                                                                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `%APPDATA%\Kosmos`, `%LOCALAPPDATA%\Kosmos`                                                                                        | roaming/local user data roots; Engine renames them on first start.                                                                                                          |
-| `%LOCALAPPDATA%\Programs\kepler-shell`, `...\Kosmos`                                                                               | Electron-era program files; installer removes them.                                                                                                                         |
-| `Uninstall\Kosmos`, `Uninstall\KosmosEngine`, bare GUID keys `4fe2b964…`, `af85bd72…`                                              | old Apps & Features registrations; installer deletes unconditionally.                                                                                                       |
-| `Kosmos Engine`, `Kosmos`, `com.kazui.kosmos`, `electron.app.Kosmos`, `com.kazui.kepler`, `Kepler`, `KeplerKosmos`, `KosmosKepler` | HKCU Run values from every previous generation; read for the autostart decision, then deleted.                                                                              |
-| `Kosmos*.lnk`, `Kepler.lnk`, `CosCast.lnk`                                                                                         | old Start Menu/Desktop shortcuts; installer removes.                                                                                                                        |
-| `KosmosSystemSvc`, `KeplerFocusSvc`                                                                                                | Windows service registrations of previous privileged services; the new `focus-svc` still answers to them and removes them on elevated `install`.                            |
-| `\\.\pipe\kepler-focus-svc`, `\\.\pipe\kosmos-system-service`                                                                      | named pipes of installed legacy services; Engine falls back to them.                                                                                                        |
+| Identifier                                           | Where it lives                                       |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `%APPDATA%\Kosmos`, `%LOCALAPPDATA%\Kosmos`          | roaming/local user data roots; Engine renames them.  |
 | `kepler-singleton.lock.db`, `kepler-device-id.txt`, `kepler-shell-settings.json`, `engine.lock.json` under `%APPDATA%\Kosmos`      | files inside the legacy roaming dir / written by the Engine shim.                                                                                                           |
 | `Kosmos-dev`, `Mundus-dev`                                                                                                       | dev-worktree directory names recognised by the dictation local-models discovery; contributor checkouts keep pre-rename dir names                                            |
 | `kepler-backend.exe`, `Kosmos*.exe`, `Kosmos.exe`                                                                                  | process/image names of running 0.9.x builds; installer kill-list + Engine-binary detection.                                                                                 |

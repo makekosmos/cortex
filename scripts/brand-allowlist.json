@@ -132,14 +132,6 @@
       "reason": "Historical handoff record; contains a verbatim delivered-artifact path."
     },
     {
-      "path": "desktop/build/installer-script.test.mjs",
-      "reason": "Migration-behavior test asserting the installer still removes every legacy identifier."
-    },
-    {
-      "path": "desktop/scripts/installer-autostart-migration.test.mjs",
-      "reason": "Migration-behavior test enumerating legacy Run value names."
-    },
-    {
       "path": "desktop/scripts/engine-bootstrap-contract.test.mjs",
       "reason": "Contract test asserting the legacy standalone-Engine uninstall key stays registered for migration."
     }
