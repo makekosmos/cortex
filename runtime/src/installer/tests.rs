@@ -270,7 +270,6 @@ fn unsafe_manifest_paths_and_sizes_are_rejected_before_installation() {
     }
 }
 
-#[cfg(windows)]
 fn post_install_options(root: &Path) -> post_install::Options {
     let pid = std::process::id();
     post_install::Options {
