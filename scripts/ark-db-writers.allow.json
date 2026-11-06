@@ -64,7 +64,7 @@
     {
       "path": "core/crates/ark-store/src/canonical_migrations/registry/preflight.rs",
       "category": "SQLite mutation API",
-      "count": 7
+      "count": 2
     },
     {
       "path": "core/crates/ark-store/src/committed_feed.rs",
@@ -264,7 +264,7 @@
     {
       "path": "core/crates/ark-store/src/type_registry/registration.rs",
       "category": "SQLite mutation API",
-      "count": 3
+      "count": 2
     },
     {
       "path": "core/crates/ark-store/src/type_registry/updates.rs",
@@ -274,7 +274,7 @@
     {
       "path": "core/crates/ark-store/src/type_registry/version_storage.rs",
       "category": "SQLite mutation API",
-      "count": 1
+      "count": 7
     },
     {
       "path": "core/crates/ark-store/src/usage_sync_log.rs",

@@ -22,3 +22,13 @@ pub use registration::{register_application_type, register_type};
 pub use resolution::{resolve_alias, resolve_type_id};
 pub use updates::{get_type, set_base_type, set_current_version, set_status};
 pub use version_storage::{insert_type_version, persist_type_version};
+pub(crate) use version_storage::{write_definition, DefinitionWriteError, TypeRowWrite};
+
+pub(crate) fn definition_write_message(error: DefinitionWriteError) -> String {
+    match error {
+        DefinitionWriteError::ImmutableVersionConflict => {
+            "immutable type version conflict".to_string()
+        }
+        DefinitionWriteError::Storage(detail) => detail,
+    }
+}

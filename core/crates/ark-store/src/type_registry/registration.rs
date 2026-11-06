@@ -6,12 +6,12 @@ use ark_domain::canonical_type::validation::{
     check_additive_schema_change, validate_type_schema, CanonicalValidationError,
 };
 use ark_domain::canonical_type::{TypeRegistration, TypeVersion};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde_json::Value;
 
 use super::{
-    get_type, insert_type_record, register_alias, resolve_alias, set_base_type,
-    set_current_version, set_status, type_name,
+    definition_write_message, get_type, register_alias, resolve_alias, type_name,
+    version_storage::{write_definition, TypeRowWrite},
 };
 use crate::pending_objects::{replay_pending_for_type, ReplayNotice};
 
@@ -97,29 +97,13 @@ pub fn register_application_type(
         .execute_batch("SAVEPOINT ark_registry_application_registration")
         .map_err(|error| error.to_string())?;
     let result = (|| {
-        let notices = crate::type_registry::insert_type_version(
-            connection,
-            &TypeVersion {
-                type_id: type_id.clone(),
-                version: normalized.version.clone(),
-                schema_json: normalized.schema_json.clone(),
-                ui_schema_json: normalized.ui_schema_json.clone(),
-                content_contract_json: normalized.content_contract_json.clone(),
-                relations_json: normalized.relations_json.clone(),
-                sync_policy_json: normalized.sync_policy_json.clone(),
-                schema_hash: normalized.schema_hash.clone(),
-                created_at: now.clone(),
-            },
-            &now,
-        )?;
-        set_current_version(connection, type_id, &normalized.version)?;
-        connection
-            .execute(
-                "UPDATE object_types SET schema_json=?1, updated_at=?2 WHERE id=?3",
-                params![normalized.schema_json, now, type_id],
-            )
-            .map_err(|error| error.to_string())?;
-        Ok(notices)
+        let written = TypeRegistration {
+            created_at: now.clone(),
+            ..normalized.clone()
+        };
+        write_definition(connection, &written, TypeRowWrite::RefreshSchema)
+            .map_err(definition_write_message)?;
+        crate::pending_objects::replay_pending_for_type(connection, type_id, &normalized.version)
     })();
     match result {
         Ok(notices) => {
@@ -241,34 +225,19 @@ pub fn register_type(
         .execute_batch("SAVEPOINT ark_registry_registration")
         .map_err(|error| error.to_string())?;
     let result = (|| {
-        insert_type_record(connection, registration)?;
-        crate::type_registry::persist_type_version(
+        write_definition(
             connection,
-            &TypeVersion {
-                type_id: registration.type_id.clone(),
-                version: registration.version.clone(),
-                schema_json: registration.schema_json.clone(),
-                ui_schema_json: registration.ui_schema_json.clone(),
-                content_contract_json: registration.content_contract_json.clone(),
-                relations_json: registration.relations_json.clone(),
-                sync_policy_json: registration.sync_policy_json.clone(),
-                schema_hash: registration.schema_hash.clone(),
-                created_at: registration.created_at.clone(),
+            registration,
+            TypeRowWrite::InsertIfMissing {
+                system_locked: false,
             },
-            &registration.created_at,
-        )?;
+        )
+        .map_err(definition_write_message)?;
         let mut notices =
             replay_pending_for_type(connection, &registration.type_id, &registration.version)?;
         for alias in &registration.aliases {
             register_alias(connection, alias)?;
         }
-        set_current_version(connection, &registration.type_id, &registration.version)?;
-        set_status(connection, &registration.type_id, &registration.status)?;
-        set_base_type(
-            connection,
-            &registration.type_id,
-            registration.base_type_id.as_deref(),
-        )?;
         notices.extend(replay_pending_for_type(
             connection,
             &registration.type_id,

@@ -252,3 +252,82 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
         0
     );
 }
+
+fn application_registration(type_id: &str, version: &str) -> TypeRegistration {
+    TypeRegistration {
+        type_id: type_id.into(),
+        name: "Application type".into(),
+        schema_json: r#"{"type":"object","properties":{"title":{"type":"string"}}}"#.into(),
+        ui_schema_json: "{}".into(),
+        content_contract_json: "{}".into(),
+        relations_json: "[]".into(),
+        sync_policy_json: "{}".into(),
+        version: version.into(),
+        schema_hash: String::new(),
+        owner_kind: "application".into(),
+        owner_id: Some("com.example".into()),
+        status: "active".into(),
+        base_type_id: None,
+        aliases: Vec::new(),
+        created_at: "registered-at".into(),
+    }
+}
+
+#[test]
+fn the_builtin_migration_and_register_type_write_the_same_definition_rows() {
+    let conn = Connection::open_in_memory().unwrap();
+    crate::open::init_schema(&conn).unwrap();
+    register_type(
+        &conn,
+        &application_registration("com.example.note", "1.0.0"),
+    )
+    .unwrap();
+
+    for (type_id, version, locked) in [("core.note", "0.1.0", 1), ("com.example.note", "1.0.0", 0)]
+    {
+        let (schema, hash, current_version, system_locked): (String, String, String, i64) = conn
+            .query_row(
+                concat!(
+                    "SELECT versions.schema_json, versions.schema_hash, types.current_version,",
+                    " types.system_locked FROM object_type_versions versions JOIN object_types",
+                    " types ON types.id=versions.type_id",
+                    " WHERE versions.type_id=?1 AND versions.version=?2"
+                ),
+                rusqlite::params![type_id, version],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert!(
+            serde_json::from_str::<serde_json::Value>(&schema).is_ok(),
+            "{type_id}: the version row stores a definition"
+        );
+        assert_eq!(
+            hash.len(),
+            64,
+            "{type_id}: the version row carries its hash"
+        );
+        assert_eq!(
+            current_version, version,
+            "{type_id}: current_version follows"
+        );
+        assert_eq!(system_locked, locked, "{type_id}: locking stays per caller");
+    }
+
+    // Replaying the builtin install is idempotent: one row per version, same hash.
+    crate::canonical_migrations::registry::ensure_canonical_type_versions(&conn).unwrap();
+    let (version_rows, hash_after): (i64, String) = conn
+        .query_row(
+            concat!(
+                "SELECT count(*), MAX(schema_hash) FROM object_type_versions",
+                " WHERE type_id='core.note' AND version='0.1.0'"
+            ),
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        version_rows, 1,
+        "reinstalling does not duplicate the version row"
+    );
+    assert_eq!(hash_after.len(), 64);
+}
