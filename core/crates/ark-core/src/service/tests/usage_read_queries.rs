@@ -55,7 +55,7 @@ async fn usage_read_rpcs_return_empty_database_results() {
     assert_eq!(
         handle_request(
             &state,
-            Request::GetUsageGamePlaytimeSummary {
+            Request::GetUsageSummary {
                 bindings: Vec::new(),
                 range_start: None,
                 range_end: None,
@@ -63,6 +63,6 @@ async fn usage_read_rpcs_return_empty_database_results() {
         )
         .await
         .unwrap(),
-        json!({"aggregates": [], "dailyTotals": [], "perGameTotals": []})
+        json!({"aggregates": [], "dailyTotals": [], "perBindingTotals": []})
     );
 }

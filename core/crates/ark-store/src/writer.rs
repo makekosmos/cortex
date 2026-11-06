@@ -55,14 +55,6 @@ pub struct ObjectWrites<'scope, 'connection> {
     transaction: &'scope Transaction<'connection>,
 }
 
-pub struct BookCoverWrites<'scope, 'connection> {
-    transaction: &'scope Transaction<'connection>,
-}
-
-pub struct CanonicalGameWrites<'scope, 'connection> {
-    transaction: &'scope Transaction<'connection>,
-}
-
 impl WriteCapabilities<'_, '_> {
     #[cfg(feature = "test-support")]
     pub fn test_support(&mut self) -> crate::test_support::ActorTestWrites<'_, '_> {
@@ -77,18 +69,6 @@ impl WriteCapabilities<'_, '_> {
 
     pub fn objects(&mut self) -> ObjectWrites<'_, '_> {
         ObjectWrites {
-            transaction: self.transaction,
-        }
-    }
-
-    pub fn book_cover(&mut self) -> BookCoverWrites<'_, '_> {
-        BookCoverWrites {
-            transaction: self.transaction,
-        }
-    }
-
-    pub fn canonical_game(&mut self) -> CanonicalGameWrites<'_, '_> {
-        CanonicalGameWrites {
             transaction: self.transaction,
         }
     }
@@ -144,28 +124,6 @@ impl ObjectWrites<'_, '_> {
             principal,
             operation_id,
         )
-    }
-}
-
-impl BookCoverWrites<'_, '_> {
-    pub fn apply_local_book_cover(
-        &mut self,
-        write: ark_domain::book_cover::LocalBookCoverWrite,
-    ) -> Result<bool, crate::book_cover::BookCoverOperationError> {
-        crate::book_cover::apply_local_book_cover_in(self.transaction, write)
-    }
-}
-
-impl CanonicalGameWrites<'_, '_> {
-    pub fn apply_upsert(
-        &mut self,
-        command: ark_domain::canonical_game::GameUpsertCommand,
-        fallback_device_id: &str,
-    ) -> Result<
-        ark_domain::canonical_game::GameMutationResult,
-        crate::canonical_game::CanonicalGameOperationError,
-    > {
-        crate::canonical_game::upsert_game_in(self.transaction, command, fallback_device_id)
     }
 }
 

@@ -1,6 +1,3 @@
-pub mod book_cover;
-pub mod canonical_asset_sources;
-pub mod canonical_game;
 pub mod canonical_migrations;
 pub mod committed_feed;
 mod core_migration;
@@ -46,16 +43,12 @@ pub mod writer;
 pub mod test_support;
 
 pub use read_capabilities::{
-    CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities, SystemReadCapabilities,
-    TypeRegistryReadCapabilities, UsageReadCapabilities,
+    ObjectReadCapabilities, ReadCapabilities, SyncReadCapabilities, SystemReadCapabilities,
+    TaskMergeReadCapabilities, TypeRegistryReadCapabilities, UsageReadCapabilities,
 };
 
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 
-#[cfg(test)]
-mod canonical_facades_tests;
-#[cfg(test)]
-mod canonical_game_tests;
 #[cfg(test)]
 mod canonical_type_bootstrap_tests;
 #[cfg(test)]

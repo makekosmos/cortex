@@ -1,13 +1,13 @@
 use super::process_queries::normalize_usage_binding_value;
-use ark_domain::types::UsageGamePlaytimeBinding;
+use ark_domain::types::UsageTimeBinding;
 use rusqlite::Row;
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub(super) struct UsageGameBindingIndex {
-    game_names_by_id: HashMap<String, String>,
-    game_ids_by_path: HashMap<String, String>,
-    game_ids_by_process_name: HashMap<String, String>,
+pub(super) struct UsageTimeBindingIndex {
+    names_by_id: HashMap<String, String>,
+    ids_by_path: HashMap<String, String>,
+    ids_by_process_name: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -16,7 +16,7 @@ pub(super) struct UsageTrackedAggregateRow {
     pub(super) normalized_process_name: Option<String>,
     pub(super) total_seconds: i64,
     pub(super) session_count: i64,
-    pub(super) last_played: Option<String>,
+    pub(super) last_seen: Option<String>,
 }
 
 #[derive(Debug)]
@@ -27,28 +27,26 @@ pub(super) struct UsageTrackedDailyRow {
     pub(super) seconds: i64,
 }
 
-pub(super) fn build_usage_game_binding_index(
-    bindings: &[UsageGamePlaytimeBinding],
-) -> UsageGameBindingIndex {
-    let mut index = UsageGameBindingIndex {
-        game_names_by_id: HashMap::new(),
-        game_ids_by_path: HashMap::new(),
-        game_ids_by_process_name: HashMap::new(),
+pub(super) fn build_usage_binding_index(bindings: &[UsageTimeBinding]) -> UsageTimeBindingIndex {
+    let mut index = UsageTimeBindingIndex {
+        names_by_id: HashMap::new(),
+        ids_by_path: HashMap::new(),
+        ids_by_process_name: HashMap::new(),
     };
 
     for binding in bindings {
-        let game_id = binding.game_id.trim();
-        if game_id.is_empty() {
+        let binding_id = binding.binding_id.trim();
+        if binding_id.is_empty() {
             continue;
         }
 
-        let game_name = binding.game_name.trim();
-        index.game_names_by_id.insert(
-            game_id.to_string(),
-            if game_name.is_empty() {
-                game_id.to_string()
+        let binding_name = binding.binding_name.trim();
+        index.names_by_id.insert(
+            binding_id.to_string(),
+            if binding_name.is_empty() {
+                binding_id.to_string()
             } else {
-                game_name.to_string()
+                binding_name.to_string()
             },
         );
 
@@ -58,13 +56,11 @@ pub(super) fn build_usage_game_binding_index(
         }
 
         if binding.match_type == "exe_path" {
-            index
-                .game_ids_by_path
-                .insert(normalized, game_id.to_string());
+            index.ids_by_path.insert(normalized, binding_id.to_string());
         } else if binding.match_type == "process_name" {
             index
-                .game_ids_by_process_name
-                .insert(normalized, game_id.to_string());
+                .ids_by_process_name
+                .insert(normalized, binding_id.to_string());
         }
     }
 
@@ -72,31 +68,31 @@ pub(super) fn build_usage_game_binding_index(
 }
 
 pub(super) fn append_usage_binding_where_clause(
-    index: &UsageGameBindingIndex,
+    index: &UsageTimeBindingIndex,
     params: &mut Vec<String>,
 ) -> Option<String> {
     let mut clauses = Vec::new();
 
-    if !index.game_ids_by_path.is_empty() {
-        let placeholders = (0..index.game_ids_by_path.len())
+    if !index.ids_by_path.is_empty() {
+        let placeholders = (0..index.ids_by_path.len())
             .map(|offset| format!("?{}", params.len() + offset + 1))
             .collect::<Vec<_>>()
             .join(", ");
         clauses.push(format!(
             "tracked_apps.normalized_exe_path IN ({placeholders})"
         ));
-        params.extend(index.game_ids_by_path.keys().cloned());
+        params.extend(index.ids_by_path.keys().cloned());
     }
 
-    if !index.game_ids_by_process_name.is_empty() {
-        let placeholders = (0..index.game_ids_by_process_name.len())
+    if !index.ids_by_process_name.is_empty() {
+        let placeholders = (0..index.ids_by_process_name.len())
             .map(|offset| format!("?{}", params.len() + offset + 1))
             .collect::<Vec<_>>()
             .join(", ");
         clauses.push(format!(
             "LOWER(COALESCE(tracked_apps.process_name, '')) IN ({placeholders})"
         ));
-        params.extend(index.game_ids_by_process_name.keys().cloned());
+        params.extend(index.ids_by_process_name.keys().cloned());
     }
 
     if clauses.is_empty() {
@@ -106,20 +102,20 @@ pub(super) fn append_usage_binding_where_clause(
     }
 }
 
-pub(super) fn find_usage_game_for_tracked_row(
+pub(super) fn find_usage_binding_for_tracked_row(
     normalized_path: Option<&str>,
     normalized_process_name: Option<&str>,
-    index: &UsageGameBindingIndex,
+    index: &UsageTimeBindingIndex,
 ) -> Option<(String, String)> {
     if let Some(path) = normalized_path {
         let normalized = normalize_usage_binding_value("exe_path", path);
-        if let Some(game_id) = index.game_ids_by_path.get(&normalized) {
-            let game_name = index
-                .game_names_by_id
-                .get(game_id)
+        if let Some(binding_id) = index.ids_by_path.get(&normalized) {
+            let binding_name = index
+                .names_by_id
+                .get(binding_id)
                 .cloned()
-                .unwrap_or_else(|| game_id.clone());
-            return Some((game_id.clone(), game_name));
+                .unwrap_or_else(|| binding_id.clone());
+            return Some((binding_id.clone(), binding_name));
         }
     }
 
@@ -131,15 +127,15 @@ pub(super) fn find_usage_game_for_tracked_row(
     }
 
     index
-        .game_ids_by_process_name
+        .ids_by_process_name
         .get(&process_name)
-        .map(|game_id| {
-            let game_name = index
-                .game_names_by_id
-                .get(game_id)
+        .map(|binding_id| {
+            let binding_name = index
+                .names_by_id
+                .get(binding_id)
                 .cloned()
-                .unwrap_or_else(|| game_id.clone());
-            (game_id.clone(), game_name)
+                .unwrap_or_else(|| binding_id.clone());
+            (binding_id.clone(), binding_name)
         })
 }
 
@@ -151,7 +147,7 @@ pub(super) fn map_usage_tracked_aggregate_row(
         normalized_process_name: row.get(1)?,
         total_seconds: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
         session_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-        last_played: row.get(4)?,
+        last_seen: row.get(4)?,
     })
 }
 

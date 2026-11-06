@@ -1,5 +1,5 @@
 use super::UsageReadCapabilities;
-use ark_domain::types::{UsageGamePlaytimeBinding, UsageProcessCandidate};
+use ark_domain::types::{UsageProcessCandidate, UsageTimeBinding};
 
 impl UsageReadCapabilities<'_> {
     pub fn title_total(&self, query: &str) -> Result<ark_domain::types::UsageTitleTotal, String> {
@@ -34,17 +34,12 @@ impl UsageReadCapabilities<'_> {
         crate::usage_queries::search_usage_processes(self.connection, query, limit)
     }
 
-    pub fn game_playtime_summary(
+    pub fn usage_summary(
         &self,
-        bindings: &[UsageGamePlaytimeBinding],
+        bindings: &[UsageTimeBinding],
         range_start: Option<&str>,
         range_end: Option<&str>,
-    ) -> Result<ark_domain::types::UsageGamePlaytimeSummary, String> {
-        crate::usage_queries::load_usage_game_playtime_summary(
-            self.connection,
-            bindings,
-            range_start,
-            range_end,
-        )
+    ) -> Result<ark_domain::types::UsageTimeSummary, String> {
+        crate::usage_queries::load_usage_summary(self.connection, bindings, range_start, range_end)
     }
 }

@@ -224,9 +224,9 @@ pub(super) async fn search_usage_processes(
     .await
 }
 
-pub(super) async fn get_usage_game_playtime_summary(
+pub(super) async fn get_usage_usage_summary(
     state: &Arc<ServiceState>,
-    bindings: Vec<UsageGamePlaytimeBinding>,
+    bindings: Vec<UsageTimeBinding>,
     range_start: Option<String>,
     range_end: Option<String>,
 ) -> Result<Value, String> {

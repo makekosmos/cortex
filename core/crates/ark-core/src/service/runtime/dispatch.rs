@@ -50,11 +50,11 @@ pub(crate) async fn handle_request(
             batch_limit,
             device_id,
         } => usage::compact_usage_sync_log(state, older_than_days, batch_limit, device_id).await,
-        Request::GetUsageGamePlaytimeSummary {
+        Request::GetUsageSummary {
             bindings,
             range_start,
             range_end,
-        } => usage::get_usage_game_playtime_summary(state, bindings, range_start, range_end).await,
+        } => usage::get_usage_usage_summary(state, bindings, range_start, range_end).await,
 
         Request::ListObjects => objects::list_objects(state).await,
         Request::ListObjectSummaries => objects::list_object_summaries(state).await,
@@ -83,35 +83,6 @@ pub(crate) async fn handle_request(
             merge_operation,
             expected_conflict_digest,
         } => objects::task_merge_append(state, merge_operation, expected_conflict_digest).await,
-        Request::CanonicalGameList { device_id } => {
-            objects::canonical_game_list(state, device_id).await
-        }
-        Request::CanonicalGameGet { id, device_id } => {
-            objects::canonical_game_get(state, id, device_id).await
-        }
-        Request::CanonicalGameUpsert { game, device_id } => {
-            objects::canonical_game_upsert(state, game, device_id).await
-        }
-        Request::CanonicalAssetSources { object_ids } => {
-            objects::canonical_asset_sources(state, object_ids).await
-        }
-        Request::CanonicalSetBookCover {
-            book_id,
-            source_ref,
-            existing_image_id,
-            alt_text,
-            device_id,
-        } => {
-            objects::canonical_set_book_cover(
-                state,
-                book_id,
-                source_ref,
-                existing_image_id,
-                alt_text,
-                device_id,
-            )
-            .await
-        }
         Request::UpsertObject {
             object,
             expected_snapshot,

@@ -52,16 +52,6 @@
       "count": 3
     },
     {
-      "path": "core/crates/ark-store/src/book_cover.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-store/src/canonical_game.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-store/src/canonical_migrations/objects.rs",
       "category": "SQLite mutation API",
       "count": 1

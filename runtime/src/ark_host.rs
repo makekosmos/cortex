@@ -2,9 +2,7 @@
 // (Was: supervisor for the ark-core-rpc child process over newline-delimited
 // JSON-RPC. The sidecar is gone; the Engine hosts ARK as a library now.)
 
-use ark_core::canonical_types::game::{GameMutationResult, GameRecord, GameUpsertCommand};
 use ark_core::service::ArkService;
-use ark_core::type_registry::TypeRegistration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -66,49 +64,6 @@ impl Drop for ArkHost {
 impl ArkHost {
     /// Trusted package-install seam. The ARK side owns the SQLite transaction;
     /// callers never receive a database handle or issue arbitrary SQL.
-    pub async fn register_package_definitions(
-        &self,
-        registrations: Vec<TypeRegistration>,
-    ) -> ArkResult<()> {
-        let response = self
-            .request(
-                "types.registerPackageDefinitions",
-                serde_json::json!({ "registrations": registrations }),
-            )
-            .await?;
-        typed_response(response, "package_definition_registration_failed")
-    }
-    pub async fn canonical_game_list(&self) -> ArkResult<Vec<GameRecord>> {
-        let response = self
-            .request(
-                "canonical.game.list",
-                serde_json::json!({ "deviceId": stable_device_id() }),
-            )
-            .await?;
-        typed_response(response, "game_list_failed")
-    }
-
-    pub async fn canonical_game_get(&self, id: &str) -> ArkResult<Option<GameRecord>> {
-        let response = self
-            .request(
-                "canonical.game.get",
-                serde_json::json!({ "id": id, "deviceId": stable_device_id() }),
-            )
-            .await?;
-        typed_response(response, "game_not_found")
-    }
-
-    pub async fn canonical_game_upsert(
-        &self,
-        mut game: GameUpsertCommand,
-    ) -> ArkResult<GameMutationResult> {
-        game.device_id = Some(stable_device_id());
-        let response = self
-            .request("canonical.game.upsert", serde_json::json!({ "game": game }))
-            .await?;
-        typed_response(response, "game_upsert_failed")
-    }
-
     /// Open (create if needed) the ARK database at `db_path` and start the
     /// service worker. Same semantics as the old `ArkHost::spawn` + `init`.
     pub async fn open(db_path: &str) -> ArkResult<Self> {
@@ -221,25 +176,6 @@ impl ArkHost {
             .expect("ArkHost service is present until shutdown");
         service.shutdown(deadline).await.map_err(Into::into)
     }
-}
-
-fn stable_device_id() -> String {
-    crate::brand::env("DEVICE_ID")
-        .filter(|id| !id.trim().is_empty())
-        .map(|id| id.trim().to_owned())
-        .unwrap_or_else(|| "ark-host-local".to_owned())
-}
-
-fn typed_response<T: for<'de> Deserialize<'de>>(
-    response: ArkResponse,
-    fallback: &str,
-) -> ArkResult<T> {
-    if !response.ok {
-        return Err(ArkHostError::RpcError(
-            response.error.unwrap_or_else(|| fallback.into()),
-        ));
-    }
-    serde_json::from_value(response.data).map_err(ArkHostError::Json)
 }
 
 /// Real %SystemRoot% via `GetSystemWindowsDirectoryW`, memoized. `None`

@@ -1,4 +1,3 @@
-mod canonical;
 mod device_registry;
 mod objects;
 mod sync;
@@ -14,10 +13,6 @@ pub struct ReadCapabilities<'snapshot> {
 }
 
 pub struct ObjectReadCapabilities<'snapshot> {
-    connection: &'snapshot Connection,
-}
-
-pub struct CanonicalReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -57,12 +52,6 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn objects(&self) -> ObjectReadCapabilities<'_> {
         ObjectReadCapabilities {
-            connection: self.connection,
-        }
-    }
-
-    pub fn canonical(&self) -> CanonicalReadCapabilities<'_> {
-        CanonicalReadCapabilities {
             connection: self.connection,
         }
     }

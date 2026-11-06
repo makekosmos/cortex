@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 pub struct LinkedAppUsageSummary {
     pub seconds: i64,
     pub session_count: i64,
-    pub last_played_at: Option<String>,
+    pub last_seen_at: Option<String>,
 }
 
 /// Summarize active usage for app IDs linked to a source object. Legacy app IDs
@@ -90,7 +90,7 @@ pub fn summarize_linked_app_usage(
         Ok(LinkedAppUsageSummary {
             seconds: row.get(0)?,
             session_count: row.get(1)?,
-            last_played_at: row.get(2)?,
+            last_seen_at: row.get(2)?,
         })
     })
     .map_err(|error| error.to_string())
@@ -133,7 +133,7 @@ mod tests {
             .expect("linked usage loads");
         assert_eq!(result.seconds, 2700);
         assert_eq!(result.session_count, 3);
-        assert_eq!(result.last_played_at.as_deref(), Some("2026-01-04"));
+        assert_eq!(result.last_seen_at.as_deref(), Some("2026-01-04"));
         assert_eq!(
             summarize_linked_app_usage(&conn, "game", &[]).expect("empty types load"),
             LinkedAppUsageSummary::default()

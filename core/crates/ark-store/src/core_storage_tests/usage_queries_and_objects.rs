@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used)]
 
-use ark_domain::types::{UsageGameDailyTotal, UsageGamePlaytimeBinding};
+use ark_domain::types::{UsageTimeBinding, UsageTimeDailyTotal};
 
 use crate::objects::upsert_object_compat as upsert_object;
 
 #[test]
-fn usage_game_playtime_summary_matches_bindings_and_range() {
+fn usage_usage_summary_matches_bindings_and_range() {
     let conn = setup_db();
     let mut main_app = make_tracked_app("tracked-main");
     main_app.exe_path = r"C:\Games\Chronicle\Chronicle.exe".to_string();
@@ -67,27 +67,27 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
     }
 
     let bindings = vec![
-        UsageGamePlaytimeBinding {
-            game_id: "game-1".to_string(),
-            game_name: "Chronicle".to_string(),
+        UsageTimeBinding {
+            binding_id: "game-1".to_string(),
+            binding_name: "Chronicle".to_string(),
             match_type: "exe_path".to_string(),
             match_value: r"C:\Games\Chronicle\Chronicle.exe".to_string(),
         },
-        UsageGamePlaytimeBinding {
-            game_id: "game-1".to_string(),
-            game_name: "Chronicle".to_string(),
+        UsageTimeBinding {
+            binding_id: "game-1".to_string(),
+            binding_name: "Chronicle".to_string(),
             match_type: "exe_path".to_string(),
             match_value: r"C:\Games\Chronicle\Chronicle_DX12.exe".to_string(),
         },
-        UsageGamePlaytimeBinding {
-            game_id: "game-1".to_string(),
-            game_name: "Chronicle".to_string(),
+        UsageTimeBinding {
+            binding_id: "game-1".to_string(),
+            binding_name: "Chronicle".to_string(),
             match_type: "process_name".to_string(),
             match_value: "chronicle helper.exe".to_string(),
         },
     ];
 
-    let summary = crate::usage_queries::load_usage_game_playtime_summary(
+    let summary = crate::usage_queries::load_usage_summary(
         &conn,
         &bindings,
         Some("2026-04-20"),
@@ -96,24 +96,24 @@ fn usage_game_playtime_summary_matches_bindings_and_range() {
     .unwrap();
 
     assert_eq!(summary.aggregates.len(), 1);
-    assert_eq!(summary.aggregates[0].game_id, "game-1");
+    assert_eq!(summary.aggregates[0].binding_id, "game-1");
     assert_eq!(summary.aggregates[0].total_seconds, 6_000);
     assert_eq!(summary.aggregates[0].session_count, 3);
     assert_eq!(
         summary.daily_totals,
         vec![
-            UsageGameDailyTotal {
+            UsageTimeDailyTotal {
                 date: "2026-04-20".to_string(),
                 seconds: 5_400,
             },
-            UsageGameDailyTotal {
+            UsageTimeDailyTotal {
                 date: "2026-04-21".to_string(),
                 seconds: 600,
             },
         ]
     );
-    assert_eq!(summary.per_game_totals.len(), 1);
-    assert_eq!(summary.per_game_totals[0].seconds, 6_000);
+    assert_eq!(summary.per_binding_totals.len(), 1);
+    assert_eq!(summary.per_binding_totals[0].seconds, 6_000);
 }
 
 #[test]

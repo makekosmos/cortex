@@ -366,7 +366,6 @@ fn canonical_task_props() -> Value {
 
 mod canonical_rpc;
 mod device_registry;
-mod object_mutation_commands;
 mod operation_receipts;
 mod sync_policy;
 mod system_commands;

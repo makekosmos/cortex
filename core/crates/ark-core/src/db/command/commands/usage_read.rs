@@ -20,7 +20,7 @@ pub(crate) enum UsageReadQuery {
         limit: i64,
     },
     GamePlaytimeSummary {
-        bindings: Vec<crate::types::UsageGamePlaytimeBinding>,
+        bindings: Vec<crate::types::UsageTimeBinding>,
         range_start: Option<String>,
         range_end: Option<String>,
     },
@@ -66,7 +66,7 @@ impl StoreReadQuery for UsageReadQuery {
                 bindings,
                 range_start,
                 range_end,
-            } => serialize(capabilities.usage().game_playtime_summary(
+            } => serialize(capabilities.usage().usage_summary(
                 &bindings,
                 range_start.as_deref(),
                 range_end.as_deref(),

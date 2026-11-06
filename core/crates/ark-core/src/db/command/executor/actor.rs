@@ -31,13 +31,13 @@ pub(in crate::db::command) use task::InboxReceiptTask;
 #[cfg(test)]
 pub(in crate::db::command) use task::TypedCommand;
 pub(in crate::db::command) use task::{
-    AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, CanonicalGameUpsertTask,
-    ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
-    IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask, LocalObjectDeleteTask,
-    LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish,
-    RegisterApplicationTypeTask, ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask,
-    TrackedAppMutationTask, TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask,
-    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
+    AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, ClearAllTask,
+    CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask, IrohIdentityKeyTask,
+    LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
+    LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterApplicationTypeTask,
+    ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,
+    TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask,
+    UsageSequenceMigrationTask, WriterTask,
 };
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 

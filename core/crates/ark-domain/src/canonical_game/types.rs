@@ -37,7 +37,7 @@ pub struct GameQuarantine {
 pub struct GameUsage {
     pub seconds: i64,
     pub session_count: u64,
-    pub last_played_at: Option<String>,
+    pub last_seen_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

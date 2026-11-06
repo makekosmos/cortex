@@ -115,8 +115,8 @@ pub(crate) enum Request {
         #[serde(default)]
         limit: Option<i64>,
     },
-    GetUsageGamePlaytimeSummary {
-        bindings: Vec<UsageGamePlaytimeBinding>,
+    GetUsageSummary {
+        bindings: Vec<UsageTimeBinding>,
         #[serde(default)]
         range_start: Option<String>,
         #[serde(default)]
@@ -161,41 +161,6 @@ pub(crate) enum Request {
         merge_operation: ark_domain::task_merge::TaskMergeOperation,
         #[serde(default, rename = "expectedConflictDigest")]
         expected_conflict_digest: Option<String>,
-    },
-    #[serde(rename = "canonical.game.list")]
-    CanonicalGameList {
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    #[serde(rename = "canonical.game.get")]
-    CanonicalGameGet {
-        id: String,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    #[serde(rename = "canonical.game.upsert")]
-    CanonicalGameUpsert {
-        game: crate::canonical_types::game::GameUpsertCommand,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    #[serde(rename = "canonical.asset_sources")]
-    CanonicalAssetSources {
-        #[serde(rename = "objectIds")]
-        object_ids: Vec<String>,
-    },
-    #[serde(rename = "canonical.set_book_cover")]
-    CanonicalSetBookCover {
-        #[serde(rename = "bookId")]
-        book_id: String,
-        #[serde(default, rename = "sourceRef")]
-        source_ref: Option<String>,
-        #[serde(default, rename = "existingImageId")]
-        existing_image_id: Option<String>,
-        #[serde(default)]
-        alt_text: String,
-        #[serde(default)]
-        device_id: Option<String>,
     },
     UpsertObject {
         object: ArkObjectWrite,

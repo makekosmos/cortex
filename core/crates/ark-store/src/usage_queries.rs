@@ -1,19 +1,19 @@
 use serde_json::Value;
 
 mod analytics;
-mod game_playtime_queries;
-mod game_playtime_summary;
 mod linked_app_usage;
 mod process_projection;
 mod process_queries;
 mod spans_and_title_totals;
+mod summary;
+mod summary_queries;
 
 pub use analytics::load_usage_analytics;
-pub use game_playtime_summary::load_usage_game_playtime_summary;
 pub use linked_app_usage::{summarize_linked_app_usage, LinkedAppUsageSummary};
 pub use process_projection::{canonical_app_key, is_system_path, merge_top_apps};
 pub use process_queries::{list_recent_usage_processes, search_usage_processes};
 pub use spans_and_title_totals::{get_usage_title_total, upsert_usage_span};
+pub use summary::load_usage_summary;
 
 pub(super) fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
     payload

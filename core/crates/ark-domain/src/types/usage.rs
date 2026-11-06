@@ -99,42 +99,42 @@ pub struct UsageProcessCandidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageGamePlaytimeBinding {
-    pub game_id: String,
-    pub game_name: String,
+pub struct UsageTimeBinding {
+    pub binding_id: String,
+    pub binding_name: String,
     pub match_type: String,
     pub match_value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageGamePlaytimeAggregate {
-    pub game_id: String,
-    pub game_name: String,
+pub struct UsageTimeAggregate {
+    pub binding_id: String,
+    pub binding_name: String,
     pub total_seconds: i64,
     pub session_count: i64,
-    pub last_played: Option<String>,
+    pub last_seen: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageGameDailyTotal {
+pub struct UsageTimeDailyTotal {
     pub date: String,
     pub seconds: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageGameRangeTotal {
-    pub game_id: String,
-    pub game_name: String,
+pub struct UsageTimeRangeTotal {
+    pub binding_id: String,
+    pub binding_name: String,
     pub seconds: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageGamePlaytimeSummary {
-    pub aggregates: Vec<UsageGamePlaytimeAggregate>,
-    pub daily_totals: Vec<UsageGameDailyTotal>,
-    pub per_game_totals: Vec<UsageGameRangeTotal>,
+pub struct UsageTimeSummary {
+    pub aggregates: Vec<UsageTimeAggregate>,
+    pub daily_totals: Vec<UsageTimeDailyTotal>,
+    pub per_binding_totals: Vec<UsageTimeRangeTotal>,
 }

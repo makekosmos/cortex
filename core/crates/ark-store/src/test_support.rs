@@ -53,7 +53,6 @@ impl Drop for TestTempDir {
 
 mod actor_capabilities;
 mod actor_log;
-mod book_cover_rollback;
 mod canonical_task_idempotency;
 mod data_volume;
 mod device_registry;
@@ -76,7 +75,6 @@ mod usage_rollback;
 
 pub use actor_capabilities::{ActorTestReads, ActorTestWriterMaintenance, ActorTestWrites};
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
-pub use book_cover_rollback::{BookCoverRollbackFixture, BookCoverRollbackState};
 pub use canonical_task_idempotency::{
     CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,
 };

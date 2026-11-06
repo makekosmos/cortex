@@ -1,7 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub mod app_identity;
-pub mod book_cover;
 pub mod canonical_game;
 pub mod canonical_type;
 pub mod device_registry;

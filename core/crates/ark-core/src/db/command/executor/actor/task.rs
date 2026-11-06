@@ -121,17 +121,6 @@ pub(in crate::db::command) struct LocalObjectDeleteTask {
         oneshot::Sender<Result<(ark_store::object_mutation::ObjectDeleteCommit, bool), DbError>>,
 }
 
-pub(in crate::db::command) struct LocalBookCoverTask {
-    pub write: ark_domain::book_cover::LocalBookCoverWrite,
-    pub reply: oneshot::Sender<Result<bool, DbError>>,
-}
-
-pub(in crate::db::command) struct CanonicalGameUpsertTask {
-    pub command: ark_domain::canonical_game::GameUpsertCommand,
-    pub fallback_device_id: String,
-    pub reply: oneshot::Sender<Result<ark_domain::canonical_game::GameMutationResult, DbError>>,
-}
-
 pub(in crate::db::command) struct LocalUsageWriteTask {
     pub device_id: String,
     pub write: ark_store::usage::LocalUsageWrite,
@@ -289,59 +278,6 @@ impl WriterTask for LocalUsageWriteTask {
                 capabilities
                     .usage()
                     .apply_local_usage_write(&device_id, write)
-            })
-            .map_err(map_store_application_transaction_failure);
-        settle(result, reply, on_error)
-    }
-
-    fn cancel_before_start(self: Box<Self>) {
-        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
-    }
-
-    fn receiver_closed(&self) -> bool {
-        self.reply.is_closed()
-    }
-}
-
-impl WriterTask for CanonicalGameUpsertTask {
-    fn run(
-        self: Box<Self>,
-        writer: &mut SqliteWriter,
-        on_error: &mut dyn FnMut(&DbError),
-    ) -> (Result<(), DbError>, Publish) {
-        let Self {
-            command,
-            fallback_device_id,
-            reply,
-        } = *self;
-        let result = writer.write_with_capabilities(|capabilities| {
-            capabilities
-                .canonical_game()
-                .apply_upsert(command, &fallback_device_id)
-        });
-        let result = result.map_err(map_store_application_transaction_failure);
-        settle(result, reply, on_error)
-    }
-
-    fn cancel_before_start(self: Box<Self>) {
-        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
-    }
-
-    fn receiver_closed(&self) -> bool {
-        self.reply.is_closed()
-    }
-}
-
-impl WriterTask for LocalBookCoverTask {
-    fn run(
-        self: Box<Self>,
-        writer: &mut SqliteWriter,
-        on_error: &mut dyn FnMut(&DbError),
-    ) -> (Result<(), DbError>, Publish) {
-        let Self { write, reply } = *self;
-        let result = writer
-            .write_with_capabilities(|capabilities| {
-                capabilities.book_cover().apply_local_book_cover(write)
             })
             .map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)

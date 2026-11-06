@@ -17,9 +17,6 @@ pub(crate) enum ObjectReadQuery {
     Search(String),
     Get(String),
     WriteSnapshot(String),
-    CanonicalGames(String),
-    CanonicalGame(String, String),
-    CanonicalAssetSources(Vec<String>),
 }
 
 impl sealed::Sealed for ObjectReadQuery {}
@@ -58,18 +55,6 @@ impl StoreReadQuery for ObjectReadQuery {
             Self::Search(query) => serialize(capabilities.objects().search(&query)),
             Self::Get(id) => serialize(capabilities.objects().get(&id)),
             Self::WriteSnapshot(id) => serialize(capabilities.objects().write_snapshot(&id)),
-            Self::CanonicalGames(device_id) => {
-                serialize(capabilities.canonical().games(&device_id))
-            }
-            Self::CanonicalGame(id, device_id) => {
-                serialize(capabilities.canonical().game(&id, &device_id))
-            }
-            Self::CanonicalAssetSources(object_ids) => serialize(
-                capabilities
-                    .canonical()
-                    .asset_sources(&object_ids)
-                    .map_err(|error| error.to_string()),
-            ),
         }
     }
 }

@@ -1,74 +1,7 @@
-use super::super::executor::actor::{
-    CanonicalGameUpsertTask, LocalBookCoverTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
-    WriterTask,
-};
+use super::super::executor::actor::{LocalObjectDeleteTask, LocalObjectUpsertTask, WriterTask};
 use super::*;
 
 impl DbHandle {
-    pub(crate) async fn submit_canonical_game_upsert(
-        &self,
-        context: CommandContext,
-        command: ark_domain::canonical_game::GameUpsertCommand,
-        fallback_device_id: String,
-    ) -> Result<ark_domain::canonical_game::GameMutationResult, DbError> {
-        if context.class != CommandClass::Interactive {
-            return Err(DbError::Invalid("database command class mismatch".into()));
-        }
-        context.require_engine()?;
-        #[derive(serde::Serialize)]
-        struct GameCommand<'a> {
-            command: &'a ark_domain::canonical_game::GameUpsertCommand,
-            fallback_device_id: &'a str,
-        }
-        let weight = serde_json::to_vec(&GameCommand {
-            command: &command,
-            fallback_device_id: &fallback_device_id,
-        })
-        .map_or(usize::MAX, |bytes| bytes.len());
-        if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-        {
-            let actor = &self.backend;
-            let (reply, response) = tokio::sync::oneshot::channel();
-            let task: Box<dyn WriterTask> = Box::new(CanonicalGameUpsertTask {
-                command,
-                fallback_device_id,
-                reply,
-            });
-            actor.admit(context.class, &context.source, weight, task)?;
-            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-        }
-    }
-
-    pub(crate) async fn submit_local_book_cover(
-        &self,
-        context: CommandContext,
-        write: ark_domain::book_cover::LocalBookCoverWrite,
-    ) -> Result<bool, DbError> {
-        if context.class != CommandClass::Interactive {
-            return Err(DbError::Invalid("database command class mismatch".into()));
-        }
-        context.require_engine()?;
-        #[derive(serde::Serialize)]
-        struct BookCoverCommand<'a> {
-            write: &'a ark_domain::book_cover::LocalBookCoverWrite,
-        }
-        let weight = serde_json::to_vec(&BookCoverCommand { write: &write })
-            .map_or(usize::MAX, |bytes| bytes.len());
-        if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-
-        {
-            let actor = &self.backend;
-            let (reply, response) = tokio::sync::oneshot::channel();
-            let task: Box<dyn WriterTask> = Box::new(LocalBookCoverTask { write, reply });
-            actor.admit(context.class, &context.source, weight, task)?;
-            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-        }
-    }
-
     pub(crate) async fn submit_local_object_upsert(
         &self,
         context: CommandContext,
