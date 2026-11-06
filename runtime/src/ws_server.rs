@@ -20,7 +20,6 @@ use crate::db_backup;
 use crate::diagnostics::{RpcDiagnostics, SharedRpcDiagnostics};
 use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};
-use crate::focus::handle_focus_op;
 use crate::manager_api::ManagerState;
 use crate::protocol_usage::{ProtocolUsageStore, TransportKind};
 use crate::protocol_version::{Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT};
