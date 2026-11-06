@@ -1,4 +1,4 @@
-pub use ::domain::canonical_type::definitions::{
+pub use ::domain::r#type::definitions::{
     canonical_type_registrations, current_canonical_version, is_canonical_version,
 };
 

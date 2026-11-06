@@ -6,7 +6,7 @@ use crate::objects::{
 };
 use crate::pending_objects::insert_pending_object;
 use crate::type_registry::{register_alias, upsert_object_type};
-use domain::canonical_type::AliasRecord;
+use domain::r#type::AliasRecord;
 use domain::types::{ArkObject, ObjectType, SyncEntity};
 use rusqlite::Connection;
 use serde_json::json;

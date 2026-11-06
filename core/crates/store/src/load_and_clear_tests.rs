@@ -37,7 +37,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     upsert_object_type(&conn, &builtin).unwrap();
     crate::type_registry::register_alias(
         &conn,
-        &domain::canonical_type::AliasRecord {
+        &domain::r#type::AliasRecord {
             alias: "user.alias".into(),
             canonical_type_id: user.id.clone(),
             created_at: "a".into(),

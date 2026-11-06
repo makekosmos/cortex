@@ -1,4 +1,4 @@
-use crate::canonical_type::{AliasRecord, TypeSummary, TypeVersion};
+use crate::r#type::{AliasRecord, TypeSummary, TypeVersion};
 use crate::types::{ArkObject, ObjectLink, ObjectType, TrackedApp, UsageEvent, UsageSession};
 use serde::Serialize;
 

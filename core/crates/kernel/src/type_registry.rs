@@ -1,6 +1,6 @@
 mod version_storage;
 
-pub use ::domain::canonical_type::registry::{is_system_type, validate_type_namespace};
+pub use ::domain::r#type::registry::{is_system_type, validate_type_namespace};
 pub use ::store::type_registry::{
     ensure_builtin_versions, ensure_legacy_type_version, get_type, list_aliases,
     list_all_type_versions, list_type_summaries, list_type_versions, register_alias, resolve_alias,

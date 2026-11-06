@@ -1,5 +1,5 @@
 use super::TypeRegistryReadCapabilities;
-use domain::canonical_type::{TypeSummary, TypeVersion};
+use domain::r#type::{TypeSummary, TypeVersion};
 use domain::type_registry::TypeGetResponse;
 use domain::types::ObjectLink;
 

@@ -1,4 +1,4 @@
-use domain::canonical_type::registry::legacy_compatibility_version;
+use domain::r#type::registry::legacy_compatibility_version;
 use domain::types::ObjectType;
 use rusqlite::Connection;
 use std::path::Path;

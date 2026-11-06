@@ -1,8 +1,8 @@
 use super::resolve_type_id;
-use domain::canonical_type::registry::{
+use domain::r#type::registry::{
     canonicalize_legacy_definition, validate_type_id, validate_version, LEGACY_VERSION,
 };
-use domain::canonical_type::{AliasRecord, TypeRegistration, TypeSummary, TypeVersion};
+use domain::r#type::{AliasRecord, TypeRegistration, TypeSummary, TypeVersion};
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 

@@ -2,10 +2,10 @@ use super::types::*;
 use serde_json::{json, Value};
 
 pub fn read_game_props(object: &crate::types::ArkObject) -> Result<GameProperties, String> {
-    use crate::canonical_type::validation::{validate_canonical, CanonicalValidationCode};
+    use crate::r#type::validation::{validate_canonical, CanonicalValidationCode};
 
     let props = object.props_json.as_object().ok_or("invalid_game_props")?;
-    let registration = crate::canonical_type::definitions::canonical_type_registrations()
+    let registration = crate::r#type::definitions::canonical_type_registrations()
         .map_err(|_| "definition_invariant:game".to_owned())?
         .into_iter()
         .find(|registration| {

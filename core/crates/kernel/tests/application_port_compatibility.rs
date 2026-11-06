@@ -166,10 +166,8 @@ fn peer_identity_port_keeps_both_public_paths() {
 #[test]
 fn application_read_model_and_domain_type_registry_keep_kernel_paths() {
     let _: fn(domain::load_all_data::LoadAllData) -> kernel::types::LoadAllData = |value| value;
-    let _: fn(domain::canonical_type::TypeSummary) -> kernel::type_registry::TypeSummary =
-        |value| value;
-    let _: fn(domain::canonical_type::TypeVersion) -> kernel::type_registry::TypeVersion =
-        |value| value;
+    let _: fn(domain::r#type::TypeSummary) -> kernel::type_registry::TypeSummary = |value| value;
+    let _: fn(domain::r#type::TypeVersion) -> kernel::type_registry::TypeVersion = |value| value;
     let _: fn(domain::type_registry::TypeGetResponse) -> kernel::type_registry::TypeGetResponse =
         |value| value;
 }

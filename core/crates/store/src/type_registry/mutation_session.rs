@@ -1,4 +1,4 @@
-use domain::canonical_type::TypeRegistration;
+use domain::r#type::TypeRegistration;
 use domain::sync_storage::ReplayNotice;
 use rusqlite::Transaction;
 

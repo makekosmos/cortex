@@ -34,7 +34,7 @@ pub fn decode_remote_core_task_write(
         || !data
             .get("typeVersion")
             .and_then(Value::as_str)
-            .is_some_and(domain::canonical_type::definitions::is_supported_core_task_version)
+            .is_some_and(domain::r#type::definitions::is_supported_core_task_version)
     {
         return Err(RemoteCoreTaskWriteDecodeError::UnsupportedType);
     }

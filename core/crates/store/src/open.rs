@@ -157,7 +157,7 @@ mod tests {
     fn core_task_relation_change_preserves_010_and_promotes_to_020() -> Result<(), String> {
         let connection = Connection::open_in_memory().map_err(|error| error.to_string())?;
         init_schema_prerequisites(&connection)?;
-        let previous = domain::canonical_type::definitions::canonical_type_registrations()?
+        let previous = domain::r#type::definitions::canonical_type_registrations()?
             .into_iter()
             .find(|registration| {
                 registration.type_id == "core.task" && registration.version == "0.1.0"

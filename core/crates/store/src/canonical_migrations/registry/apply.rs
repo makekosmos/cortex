@@ -1,6 +1,6 @@
 use super::*;
-use domain::canonical_type::definitions::canonical_type_registrations;
-use domain::canonical_type::TypeRegistration;
+use domain::r#type::definitions::canonical_type_registrations;
+use domain::r#type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 
 fn archive_and_promote(

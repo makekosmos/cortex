@@ -2,7 +2,6 @@
 
 pub mod app_identity;
 pub mod canonical_game;
-pub mod canonical_type;
 pub mod device_registry;
 pub mod hlc;
 pub mod load_all_data;
@@ -16,6 +15,7 @@ pub mod sync_policy;
 pub mod sync_storage;
 pub mod task_merge;
 pub mod task_merge_sync;
+pub mod r#type;
 pub mod type_registry;
 pub mod types;
 pub use sync_policy::PolicyIdentity;

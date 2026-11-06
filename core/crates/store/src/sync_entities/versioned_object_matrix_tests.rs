@@ -83,7 +83,7 @@ fn versioned_object_matrix_holds_unknown_payload_and_replays_exactly() {
             .unwrap()
             .unwrap()
             .type_version,
-        domain::canonical_type::registry::LEGACY_VERSION
+        domain::r#type::registry::LEGACY_VERSION
     );
 
     let mut unknown = object_entity("remote-unknown", "remote-type", "unknown-wire");
@@ -116,7 +116,7 @@ fn versioned_object_matrix_holds_unknown_payload_and_replays_exactly() {
     let replayed = crate::pending_objects::replay_pending_for_type(
         &connection,
         "remote-type",
-        domain::canonical_type::registry::LEGACY_VERSION,
+        domain::r#type::registry::LEGACY_VERSION,
     )
     .unwrap();
     assert!(replayed.is_empty());

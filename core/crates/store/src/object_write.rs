@@ -1,5 +1,5 @@
-use domain::canonical_type::{prepare_resolved_object, CanonicalIngressError};
 use domain::object_write::ObjectWriteSnapshot;
+use domain::r#type::{prepare_resolved_object, CanonicalIngressError};
 use domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use serde::Serialize;
@@ -18,7 +18,7 @@ pub fn prepare_object(
         requested_version.as_deref(),
     )
     .map_err(|_| CanonicalIngressError::invalid("unknown_type_or_version"))?;
-    let registrations = domain::canonical_type::definitions::canonical_type_registrations()
+    let registrations = domain::r#type::definitions::canonical_type_registrations()
         .map_err(|_| CanonicalIngressError::invariant("canonical_registry"))?;
     let registration = registrations.iter().find(|registration| {
         registration.type_id == canonical_type_id && registration.version == resolved_version

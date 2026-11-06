@@ -238,12 +238,11 @@ mod tests {
     fn object_type_store_upserts_compatibility_and_filters_deprecated_rows() {
         let connection = database();
         let object_type = object_type();
-        let (version, schema_hash) =
-            domain::canonical_type::registry::legacy_compatibility_version(
-                &object_type.schema_json,
-                &object_type.ui_schema_json,
-            )
-            .expect("compatibility version derives");
+        let (version, schema_hash) = domain::r#type::registry::legacy_compatibility_version(
+            &object_type.schema_json,
+            &object_type.ui_schema_json,
+        )
+        .expect("compatibility version derives");
 
         assert_eq!(
             upsert_legacy_type(

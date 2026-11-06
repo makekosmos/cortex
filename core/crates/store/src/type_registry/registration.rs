@@ -1,11 +1,11 @@
-use domain::canonical_type::registry::{
+use domain::r#type::registry::{
     canonicalize_type_version, is_system_type, validate_type_id, validate_type_namespace,
     validate_version,
 };
-use domain::canonical_type::validation::{
+use domain::r#type::validation::{
     check_additive_schema_change, validate_type_schema, CanonicalValidationError,
 };
-use domain::canonical_type::{TypeRegistration, TypeVersion};
+use domain::r#type::{TypeRegistration, TypeVersion};
 use rusqlite::Connection;
 use serde_json::Value;
 

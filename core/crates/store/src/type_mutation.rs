@@ -1,6 +1,6 @@
 use crate::object_link_mutation::SqliteObjectLinkMutationSession;
 use crate::type_registry::mutation_session::SqliteTypeMutationSession;
-use domain::canonical_type::TypeRegistration;
+use domain::r#type::TypeRegistration;
 use domain::sync_storage::ReplayNotice;
 use domain::types::{ObjectLink, SyncEntity};
 use serde_json::{Map, Value};

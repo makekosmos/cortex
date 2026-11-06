@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use domain::canonical_type::{AliasRecord, TypeRegistration};
+use domain::r#type::{AliasRecord, TypeRegistration};
 use domain::types::SyncEntity;
 use rusqlite::Connection;
 

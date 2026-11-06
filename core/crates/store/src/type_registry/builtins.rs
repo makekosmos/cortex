@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 
-use domain::canonical_type::registry::{canonicalize_legacy_definition, LEGACY_VERSION};
+use domain::r#type::registry::{canonicalize_legacy_definition, LEGACY_VERSION};
 
 pub fn ensure_builtin_versions(conn: &Connection) -> Result<(), String> {
     let mut stmt = conn

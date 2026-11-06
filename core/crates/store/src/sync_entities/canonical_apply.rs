@@ -55,20 +55,20 @@ pub fn apply_canonical_object_entity(
         let input: ArkObjectWrite = serde_json::from_value(Value::Object(data.clone()))
             .map_err(|error| error.to_string())?;
         let input_type_version = input.type_version.clone();
-        let object =
-            if domain::canonical_type::definitions::canonical_type_registrations()
+        let object = if domain::r#type::definitions::canonical_type_registrations()
+            .map_err(|error| error.to_string())?
+            .iter()
+            .any(|registration| registration.type_id == input.type_id)
+        {
+            crate::object_write::prepare_object(connection, input)
                 .map_err(|error| error.to_string())?
-                .iter()
-                .any(|registration| registration.type_id == input.type_id)
-            {
-                crate::object_write::prepare_object(connection, input)
-                    .map_err(|error| error.to_string())?
-            } else {
-                // Preserve the wire version for generic Phase 2 objects.
-                input.with_type_version(input_type_version.unwrap_or_else(|| {
-                    domain::canonical_type::registry::LEGACY_VERSION.to_string()
-                }))
-            };
+        } else {
+            // Preserve the wire version for generic Phase 2 objects.
+            input.with_type_version(
+                input_type_version
+                    .unwrap_or_else(|| domain::r#type::registry::LEGACY_VERSION.to_string()),
+            )
+        };
 
         let links: Vec<ObjectLink> = data
             .get("links")

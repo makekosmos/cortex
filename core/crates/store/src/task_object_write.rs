@@ -86,28 +86,25 @@ fn apply_core_task_write(
     let (resolved_type_id, resolved_version) = object_session
         .resolve_type_identity(&write.type_id, write.type_version.as_deref())
         .map_err(|_| {
-            domain::canonical_type::CanonicalIngressError::invalid("unknown_type_or_version")
-                .to_string()
+            domain::r#type::CanonicalIngressError::invalid("unknown_type_or_version").to_string()
         })?;
-    let registration = domain::canonical_type::definitions::canonical_type_registrations()
+    let registration = domain::r#type::definitions::canonical_type_registrations()
         .map_err(|_| {
-            domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
-                .to_string()
+            domain::r#type::CanonicalIngressError::invariant("canonical_registry").to_string()
         })?
         .into_iter()
         .find(|registration| {
             registration.type_id == resolved_type_id && registration.version == resolved_version
         })
         .ok_or_else(|| {
-            domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
-                .to_string()
+            domain::r#type::CanonicalIngressError::invariant("canonical_registry").to_string()
         })?;
     if resolved_type_id != CORE_TASK_ID
-        || !domain::canonical_type::definitions::is_supported_core_task_version(&resolved_version)
+        || !domain::r#type::definitions::is_supported_core_task_version(&resolved_version)
     {
         return Err("object_write_slice_unsupported_type".into());
     }
-    let object = domain::canonical_type::prepare_resolved_object(
+    let object = domain::r#type::prepare_resolved_object(
         write,
         &resolved_type_id,
         &resolved_version,

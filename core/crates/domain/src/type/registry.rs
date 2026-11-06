@@ -110,7 +110,7 @@ pub fn validate_type_namespace(type_id: &str, owner_id: &str) -> Result<(), Stri
 /// First-party core types (and their aliases) are system-owned and immutable
 /// through application registration.
 pub fn is_system_type(type_id: &str) -> Result<bool, String> {
-    let canonical = crate::canonical_type::definitions::canonical_type_registrations()?;
+    let canonical = crate::r#type::definitions::canonical_type_registrations()?;
     Ok(canonical.iter().any(|registration| {
         registration.type_id == type_id
             || registration
@@ -167,7 +167,7 @@ fn json_empty_array() -> Value {
 #[cfg(test)]
 mod tests {
     use super::{canonicalize_type_version, legacy_compatibility_version};
-    use crate::canonical_type::TypeVersion;
+    use crate::r#type::TypeVersion;
 
     fn version() -> TypeVersion {
         TypeVersion {

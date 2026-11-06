@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{list_type_summaries, list_type_versions, resolve_type_id};
-use domain::canonical_type::registry::{validate_version, LEGACY_VERSION};
+use domain::r#type::registry::{validate_version, LEGACY_VERSION};
 use domain::type_registry::TypeGetResponse;
 
 pub fn get_type(

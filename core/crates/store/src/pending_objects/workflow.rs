@@ -16,7 +16,7 @@ pub fn insert_pending_object(
         .data
         .get("typeVersion")
         .and_then(Value::as_str)
-        .unwrap_or(domain::canonical_type::registry::LEGACY_VERSION);
+        .unwrap_or(domain::r#type::registry::LEGACY_VERSION);
     let schema = crate::pending_objects::schema(connection)?;
     let is_versioned = schema == crate::pending_objects::PendingObjectSchema::Versioned;
     if is_versioned {

@@ -5,7 +5,7 @@ impl DbHandle {
     pub(crate) async fn submit_register_application_type(
         &self,
         context: CommandContext,
-        registration: ::domain::canonical_type::TypeRegistration,
+        registration: ::domain::r#type::TypeRegistration,
     ) -> Result<Vec<::domain::sync_storage::ReplayNotice>, DbError> {
         let weight = validate(&context, "types.register_app.v1", &registration)?;
         {

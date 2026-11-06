@@ -1,4 +1,4 @@
-use crate::canonical_type::{TypeSummary, TypeVersion};
+use crate::r#type::{TypeSummary, TypeVersion};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

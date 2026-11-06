@@ -1,7 +1,7 @@
 use super::*;
 
 pub(in crate::db::command) struct RegisterApplicationTypeTask {
-    pub registration: ::domain::canonical_type::TypeRegistration,
+    pub registration: ::domain::r#type::TypeRegistration,
     pub reply: oneshot::Sender<Result<Vec<::domain::sync_storage::ReplayNotice>, DbError>>,
 }
 

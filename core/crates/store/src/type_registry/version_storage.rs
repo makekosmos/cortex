@@ -1,7 +1,5 @@
-use domain::canonical_type::registry::{
-    canonicalize_type_version, validate_type_id, validate_version,
-};
-use domain::canonical_type::{TypeRegistration, TypeVersion};
+use domain::r#type::registry::{canonicalize_type_version, validate_type_id, validate_version};
+use domain::r#type::{TypeRegistration, TypeVersion};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn persist_type_version(

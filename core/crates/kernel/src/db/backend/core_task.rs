@@ -9,7 +9,7 @@ pub(super) fn is_full_core_task(entity: &SyncEntity) -> bool {
             .data
             .get("typeVersion")
             .and_then(Value::as_str)
-            .is_some_and(::domain::canonical_type::definitions::is_supported_core_task_version)
+            .is_some_and(::domain::r#type::definitions::is_supported_core_task_version)
         && entity.data.contains_key("contentJson")
         && entity.data.contains_key("propsJson")
 }

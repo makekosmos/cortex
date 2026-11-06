@@ -1,3 +1,3 @@
-pub use ::domain::canonical_type::validation::{
+pub use ::domain::r#type::validation::{
     is_full_date, validate_canonical, CanonicalValidationCode, CanonicalValidationError,
 };

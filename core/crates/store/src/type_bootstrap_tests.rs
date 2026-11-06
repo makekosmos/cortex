@@ -3,7 +3,7 @@
 use crate::type_registry::{
     delete_object_type, get_type, list_type_summaries, list_type_versions, upsert_object_type,
 };
-use domain::canonical_type::definitions::canonical_type_registrations;
+use domain::r#type::definitions::canonical_type_registrations;
 use domain::types::ObjectType;
 use rusqlite::Connection;
 

@@ -1,5 +1,5 @@
-use domain::canonical_type::registry::{canonicalize_legacy_definition, LEGACY_VERSION};
-use domain::canonical_type::TypeVersion;
+use domain::r#type::registry::{canonicalize_legacy_definition, LEGACY_VERSION};
+use domain::r#type::TypeVersion;
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn migrate_schema(conn: &Connection) -> Result<(), String> {

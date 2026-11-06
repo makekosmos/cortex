@@ -74,9 +74,7 @@ fn commit_local_task_upsert_with_existence(
     existence_override: Option<domain::task_merge::TaskMergeValue>,
 ) -> Result<Vec<SyncEntity>, String> {
     if object.type_id != "core.task"
-        || !domain::canonical_type::definitions::is_supported_core_task_version(
-            &object.type_version,
-        )
+        || !domain::r#type::definitions::is_supported_core_task_version(&object.type_version)
     {
         return Err("object_write_slice_unsupported_type".into());
     }
@@ -282,13 +280,13 @@ fn next_operation_id() -> OperationId {
 }
 
 fn validate_materialized_task(object: &ArkObject) -> Result<(), String> {
-    let registration = domain::canonical_type::definitions::canonical_type_registrations()?
+    let registration = domain::r#type::definitions::canonical_type_registrations()?
         .into_iter()
         .find(|registration| {
             registration.type_id == object.type_id && registration.version == object.type_version
         })
         .ok_or_else(|| "canonical_registry".to_string())?;
-    domain::canonical_type::validation::validate_canonical(
+    domain::r#type::validation::validate_canonical(
         &registration,
         &object.props_json,
         &object.content_json,

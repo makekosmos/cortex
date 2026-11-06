@@ -1,4 +1,4 @@
-use domain::canonical_type::{
+use domain::r#type::{
     definitions::canonical_type_registrations,
     registry::{self, LEGACY_VERSION},
 };

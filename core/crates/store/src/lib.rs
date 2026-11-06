@@ -47,8 +47,6 @@ pub use read_capabilities::{
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 
 #[cfg(test)]
-mod canonical_type_bootstrap_tests;
-#[cfg(test)]
 mod core_storage_tests;
 #[cfg(test)]
 mod data_platform_tests;
@@ -72,5 +70,7 @@ mod sync_storage_contract_tests;
 mod sync_transaction_contract_tests;
 #[cfg(test)]
 mod transactions_and_usage_tests;
+#[cfg(test)]
+mod type_bootstrap_tests;
 #[cfg(test)]
 mod type_registry_mutation_tests;

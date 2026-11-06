@@ -1,5 +1,5 @@
 use crate::type_registry::register_type;
-use domain::canonical_type::{AliasRecord, TypeRegistration};
+use domain::r#type::{AliasRecord, TypeRegistration};
 use rusqlite::{Connection, OptionalExtension};
 
 type ObjectTypeRow = (

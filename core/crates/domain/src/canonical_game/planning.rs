@@ -30,12 +30,12 @@ pub fn object_write(command: &GameUpsertCommand) -> ArkObjectWrite {
 }
 
 pub fn validate_game_command(command: &GameUpsertCommand) -> Result<(), GameUpsertError> {
-    use crate::canonical_type::validation::{validate_canonical, CanonicalValidationCode};
+    use crate::r#type::validation::{validate_canonical, CanonicalValidationCode};
 
     if !command.user_rating.map(f64::is_finite).unwrap_or(true) {
         return Err(GameUpsertError::InvalidRating);
     }
-    let registration = crate::canonical_type::definitions::canonical_type_registrations()
+    let registration = crate::r#type::definitions::canonical_type_registrations()
         .map_err(|_| GameUpsertError::DefinitionUnavailable)?
         .into_iter()
         .find(|registration| {

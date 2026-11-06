@@ -3,7 +3,7 @@ use crate::type_registry::{
     insert_type_version, list_type_versions, register_alias, register_type, resolve_alias,
     set_current_version,
 };
-use domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeRegistration};
+use domain::r#type::{canonical_schema_hash, AliasRecord, TypeRegistration};
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::json;
 

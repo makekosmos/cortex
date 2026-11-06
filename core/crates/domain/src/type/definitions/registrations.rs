@@ -195,7 +195,7 @@ mod hash_guard_tests {
             previous["schemaHash"].as_str().unwrap(),
             "hash must change"
         );
-        crate::canonical_type::validation::check_additive_schema_change(
+        crate::r#type::validation::check_additive_schema_change(
             &previous["schema"],
             &candidate["schema"],
         )

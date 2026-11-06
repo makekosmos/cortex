@@ -25,13 +25,13 @@ pub fn apply_inbound_entity(
         )?;
         return Ok((InboundApplyOutcome::Stale, Vec::new()));
     }
-    let canonical_type = entity.entity_type.as_str();
+    let r#type = entity.entity_type.as_str();
     let deleted = entity.deleted == Some(true);
     let (outcome, notices) = apply_mutation(connection, entity)?;
     if outcome == InboundApplyOutcome::Applied {
         crate::committed_feed::append_committed_change(
             connection,
-            canonical_type,
+            r#type,
             &entity.id,
             &entity.hlc,
             deleted,

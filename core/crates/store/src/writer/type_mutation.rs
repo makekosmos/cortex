@@ -3,7 +3,7 @@ use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 impl SqliteWriter {
     pub fn register_application_type(
         &mut self,
-        registration: domain::canonical_type::TypeRegistration,
+        registration: domain::r#type::TypeRegistration,
     ) -> Result<Vec<domain::sync_storage::ReplayNotice>, StoreTransactionFailure<String>> {
         self.write_with_capabilities(|capabilities| {
             let session = type_mutation_session(capabilities);
