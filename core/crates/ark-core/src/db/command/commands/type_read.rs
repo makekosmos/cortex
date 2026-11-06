@@ -14,8 +14,6 @@ pub(crate) enum TypeReadQuery {
     },
     ListVersions(String),
     ResolveAlias(String),
-    ListObjectTypes,
-    GetObjectType(String),
     ListObjectLinks,
 }
 
@@ -51,8 +49,6 @@ impl StoreReadQuery for TypeReadQuery {
             Self::ResolveAlias(alias) => {
                 serialize(capabilities.type_registry().resolve_alias(&alias))
             }
-            Self::ListObjectTypes => serialize(capabilities.type_registry().list_object_types()),
-            Self::GetObjectType(id) => serialize(capabilities.type_registry().get_object_type(&id)),
             Self::ListObjectLinks => serialize(capabilities.type_registry().list_object_links()),
         }
     }

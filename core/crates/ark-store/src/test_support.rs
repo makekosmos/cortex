@@ -58,6 +58,7 @@ mod data_volume;
 mod device_registry;
 mod foreign_schema;
 mod inbox;
+mod legacy_type_seed;
 mod object_mutation_replay;
 mod object_revision;
 mod object_validation;
@@ -82,6 +83,7 @@ pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use foreign_schema::ForeignSchemaFixture;
 pub use inbox::has_inbox_receipt;
+pub use legacy_type_seed::{seed_legacy_type, seed_legacy_type_in};
 pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationReplayState};
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,

@@ -109,15 +109,6 @@ pub(crate) async fn handle_request(
         Request::TypesGet { type_id, version } => types::types_get(state, type_id, version).await,
         Request::TypesListVersions { type_id } => types::types_list_versions(state, type_id).await,
         Request::TypesResolveAlias { alias } => types::types_resolve_alias(state, alias).await,
-        Request::ListObjectTypes => types::list_object_types(state).await,
-        Request::GetObjectType { id } => types::get_object_type(state, id).await,
-        Request::UpsertObjectType {
-            object_type,
-            device_id,
-        } => types::upsert_object_type(state, object_type, device_id).await,
-        Request::DeleteObjectType { id, device_id } => {
-            types::delete_object_type(state, id, device_id).await
-        }
         Request::ListObjectLinks => types::list_object_links(state).await,
         Request::UpsertObjectLink {
             object_link,

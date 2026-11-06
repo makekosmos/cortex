@@ -168,45 +168,11 @@ async fn local_object_type_and_link_writes_record_sync_state() {
         .unwrap();
 
     let timestamp = "2026-04-24T00:00:00.000Z".to_string();
-    let object_type = ObjectType {
-        id: "rpc-game-type".to_string(),
-        name: "Game".to_string(),
-        schema_json: "{}".to_string(),
-        ui_schema_json: "{}".to_string(),
-        created_at: timestamp.clone(),
-        updated_at: timestamp.clone(),
-        system_locked: false,
-    };
-    handle_request(
-        &state,
-        Request::UpsertObjectType {
-            object_type: object_type.clone(),
-            device_id: Some("device-local".to_string()),
-        },
-    )
-    .await
-    .unwrap();
-    handle_request(
-        &state,
-        Request::UpsertObjectType {
-            object_type: ObjectType {
-                id: "empty_type_for_delete".to_string(),
-                name: "Empty".to_string(),
-                schema_json: "{}".to_string(),
-                ui_schema_json: "{}".to_string(),
-                created_at: timestamp.clone(),
-                updated_at: timestamp.clone(),
-                system_locked: false,
-            },
-            device_id: Some("device-local".to_string()),
-        },
-    )
-    .await
-    .unwrap();
+    ark_store::test_support::seed_legacy_type(&db_path, "rpc-game-type", "Game").unwrap();
 
     let source = ArkObjectWrite {
         id: "source-object".to_string(),
-        type_id: object_type.id.clone(),
+        type_id: "rpc-game-type".to_string(),
         type_version: Some("0.0.0-legacy".to_string()),
         title: "Source".to_string(),
         content_json: json!({}),
@@ -217,7 +183,7 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     };
     let target = ArkObjectWrite {
         id: "target-object".to_string(),
-        type_id: object_type.id.clone(),
+        type_id: "rpc-game-type".to_string(),
         type_version: Some("0.0.0-legacy".to_string()),
         title: "Target".to_string(),
         content_json: json!({}),
@@ -275,32 +241,18 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     )
     .await
     .unwrap();
-    handle_request(
-        &state,
-        Request::DeleteObjectType {
-            id: "empty_type_for_delete".to_string(),
-            device_id: Some("device-local".to_string()),
-        },
-    )
-    .await
-    .unwrap();
 
     let sync_state = ark_store::test_support::SyncPersistenceFixture::inspect(&db_path).unwrap();
-    for id in ["rpc-game-type", "link-local-write", "empty_type_for_delete"] {
-        assert!(
-            sync_state
-                .version_vector
-                .get(id)
-                .is_some_and(|hlc| hlc.ends_with(":device-local")),
-            "{id} should have a local HLC in the version vector",
-        );
-    }
+    assert!(
+        sync_state
+            .version_vector
+            .get("link-local-write")
+            .is_some_and(|hlc| hlc.ends_with(":device-local")),
+        "link-local-write should have a local HLC in the version vector",
+    );
 
     assert!(sync_state
         .tombstones
         .iter()
         .any(|(id, entity_type)| id == "link-local-write" && entity_type == "object_link"));
-    assert!(sync_state.tombstones.iter().any(|(id, entity_type)| {
-        id == "empty_type_for_delete" && entity_type == "object_type"
-    }));
 }

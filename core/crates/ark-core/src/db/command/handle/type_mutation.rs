@@ -1,6 +1,4 @@
-use super::super::executor::actor::{
-    DeleteObjectTypeTask, RegisterApplicationTypeTask, UpsertObjectTypeTask, WriterTask,
-};
+use super::super::executor::actor::{RegisterApplicationTypeTask, WriterTask};
 use super::*;
 
 impl DbHandle {
@@ -15,46 +13,6 @@ impl DbHandle {
             let (reply, response) = tokio::sync::oneshot::channel();
             let task: Box<dyn WriterTask> = Box::new(RegisterApplicationTypeTask {
                 registration,
-                reply,
-            });
-            actor.admit(context.class, &context.source, weight, task)?;
-            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-        }
-    }
-
-    pub(crate) async fn submit_upsert_object_type(
-        &self,
-        context: CommandContext,
-        object_type: ark_domain::types::ObjectType,
-        device_id: Option<String>,
-    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
-        let weight = validate(&context, "types.upsert.v1", &(&object_type, &device_id))?;
-        {
-            let actor = &self.backend;
-            let (reply, response) = tokio::sync::oneshot::channel();
-            let task: Box<dyn WriterTask> = Box::new(UpsertObjectTypeTask {
-                object_type,
-                device_id,
-                reply,
-            });
-            actor.admit(context.class, &context.source, weight, task)?;
-            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-        }
-    }
-
-    pub(crate) async fn submit_delete_object_type(
-        &self,
-        context: CommandContext,
-        id: String,
-        device_id: Option<String>,
-    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
-        let weight = validate(&context, "types.delete.v1", &(&id, &device_id))?;
-        {
-            let actor = &self.backend;
-            let (reply, response) = tokio::sync::oneshot::channel();
-            let task: Box<dyn WriterTask> = Box::new(DeleteObjectTypeTask {
-                id,
-                device_id,
                 reply,
             });
             actor.admit(context.class, &context.source, weight, task)?;

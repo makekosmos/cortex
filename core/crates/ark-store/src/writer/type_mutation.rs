@@ -10,28 +10,6 @@ impl SqliteWriter {
             crate::type_mutation::register_application_type(&session, &registration)
         })
     }
-
-    pub fn upsert_object_type(
-        &mut self,
-        object_type: ark_domain::types::ObjectType,
-        device_id: Option<String>,
-    ) -> Result<crate::type_mutation::TypeMutationCommit, StoreTransactionFailure<String>> {
-        self.write_with_capabilities(|capabilities| {
-            let session = type_mutation_session(capabilities);
-            crate::type_mutation::upsert_object_type(&session, object_type, device_id.as_deref())
-        })
-    }
-
-    pub fn delete_object_type(
-        &mut self,
-        id: String,
-        device_id: Option<String>,
-    ) -> Result<crate::type_mutation::TypeMutationCommit, StoreTransactionFailure<String>> {
-        self.write_with_capabilities(|capabilities| {
-            let session = type_mutation_session(capabilities);
-            crate::type_mutation::delete_object_type(&session, id, device_id.as_deref())
-        })
-    }
 }
 
 fn type_mutation_session<'scope, 'connection>(

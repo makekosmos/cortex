@@ -19,24 +19,14 @@ fn project_link(id: &str, source: &str, target: &str) -> ObjectLink {
 
 /// Opens the DB and creates one task and two project objects.
 async fn setup(state: &Arc<ServiceState>, db_path: String) {
-    initialize_test_database(state, db_path).await.unwrap();
-    let object_type = ObjectType {
-        id: "replace-link-type".to_string(),
-        name: "Replace link".to_string(),
-        schema_json: "{}".to_string(),
-        ui_schema_json: "{}".to_string(),
-        created_at: TIMESTAMP.to_string(),
-        updated_at: TIMESTAMP.to_string(),
-        system_locked: false,
-    };
-    handle_request(
-        state,
-        Request::UpsertObjectType {
-            object_type,
-            device_id: device(),
-        },
+    initialize_test_database(state, db_path.clone())
+        .await
+        .unwrap();
+    ark_store::test_support::seed_legacy_type(
+        std::path::Path::new(&db_path),
+        "replace-link-type",
+        "Replace link",
     )
-    .await
     .unwrap();
     for id in ["task-1", "project-a", "project-b"] {
         let object = ArkObjectWrite {

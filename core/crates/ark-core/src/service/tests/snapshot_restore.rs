@@ -12,24 +12,9 @@ async fn init_snapshot_db(fixture: &ServiceFixture) -> String {
     db_str
 }
 
-async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
-    handle_request(
-        state,
-        Request::UpsertObjectType {
-            object_type: ObjectType {
-                id: "snap_type".to_string(),
-                name: "Note".to_string(),
-                schema_json: "{}".to_string(),
-                ui_schema_json: "{}".to_string(),
-                created_at: "2026-09-15T00:00:00.000Z".to_string(),
-                updated_at: "2026-09-15T00:00:00.000Z".to_string(),
-                system_locked: false,
-            },
-            device_id: Some("test-device".to_string()),
-        },
-    )
-    .await
-    .unwrap();
+async fn seed_rpc_object(state: &Arc<ServiceState>, db_path: &str, id: &str, title: &str) {
+    ark_store::test_support::seed_legacy_type(std::path::Path::new(db_path), "snap_type", "Note")
+        .unwrap();
     handle_request(
         state,
         Request::UpsertObject {
@@ -83,7 +68,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
-    seed_rpc_object(&state, "obj-before", "before").await;
+    seed_rpc_object(&state, &db_path, "obj-before", "before").await;
     write_snapshot(&db_path, "ark.db.backup-rt");
 
     // Live расходится со snapshot'ом.
@@ -98,7 +83,7 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync(
     )
     .await
     .unwrap();
-    seed_rpc_object(&state, "obj-after", "after").await;
+    seed_rpc_object(&state, &db_path, "obj-after", "after").await;
     assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
 
     handle_request(
@@ -157,7 +142,7 @@ async fn db_backup_restore_quiesces_and_restarts_running_sync() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
-    seed_rpc_object(&state, "obj-before-sync", "before sync").await;
+    seed_rpc_object(&state, &db_path, "obj-before-sync", "before sync").await;
     write_snapshot(&db_path, "ark.db.backup-sync-restore");
 
     handle_request(
@@ -248,7 +233,7 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
-    seed_rpc_object(&state, "obj-live", "alive").await;
+    seed_rpc_object(&state, &db_path, "obj-live", "alive").await;
     write_snapshot(&db_path, "ark.db.backup-good");
 
     // Не-SQLite garbage.
@@ -292,7 +277,7 @@ async fn db_backup_list_and_validate_contract() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
-    seed_rpc_object(&state, "obj-l", "l").await;
+    seed_rpc_object(&state, &db_path, "obj-l", "l").await;
     write_snapshot(&db_path, "ark.db.backup-listed");
 
     let backups = ark_store::snapshot::backups_dir(&db_path);
@@ -353,7 +338,7 @@ fn db_backup_restore_waits_for_backup_gate() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let db_path = runtime.block_on(async {
         let path = init_snapshot_db(&fixture).await;
-        seed_rpc_object(&fixture.state, "obj-g", "g").await;
+        seed_rpc_object(&fixture.state, &path, "obj-g", "g").await;
         path
     });
     write_snapshot(&db_path, "ark.db.backup-gated");

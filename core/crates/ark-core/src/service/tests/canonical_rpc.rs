@@ -37,16 +37,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         initialize_test_database(&state, path.to_string_lossy().into_owned())
             .await
             .unwrap();
-        let type_request: Request = serde_json::from_value(json!({
-            "operation": "upsert_object_type",
-            "object_type": {
-                "id": "rpc-phase2", "name": "RPC", "schemaJson": "{}",
-                "uiSchemaJson": "{}", "createdAt": "c", "updatedAt": "u",
-                "systemLocked": false
-            }
-        }))
-        .unwrap();
-        handle_request(&state, type_request).await.unwrap();
+        ark_store::test_support::seed_legacy_type(&path, "rpc-phase2", "RPC").unwrap();
         let object_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object",
             "object": {
@@ -157,23 +148,7 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
             .await
             .unwrap();
         for id in ["rpc-z", "rpc-a"] {
-            handle_request(
-                &state,
-                Request::UpsertObjectType {
-                    object_type: ObjectType {
-                        id: id.into(),
-                        name: id.into(),
-                        schema_json: "{}".into(),
-                        ui_schema_json: "{}".into(),
-                        created_at: "c".into(),
-                        updated_at: "u".into(),
-                        system_locked: false,
-                    },
-                    device_id: None,
-                },
-            )
-            .await
-            .unwrap();
+            ark_store::test_support::seed_legacy_type(&path, id, id).unwrap();
         }
         ark_store::test_support::TypeMutationFixture::open(&path)
             .unwrap()

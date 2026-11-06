@@ -88,44 +88,6 @@ pub(super) async fn types_resolve_alias(
     type_read(state, db::TypeReadQuery::ResolveAlias(alias)).await
 }
 
-pub(super) async fn list_object_types(state: &Arc<ServiceState>) -> Result<Value, String> {
-    type_read(state, db::TypeReadQuery::ListObjectTypes).await
-}
-
-pub(super) async fn get_object_type(
-    state: &Arc<ServiceState>,
-    id: String,
-) -> Result<Value, String> {
-    type_read(state, db::TypeReadQuery::GetObjectType(id)).await
-}
-
-pub(super) async fn upsert_object_type(
-    state: &Arc<ServiceState>,
-    object_type: ObjectType,
-    device_id: Option<String>,
-) -> Result<Value, String> {
-    let commit = get_db_handle(state)?
-        .submit_upsert_object_type(db::CommandContext::engine(), object_type, device_id)
-        .await
-        .map_err(|error| error.to_string())?;
-    emit_replay_notices(commit.replay_notices);
-    maybe_broadcast_local_changes(state, commit.entities).await;
-    Ok(json!(true))
-}
-
-pub(super) async fn delete_object_type(
-    state: &Arc<ServiceState>,
-    id: String,
-    device_id: Option<String>,
-) -> Result<Value, String> {
-    let commit = get_db_handle(state)?
-        .submit_delete_object_type(db::CommandContext::engine(), id, device_id)
-        .await
-        .map_err(|error| error.to_string())?;
-    maybe_broadcast_local_changes(state, commit.entities).await;
-    Ok(json!(true))
-}
-
 pub(super) async fn list_object_links(state: &Arc<ServiceState>) -> Result<Value, String> {
     type_read(state, db::TypeReadQuery::ListObjectLinks).await
 }

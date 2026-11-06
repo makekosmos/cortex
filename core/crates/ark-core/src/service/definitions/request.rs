@@ -212,20 +212,6 @@ pub(crate) enum Request {
         #[serde(default, rename = "appId")]
         app_id: Option<String>,
     },
-    ListObjectTypes,
-    GetObjectType {
-        id: String,
-    },
-    UpsertObjectType {
-        object_type: ObjectType,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
-    DeleteObjectType {
-        id: String,
-        #[serde(default)]
-        device_id: Option<String>,
-    },
     ListObjectLinks,
     UpsertObjectLink {
         object_link: ObjectLink,

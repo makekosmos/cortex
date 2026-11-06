@@ -2,7 +2,7 @@ use crate::object_link_mutation::SqliteObjectLinkMutationSession;
 use crate::type_registry::mutation_session::SqliteTypeMutationSession;
 use ark_domain::canonical_type::TypeRegistration;
 use ark_domain::sync_storage::ReplayNotice;
-use ark_domain::types::{ObjectLink, ObjectType, SyncEntity};
+use ark_domain::types::{ObjectLink, SyncEntity};
 use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Copy)]
@@ -37,50 +37,6 @@ pub fn register_application_type(
     registration: &TypeRegistration,
 ) -> Result<Vec<ReplayNotice>, String> {
     session.register_application_type(registration)
-}
-
-pub fn upsert_object_type(
-    session: &SqliteTypeMutationSession<'_, '_>,
-    object_type: ObjectType,
-    device_id: Option<&str>,
-) -> Result<TypeMutationCommit, String> {
-    let replay_notices = session.upsert_object_type(&object_type)?;
-    let hlc = session.record_local_revision(
-        TypeEntityKind::ObjectType,
-        &object_type.id,
-        device_id,
-        false,
-    )?;
-    let entity = sync_entity(
-        TypeEntityKind::ObjectType,
-        &object_type.id,
-        serde_json::to_value(&object_type).unwrap_or_else(|_| serde_json::json!({})),
-        hlc,
-        None,
-    );
-    Ok(TypeMutationCommit {
-        entities: vec![entity],
-        replay_notices,
-    })
-}
-
-pub fn delete_object_type(
-    session: &SqliteTypeMutationSession<'_, '_>,
-    id: String,
-    device_id: Option<&str>,
-) -> Result<TypeMutationCommit, String> {
-    session.delete_object_type(&id)?;
-    let hlc = session.record_local_revision(TypeEntityKind::ObjectType, &id, device_id, true)?;
-    Ok(TypeMutationCommit {
-        entities: vec![sync_entity(
-            TypeEntityKind::ObjectType,
-            &id,
-            serde_json::json!({}),
-            hlc,
-            Some(true),
-        )],
-        replay_notices: Vec::new(),
-    })
 }
 
 pub fn upsert_object_link(

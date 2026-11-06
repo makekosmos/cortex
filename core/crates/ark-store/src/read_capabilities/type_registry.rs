@@ -1,7 +1,7 @@
 use super::TypeRegistryReadCapabilities;
 use ark_domain::canonical_type::{TypeSummary, TypeVersion};
 use ark_domain::type_registry::TypeGetResponse;
-use ark_domain::types::{ObjectLink, ObjectType};
+use ark_domain::types::ObjectLink;
 
 impl TypeRegistryReadCapabilities<'_> {
     pub fn list_summaries(&self) -> Result<Vec<TypeSummary>, String> {
@@ -26,14 +26,6 @@ impl TypeRegistryReadCapabilities<'_> {
 
     pub fn resolve_alias(&self, alias: &str) -> Result<Option<String>, String> {
         crate::type_registry::resolve_alias(self.connection, alias)
-    }
-
-    pub fn list_object_types(&self) -> Result<Vec<ObjectType>, String> {
-        crate::object_types::list(self.connection)
-    }
-
-    pub fn get_object_type(&self, id: &str) -> Result<Option<ObjectType>, String> {
-        crate::object_types::get(self.connection, id)
     }
 
     pub fn list_object_links(&self) -> Result<Vec<ObjectLink>, String> {

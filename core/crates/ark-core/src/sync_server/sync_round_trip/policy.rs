@@ -6,7 +6,7 @@ use ark_core::direct_client::{new_direct_client, DirectClient};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::sync_server::SyncServer;
-use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
+use ark_core::types::{ArkObject, PeerRecord, SyncEntity};
 use ark_core::SqliteStorageBackend;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
 use ark_domain::sync_policy::SyncProfileRule;
@@ -42,21 +42,8 @@ async fn make_policy_storage(
     let (db, owner) = DbHandle::open(database.path().to_string_lossy().into_owned())
         .await
         .expect("open test database actor");
-    db.submit_upsert_object_type(
-        CommandContext::engine(),
-        ObjectType {
-            id: "book".into(),
-            name: "Book".into(),
-            schema_json: "{}".into(),
-            ui_schema_json: "{}".into(),
-            created_at: "2026-10-16T00:00:00.000Z".into(),
-            updated_at: "2026-10-16T00:00:00.000Z".into(),
-            system_locked: false,
-        },
-        Some(device_id.to_owned()),
-    )
-    .await
-    .expect("register book type");
+    ark_store::test_support::seed_legacy_type(database.path(), "book", "Book")
+        .expect("register book type");
     if let Some(rules) = profile_rules {
         db.save_local_sync_profile(
             CommandContext::engine(),

@@ -32,12 +32,11 @@ pub(in crate::db::command) use task::InboxReceiptTask;
 pub(in crate::db::command) use task::TypedCommand;
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, ClearAllTask,
-    CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask, IrohIdentityKeyTask,
-    LocalCoreTaskWriteTask, LocalObjectDeleteTask, LocalObjectUpsertTask,
-    LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish, RegisterApplicationTypeTask,
-    ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask,
-    TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask,
-    UsageSequenceMigrationTask, WriterTask,
+    CommittedFeedProgressTask, DeleteObjectLinkTask, IrohIdentityKeyTask, LocalCoreTaskWriteTask,
+    LocalObjectDeleteTask, LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask,
+    Publish, RegisterApplicationTypeTask, ReplaceObjectLinkTask, SyncPolicyWriteTask,
+    SyncProgressWriteTask, TrackedAppMutationTask, TypedMaintenance, UpsertObjectLinkTask,
+    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
 };
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 
