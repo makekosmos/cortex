@@ -1,5 +1,5 @@
 #[cfg(test)]
-use super::{RelayPeerState, RelaySync, RelaySyncConfig};
+use super::{SyncPeerState, SyncSession, SyncSessionConfig};
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::types::{SyncEntity, VersionVector};
 use std::sync::Arc;
@@ -28,7 +28,7 @@ pub(super) async fn load_version_vector(
     storage.load_version_vector().await
 }
 
-pub(super) async fn apply_relay_entity(
+pub(super) async fn apply_sync_entity(
     storage: &Arc<dyn SyncRuntimeStorage>,
     entity: &SyncEntity,
     authenticated_peer_id: Option<&str>,
@@ -85,9 +85,9 @@ mod tests {
         backend.fail_peer_transport_keys_read("injected database read failure");
         let storage = backend as Arc<dyn SyncRuntimeStorage>;
         let transport = Arc::new(TrackingTransport);
-        let relay = RelaySync::with_transport(
+        let relay = SyncSession::with_transport(
             storage,
-            RelaySyncConfig {
+            SyncSessionConfig {
                 relay_url: String::new(),
                 relay_api_key: None,
                 space_id: "space".into(),
@@ -99,7 +99,7 @@ mod tests {
         );
         relay.peers.lock().await.insert(
             "peer".into(),
-            RelayPeerState {
+            SyncPeerState {
                 device_name: "Peer".into(),
                 platform: None,
                 app_version: None,
@@ -258,16 +258,16 @@ mod tests {
             origin_seq: None,
         }
     }
-    fn relay_sync(
+    fn sync_session(
         storage: Arc<SqliteStorageBackend>,
         relay_url: &str,
         device_id: &str,
         device_name: &str,
         auth_secret: Option<&str>,
-    ) -> Arc<RelaySync> {
-        RelaySync::new(
+    ) -> Arc<SyncSession> {
+        SyncSession::new(
             storage as Arc<dyn SyncRuntimeStorage>,
-            RelaySyncConfig {
+            SyncSessionConfig {
                 relay_url: relay_url.to_string(),
                 relay_api_key: None,
                 space_id: "relay-space".to_string(),
@@ -291,7 +291,7 @@ mod tests {
             ))
             .await
             .unwrap();
-        let relay_a = relay_sync(
+        let relay_a = sync_session(
             storage_a.clone(),
             &relay_url,
             "device-a",
@@ -300,7 +300,7 @@ mod tests {
         );
         relay_a.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let relay_b = relay_sync(
+        let relay_b = sync_session(
             storage_b.clone(),
             &relay_url,
             "device-b",
@@ -334,7 +334,7 @@ mod tests {
             .apply_entity(&core_note_entity("relay-denied", "Denied", "device-a", 1))
             .await
             .unwrap();
-        let relay_a = relay_sync(
+        let relay_a = sync_session(
             storage_a.clone(),
             &relay_url,
             "device-a",
@@ -343,7 +343,7 @@ mod tests {
         );
         relay_a.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let relay_b = relay_sync(
+        let relay_b = sync_session(
             storage_b.clone(),
             &relay_url,
             "device-b",
@@ -428,7 +428,7 @@ mod tests {
 
         for candidate in &cases {
             assert_eq!(
-                apply_relay_entity(&storage, candidate, None)
+                apply_sync_entity(&storage, candidate, None)
                     .await
                     .unwrap_err(),
                 "authenticated_transport_identity_unavailable"

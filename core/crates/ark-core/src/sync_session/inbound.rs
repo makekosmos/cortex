@@ -1,4 +1,4 @@
-use super::{load_version_vector, task_merge, RelayPeerState, RelaySync, TAG};
+use super::{load_version_vector, task_merge, SyncPeerState, SyncSession, TAG};
 use crate::types::PeerRecord;
 use ark_domain::sync_contracts::protocol_negotiation::{
     negotiate_protocol, verify_hello_auth_hmac, verify_negotiation_offer_hmac, ProtocolCapability,
@@ -7,7 +7,7 @@ use ark_domain::sync_contracts::protocol_negotiation::{
 };
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_sync::protocol::merge_peer_records;
-impl RelaySync {
+impl SyncSession {
     pub(super) async fn handle_message(
         &self,
         from_device_id: String,
@@ -166,7 +166,7 @@ impl RelaySync {
                     let was_new = !peers.contains_key(&device_id);
                     peers.insert(
                         device_id.clone(),
-                        RelayPeerState {
+                        SyncPeerState {
                             device_name: device_name.clone(),
                             platform: platform.clone(),
                             app_version: app_version.clone(),

@@ -152,7 +152,7 @@ pub(super) async fn handle_connection(params: ConnectionParams) {
     eprintln!("[iroh] bi-stream established ({role}) remote={remote_endpoint_id}");
 
     // ── Инжектируем Hello как первый фрейм. ──────────────────────────────────
-    // Запускает CRDT-рукопожатие через RelaySync::handle_message без явного
+    // Запускает CRDT-рукопожатие через SyncSession::handle_message без явного
     // вызова send() сверху — зеркалит relay_transport.rs строки 128-148.
     let hello_payload = serialize_message(&hello);
     if let Err(e) = write_frame(&mut send, hello_payload.as_bytes()).await {

@@ -1,5 +1,5 @@
-use super::RelaySync;
-impl RelaySync {
+use super::SyncSession;
+impl SyncSession {
     pub(super) fn disconnect_iroh_transport_endpoint(&self, endpoint: &str) {
         if let Some(session) = self.transport.session() {
             let _ = session.disconnect_transport_peer(endpoint);

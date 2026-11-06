@@ -232,7 +232,7 @@ async fn iroh_bidirectional_burst_no_desync() {
         "A must receive Hello from B within {hello_timeout:?}"
     );
     // KOS-369: data frames only flow to endpoints bound as authenticated
-    // (pairing consent at the RelaySync layer). These transport-level tests
+    // (pairing consent at the SyncSession layer). These transport-level tests
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a

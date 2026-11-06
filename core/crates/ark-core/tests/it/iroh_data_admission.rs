@@ -133,7 +133,7 @@ async fn transport_blocks_outbound_and_inbound_data_until_peer_is_ready() {
         .expect("send");
     assert!(
         !receive_change(&mut b_events_rx, "inbound-pending", Duration::from_secs(1)).await,
-        "an unadmitted receiver must not forward user data to RelaySync"
+        "an unadmitted receiver must not forward user data to SyncSession"
     );
 
     transport_b

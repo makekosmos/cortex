@@ -1,14 +1,14 @@
 use super::{
-    OutgoingPairing, PendingPairingRequest, RelaySync, PAIRING_DECISION_TIMEOUT,
+    OutgoingPairing, PendingPairingRequest, SyncSession, PAIRING_DECISION_TIMEOUT,
     PAIRING_DECLINE_SUPPRESS, TAG,
 };
 use crate::sync_server::PeerEntry;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use std::time::{Duration, Instant};
-// RelaySync pairing consent (KOS-369): unknown endpoints park their Hello
+// SyncSession pairing consent (KOS-369): unknown endpoints park their Hello
 // here until a human presses «Принять»/«Отклонить», and the initiator's own
 // attempt resolves through `outgoing_pairing` in the snapshot.
-impl RelaySync {
+impl SyncSession {
     /// Record the ticket endpoint before dialing so only its `PairingAccepted`
     /// can complete this attempt.
     pub async fn begin_outgoing_pairing(&self, endpoint: String) {
@@ -51,7 +51,7 @@ impl RelaySync {
         let mut keys = match crate::sync_server::load_peer_transport_keys(&self.storage).await {
             Ok(keys) => keys,
             Err(error) => {
-                eprintln!("[RelaySync] failed to load pairing keys: {error}");
+                eprintln!("[SyncSession] failed to load pairing keys: {error}");
                 return;
             }
         };
@@ -59,14 +59,14 @@ impl RelaySync {
             if let Err(error) =
                 crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await
             {
-                eprintln!("[RelaySync] failed to persist pairing keys: {error}");
+                eprintln!("[SyncSession] failed to persist pairing keys: {error}");
                 return;
             }
         }
         if let Err(error) =
             crate::sync_server::remove_peer_record(&self.storage, responder_device_id).await
         {
-            eprintln!("[RelaySync] failed to remove rejected peer: {error}");
+            eprintln!("[SyncSession] failed to remove rejected peer: {error}");
             return;
         }
         if let Some(session) = self.transport.session() {
@@ -252,7 +252,7 @@ impl RelaySync {
             let _ = session.disconnect_transport_peer(endpoint);
         }
         if let Err(error) = crate::sync_server::remove_peer_record(&self.storage, device_id).await {
-            eprintln!("[RelaySync] failed to roll back peer record: {error}");
+            eprintln!("[SyncSession] failed to roll back peer record: {error}");
         }
         if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
             handler(device_id.to_string(), self.peers.lock().await.len());

@@ -141,7 +141,7 @@ async fn iroh_ticket_pairing_round_trip() {
     .expect("A must receive Hello from B (auto-injected by transport)");
 
     // KOS-369: data frames only flow to endpoints bound as authenticated
-    // (pairing consent at the RelaySync layer). These transport-level tests
+    // (pairing consent at the SyncSession layer). These transport-level tests
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a

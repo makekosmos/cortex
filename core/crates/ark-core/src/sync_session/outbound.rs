@@ -1,5 +1,5 @@
 use super::{
-    apply_relay_entity, load_version_vector, trim_process_heap, IncomingSyncState, RelaySync,
+    apply_sync_entity, load_version_vector, trim_process_heap, IncomingSyncState, SyncSession,
     SYNC_LOAD_PAGE_SIZE, TAG,
 };
 use crate::hlc::HLC;
@@ -18,7 +18,7 @@ use ark_sync::protocol::{
 use std::collections::HashMap;
 use std::time::Instant;
 
-impl RelaySync {
+impl SyncSession {
     pub(super) fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
         if self.transport.session().is_none() {
             return Err("transport does not support per-device registry admission".into());
@@ -195,7 +195,8 @@ impl RelaySync {
             Ok(through) => through,
             Err(error) => {
                 eprintln!(
-                    "[RelaySync] outbound usage progress read failed for {peer_device_id}: {error}"
+                    "[SyncSession] outbound usage progress read failed for \
+                     {peer_device_id}: {error}"
                 );
                 return;
             }
@@ -217,7 +218,7 @@ impl RelaySync {
                 Ok(entities) => entities,
                 Err(error) => {
                     eprintln!(
-                        "[RelaySync] outbound sync page read failed for {peer_device_id}: {error}"
+                        "[SyncSession] outbound sync page read failed for {peer_device_id}: {error}"
                     );
                     return;
                 }
@@ -453,7 +454,7 @@ impl RelaySync {
                 continue;
             }
 
-            match apply_relay_entity(&self.storage, entity, authenticated_peer_id).await {
+            match apply_sync_entity(&self.storage, entity, authenticated_peer_id).await {
                 Ok(()) => {
                     state.changed |= observe_non_usage_entity(&mut state.vector, entity);
                     if let Some(handler) = self.on_change.lock().await.as_ref() {

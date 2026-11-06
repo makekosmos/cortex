@@ -43,8 +43,8 @@ async fn storage_for_with_policy(
     peer
 }
 
-fn relay_config(device_id: &str) -> RelaySyncConfig {
-    RelaySyncConfig {
+fn relay_config(device_id: &str) -> SyncSessionConfig {
+    SyncSessionConfig {
         relay_url: String::new(),
         relay_api_key: None,
         space_id: "registry-live-iroh-test".into(),
@@ -126,12 +126,12 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
         key_a.clone(),
         None,
     )));
-    let relay_a = RelaySync::with_iroh_transport(
+    let relay_a = SyncSession::with_iroh_transport(
         storage_a.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-A"),
         transport_a.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_a.start().await.unwrap();
 
     let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
@@ -139,12 +139,12 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
         key_b,
         transport_a.endpoint_addr(),
     )));
-    let relay_b = RelaySync::with_iroh_transport(
+    let relay_b = SyncSession::with_iroh_transport(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-B"),
         transport_b.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_b.start().await.unwrap();
 
     let transport_c = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
@@ -152,12 +152,12 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
         key_c,
         transport_a.endpoint_addr(),
     )));
-    let relay_c = RelaySync::with_iroh_transport(
+    let relay_c = SyncSession::with_iroh_transport(
         storage_c.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-C"),
         transport_c.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     let received_b = Arc::new(AtomicBool::new(false));
     let received_b_callback = received_b.clone();
     relay_b
@@ -429,23 +429,23 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
     let mut iroh_config_a = iroh_config("policy-A", key_a.clone(), None);
     iroh_config_a.auth_secret = Some(AUTH_SECRET.into());
     let transport_a = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config_a));
-    let relay_a = RelaySync::with_iroh_transport(
+    let relay_a = SyncSession::with_iroh_transport(
         storage_a as Arc<dyn SyncRuntimeStorage>,
         relay_config_a,
         transport_a.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_a.start().await.unwrap();
 
     let mut iroh_config_b = iroh_config("policy-B", key_b, transport_a.endpoint_addr());
     iroh_config_b.auth_secret = Some(AUTH_SECRET.into());
     let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config_b));
-    let relay_b = RelaySync::with_iroh_transport(
+    let relay_b = SyncSession::with_iroh_transport(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config_b,
         transport_b.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_b.start().await.unwrap();
 
     wait_for_registry_ready(&[(&transport_a, endpoint_b), (&transport_b, endpoint_a)]).await;

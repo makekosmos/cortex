@@ -4,7 +4,7 @@ use super::*;
 #[path = "registry_fanout_tests.rs"]
 mod tests;
 
-impl RelaySync {
+impl SyncSession {
     pub(super) async fn registry_ready_for_peer(
         &self,
         peer_device_id: &str,

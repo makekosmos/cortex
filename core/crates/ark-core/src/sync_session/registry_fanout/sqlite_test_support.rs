@@ -41,8 +41,8 @@ pub(super) async fn open_peer(db_path: &std::path::Path, device_id: &str) -> Act
     }
 }
 
-pub(super) fn relay_config(device_id: &str) -> RelaySyncConfig {
-    RelaySyncConfig {
+pub(super) fn relay_config(device_id: &str) -> SyncSessionConfig {
+    SyncSessionConfig {
         relay_url: String::new(),
         relay_api_key: None,
         space_id: SPACE_ID.into(),
@@ -207,7 +207,7 @@ pub(super) async fn wait_for_accepted_task_mode(
     .await;
 }
 
-pub(super) fn policy_relay_config(device_id: &str) -> RelaySyncConfig {
+pub(super) fn policy_relay_config(device_id: &str) -> SyncSessionConfig {
     let mut config = relay_config(device_id);
     config.auth_secret = Some("sqlite-policy-iroh-test-secret".into());
     config
@@ -227,15 +227,15 @@ pub(super) fn start_policy_relay(
     peer: &ActorPeer,
     device_id: &str,
     peer_addr: Option<ark_net::iroh::EndpointAddr>,
-) -> (Arc<crate::iroh_transport::IrohTransport>, Arc<RelaySync>) {
+) -> (Arc<crate::iroh_transport::IrohTransport>, Arc<SyncSession>) {
     let transport = Arc::new(crate::iroh_transport::IrohTransport::new(
         policy_iroh_config(device_id, peer.secret.clone(), peer_addr),
     ));
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         peer.storage.clone() as Arc<dyn SyncRuntimeStorage>,
         policy_relay_config(device_id),
         transport.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     (transport, relay)
 }

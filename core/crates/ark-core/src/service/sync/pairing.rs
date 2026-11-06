@@ -174,7 +174,7 @@ pub(crate) async fn handle_cancel_pairing(state: &Arc<ServiceState>) -> Result<V
 
 /// Snapshot slice for `get_sync_snapshot`: pending consent requests and the
 /// outgoing attempt status.
-pub(super) async fn snapshot(relay: &RelaySync) -> (Vec<Value>, Value) {
+pub(super) async fn snapshot(relay: &SyncSession) -> (Vec<Value>, Value) {
     let incoming = relay
         .pending_pairing_requests()
         .await

@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) async fn handle_message(
-    relay: &RelaySync,
+    relay: &SyncSession,
     from_device_id: &str,
     transport_public_key: Option<&str>,
     message: LanSyncMessage,

@@ -158,8 +158,8 @@ mod usage_read_queries;
 async fn setup_sync_with_capturing_transport(
     state: &Arc<ServiceState>,
 ) -> Arc<TokioMutex<Vec<ark_domain::sync_contracts::wire::LanSyncMessage>>> {
-    use crate::relay_sync::{RelaySync, RelaySyncConfig};
     use crate::sync_server::SyncRuntimeStorage;
+    use crate::sync_session::{SyncSession, SyncSessionConfig};
 
     let captured: Arc<TokioMutex<Vec<ark_domain::sync_contracts::wire::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
@@ -172,9 +172,9 @@ async fn setup_sync_with_capturing_transport(
     ));
     backend.set_device_id("test-device").unwrap();
 
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         backend.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "test-space".to_string(),

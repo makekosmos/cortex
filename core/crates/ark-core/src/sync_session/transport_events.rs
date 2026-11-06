@@ -1,6 +1,6 @@
 use super::*;
 
-impl RelaySync {
+impl SyncSession {
     pub(super) async fn handle_event(&self, event: TransportEvent) {
         match event {
             TransportEvent::MessageReceived {
@@ -129,7 +129,7 @@ impl RelaySync {
                         let already_authenticated =
                             self.is_authenticated_peer(&from_device_id).await;
                         if already_authenticated && known_key_matches {
-                            // RelaySync may announce itself with another Hello
+                            // SyncSession may announce itself with another Hello
                             // after the Iroh stream already injected one. Do
                             // not reset an in-flight registry exchange.
                             return;

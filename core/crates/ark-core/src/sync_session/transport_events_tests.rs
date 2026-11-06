@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-//! Integration test: `RelaySync` peer-state handling for transport lifecycle
+//! Integration test: `SyncSession` peer-state handling for transport lifecycle
 //! events.
 //!
 //! Regression coverage for KOS-226: a dropped transport-level socket (e.g.
@@ -14,9 +14,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::db::SqliteStorageBackend;
-use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncRuntimeStorage;
+use crate::sync_session::{SyncSession, SyncSessionConfig};
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
@@ -105,7 +105,7 @@ impl PeerSessionControl for StubTransport {
 }
 
 async fn relay_with_stub() -> (
-    Arc<RelaySync>,
+    Arc<SyncSession>,
     Arc<SqliteStorageBackend>,
     mpsc::UnboundedSender<TransportEvent>,
     String,
@@ -127,9 +127,9 @@ async fn relay_with_stub() -> (
     let transport = Arc::new(StubTransport {
         event_tx: StdMutex::new(None),
     });
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         backend.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "s".to_string(),
@@ -155,7 +155,7 @@ async fn relay_with_stub() -> (
 /// condition; the cap only bounds a wedged relay under load (KOS-308).
 const EVENT_GUARD: Duration = Duration::from_secs(60);
 
-async fn wait_for_peer(relay: &RelaySync) {
+async fn wait_for_peer(relay: &SyncSession) {
     tokio::time::timeout(EVENT_GUARD, async {
         while relay.get_connected_peer_entries().await.is_empty() {
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -165,7 +165,7 @@ async fn wait_for_peer(relay: &RelaySync) {
     .expect("peer never registered");
 }
 
-async fn wait_for_no_peers(relay: &RelaySync) {
+async fn wait_for_no_peers(relay: &SyncSession) {
     tokio::time::timeout(EVENT_GUARD, async {
         while !relay.get_connected_peer_entries().await.is_empty() {
             tokio::time::sleep(Duration::from_millis(20)).await;

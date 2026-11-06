@@ -11,7 +11,7 @@ mod pairing;
 mod start;
 pub(crate) use self::disconnect::handle_disconnect_peer;
 use self::events::{
-    wire_relay_registry_fanout, wire_relay_sync_events, wire_server_registry_fanout,
+    wire_relay_registry_fanout, wire_server_registry_fanout, wire_sync_session_events,
 };
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
@@ -33,7 +33,7 @@ struct ClientEnv {
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
-    relay: Option<Arc<RelaySync>>,
+    relay: Option<Arc<SyncSession>>,
 }
 
 async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {

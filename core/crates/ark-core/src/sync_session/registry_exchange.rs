@@ -1,6 +1,6 @@
 use super::*;
 
-impl RelaySync {
+impl SyncSession {
     pub(super) async fn start_registry_exchange(
         &self,
         peer_device_id: &str,

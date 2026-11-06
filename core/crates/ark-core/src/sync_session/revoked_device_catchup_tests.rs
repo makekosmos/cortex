@@ -113,9 +113,9 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         key_a.clone(),
         None,
     )));
-    let relay_a = RelaySync::with_iroh_transport(
+    let relay_a = SyncSession::with_iroh_transport(
         storage_a.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "revoked-peer-catchup".into(),
@@ -125,7 +125,7 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         },
         transport_a.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_a.start().await.unwrap();
 
     let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
@@ -133,9 +133,9 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         key_b.clone(),
         transport_a.endpoint_addr(),
     )));
-    let relay_b = RelaySync::with_iroh_transport(
+    let relay_b = SyncSession::with_iroh_transport(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "revoked-peer-catchup".into(),
@@ -145,7 +145,7 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         },
         transport_b.clone(),
     )
-    .expect("Iroh RelaySync construction");
+    .expect("Iroh SyncSession construction");
     relay_b.start().await.unwrap();
 
     tokio::time::timeout(Duration::from_secs(10), async {

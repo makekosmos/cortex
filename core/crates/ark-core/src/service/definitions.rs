@@ -41,12 +41,12 @@ pub(crate) struct SyncRuntime {
     pub(crate) server: Arc<SyncServer>,
     pub(crate) storage: Arc<SqliteStorageBackend>,
     pub(crate) clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
-    pub(crate) relay: Option<Arc<RelaySync>>,
+    pub(crate) relay: Option<Arc<SyncSession>>,
     pub(crate) transport_choice: Option<TransportChoice>,
     pub(crate) start_params: SyncStartParams,
     /// Step 4a: our iroh pairing ticket, resolved asynchronously after the
     /// iroh transport binds (`our_ticket()` needs the transport object
-    /// directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`, which
+    /// directly — `SyncSession` only exposes `Arc<dyn SyncTransport>`, which
     /// is not downcastable — so the ticket string is published through this
     /// watch channel instead of threading a concrete `IrohTransport` handle
     /// through `SyncRuntime`). With relay homing enabled `our_ticket()`

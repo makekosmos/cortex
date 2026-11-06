@@ -22,33 +22,26 @@ mod task_merge;
 mod transport_events;
 
 #[cfg(test)]
-#[path = "relay_sync/pairing_retry_tests.rs"]
 mod pairing_retry_tests;
 
 #[cfg(test)]
-#[path = "relay_sync/revoked_device_catchup_tests.rs"]
 mod revoked_device_catchup_tests;
 
 #[cfg(test)]
-#[path = "relay_sync/transport_events_tests.rs"]
 mod transport_events_tests;
 
-#[path = "relay_disconnect.rs"]
 mod disconnect;
-#[path = "relay_helpers.rs"]
 mod helpers;
-#[path = "relay_impl_1.rs"]
-mod impl_1;
-#[path = "relay_impl_2.rs"]
-mod impl_2;
-#[path = "relay_pairing.rs"]
+mod inbound;
+mod outbound;
 mod pairing;
-#[path = "relay_types.rs"]
 mod types;
 
-use helpers::{apply_relay_entity, load_version_vector, trim_process_heap};
+use helpers::{apply_sync_entity, load_version_vector, trim_process_heap};
 use types::{
-    IncomingSyncState, OutgoingPairing, PendingPairingRequest, RelayPeerState,
+    IncomingSyncState, OutgoingPairing, PendingPairingRequest, SyncPeerState,
     PAIRING_DECISION_TIMEOUT, PAIRING_DECLINE_SUPPRESS, SYNC_LOAD_PAGE_SIZE, TAG,
 };
-pub use types::{OnPairingChangedCallback, OnRegistryEventsCallback, RelaySync, RelaySyncConfig};
+pub use types::{
+    OnPairingChangedCallback, OnRegistryEventsCallback, SyncSession, SyncSessionConfig,
+};

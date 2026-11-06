@@ -10,11 +10,11 @@ use crate::sync_transport::SyncTransportHandle;
 use crate::types::VersionVector;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 
-pub(super) const TAG: &str = "[RelaySync]";
+pub(super) const TAG: &str = "[SyncSession]";
 pub(super) const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
-pub struct RelaySyncConfig {
+pub struct SyncSessionConfig {
     pub relay_url: String,
     pub relay_api_key: Option<String>,
     pub space_id: String,
@@ -24,7 +24,7 @@ pub struct RelaySyncConfig {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct RelayPeerState {
+pub(super) struct SyncPeerState {
     pub(super) device_name: String,
     /// OS / product version the peer advertised in its Hello.
     pub(super) platform: Option<String>,
@@ -74,14 +74,14 @@ pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
 pub type OnRegistryEventsCallback =
     Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
-pub struct RelaySync {
+pub struct SyncSession {
     pub(super) storage: Arc<dyn SyncRuntimeStorage>,
     pub(super) transport: SyncTransportHandle,
     pub(super) registry:
         Option<ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>>,
-    pub(super) config: RelaySyncConfig,
+    pub(super) config: SyncSessionConfig,
     pub(super) auth_secret: Option<String>,
-    pub(super) peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
+    pub(super) peers: Arc<Mutex<HashMap<String, SyncPeerState>>>,
     pub(super) transport_keys: Arc<Mutex<HashMap<String, String>>>,
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.

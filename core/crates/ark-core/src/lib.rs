@@ -10,14 +10,18 @@ extern crate self as ark_core;
 pub(crate) mod application;
 pub mod canonical_types;
 pub(crate) mod db;
+pub mod delphi;
 pub mod direct_client;
 pub mod events;
 pub mod hlc;
+pub mod integration_replication;
 pub mod iroh_transport;
-pub mod relay_sync;
+pub mod mesh;
 pub mod replication_storage;
 pub mod service;
+pub mod space;
 pub mod sync_server;
+pub mod sync_session;
 pub mod sync_transport;
 mod task_set;
 #[cfg(test)]
@@ -37,7 +41,8 @@ pub use db::SqliteStorageBackend;
 pub use hlc::HLC;
 pub use host::{get_host_device_name, get_own_addresses};
 pub use replication_storage::{
-    AuthenticatedEntityBackend, PeerIdentityBackend, SyncRuntimeStorage,
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+    SyncRuntimeStorage,
 };
 pub use sync_bind::SyncBind;
 pub use types::{

@@ -170,9 +170,9 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "retry-space".into(),
@@ -279,9 +279,9 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "retry-space".into(),
@@ -348,9 +348,9 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "retry-space".into(),

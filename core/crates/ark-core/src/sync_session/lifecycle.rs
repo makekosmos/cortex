@@ -1,7 +1,7 @@
 use super::*;
 
-impl RelaySync {
-    pub fn new(storage: Arc<dyn SyncRuntimeStorage>, config: RelaySyncConfig) -> Arc<Self> {
+impl SyncSession {
+    pub fn new(storage: Arc<dyn SyncRuntimeStorage>, config: SyncSessionConfig) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
         let transport: Arc<dyn SyncTransport> = Arc::new(RelayTransport::new(RelayConfig {
             url: config.relay_url.clone(),
@@ -14,14 +14,14 @@ impl RelaySync {
         Self::with_transport(storage, config, transport)
     }
 
-    /// Generalized constructor: build `RelaySync` over an already-constructed
+    /// Generalized constructor: build `SyncSession` over an already-constructed
     /// transport. Lets callers (e.g. `handle_start_sync`) drive the same CRDT
     /// orchestration with `RelayTransport`, `IrohTransport` (behind
     /// `IrohTransport`), or any other `SyncTransport` impl, instead of always
     /// constructing a `RelayTransport` internally from `config.relay_url`.
     pub fn with_transport(
         storage: Arc<dyn SyncRuntimeStorage>,
-        config: RelaySyncConfig,
+        config: SyncSessionConfig,
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
         Self::with_transport_handle(
@@ -33,7 +33,7 @@ impl RelaySync {
 
     pub fn with_iroh_transport<T>(
         storage: Arc<dyn SyncRuntimeStorage>,
-        config: RelaySyncConfig,
+        config: SyncSessionConfig,
         transport: Arc<T>,
     ) -> Result<Arc<Self>, String>
     where
@@ -62,7 +62,7 @@ impl RelaySync {
 
     fn with_transport_handle(
         storage: Arc<dyn SyncRuntimeStorage>,
-        config: RelaySyncConfig,
+        config: SyncSessionConfig,
         transport: crate::sync_transport::SyncTransportHandle,
     ) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
