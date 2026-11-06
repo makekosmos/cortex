@@ -28,8 +28,8 @@ name = "mundus-engine"
 path = "src/main.rs"
 
 [dependencies]
-ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
-ark-domain = { path = "../core/crates/ark-domain" }
+kernel = { path = "../core/crates/kernel", package = "kernel" }
+domain = { path = "../core/crates/domain" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }
 engine-indexes = { path = "crates/engine-indexes" }

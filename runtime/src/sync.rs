@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use ark_core::SyncBind;
+use kernel::SyncBind;
 use serde_json::{json, Value};
 
 use crate::ark_host::ArkHost;
@@ -107,7 +107,7 @@ pub async fn start_lan_sync(
 
     // iroh transport selection, mirrors MUNDUS_RELAY_URL above. The env vars
     // are only read here (cheap — this crate talks to the in-process ARK
-    // service over JSON-RPC and never links iroh); the embedded ark-core,
+    // service over JSON-RPC and never links iroh); the embedded kernel,
     // always built with the iroh transport, acts on them in start_sync.
     if let Some(ticket) = crate::brand::env("IROH_PEER_TICKET") {
         if !ticket.is_empty() {
@@ -124,7 +124,7 @@ pub async fn start_lan_sync(
         .error
         .clone()
         .unwrap_or_else(|| "(no error message)".to_string());
-    Err(format!("ark-core rejected start_sync: {error}").into())
+    Err(format!("kernel rejected start_sync: {error}").into())
 }
 
 /// Dev-flow cross-network step: when iroh was requested (`MUNDUS_IROH=1`),
@@ -162,7 +162,7 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
         Ok(response) => {
             tracing::warn!(
                 error = ?response.error,
-                "get_own_iroh_ticket rejected by ark-core"
+                "get_own_iroh_ticket rejected by kernel"
             );
         }
         Err(e) => {

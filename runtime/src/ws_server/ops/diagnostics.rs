@@ -19,7 +19,7 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
         "app_index": app_index_snapshot,
           "protocol_usage": protocol_usage.snapshot(),
         "correlation_id": correlation_id,
-        "ark_core": {
+        "kernel": {
             "mode": "in-process",
             "panics_recovered": ark_host.panic_count(),
         },

@@ -8,14 +8,14 @@
 //!     at the current exe (see `privileged::firewall`), and we keep the LAN
 //!     bind unconditionally;
 //!   * no privileges → bind loopback until sync is actually *on*: a paired
-//!     device exists (ark-core persists them under `sync.peers`) or the user
+//!     device exists (kernel persists them under `sync.peers`) or the user
 //!     explicitly provided a peer ticket this boot. Pairing a device through
 //!     `connect_with_pairing_code` re-binds to all interfaces inside
-//!     ark-core — that is the one moment the firewall prompt is expected.
+//!     kernel — that is the one moment the firewall prompt is expected.
 //!
 //! Tests never bind off-loopback: `SyncBind::Loopback` exists for that.
 
-use ark_core::SyncBind;
+use kernel::SyncBind;
 use serde_json::{json, Value};
 
 use crate::ark_host::ArkHost;

@@ -23,7 +23,7 @@ const SCRIPT_CHECKS = {
     "test:rust": ["test:rust"],
     "check:manager-gpui": ["manager-gpui"],
     "test:desktop-contracts": ["desktop-contracts"],
-    "test:ark-db-writers": ["ark-db-writers"],
+    "test:db-writers": ["ark-db-writers"],
     "test:release-bom": ["release-bom"],
     "test:package-manager": ["package-manager"],
     "build:desktop": [],

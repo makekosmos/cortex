@@ -1,6 +1,6 @@
-use ark_core::service::ArkService;
 use engine::appearance::AppearanceStore;
 use engine::engine_dispatch::DispatchClient;
+use kernel::service::ArkService;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 

@@ -1,0 +1,420 @@
+use super::*;
+
+// The `{"ok","data","error"}` response envelope now lives in the Engine's
+// `ark_host` adapter; wire-shape coverage for it moved to
+// `runtime/src/ark_host.rs` tests.
+
+#[test]
+fn request_deserialization_ignores_optional_id_field() {
+    let request = serde_json::from_value::<Request>(json!({
+        "id": "req-3",
+        "operation": "get_host_device_name"
+    }))
+    .expect("request id must be backward-compatible metadata");
+
+    assert!(matches!(request, Request::GetHostDeviceName));
+}
+
+#[test]
+fn request_deserialization_accepts_iroh_config() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "bind": "loopback",
+        "use_iroh": true,
+        "iroh_peer_ticket": "endpointsometicketvalue",
+        "bind": "loopback"
+    }))
+    .expect("iroh config should be accepted by the request schema");
+
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert!(params.use_iroh);
+    assert_eq!(
+        params.iroh_peer_ticket.as_deref(),
+        Some("endpointsometicketvalue")
+    );
+    assert!(params.discovery_enabled);
+}
+
+#[test]
+fn request_deserialization_accepts_code_alias_for_pairing() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "connect_with_pairing_code",
+        "code": "endpointdemo123",
+        "bind": "loopback"
+    }))
+    .expect("code alias should deserialize for pairing requests");
+
+    let Request::ConnectWithPairingCode { pairing_code, bind } = request else {
+        panic!("expected connect_with_pairing_code, got {request:?}");
+    };
+    assert_eq!(pairing_code, "endpointdemo123");
+    assert_eq!(bind, SyncBind::Loopback);
+}
+
+#[test]
+fn pairing_requests_require_an_explicit_bind() {
+    let missing_bind = json!({
+        "operation": "connect_with_pairing_code",
+        "pairing_code": "endpointdemo123"
+    });
+    assert!(
+        serde_json::from_value::<Request>(missing_bind).is_err(),
+        "connect_with_pairing_code must not default to all-interfaces"
+    );
+    assert!(
+        serde_json::from_value::<Request>(json!({"operation": "show_pairing_code"})).is_err(),
+        "show_pairing_code must not default to all-interfaces"
+    );
+}
+
+async fn test_storage(
+    database: &::store::test_support::TestDatabase,
+) -> Arc<crate::db::SqliteStorageBackend> {
+    Arc::new(
+        crate::db::SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+        )
+        .await
+        .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn pairing_restart_params_force_iroh_and_replace_ticket() {
+    let database = ::store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
+    let runtime = SyncRuntime {
+        server: Arc::new(crate::sync_server::SyncServer::new(
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
+        )),
+        storage,
+        clients: Arc::new(TokioMutex::new(HashMap::new())),
+        relay: None,
+        transport_choice: Some(TransportChoice::None),
+        start_params: SyncStartParams {
+            space_id: "space-a".to_string(),
+            device_id: "device-a".to_string(),
+            device_name: "Device A".to_string(),
+            port: Some(21531),
+            seed_addresses: Some(vec!["127.0.0.1:21531".to_string()]),
+            relay_url: Some("ws://relay.example".to_string()),
+            relay_api_key: Some("relay-key".to_string()),
+            auth_secret: Some("secret".to_string()),
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: true,
+            // Loopback on purpose: the pairing restart must escalate the
+            // bind, not just inherit it.
+            bind: SyncBind::Loopback,
+            app_version: None,
+        },
+        iroh_our_ticket: watch::channel(None).1,
+        beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
+        space_id: "space-a".to_string(),
+        device_id: "device-a".to_string(),
+        device_name: "Device A".to_string(),
+        auth_secret: Some("secret".to_string()),
+        own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+    };
+
+    let params =
+        build_pairing_restart_params(&runtime, "  endpointdemo123  ", SyncBind::AllInterfaces);
+    assert!(params.use_iroh);
+    assert_eq!(params.iroh_peer_ticket.as_deref(), Some("endpointdemo123"));
+    assert_eq!(params.relay_url.as_deref(), Some("ws://relay.example"));
+    assert_eq!(params.space_id, "space-a");
+    assert_eq!(params.device_id, "device-a");
+    // pairing is the explicit sync opt-in — even a loopback-bound
+    // boot must switch to the LAN bind so the iroh endpoint can reach the
+    // remote ticket (and the firewall prompt happens now, not at boot).
+    assert_eq!(params.bind, SyncBind::AllInterfaces);
+    runtime
+        .storage
+        .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+}
+
+/// The sync runtime fixture shared by the bind-escalation tests below:
+/// loopback-bound, relay transport selected, no iroh ticket — the state a
+/// no-privileges boot leaves behind.
+async fn loopback_runtime_fixture() -> (SyncRuntime, ::store::test_support::TestDatabase) {
+    let database = ::store::test_support::TestDatabase::create().unwrap();
+    let storage = test_storage(&database).await;
+    let runtime = SyncRuntime {
+        server: Arc::new(crate::sync_server::SyncServer::new(
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
+        )),
+        storage,
+        clients: Arc::new(TokioMutex::new(HashMap::new())),
+        relay: None,
+        transport_choice: Some(TransportChoice::Relay),
+        start_params: SyncStartParams {
+            space_id: "space-a".to_string(),
+            device_id: "device-a".to_string(),
+            device_name: "Device A".to_string(),
+            port: Some(21531),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        },
+        iroh_our_ticket: watch::channel(None).1,
+        beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
+        space_id: "space-a".to_string(),
+        device_id: "device-a".to_string(),
+        device_name: "Device A".to_string(),
+        auth_secret: None,
+        own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+    };
+    (runtime, database)
+}
+
+#[tokio::test]
+async fn show_pairing_code_errors_when_sync_is_not_running() {
+    let state = test_state();
+    let err = handle_request(
+        &state,
+        Request::ShowPairingCode {
+            bind: SyncBind::Loopback,
+        },
+    )
+    .await
+    .expect_err("show_pairing_code must fail without a running sync");
+    assert!(err.contains("Sync not running"), "unexpected error: {err}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
+    let db_path = dir.path().join("ark.db");
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
+
+    // Before start_sync, our ticket must be unavailable.
+    let before = handle_request(&state, Request::GetOwnIrohTicket)
+        .await
+        .unwrap();
+    assert_eq!(before, Value::Null);
+
+    let port = {
+        // Bind an ephemeral port for the LAN/WS server side of
+        // start_sync so this test doesn't collide with LAN_SYNC_PORT
+        // across parallel test runs.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+
+    let start_result = handle_request(
+        &state,
+        Request::StartSync(StartSyncParams {
+            space_id: "iroh-space".to_string(),
+            device_id: "device-iroh".to_string(),
+            device_name: Some("Iroh Device".to_string()),
+            port: Some(port),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: true,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        }),
+    )
+    .await;
+
+    start_result.expect("explicit discovery opt-out must avoid the shared beacon port");
+    let ticket = handle_request(&state, Request::GetOwnIrohTicket)
+        .await
+        .expect("get_own_iroh_ticket should succeed once iroh transport is running");
+    assert!(
+        ticket.as_str().is_some_and(|s| !s.is_empty()),
+        "expected a non-empty iroh ticket string, got {ticket:?}"
+    );
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let params = || StartSyncParams {
+        space_id: "retry-space".into(),
+        device_id: "retry-device".into(),
+        device_name: Some("Retry Device".into()),
+        port: Some(port),
+        seed_addresses: None,
+        relay_url: None,
+        relay_api_key: None,
+        auth_secret: None,
+        use_iroh: false,
+        iroh_peer_ticket: None,
+        iroh_relay_url: None,
+        pairing_connect: false,
+        discovery_enabled: false,
+        bind: SyncBind::Loopback,
+        app_version: None,
+    };
+
+    let error = handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect_err("corrupt peer state must fail sync startup");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(state.sync.lock().await.is_none());
+    let probe = std::net::TcpListener::bind(("127.0.0.1", port))
+        .expect("failed startup must not leak the sync listener");
+    drop(probe);
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect("retry on the same port must succeed");
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+#[test]
+fn request_deserialization_defaults_iroh_fields_when_absent() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "bind": "loopback"
+    }))
+    .expect("start_sync without iroh fields should still deserialize");
+
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert!(!params.use_iroh);
+    assert_eq!(params.iroh_peer_ticket, None);
+    assert!(params.discovery_enabled);
+    assert_eq!(params.bind, SyncBind::Loopback);
+}
+
+#[test]
+fn request_deserialization_accepts_discovery_opt_out() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "bind": "loopback",
+        "discovery_enabled": false
+    }))
+    .expect("discovery opt-out should deserialize");
+
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert!(!params.discovery_enabled);
+}
+
+#[test]
+fn request_deserialization_accepts_relay_and_auth_config() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "bind": "loopback",
+        "relay_url": "ws://127.0.0.1:8765",
+        "relay_api_key": "key",
+        "auth_secret": "secret"
+    }))
+    .expect("relay config should be accepted by the request schema");
+
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert_eq!(params.relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
+    assert_eq!(params.relay_api_key.as_deref(), Some("key"));
+    assert_eq!(params.auth_secret.as_deref(), Some("secret"));
+}
+
+// The newtype-over-params-struct variants must keep the exact wire format:
+// the params struct fields are the same JSON keys the inline fields had.
+#[test]
+fn params_struct_variants_keep_their_wire_format() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "bind": "loopback",
+        "device_name": "Laptop",
+        "port": 21531,
+        "seed_addresses": ["10.0.0.1:21531"],
+        "relay_url": "wss://relay.example",
+        "relay_api_key": "key",
+        "auth_secret": "secret",
+        "use_iroh": true,
+        "iroh_peer_ticket": "ticket",
+        "discovery_enabled": false,
+        "bind": "loopback"
+    }))
+    .expect("start_sync params must deserialize through the newtype variant");
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert_eq!(params.space_id, "space");
+    assert_eq!(params.device_id, "device");
+    assert_eq!(params.device_name.as_deref(), Some("Laptop"));
+    assert_eq!(params.port, Some(21531));
+    assert_eq!(
+        params.seed_addresses,
+        Some(vec!["10.0.0.1:21531".to_string()])
+    );
+    assert_eq!(params.relay_url.as_deref(), Some("wss://relay.example"));
+    assert_eq!(params.relay_api_key.as_deref(), Some("key"));
+    assert_eq!(params.auth_secret.as_deref(), Some("secret"));
+    assert!(params.use_iroh);
+    assert_eq!(params.iroh_peer_ticket.as_deref(), Some("ticket"));
+    assert!(!params.discovery_enabled);
+    assert_eq!(params.bind, SyncBind::Loopback);
+}
+#[path = "request_config/pairing_shutdown.rs"]
+mod pairing_shutdown;

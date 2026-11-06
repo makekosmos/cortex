@@ -40,7 +40,7 @@ target dir; дальше все три incr-случая стабильно ~10 
 - Самый дорогой юнит — **engine lib: 35.6 с** (frontend 29.6 с, codegen 5.9 с).
   Начинается на 94-й секунде, после почти всех зависимостей.
 - `mundus-engine` bin (линковка lld): 5.5 с, хвост сборки до 135.0 с.
-- Дорогие зависимости: `ring` build-script 25.7 с, `ark-core` 19.4 с,
+- Дорогие зависимости: `ring` build-script 25.7 с, `kernel` 19.4 с,
   `syn` ×2 12.4+11.4 с, `iroh` 8.9 с, `netlink-packet-route` 8.5 с.
 
 ## Выводы для crate-split

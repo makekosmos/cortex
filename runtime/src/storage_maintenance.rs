@@ -2,7 +2,7 @@
 //!
 //! Two duties, both off the hot path:
 //!   * `usage_sync_log` compaction in ark.db — the superseded-ref rule lives
-//!     in ark-core (`compact_usage_sync_log` op); here we only drive it in
+//!     in kernel (`compact_usage_sync_log` op); here we only drive it in
 //!     bounded batches with a pause between calls, so the serial ARK worker
 //!     stays responsive and no write lock is held across the sweep;
 //!   * `file-index.db` prune + bounded VACUUM (policy in
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn compact_params_omit_device_id_when_the_tracker_never_wrote() {
         // No `usage_tracker.device_id` key → no `device_id` on the wire:
-        // ark-core then bounds every origin by its contiguous cursor.
+        // kernel then bounds every origin by its contiguous cursor.
         assert!(compact_params(None).get("device_id").is_none());
         assert_eq!(
             compact_params(Some("usage-tracker-abc"))["device_id"],

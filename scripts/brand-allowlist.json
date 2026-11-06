@@ -100,7 +100,7 @@
       "reason": "Vendored upstream-monorepo doc: it names live identifiers of that codebase (`kosmos:*`, `window.kepler`, `kepler-focus-*`), which are not ours to rename."
     },
     {
-      "path": "core/crates/ark-core/README.md",
+      "path": "core/crates/kernel/README.md",
       "reason": "Vendored upstream doc describing that repo's product surface."
     },
     {

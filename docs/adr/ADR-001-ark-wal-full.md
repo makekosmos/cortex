@@ -26,7 +26,7 @@ validation, or restore recovery.
 
 ## Evidence and limits
 
-The attached [microbenchmark](../experiments/2026-10-16-ark-sync-durability.md)
+The attached [microbenchmark](../experiments/2026-10-16-sync-durability.md)
 ran five alternating trials of 700 separate WAL transactions per setting. It
 observed median per-commit times of 0.0578 ms for FULL and 0.0154 ms for NORMAL
 on the measured host. The script verified the final payload byte-for-byte, but

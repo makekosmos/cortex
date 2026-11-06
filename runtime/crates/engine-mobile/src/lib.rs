@@ -1,7 +1,7 @@
 //! Minimal in-process Engine for Android: the desktop Engine's `/v1/rpc`
 //! op surface (`get_object`, `list_objects_by_type`, `upsert_object`,
 //! `start_sync`, ...) without the HTTP server, the lockfile, or a port.
-//! `MobileEngine` hosts `ark_core::service::ArkService` in-process — the
+//! `MobileEngine` hosts `kernel::service::ArkService` in-process — the
 //! same worker-thread service the desktop Engine hosts via `ArkHost`.
 //!
 //! Kotlin drives it through UniFFI (library mode, no UDL): every method is
@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ark_core::service::{ArkService, ArkServiceError};
+use kernel::service::{ArkService, ArkServiceError};
 use serde_json::{json, Map, Value};
 use tokio::sync::{broadcast, watch};
 

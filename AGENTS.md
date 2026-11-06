@@ -15,8 +15,8 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
   (`/v1/rpc`, WebSocket), `focus.*`, диктовка, апдейтер, трей.
   Подкрейты: `runtime/crates/{engine-base,engine-dictation,engine-indexes,
   pe-version-info}`. ARK работает внутри процесса: `runtime/src/ark_host.rs`.
-- `core/crates/ark-core/` — Rust + SQLite, контракт и инварианты в
-  `core/crates/ark-core/AGENTS.md` и `docs/{ark-core,sync,write-boundary}.md`.
+- `core/crates/kernel/` — Rust + SQLite, контракт и инварианты в
+  `core/crates/kernel/AGENTS.md` и `docs/{kernel,sync,write-boundary}.md`.
 - `manager-gpui/` — GPUI-приложение Manager. Это отдельный Cargo workspace со
   своим `Cargo.lock`, корневой `cargo`-команды его не затрагивают.
 - `desktop/` — скрипты установщика (NSIS), релизный BOM и публикация.
@@ -27,7 +27,7 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
 
 - Приложения не ходят в ОС и в базу сами: микрофон, хоткеи, вставка текста,
   блокировка фокуса, ключи API и запись в SQLite принадлежат Engine
-  (`docs/ark-exocortex.md`, `docs/write-boundary.md`). Новая
+  (`docs/exocortex.md`, `docs/write-boundary.md`). Новая
   возможность для приложения — это новая операция Engine, а не обход.
 
 ## Запуск
@@ -115,9 +115,9 @@ CI на GitHub запускается на каждый PR и на push в `main
   одной сборке — ошибка типов, поднимай их вместе.
 - Схема данных ARK меняется добавлением по умолчанию; разовая перезапись
   объектов разрешается только по явному согласованию для конкретной задачи, в
-  транзакции и с бэкапом `ark.db` (`core/crates/ark-core/AGENTS.md`);
+  транзакции и с бэкапом `ark.db` (`core/crates/kernel/AGENTS.md`);
   любая запись в синхронизируемые данные обновляет версию синхронизации
-  (`core/crates/ark-core/AGENTS.md`).
+  (`core/crates/kernel/AGENTS.md`).
 
 ## Релиз
 

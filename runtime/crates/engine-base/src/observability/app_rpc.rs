@@ -28,7 +28,7 @@ pub fn app_error_class(error: &str) -> &'static str {
 ///
 /// `Site` is a call-site constant explaining where the request died; safe
 /// by construction. `Dispatch` is a string produced by the dispatch layer —
-/// ark-core codes, ark-host messages or package-worker replies — and may
+/// kernel codes, ark-host messages or package-worker replies — and may
 /// quote payload values, so only a pure wire code is echoed; anything else
 /// collapses to its public class.
 pub enum RejectionReason<'a> {

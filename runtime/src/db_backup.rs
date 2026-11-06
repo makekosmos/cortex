@@ -182,7 +182,7 @@ fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf
 }
 
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
-/// async в ark-core service). Bounded таймаутом, чтобы не зависнуть навсегда если
+/// async в kernel service). Bounded таймаутом, чтобы не зависнуть навсегда если
 /// backup thread умер посреди копирования.
 async fn wait_for_backup_result(
     events: &mut tokio::sync::broadcast::Receiver<(String, serde_json::Value)>,
@@ -255,7 +255,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
         .ok_or("backup dest path is not UTF-8")?
         .to_string();
 
-    // Подписка ДО запроса: backup в ark-core service идёт async на отдельном
+    // Подписка ДО запроса: backup в kernel service идёт async на отдельном
     // background-priority потоке, событие завершения может прийти раньше, чем
     // мы успеем подписаться после await'а RPC.
     let mut events = ark.subscribe_events();

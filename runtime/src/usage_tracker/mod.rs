@@ -562,7 +562,7 @@ struct ActiveUsageSpan {
     last_flushed_at_unix: i64,
 }
 
-/// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
+/// Локальный snapshot полей TrackedApp. Не используем kernel::types::TrackedApp
 /// напрямую чтобы не плодить дублирующий type-import — JSON envelope build'ится
 /// руками (тот же shape что у RPC operation `upsert_tracked_app`).
 #[cfg(target_os = "windows")]

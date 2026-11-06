@@ -36,7 +36,7 @@ function run(cwd, args) {
 
 // One feature set for the whole gate (KOS-270): the gate must test exactly
 // what ships, so every crate is compiled once with the same flags.
-// ark-core needs no feature flags: iroh is a regular dependency now.
+// kernel needs no feature flags: iroh is a regular dependency now.
 const GATE_FEATURES = [
   "--features",
   // KOS-337: engine/local-dictation — the gate must test what ships, and

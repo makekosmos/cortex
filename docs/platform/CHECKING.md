@@ -4,7 +4,7 @@
 
 ## Sources
 
-- `runtime/` (Engine) and `core/crates/ark-core/` (ARK) on `main` of `makekosmos/cortex`. This is an engineering matrix, so check `main`, not the latest release.
+- `runtime/` (Engine) and `core/crates/kernel/` (ARK) on `main` of `makekosmos/cortex`. This is an engineering matrix, so check `main`, not the latest release.
 - Release build scripts decide what ships: `desktop/scripts/build-backend.mjs` (Windows) and `desktop/scripts/build-macos-native.mjs` (macOS). A capability behind a Cargo feature that a release script does not enable is `no` on that OS, with a note.
 - Manager and the apps are out of scope. List only what the Engine or ARK offers.
 

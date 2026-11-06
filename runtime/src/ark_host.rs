@@ -1,8 +1,8 @@
-// In-process ARK host — wraps `ark_core::service::ArkService` directly.
-// (Was: supervisor for the ark-core-rpc child process over newline-delimited
+// In-process ARK host — wraps `kernel::service::ArkService` directly.
+// (Was: supervisor for the kernel-rpc child process over newline-delimited
 // JSON-RPC. The sidecar is gone; the Engine hosts ARK as a library now.)
 
-use ark_core::service::ArkService;
+use kernel::service::ArkService;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -19,11 +19,11 @@ pub enum ArkHostError {
 
 pub type ArkResult<T> = Result<T, ArkHostError>;
 
-impl From<ark_core::service::ArkServiceError> for ArkHostError {
-    fn from(error: ark_core::service::ArkServiceError) -> Self {
+impl From<kernel::service::ArkServiceError> for ArkHostError {
+    fn from(error: kernel::service::ArkServiceError) -> Self {
         match error {
-            ark_core::service::ArkServiceError::Request(message) => Self::RpcError(message),
-            ark_core::service::ArkServiceError::Busy(message) => {
+            kernel::service::ArkServiceError::Request(message) => Self::RpcError(message),
+            kernel::service::ArkServiceError::Busy(message) => {
                 Self::RpcError(format!("ark service busy: {message}"))
             }
             other => Self::Unavailable(other.to_string()),
@@ -68,20 +68,20 @@ impl ArkHost {
     /// service worker. Same semantics as the old `ArkHost::spawn` + `init`.
     pub async fn open(db_path: &str) -> ArkResult<Self> {
         // Host config: the real %SystemRoot%, resolved once here via
-        // GetSystemWindowsDirectoryW. ark-core marks exes under it as system
+        // GetSystemWindowsDirectoryW. kernel marks exes under it as system
         // apps; a request param would let clients lie about that, so it lives
         // in construction-time config. On failure we warn and pass None —
         // nothing gets misclassified.
         let service = ArkService::open_with_host_config(
             db_path,
-            ark_core::service::ArkHostConfig {
+            kernel::service::ArkHostConfig {
                 windows_dir: system_windows_dir().map(str::to_string),
             },
         )
         .await
         .map_err(|error| {
             ArkHostError::RpcError(format!(
-                "failed to open ARK database at {db_path} (locked by a stale ark-core-rpc \
+                "failed to open ARK database at {db_path} (locked by a stale kernel-rpc \
                  or another Engine?): {error}"
             ))
         })?;
@@ -127,12 +127,12 @@ impl ArkHost {
                 data,
                 error: None,
             }),
-            Err(ark_core::service::ArkServiceError::Request(error)) => Ok(ArkResponse {
+            Err(kernel::service::ArkServiceError::Request(error)) => Ok(ArkResponse {
                 ok: false,
                 data: serde_json::Value::Null,
                 error: Some(error),
             }),
-            Err(ark_core::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
+            Err(kernel::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
                 ok: false,
                 data: serde_json::Value::Null,
                 error: Some(format!("ark service busy: {error}")),

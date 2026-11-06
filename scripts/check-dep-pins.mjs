@@ -13,7 +13,7 @@ import { pathToFileURL } from "node:url";
 
 // "crate@<manifest dir>" → exact requirement string that is allowed.
 const ALLOWED = new Map([
-  // ed25519-dalek 3.0.0-rc.0 (workspace dep, used by ark-core and the engine
+  // ed25519-dalek 3.0.0-rc.0 (workspace dep, used by kernel and the engine
   // replication test fixtures): the 3.x line carries the API noq/iroh need; no
   // stable 3.x exists yet. Revisit on the first stable 3.x release.
   ["Cargo.toml::ed25519-dalek", "=3.0.0-rc.0"],
