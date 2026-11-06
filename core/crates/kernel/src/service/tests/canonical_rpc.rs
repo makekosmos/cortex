@@ -60,7 +60,9 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             .as_str()
             .is_some_and(|version| version.starts_with("0.0.0+legacy.")));
         let mut event_rx = crate::events::subscribe();
-        let before_objects = handle_request(&state, Request::ListObjects).await.unwrap();
+        let before_objects = handle_request(&state, Request::objects_list_all())
+            .await
+            .unwrap();
         let before_versions = handle_request(
             &state,
             Request::GetSyncKv {
@@ -80,7 +82,9 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         .unwrap();
         assert!(handle_request(&state, unknown_request).await.is_err());
         assert_eq!(
-            handle_request(&state, Request::ListObjects).await.unwrap(),
+            handle_request(&state, Request::objects_list_all())
+                .await
+                .unwrap(),
             before_objects,
             "rejected object is not visible through the public list API"
         );
@@ -290,7 +294,9 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
         "canonical_ingress:invalid_request:canonical_version_required"
     );
     assert_eq!(
-        handle_request(&state, Request::ListObjects).await.unwrap(),
+        handle_request(&state, Request::objects_list_all())
+            .await
+            .unwrap(),
         json!([]),
         "rejected object is not visible through the public list API"
     );
@@ -323,7 +329,9 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         "canonical_ingress:invalid_request:canonical_field:/unexpected"
     );
     assert_eq!(
-        handle_request(&state, Request::ListObjects).await.unwrap(),
+        handle_request(&state, Request::objects_list_all())
+            .await
+            .unwrap(),
         json!([]),
         "invalid canonical payload leaves object storage unchanged"
     );

@@ -51,7 +51,7 @@ pub(super) fn write_snapshot(db_path: &str, id: &str) {
 }
 
 async fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
-    handle_request(state, Request::ListObjects)
+    handle_request(state, Request::objects_list_all())
         .await
         .unwrap()
         .as_array()

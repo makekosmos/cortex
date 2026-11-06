@@ -59,6 +59,20 @@ pub(crate) fn reject_unknown_parameters(
     Ok(())
 }
 
+#[cfg(test)]
+impl Request {
+    /// `objects.list` with no filters — the plain listing the old
+    /// `list_objects` operation was.
+    pub(crate) fn objects_list_all() -> Self {
+        Self::ObjectsList {
+            type_id: None,
+            ids: None,
+            query: None,
+            summaries: false,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
@@ -123,13 +137,18 @@ pub(crate) enum Request {
         #[serde(default)]
         range_end: Option<String>,
     },
-    ListObjects,
-    ListObjectSummaries,
-    ListObjectsByType {
-        type_id: String,
-    },
-    ListObjectSummariesByType {
-        type_id: String,
+    /// One read door for objects: these filters select what the six old
+    /// list/search operations did.
+    #[serde(rename = "objects.list")]
+    ObjectsList {
+        #[serde(default, rename = "typeId")]
+        type_id: Option<String>,
+        #[serde(default)]
+        ids: Option<Vec<String>>,
+        #[serde(default)]
+        query: Option<String>,
+        #[serde(default)]
+        summaries: bool,
     },
     EstimateDataVolume {
         scopes: Vec<DataVolumeScope>,
@@ -137,12 +156,6 @@ pub(crate) enum Request {
     ListRunningTimeEntries {
         #[serde(default)]
         source: Option<String>,
-    },
-    GetObjectsByIds {
-        ids: Vec<String>,
-    },
-    SearchObjects {
-        query: String,
     },
     GetObject {
         id: String,

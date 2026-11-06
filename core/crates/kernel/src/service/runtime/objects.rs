@@ -7,26 +7,29 @@ async fn object_read(state: &ServiceState, query: db::ObjectReadQuery) -> Result
         .map_err(|error| error.to_string())
 }
 
-pub(super) async fn list_objects(state: &Arc<ServiceState>) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::List).await
-}
-
-pub(super) async fn list_object_summaries(state: &Arc<ServiceState>) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::ListSummaries).await
-}
-
-pub(super) async fn list_objects_by_type(
+/// `objects.list`. The filters pick the read the six old operations did: ids,
+/// then a text query, then the plain listing narrowed by `type_id` and
+/// projected to summaries when asked. Two selectors at once is an error rather
+/// than a silent precedence rule.
+pub(super) async fn list(
     state: &Arc<ServiceState>,
-    type_id: String,
+    type_id: Option<String>,
+    ids: Option<Vec<String>>,
+    query: Option<String>,
+    summaries: bool,
 ) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::ListByType(type_id)).await
-}
-
-pub(super) async fn list_object_summaries_by_type(
-    state: &Arc<ServiceState>,
-    type_id: String,
-) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::ListSummariesByType(type_id)).await
+    if ids.is_some() && query.is_some() {
+        return Err("objects.list accepts ids or query, not both".to_string());
+    }
+    let read = match (ids, query, type_id) {
+        (Some(ids), _, _) => db::ObjectReadQuery::GetByIds(ids),
+        (_, Some(query), _) => db::ObjectReadQuery::Search(query),
+        (_, _, Some(type_id)) if summaries => db::ObjectReadQuery::ListSummariesByType(type_id),
+        (_, _, Some(type_id)) => db::ObjectReadQuery::ListByType(type_id),
+        (_, _, None) if summaries => db::ObjectReadQuery::ListSummaries,
+        (_, _, None) => db::ObjectReadQuery::List,
+    };
+    object_read(state, read).await
 }
 
 pub(super) async fn estimate_data_volume(
@@ -46,20 +49,6 @@ pub(super) async fn list_running_time_entries(
     source: Option<String>,
 ) -> Result<Value, String> {
     object_read(state, db::ObjectReadQuery::ListRunningTime(source)).await
-}
-
-pub(super) async fn get_objects_by_ids(
-    state: &Arc<ServiceState>,
-    ids: Vec<String>,
-) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::GetByIds(ids)).await
-}
-
-pub(super) async fn search_objects(
-    state: &Arc<ServiceState>,
-    query: String,
-) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::Search(query)).await
 }
 
 pub(super) async fn get_object(state: &Arc<ServiceState>, id: String) -> Result<Value, String> {

@@ -47,8 +47,11 @@ async fn canonical_object_write_read_and_filter_uses_core_type() {
     for type_id in ["core.note"] {
         let objects = handle_request(
             &state,
-            Request::ListObjectsByType {
-                type_id: type_id.into(),
+            Request::ObjectsList {
+                type_id: Some(type_id.into()),
+                ids: None,
+                query: None,
+                summaries: false,
             },
         )
         .await

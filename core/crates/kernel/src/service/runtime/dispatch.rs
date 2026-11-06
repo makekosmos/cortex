@@ -56,22 +56,18 @@ pub(crate) async fn handle_request(
             range_end,
         } => usage::get_usage_summary(state, bindings, range_start, range_end).await,
 
-        Request::ListObjects => objects::list_objects(state).await,
-        Request::ListObjectSummaries => objects::list_object_summaries(state).await,
-        Request::ListObjectsByType { type_id } => {
-            objects::list_objects_by_type(state, type_id).await
-        }
-        Request::ListObjectSummariesByType { type_id } => {
-            objects::list_object_summaries_by_type(state, type_id).await
-        }
+        Request::ObjectsList {
+            type_id,
+            ids,
+            query,
+            summaries,
+        } => objects::list(state, type_id, ids, query, summaries).await,
         Request::EstimateDataVolume { scopes } => {
             objects::estimate_data_volume(state, scopes).await
         }
         Request::ListRunningTimeEntries { source } => {
             objects::list_running_time_entries(state, source).await
         }
-        Request::GetObjectsByIds { ids } => objects::get_objects_by_ids(state, ids).await,
-        Request::SearchObjects { query } => objects::search_objects(state, query).await,
         Request::GetObject { id } => objects::get_object(state, id).await,
         Request::GetObjectWriteSnapshot { id } => {
             objects::get_object_write_snapshot(state, id).await
