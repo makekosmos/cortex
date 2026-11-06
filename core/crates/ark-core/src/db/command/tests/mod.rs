@@ -27,9 +27,7 @@ async fn open_publishes_only_a_database_ready_for_commands() {
         .join("ark.db")
         .to_string_lossy()
         .into_owned();
-    let (handle, mut owner) = DbHandle::open(db_path, "device-under-test".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path).await.unwrap();
 
     let first = crate::iroh_transport::load_or_generate_secret_key_via_actor(&handle)
         .await
@@ -49,12 +47,9 @@ async fn open_publishes_only_a_database_ready_for_commands() {
 async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() {
     let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("object-write.db");
-    let (handle, mut owner) = DbHandle::open(
-        db_path.to_string_lossy().into_owned(),
-        "transaction-port-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
     ark_store::test_support::ObjectWriteRollbackFixture::reject_receipt_insert(&db_path).unwrap();
 
     let object = crate::types::ArkObjectWrite {
@@ -130,11 +125,7 @@ async fn open_rejects_an_unreadable_database_before_returning_a_handle() {
     let db_path = directory.path().join("not-a-database.db");
     std::fs::write(&db_path, b"not a SQLite database").unwrap();
 
-    let result = DbHandle::open(
-        db_path.to_string_lossy().into_owned(),
-        "device-under-test".into(),
-    )
-    .await;
+    let result = DbHandle::open(db_path.to_string_lossy().into_owned()).await;
 
     assert!(matches!(result, Err(DbError::Storage(_))));
 }
@@ -186,7 +177,6 @@ async fn actor_store_keeps_the_persisted_iroh_identity() {
             .join("persisted-identity.db")
             .to_string_lossy()
             .into_owned(),
-        "identity-device".into(),
     )
     .await
     .unwrap();
@@ -214,7 +204,6 @@ async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
             .join("usage-sequence.db")
             .to_string_lossy()
             .into_owned(),
-        "usage-sequence-device".into(),
     )
     .await
     .unwrap();
@@ -244,12 +233,9 @@ async fn usage_sequence_migration_runs_as_a_store_owned_transaction() {
 async fn usage_write_returns_typed_validation_error_and_rolls_back() {
     let directory = crate::test_support::temp_dir();
     let db_path = directory.path().join("usage-write.db");
-    let (handle, mut owner) = DbHandle::open(
-        db_path.to_string_lossy().into_owned(),
-        "usage-command-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let committed = handle
         .submit_local_usage_write(
@@ -320,9 +306,7 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         .join("clear-all.db")
         .to_string_lossy()
         .into_owned();
-    let (handle, mut owner) = DbHandle::open(db_path, "clear-all-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path).await.unwrap();
     handle
         .set_local_sync_key_value(
             CommandContext::engine(),
@@ -360,7 +344,6 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
             .join("usage-compaction.db")
             .to_string_lossy()
             .into_owned(),
-        "usage-compaction-device".into(),
     )
     .await
     .unwrap();

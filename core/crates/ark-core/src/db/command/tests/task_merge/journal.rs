@@ -229,9 +229,7 @@ async fn prepared_batch_replays_identically_after_sqlite_reopen() {
         .unwrap();
     shutdown(&mut owner).await;
 
-    let (reopened, mut reopened_owner) = DbHandle::open(path, "merge-test-device".into())
-        .await
-        .unwrap();
+    let (reopened, mut reopened_owner) = DbHandle::open(path).await.unwrap();
     let replay = prepare_batch(&reopened, "peer-a", identity.clone(), 1)
         .await
         .unwrap()

@@ -20,11 +20,8 @@ pub struct SqliteStorageBackend {
 impl SqliteStorageBackend {
     /// Opens the production writer actor for file-backed integration tests.
     #[cfg(test)]
-    pub async fn open_for_test(
-        db_path: impl Into<String>,
-        legacy_task_device_id: impl Into<String>,
-    ) -> Result<Self, String> {
-        let (db, owner) = DbHandle::open(db_path.into(), legacy_task_device_id.into())
+    pub async fn open_for_test(db_path: impl Into<String>) -> Result<Self, String> {
+        let (db, owner) = DbHandle::open(db_path.into())
             .await
             .map_err(|error| error.to_string())?;
         let mut backend = Self::with_db_handle(db);

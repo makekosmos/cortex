@@ -64,8 +64,7 @@ async fn production_actor_reply_is_published_after_maintenance_release() {
         .join("actor.db")
         .to_string_lossy()
         .into_owned();
-    let (shared, mut owner, ready) =
-        ActorShared::spawn(db_path, "actor-test-device".into(), actor_test_limits()).unwrap();
+    let (shared, mut owner, ready) = ActorShared::spawn(db_path, actor_test_limits()).unwrap();
     ready.recv().unwrap().unwrap();
 
     let (admitted_tx, admitted_rx) = oneshot::channel();

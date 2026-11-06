@@ -222,12 +222,9 @@ mod tests {
     ) {
         let database = ark_store::test_support::TestDatabase::create().expect("test database");
         let backend = Arc::new(
-            SqliteStorageBackend::open_for_test(
-                database.path().to_string_lossy().into_owned(),
-                device_id,
-            )
-            .await
-            .expect("open test storage"),
+            SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+                .await
+                .expect("open test storage"),
         );
         backend.set_device_id(device_id).unwrap();
         (backend, database)
@@ -379,12 +376,9 @@ mod tests {
         ark_store::test_support::SyncTestState::add_removed_peer(database.path(), "device-blocked")
             .unwrap();
         let backend = Arc::new(
-            SqliteStorageBackend::open_for_test(
-                database.path().to_string_lossy().into_owned(),
-                "device-local",
-            )
-            .await
-            .unwrap(),
+            SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+                .await
+                .unwrap(),
         );
         let storage = backend.clone() as Arc<dyn SyncRuntimeStorage>;
         let entity = SyncEntity {

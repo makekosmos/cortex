@@ -107,9 +107,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
         .join("task-merge-right.db")
         .to_string_lossy()
         .into_owned();
-    let (right, mut right_owner) = DbHandle::open(right_path.clone(), "right-device".into())
-        .await
-        .unwrap();
+    let (right, mut right_owner) = DbHandle::open(right_path.clone()).await.unwrap();
     let peer_id = "merge-test-device";
     let left_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let right_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();

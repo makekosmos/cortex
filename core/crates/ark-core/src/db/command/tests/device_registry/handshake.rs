@@ -12,9 +12,7 @@ async fn production_storage_signs_and_verifies_only_active_registry_identities()
         .to_string_lossy()
         .into_owned();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path).await.unwrap();
     handle
         .enroll_paired_device(
             CommandContext::engine(),

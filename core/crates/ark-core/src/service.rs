@@ -168,7 +168,7 @@ impl ArkService {
     ) -> Result<Self, ArkServiceError> {
         let db_path = db_path.into();
         let state = Arc::new(ServiceState::new(host_config));
-        let (db, owner) = db::DbHandle::open(db_path.clone(), "ark-core".to_string())
+        let (db, owner) = db::DbHandle::open(db_path.clone())
             .await
             .map_err(|error| ArkServiceError::Unavailable(error.to_string()))?;
         *state.db.lock().unwrap_or_else(|error| error.into_inner()) = Some(db);

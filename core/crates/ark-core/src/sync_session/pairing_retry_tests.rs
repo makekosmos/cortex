@@ -16,12 +16,9 @@ async fn test_storage(
 ) {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
     let storage = Arc::new(
-        SqliteStorageBackend::open_for_test(
-            database.path().to_string_lossy().into_owned(),
-            device_id,
-        )
-        .await
-        .unwrap(),
+        SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+            .await
+            .unwrap(),
     );
     storage.set_device_id(device_id).unwrap();
     (storage, database)

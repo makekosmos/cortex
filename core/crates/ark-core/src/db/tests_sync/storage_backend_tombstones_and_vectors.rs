@@ -58,7 +58,7 @@ async fn storage_backend_tombstone_survives_backend_recreation() {
         .await
         .unwrap();
     drop(backend);
-    let recreated = SqliteStorageBackend::open_for_test(database_path, "device-under-test")
+    let recreated = SqliteStorageBackend::open_for_test(database_path)
         .await
         .expect("production writer reopens for test");
     let empty_vector: VersionVector = std::collections::HashMap::new();

@@ -6,7 +6,6 @@ pub enum StoreBootstrapStage {
     Recovery,
     Open,
     Schema,
-    Migration,
 }
 
 #[derive(Debug)]
@@ -22,13 +21,9 @@ impl fmt::Display for StoreBootstrapError {
 }
 
 impl SqliteWriter {
-    /// Recover any interrupted restore, initialize the schema, and apply the
-    /// required canonical migration before the writer becomes available.
-    pub fn open_initialized(
-        path: &str,
-        migration_backup_path: &str,
-        bootstrap_device_id: &str,
-    ) -> Result<Self, StoreBootstrapError> {
+    /// Recover any interrupted restore and initialize the schema before the
+    /// writer becomes available.
+    pub fn open_initialized(path: &str) -> Result<Self, StoreBootstrapError> {
         crate::snapshot::recover_interrupted_restore(path).map_err(|error| {
             StoreBootstrapError {
                 stage: StoreBootstrapStage::Recovery,
@@ -40,11 +35,6 @@ impl SqliteWriter {
             stage: StoreBootstrapStage::Open,
             message: error.to_string(),
         })?;
-        crate::core_migration::backup_before_migration(&connection, migration_backup_path)
-            .map_err(|message| StoreBootstrapError {
-                stage: StoreBootstrapStage::Migration,
-                message,
-            })?;
         connection
             .execute_batch(
                 "PRAGMA journal_mode = WAL;
@@ -60,13 +50,6 @@ impl SqliteWriter {
             stage: StoreBootstrapStage::Schema,
             message,
         })?;
-        let mut connection = connection;
-        crate::core_migration::migrate(&mut connection, bootstrap_device_id).map_err(
-            |message| StoreBootstrapError {
-                stage: StoreBootstrapStage::Migration,
-                message,
-            },
-        )?;
         Ok(Self::from_connection(connection))
     }
 }

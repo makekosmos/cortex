@@ -77,7 +77,6 @@ async fn test_storage(
     Arc::new(
         crate::db::SqliteStorageBackend::open_for_test(
             database.path().to_string_lossy().into_owned(),
-            "device-a",
         )
         .await
         .unwrap(),

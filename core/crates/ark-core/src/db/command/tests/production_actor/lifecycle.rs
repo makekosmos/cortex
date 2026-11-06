@@ -159,7 +159,7 @@ async fn production_actor_panic_rolls_back_and_fails_closed_until_reopen() {
         .join("actor.db")
         .to_string_lossy()
         .into_owned();
-    let (reopened, mut reopened_owner) = DbHandle::open(reopened_path, "actor-test-device".into())
+    let (reopened, mut reopened_owner) = DbHandle::open(reopened_path)
         .await
         .expect("explicit owner reopen");
     assert!(reopened.actor_ready_for_test());
@@ -360,13 +360,9 @@ async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
     let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("restart.db");
     let db_path = database_path.to_string_lossy().into_owned();
-    let (handle, mut owner) = DbHandle::open_with_limits(
-        db_path.clone(),
-        "actor-test-device".into(),
-        actor_test_limits(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open_with_limits(db_path.clone(), actor_test_limits())
+        .await
+        .unwrap();
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let first_handle = handle.clone();
@@ -424,9 +420,7 @@ async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
         Err(DbError::Unavailable)
     ));
 
-    let (_reopened, mut reopened_owner) = DbHandle::open(db_path, "actor-test-device".into())
-        .await
-        .unwrap();
+    let (_reopened, mut reopened_owner) = DbHandle::open(db_path).await.unwrap();
     let rows = ark_store::test_support::ActorTestLog::entries_at(
         &database_path,
         ark_store::test_support::ActorLogOrder::Insertion,

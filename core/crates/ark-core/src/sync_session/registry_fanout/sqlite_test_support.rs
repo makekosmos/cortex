@@ -23,7 +23,7 @@ pub(super) struct ActorPeer {
 }
 
 pub(super) async fn open_peer(db_path: &std::path::Path, device_id: &str) -> ActorPeer {
-    let (db, owner) = DbHandle::open(db_path.to_string_lossy().into_owned(), device_id.to_owned())
+    let (db, owner) = DbHandle::open(db_path.to_string_lossy().into_owned())
         .await
         .expect("open production SQLite actor");
     let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)

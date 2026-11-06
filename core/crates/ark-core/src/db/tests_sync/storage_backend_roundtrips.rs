@@ -29,12 +29,10 @@ impl TestBackend {
 pub(super) async fn make_backend() -> TestBackend {
     let database =
         ark_store::test_support::TestDatabase::create().expect("test database initializes");
-    let backend = SqliteStorageBackend::open_for_test(
-        database.path().to_string_lossy().into_owned(),
-        "device-under-test",
-    )
-    .await
-    .expect("production writer opens for test");
+    let backend =
+        SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+            .await
+            .expect("production writer opens for test");
     backend.set_device_id("device-under-test").unwrap();
     TestBackend {
         backend,

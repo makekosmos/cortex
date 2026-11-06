@@ -1,8 +1,5 @@
 pub mod canonical_migrations;
 pub mod committed_feed;
-mod core_migration;
-#[cfg(test)]
-mod core_migration_tests;
 pub mod data_platform;
 pub mod data_volume;
 pub mod database;

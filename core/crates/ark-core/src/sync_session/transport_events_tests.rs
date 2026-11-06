@@ -113,7 +113,7 @@ async fn relay_with_stub() -> (
 ) {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
     let backend = Arc::new(
-        SqliteStorageBackend::open_for_test(database.path().to_str().unwrap().to_owned(), "me")
+        SqliteStorageBackend::open_for_test(database.path().to_str().unwrap().to_owned())
             .await
             .unwrap(),
     );

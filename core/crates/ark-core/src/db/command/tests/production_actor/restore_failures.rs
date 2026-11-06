@@ -4,12 +4,9 @@ use std::time::Duration;
 
 async fn open_failure_actor() -> (ark_store::test_support::TestDatabase, DbHandle, DbOwner) {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
-    let (handle, owner) = DbHandle::open(
-        database.path().to_string_lossy().into_owned(),
-        "actor-test-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, owner) = DbHandle::open(database.path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
     (database, handle, owner)
 }
 

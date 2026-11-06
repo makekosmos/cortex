@@ -6,7 +6,6 @@ use std::time::Instant;
 
 pub(super) fn actor_loop(
     shared: Arc<ActorShared>,
-    bootstrap_device_id: String,
     ready: std::sync::mpsc::Sender<Result<(), DbError>>,
 ) {
     let connection = {
@@ -16,17 +15,14 @@ pub(super) fn actor_loop(
             .unwrap_or_else(|error| error.into_inner());
         ledger.lifecycle = Lifecycle::Migrating;
         drop(ledger);
-        shared
-            .database
-            .open_writer(&bootstrap_device_id)
-            .map_err(|error| {
-                if error.stage == ark_store::writer::StoreBootstrapStage::Recovery {
-                    eprintln!("database restore recovery failed before startup: {error}");
-                    DbError::RecoveryRequired
-                } else {
-                    DbError::Storage(error.to_string())
-                }
-            })
+        shared.database.open_writer().map_err(|error| {
+            if error.stage == ark_store::writer::StoreBootstrapStage::Recovery {
+                eprintln!("database restore recovery failed before startup: {error}");
+                DbError::RecoveryRequired
+            } else {
+                DbError::Storage(error.to_string())
+            }
+        })
     };
     let mut writer = match connection {
         Ok(writer) => {

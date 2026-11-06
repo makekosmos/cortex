@@ -47,7 +47,7 @@ pub(super) async fn initialize_test_database(
             .await
             .map_err(|error| format!("database owner shutdown failed: {error}"))?;
     }
-    let (db, owner) = db::DbHandle::open(db_path.clone(), "ark-core".to_string())
+    let (db, owner) = db::DbHandle::open(db_path.clone())
         .await
         .map_err(|error| error.to_string())?;
     *state

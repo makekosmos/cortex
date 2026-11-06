@@ -32,9 +32,7 @@ async fn open_merge_fixture() -> (
 ) {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
     let path = database.path().to_string_lossy().into_owned();
-    let (handle, owner) = DbHandle::open(path.clone(), "merge-test-device".into())
-        .await
-        .unwrap();
+    let (handle, owner) = DbHandle::open(path.clone()).await.unwrap();
     (database, path, handle, owner)
 }
 
@@ -77,12 +75,9 @@ async fn append_actor_requires_the_engine_principal() {
 #[tokio::test]
 async fn append_actor_uses_the_store_writer_transaction() {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
-    let (handle, mut owner) = DbHandle::open(
-        database.path().to_string_lossy().into_owned(),
-        "merge-test-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(database.path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     let result = append(&handle, operation('1', &[], "test backend"), None)
         .await
@@ -162,9 +157,7 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
     shutdown(&mut owner).await;
     drop(handle);
 
-    let (reopened, mut reopened_owner) = DbHandle::open(path.clone(), "merge-test-device".into())
-        .await
-        .unwrap();
+    let (reopened, mut reopened_owner) = DbHandle::open(path.clone()).await.unwrap();
     let after_reopen = read(&reopened).await;
     assert!(!after_reopen.dependencies_pending);
     assert_eq!(

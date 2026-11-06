@@ -14,9 +14,7 @@ async fn registry_event_batch_rolls_back_prior_events_after_sequence_conflict() 
         .to_string_lossy()
         .into_owned();
     let endpoint_key = ark_net::iroh::SecretKey::generate();
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path).await.unwrap();
     handle
         .enroll_paired_device(
             CommandContext::engine(),

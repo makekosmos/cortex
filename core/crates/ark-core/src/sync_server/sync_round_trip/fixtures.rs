@@ -55,7 +55,6 @@ pub(super) async fn make_storage_with_identity(device_id: &str) -> (Arc<TestStor
                 .to_str()
                 .expect("temporary database path is UTF-8")
                 .to_owned(),
-            device_id,
         )
         .await
         .expect("production database actor starts"),

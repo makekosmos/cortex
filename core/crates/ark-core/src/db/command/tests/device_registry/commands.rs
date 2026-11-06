@@ -10,9 +10,7 @@ async fn local_registry_event_and_projection_roll_back_together() {
         .to_string_lossy()
         .into_owned();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
-    let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path.clone()).await.unwrap();
     handle
         .enroll_paired_device(
             CommandContext::engine(),
@@ -70,9 +68,7 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .to_string_lossy()
         .into_owned();
     let remote_key = ark_net::iroh::SecretKey::generate();
-    let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path.clone()).await.unwrap();
     handle
         .enroll_paired_device(
             CommandContext::engine(),
@@ -157,9 +153,7 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .await
         .unwrap();
     drop(handle);
-    let (_handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
-        .await
-        .unwrap();
+    let (_handle, mut owner) = DbHandle::open(db_path.clone()).await.unwrap();
     let state =
         ark_store::test_support::DeviceRegistryFixture::open(std::path::Path::new(&db_path))
             .unwrap()
@@ -192,9 +186,7 @@ async fn outbound_sync_admission_closes_after_device_disable() {
         .to_string_lossy()
         .into_owned();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
-    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
-        .await
-        .unwrap();
+    let (handle, mut owner) = DbHandle::open(db_path).await.unwrap();
     handle
         .enroll_paired_device(
             CommandContext::engine(),

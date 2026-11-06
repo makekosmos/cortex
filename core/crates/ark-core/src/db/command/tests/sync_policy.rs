@@ -4,12 +4,9 @@ use super::*;
 async fn sync_progress_write_commits_through_store_owned_actor_transaction() {
     let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("sync-progress.db");
-    let (handle, mut owner) = DbHandle::open(
-        database_path.to_string_lossy().into_owned(),
-        "local-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(database_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     handle
         .set_sync_progress(
@@ -49,12 +46,9 @@ fn profile_rule(resource_id: String) -> ark_domain::sync_policy::SyncProfileRule
 async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("accepted-peer-policy.db");
-    let (handle, mut owner) = DbHandle::open(
-        database_path.to_string_lossy().into_owned(),
-        "local-device".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(database_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
     let rules = vec![profile_rule("type-books".into())];
     let profile = ark_domain::sync_policy::SyncProfile {
         profile_id: "remote-policy".into(),
@@ -107,12 +101,9 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
 async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     let directory = crate::test_support::temp_dir();
     let database_path = directory.path().join("sync-policy.db");
-    let (handle, mut owner) = DbHandle::open(
-        database_path.to_string_lossy().into_owned(),
-        "device-0".into(),
-    )
-    .await
-    .unwrap();
+    let (handle, mut owner) = DbHandle::open(database_path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
 
     for index in 0..6 {
         let device_id = format!("device-{index}");
@@ -217,12 +208,10 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
         .await
         .unwrap();
-    let (reopened, mut reopened_owner) = DbHandle::open(
-        database_path.to_string_lossy().into_owned(),
-        "device-0".into(),
-    )
-    .await
-    .unwrap();
+    let (reopened, mut reopened_owner) =
+        DbHandle::open(database_path.to_string_lossy().into_owned())
+            .await
+            .unwrap();
     let persisted = reopened
         .query_with_store(
             CommandContext::engine(),

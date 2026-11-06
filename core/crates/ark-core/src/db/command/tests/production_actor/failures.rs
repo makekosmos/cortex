@@ -45,9 +45,7 @@ async fn open_failure_actor() -> (
     let directory = crate::test_support::temp_dir();
     let path = actor_path(&directory);
     let path_text = path.to_str().expect("test database path is valid UTF-8");
-    let (handle, owner) = DbHandle::open(path_text.to_owned(), "actor-test-device".into())
-        .await
-        .unwrap();
+    let (handle, owner) = DbHandle::open(path_text.to_owned()).await.unwrap();
     (directory, path, handle, owner)
 }
 
@@ -56,9 +54,7 @@ async fn production_actor_recovers_interrupted_restore_before_ready() {
     let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
     let path = fixture.database_path().to_string_lossy().into_owned();
 
-    let (_handle, mut owner) = DbHandle::open(path, "actor-test-device".into())
-        .await
-        .unwrap();
+    let (_handle, mut owner) = DbHandle::open(path).await.unwrap();
     let value = fixture.marker().unwrap();
     assert_eq!(value, "before");
     assert_eq!(
@@ -79,11 +75,7 @@ async fn production_actor_refuses_ready_when_restore_intent_is_corrupt() {
     let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
     fixture.corrupt_intent().unwrap();
 
-    let opened = DbHandle::open(
-        fixture.database_path().to_string_lossy().into_owned(),
-        "actor-test-device".into(),
-    )
-    .await;
+    let opened = DbHandle::open(fixture.database_path().to_string_lossy().into_owned()).await;
 
     assert!(matches!(opened, Err(DbError::RecoveryRequired)));
     assert_eq!(fixture.marker().unwrap(), "partial");
@@ -98,11 +90,7 @@ async fn production_actor_refuses_ready_when_restore_capsule_is_missing() {
     let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
     fixture.remove_capsule().unwrap();
 
-    let opened = DbHandle::open(
-        fixture.database_path().to_string_lossy().into_owned(),
-        "actor-test-device".into(),
-    )
-    .await;
+    let opened = DbHandle::open(fixture.database_path().to_string_lossy().into_owned()).await;
 
     assert!(matches!(opened, Err(DbError::RecoveryRequired)));
     assert_eq!(fixture.marker().unwrap(), "partial");

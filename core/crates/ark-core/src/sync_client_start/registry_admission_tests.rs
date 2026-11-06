@@ -24,7 +24,6 @@ pub(super) async fn registry_backend(
     let backend = Arc::new(
         crate::db::SqliteStorageBackend::open_for_test(
             database.path().to_string_lossy().into_owned(),
-            device_id,
         )
         .await
         .expect("open writer actor"),

@@ -113,7 +113,6 @@ type SpawnedActor = (
 impl ActorShared {
     pub(in crate::db::command) fn spawn(
         path: String,
-        bootstrap_device_id: String,
         limits: AdmissionLimits,
     ) -> Result<SpawnedActor, std::io::Error> {
         let slots = (0..limits.max_commands).map(|_| None).collect();
@@ -147,7 +146,7 @@ impl ActorShared {
         let actor_shared = Arc::clone(&shared);
         let join = std::thread::Builder::new()
             .name("ark-db-writer".to_string())
-            .spawn(move || actor_loop(actor_shared, bootstrap_device_id, ready_tx))?;
+            .spawn(move || actor_loop(actor_shared, ready_tx))?;
         let owner = ActorOwner {
             shared: Arc::clone(&shared),
             join: Some(join),

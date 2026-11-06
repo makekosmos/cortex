@@ -264,9 +264,7 @@ pub(in crate::db::command::tests) async fn open_actor_fixture_with_limits(
     let db_path = actor_database_path(&directory)
         .to_string_lossy()
         .into_owned();
-    let (handle, owner) = DbHandle::open_with_limits(db_path, "actor-test-device".into(), limits)
-        .await
-        .unwrap();
+    let (handle, owner) = DbHandle::open_with_limits(db_path, limits).await.unwrap();
     (directory, handle, owner)
 }
 

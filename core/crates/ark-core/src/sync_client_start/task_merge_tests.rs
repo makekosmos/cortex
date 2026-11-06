@@ -20,7 +20,7 @@ struct PeerFixture {
 }
 
 async fn open_peer(path: &std::path::Path, device_id: &str) -> PeerFixture {
-    let (db, owner) = DbHandle::open(path.to_string_lossy().into_owned(), device_id.into())
+    let (db, owner) = DbHandle::open(path.to_string_lossy().into_owned())
         .await
         .unwrap();
     let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)

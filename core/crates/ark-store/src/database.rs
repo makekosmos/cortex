@@ -11,12 +11,8 @@ impl StoreDatabase {
         Self { path: path.into() }
     }
 
-    pub fn open_writer(
-        &self,
-        bootstrap_device_id: &str,
-    ) -> Result<SqliteWriter, StoreBootstrapError> {
-        let migration_backup_path = format!("{}.pre-core.bak", self.path);
-        SqliteWriter::open_initialized(&self.path, &migration_backup_path, bootstrap_device_id)
+    pub fn open_writer(&self) -> Result<SqliteWriter, StoreBootstrapError> {
+        SqliteWriter::open_initialized(&self.path)
     }
 
     pub fn open_reader(&self) -> Result<SqliteReader, StoreError> {

@@ -7,12 +7,10 @@ use ark_store::test_support::TestDatabase;
 #[tokio::test]
 async fn sync_policy_generation_changes_when_only_filter_changes() {
     let database = TestDatabase::create().unwrap();
-    let backend = SqliteStorageBackend::open_for_test(
-        database.path().to_string_lossy().into_owned(),
-        "test-device",
-    )
-    .await
-    .unwrap();
+    let backend =
+        SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+            .await
+            .unwrap();
     let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
     profile.set_rule(
         "type",

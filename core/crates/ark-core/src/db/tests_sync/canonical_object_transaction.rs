@@ -107,12 +107,10 @@ async fn authenticated_core_task_commit_failure_is_reported_and_fails_closed() {
     let database =
         ark_store::test_support::TestDatabase::create().expect("test database initializes");
     FailureProbe::install_deferred_object_commit_failure_path(database.path()).unwrap();
-    let backend = SqliteStorageBackend::open_for_test(
-        database.path().to_string_lossy().into_owned(),
-        "device-local",
-    )
-    .await
-    .unwrap();
+    let backend =
+        SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+            .await
+            .unwrap();
     admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
         "failed-core-task-commit",
@@ -154,10 +152,9 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
         "Replay after writer restart",
         "2026-10-16T00:00:00.000Z:000001:device-a",
     );
-    let (handle, mut owner) =
-        crate::db::DbHandle::open(path.to_string_lossy().into_owned(), "device-local".into())
-            .await
-            .unwrap();
+    let (handle, mut owner) = crate::db::DbHandle::open(path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
     let backend = SqliteStorageBackend::with_db_handle(handle);
     admit_test_registry_peer(&backend, "device-a").await;
     ark_store::test_support::ProductionActorFailureProbe::install_deferred_feed_commit_failure(
@@ -178,10 +175,9 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
     )
     .unwrap();
 
-    let (handle, mut owner) =
-        crate::db::DbHandle::open(path.to_string_lossy().into_owned(), "device-local".into())
-            .await
-            .unwrap();
+    let (handle, mut owner) = crate::db::DbHandle::open(path.to_string_lossy().into_owned())
+        .await
+        .unwrap();
     let backend = SqliteStorageBackend::with_db_handle(handle);
     backend
         .apply_authenticated_entity(&entity, "device-a")
@@ -205,12 +201,10 @@ async fn authenticated_apply_rejects_removed_peer() {
         ark_store::test_support::TestDatabase::create().expect("test database initializes");
     ark_store::test_support::SyncTestState::add_removed_peer(database.path(), "device-blocked")
         .unwrap();
-    let backend = SqliteStorageBackend::open_for_test(
-        database.path().to_string_lossy().into_owned(),
-        "device-local",
-    )
-    .await
-    .unwrap();
+    let backend =
+        SqliteStorageBackend::open_for_test(database.path().to_string_lossy().into_owned())
+            .await
+            .unwrap();
     let mut entity = sync_object("blocked-core-task", "core.task", "Blocked task");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(

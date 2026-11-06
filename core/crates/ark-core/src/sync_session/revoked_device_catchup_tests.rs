@@ -16,12 +16,9 @@ struct RelayStorageFixture {
 
 async fn storage(device_id: &str) -> RelayStorageFixture {
     let database = ark_store::test_support::TestDatabase::create().unwrap();
-    let (db, owner) = DbHandle::open(
-        database.path().to_string_lossy().into_owned(),
-        device_id.to_owned(),
-    )
-    .await
-    .unwrap();
+    let (db, owner) = DbHandle::open(database.path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
     let secret = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db)
         .await
         .unwrap();

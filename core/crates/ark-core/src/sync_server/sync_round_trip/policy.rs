@@ -39,12 +39,9 @@ async fn make_policy_storage(
     profile_rules: Option<Vec<SyncProfileRule>>,
 ) -> PolicyStorage {
     let database = ark_store::test_support::TestDatabase::create().expect("test database");
-    let (db, owner) = DbHandle::open(
-        database.path().to_string_lossy().into_owned(),
-        device_id.to_owned(),
-    )
-    .await
-    .expect("open test database actor");
+    let (db, owner) = DbHandle::open(database.path().to_string_lossy().into_owned())
+        .await
+        .expect("open test database actor");
     db.submit_upsert_object_type(
         CommandContext::engine(),
         ObjectType {

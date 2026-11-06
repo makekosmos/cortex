@@ -40,12 +40,10 @@ mod tests {
     async fn actor_checks_peer_before_committing_progress() {
         let directory = crate::test_support::temp_dir();
         let path = directory.path().join("ark.db");
-        let (handle, mut owner) = DbHandle::open(
-            path.to_str().expect("database path is UTF-8").to_owned(),
-            "local-device".into(),
-        )
-        .await
-        .expect("actor database opens");
+        let (handle, mut owner) =
+            DbHandle::open(path.to_str().expect("database path is UTF-8").to_owned())
+                .await
+                .expect("actor database opens");
 
         let make_command = || {
             CommittedFeedProgressCommand::new(OutboundProgressWrite::new(

@@ -38,30 +38,25 @@ pub(crate) struct DbOwner {
 }
 
 impl DbHandle {
-    pub(crate) async fn open(
-        db_path: String,
-        legacy_task_device_id: String,
-    ) -> Result<(Self, DbOwner), DbError> {
-        Self::open_with_limits_inner(db_path, legacy_task_device_id, super::DB_ADMISSION_LIMITS)
-            .await
+    pub(crate) async fn open(db_path: String) -> Result<(Self, DbOwner), DbError> {
+        Self::open_with_limits_inner(db_path, super::DB_ADMISSION_LIMITS).await
     }
 
     #[cfg(test)]
     pub(crate) async fn open_with_limits(
         db_path: String,
-        legacy_task_device_id: String,
         limits: executor::AdmissionLimits,
     ) -> Result<(Self, DbOwner), DbError> {
-        Self::open_with_limits_inner(db_path, legacy_task_device_id, limits).await
+        Self::open_with_limits_inner(db_path, limits).await
     }
 
     async fn open_with_limits_inner(
         db_path: String,
-        legacy_task_device_id: String,
         limits: executor::AdmissionLimits,
     ) -> Result<(Self, DbOwner), DbError> {
-        let (shared, owner, ready) = ActorShared::spawn(db_path, legacy_task_device_id, limits)
+        let (shared, owner, ready) = ActorShared::spawn(db_path, limits)
             .map_err(|error| DbError::Storage(error.to_string()))?;
+
         match tokio::task::spawn_blocking(move || ready.recv()).await {
             Ok(Ok(Ok(()))) => Ok((Self { backend: shared }, DbOwner { actor: owner })),
             Ok(Ok(Err(error))) => Err(error),
