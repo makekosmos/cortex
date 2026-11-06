@@ -7,10 +7,12 @@ mod ntfs;
 mod filter;
 mod roots;
 #[cfg(windows)]
+use filter::filter_indexed_files;
+#[cfg(windows)]
 use filter::is_drive_root;
 #[cfg(all(windows, test))]
 use filter::path_has_hidden_attribute;
-use filter::{filter_indexed_files, ignore_matcher, should_enter_dir, should_index_path_for_root};
+use filter::{ignore_matcher, should_enter_dir, should_index_path_for_root};
 pub use filter::{path_contains_noisy_folder, should_index_with_options, validate_ignore_pattern};
 pub use roots::{default_roots, open_file};
 
