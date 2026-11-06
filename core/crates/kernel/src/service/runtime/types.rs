@@ -101,6 +101,9 @@ pub(super) async fn upsert_object_link(
         .submit_upsert_object_link(db::CommandContext::engine(), object_link, device_id)
         .await
         .map_err(|error| error.to_string())?;
+    for entity in &commit.entities {
+        emit_event(super::objects::links_changed(entity, "upsert"));
+    }
     maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
@@ -111,9 +114,12 @@ pub(super) async fn delete_object_link(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let commit = get_db_handle(state)?
-        .submit_delete_object_link(db::CommandContext::engine(), id, device_id)
+        .submit_delete_object_link(db::CommandContext::engine(), id.clone(), device_id)
         .await
         .map_err(|error| error.to_string())?;
+    for entity in &commit.entities {
+        emit_event(super::objects::links_changed(entity, "delete"));
+    }
     maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
 }
@@ -133,5 +139,9 @@ pub(super) async fn replace_object_link(
         .await
         .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, commit.mutation.entities).await;
+    emit_event(super::objects::links_changed_from(
+        &commit.object_link,
+        "replace",
+    ));
     serde_json::to_value(&commit.object_link).map_err(|e| e.to_string())
 }

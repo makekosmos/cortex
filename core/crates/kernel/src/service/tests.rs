@@ -62,6 +62,26 @@ pub(super) async fn initialize_test_database(
     Ok(())
 }
 
+/// A canonical note write: the type every service test can rely on.
+pub(super) fn note_write(id: &str) -> Request {
+    Request::UpsertObject {
+        object: ArkObjectWrite {
+            id: id.to_string(),
+            type_id: "core.note".to_string(),
+            type_version: Some("0.1.0".to_string()),
+            title: "changed".to_string(),
+            content_json: json!({"type": "doc", "content": []}),
+            props_json: json!({"description": null, "extensions": {}}),
+            created_at: "2026-10-16T00:00:00.000Z".to_string(),
+            updated_at: "2026-10-16T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        },
+        expected_snapshot: None,
+        operation_id: None,
+        device_id: Some("change-events-device".to_string()),
+    }
+}
+
 pub(super) fn received_upsert_for(
     receiver: &mut tokio::sync::broadcast::Receiver<serde_json::Value>,
     object_id: &str,
@@ -362,6 +382,7 @@ fn canonical_task_props() -> Value {
 }
 
 mod canonical_rpc;
+mod change_events;
 mod device_registry;
 mod operation_receipts;
 mod sync_policy;
