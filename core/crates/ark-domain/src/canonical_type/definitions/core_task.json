@@ -1,5 +1,4 @@
-// 0.2.0 retargets task relations to the canonical core project/tag types.
-pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
+{
   "typeId": "core.task",
   "name": "Задача",
   "version": "0.2.0",
@@ -452,4 +451,4 @@ pub(crate) const CORE_TASK_DEFINITION: &str = r###"{
     ]
   },
   "schemaHash": "7deaeac7698789a497fdb17f2e005c3b8f6c2d046576685173fe8b6467fbefef"
-}"###;
+}

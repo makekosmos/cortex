@@ -1,4 +1,4 @@
-pub(crate) const GAME_DEFINITION: &str = r###"{
+{
   "typeId": "core.game",
   "name": "Игра",
   "version": "0.1.0",
@@ -121,4 +121,4 @@ pub(crate) const GAME_DEFINITION: &str = r###"{
     "exclude": ["objectLocalState", "secrets"]
   },
   "schemaHash": "37c858f0ba362a4df247f50b4955ae9b92961671664b66314f019ac06e8f420c"
-}"###;
+}

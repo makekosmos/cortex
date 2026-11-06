@@ -1,6 +1,6 @@
-pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
-  "typeId": "core.time-entry",
-  "name": "Запись времени",
+{
+  "typeId": "core.person",
+  "name": "Человек",
   "version": "0.1.0",
   "ownerKind": "core",
   "ownerId": "core",
@@ -13,27 +13,22 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "startedAt": {
-        "type": "string",
-        "format": "date-time"
-      },
-      "endedAt": {
-        "type": ["string", "null"],
-        "default": null,
-        "format": "date-time"
-      },
-      "billable": {
-        "type": "boolean",
-        "default": false
-      },
-      "source": {
-        "type": "string",
-        "enum": ["manual", "pomodoro", "imported"],
-        "default": "manual"
-      },
-      "taskTitle": {
+      "firstName": {
         "type": ["string", "null"],
         "default": null
+      },
+      "lastName": {
+        "type": ["string", "null"],
+        "default": null
+      },
+      "patronymic": {
+        "type": ["string", "null"],
+        "default": null
+      },
+      "birthDate": {
+        "type": ["string", "null"],
+        "default": null,
+        "format": "date"
       },
       "extensions": {
         "type": "object",
@@ -41,15 +36,15 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
         "additionalProperties": true
       }
     },
-    "required": ["startedAt", "endedAt", "billable", "source", "taskTitle", "extensions"]
+    "required": ["firstName", "lastName", "patronymic", "birthDate", "extensions"]
   },
   "uiSchema": {
-    "collectionName": "Записи времени",
-    "featuredFields": ["startedAt", "endedAt"],
-    "visibleFields": ["startedAt", "endedAt", "billable", "source", "taskTitle"],
+    "collectionName": "Люди",
+    "featuredFields": ["firstName", "lastName"],
+    "visibleFields": ["firstName", "lastName", "patronymic", "birthDate"],
     "hiddenFields": ["extensions"],
     "readOnlyFields": [],
-    "fieldOrder": ["startedAt", "endedAt", "billable", "source", "taskTitle"],
+    "fieldOrder": ["firstName", "lastName", "patronymic", "birthDate"],
     "headerLayout": "inline",
     "defaultLayout": "page",
     "defaultTemplateId": null
@@ -137,18 +132,11 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
   },
   "relations": [
     {
-      "type": "for-task",
+      "type": "photo",
       "direction": "outbound",
-      "targetTypeId": "core.task",
+      "targetTypeId": "core.image",
       "min": 0,
       "max": 1
-    },
-    {
-      "type": "tag",
-      "direction": "outbound",
-      "targetTypeId": "core.tag",
-      "min": 0,
-      "max": null
     }
   ],
   "syncPolicy": {
@@ -156,5 +144,5 @@ pub(crate) const TIME_ENTRY_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "84c8bebd6e44a635879c32a57f6a1dc3e69a46bce08f43a410efffe5140735e9"
-}"###;
+  "schemaHash": "232e97b6c807e0d5c0c4b243b77109a3ea521ee5e047d913d8132d74bc65a9ce"
+}

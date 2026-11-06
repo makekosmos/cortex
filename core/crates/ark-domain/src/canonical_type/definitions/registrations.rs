@@ -168,6 +168,41 @@ mod hash_guard_tests {
     use std::collections::BTreeMap;
 
     #[test]
+    fn an_optional_field_added_in_json_needs_no_rust_change() {
+        // Evolving a type is a data edit: take the shipped definition, add an
+        // optional property, recompute the frozen hash and register it through
+        // the same path the builtin files use.
+        let previous: Value = serde_json::from_str(NOTE_DEFINITION).expect("note definition");
+        let mut candidate = previous.clone();
+        candidate["version"] = serde_json::json!("0.2.0");
+        candidate["schema"]["properties"]["highlight"] = serde_json::json!({"type": "string"});
+        let hash = canonical_schema_hash(
+            &candidate["schema"],
+            &candidate["uiSchema"],
+            &candidate["contentContract"],
+            &candidate["relations"],
+            &candidate["syncPolicy"],
+        )
+        .expect("candidate hash");
+        candidate["schemaHash"] = Value::String(hash.clone());
+
+        let registration = registration_from_literal(&candidate.to_string())
+            .expect("json-only definition registers");
+        assert_eq!(registration.version, "0.2.0");
+        assert_eq!(registration.schema_hash, hash);
+        assert_ne!(
+            hash,
+            previous["schemaHash"].as_str().unwrap(),
+            "hash must change"
+        );
+        crate::canonical_type::validation::check_additive_schema_change(
+            &previous["schema"],
+            &candidate["schema"],
+        )
+        .expect("adding an optional property is additive");
+    }
+
+    #[test]
     fn every_registered_type_version_has_a_frozen_schema_hash() {
         let expected: BTreeMap<String, String> = serde_json::from_str(include_str!(
             "../../../tests/fixtures/canonical_type_hashes.json"

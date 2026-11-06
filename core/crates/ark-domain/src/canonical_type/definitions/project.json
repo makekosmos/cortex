@@ -1,4 +1,4 @@
-pub(crate) const PROJECT_DEFINITION: &str = r###"{
+{
   "typeId": "core.project",
   "name": "Проект",
   "version": "0.1.0",
@@ -154,4 +154,4 @@ pub(crate) const PROJECT_DEFINITION: &str = r###"{
     "exclude": ["objectLocalState", "secrets"]
   },
   "schemaHash": "e3e45412ffbfd5dc51267d26141f19e6d02612cbf9a9b7f6943895dfc23e7862"
-}"###;
+}

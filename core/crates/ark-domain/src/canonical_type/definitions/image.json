@@ -1,4 +1,4 @@
-pub(crate) const IMAGE_DEFINITION: &str = r###"{
+{
   "typeId": "core.image",
   "name": "Изображение",
   "version": "0.1.0",
@@ -91,4 +91,4 @@ pub(crate) const IMAGE_DEFINITION: &str = r###"{
     "exclude": ["objectLocalState", "secrets"]
   },
   "schemaHash": "83e9bc320b20236b48b29294c084ca2adaecb83ddd8702217ee220641ca193ff"
-}"###;
+}

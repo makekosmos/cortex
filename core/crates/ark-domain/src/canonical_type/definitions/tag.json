@@ -1,12 +1,6 @@
-// Immutable first-party canonical type definitions.
-//
-// This module is pure domain data: it does not perform SQL, migration, validation,
-// event, or registry writes. The complete JSON fixtures below are the frozen
-// authority; the existing type-registry hash implementation remains authoritative.
-
-pub(crate) const NOTE_DEFINITION: &str = r###"{
-  "typeId": "core.note",
-  "name": "Заметка",
+{
+  "typeId": "core.tag",
+  "name": "Тег",
   "version": "0.1.0",
   "ownerKind": "core",
   "ownerId": "core",
@@ -19,7 +13,7 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "description": {
+      "color": {
         "type": ["string", "null"],
         "default": null
       },
@@ -29,15 +23,15 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
         "additionalProperties": true
       }
     },
-    "required": ["description", "extensions"]
+    "required": ["color", "extensions"]
   },
   "uiSchema": {
-    "collectionName": "Заметки",
+    "collectionName": "Теги",
     "featuredFields": [],
-    "visibleFields": ["description"],
+    "visibleFields": ["color"],
     "hiddenFields": ["extensions"],
     "readOnlyFields": [],
-    "fieldOrder": ["description"],
+    "fieldOrder": ["color"],
     "headerLayout": "inline",
     "defaultLayout": "page",
     "defaultTemplateId": null
@@ -127,13 +121,6 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
     {
       "type": "related",
       "direction": "outbound",
-      "targetTypeId": "core.note",
-      "min": 0,
-      "max": null
-    },
-    {
-      "type": "tag",
-      "direction": "outbound",
       "targetTypeId": "core.tag",
       "min": 0,
       "max": null
@@ -144,5 +131,5 @@ pub(crate) const NOTE_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "df2874984e7fae9cda3aa47ce42311e3ba1deb37196cd4e5a0f94a4b9accb311"
-}"###;
+  "schemaHash": "ba8e9c1784b8590a1db80b9e1d613940fe04bf9370f05a0449447c85d2a40517"
+}

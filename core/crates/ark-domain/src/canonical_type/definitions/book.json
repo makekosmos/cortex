@@ -1,6 +1,6 @@
-pub(crate) const TAG_DEFINITION: &str = r###"{
-  "typeId": "core.tag",
-  "name": "Тег",
+{
+  "typeId": "core.book",
+  "name": "Книга",
   "version": "0.1.0",
   "ownerKind": "core",
   "ownerId": "core",
@@ -13,9 +13,36 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "color": {
+      "author": {
         "type": ["string", "null"],
         "default": null
+      },
+      "isbn": {
+        "type": ["string", "null"],
+        "default": null
+      },
+      "pageCount": {
+        "type": ["integer", "null"],
+        "default": null,
+        "minimum": 0
+      },
+      "language": {
+        "type": ["string", "null"],
+        "default": null
+      },
+      "publisher": {
+        "type": ["string", "null"],
+        "default": null
+      },
+      "publishedDate": {
+        "type": ["string", "null"],
+        "default": null,
+        "format": "date"
+      },
+      "sourceUrl": {
+        "type": ["string", "null"],
+        "default": null,
+        "format": "uri"
       },
       "extensions": {
         "type": "object",
@@ -23,15 +50,40 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
         "additionalProperties": true
       }
     },
-    "required": ["color", "extensions"]
+    "required": [
+      "author",
+      "isbn",
+      "pageCount",
+      "language",
+      "publisher",
+      "publishedDate",
+      "sourceUrl",
+      "extensions"
+    ]
   },
   "uiSchema": {
-    "collectionName": "Теги",
-    "featuredFields": [],
-    "visibleFields": ["color"],
+    "collectionName": "Книги",
+    "featuredFields": ["author"],
+    "visibleFields": [
+      "author",
+      "isbn",
+      "pageCount",
+      "language",
+      "publisher",
+      "publishedDate",
+      "sourceUrl"
+    ],
     "hiddenFields": ["extensions"],
     "readOnlyFields": [],
-    "fieldOrder": ["color"],
+    "fieldOrder": [
+      "author",
+      "isbn",
+      "pageCount",
+      "language",
+      "publisher",
+      "publishedDate",
+      "sourceUrl"
+    ],
     "headerLayout": "inline",
     "defaultLayout": "page",
     "defaultTemplateId": null
@@ -119,9 +171,23 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
   },
   "relations": [
     {
-      "type": "related",
+      "type": "cover-image",
+      "direction": "outbound",
+      "targetTypeId": "core.image",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "type": "tag",
       "direction": "outbound",
       "targetTypeId": "core.tag",
+      "min": 0,
+      "max": null
+    },
+    {
+      "type": "author-person",
+      "direction": "outbound",
+      "targetTypeId": "core.person",
       "min": 0,
       "max": null
     }
@@ -131,5 +197,5 @@ pub(crate) const TAG_DEFINITION: &str = r###"{
     "include": ["title", "content", "props", "links", "createdAt", "updatedAt", "deletedAt"],
     "exclude": ["objectLocalState", "secrets"]
   },
-  "schemaHash": "ba8e9c1784b8590a1db80b9e1d613940fe04bf9370f05a0449447c85d2a40517"
-}"###;
+  "schemaHash": "7217e0ef3d1b48f250a904891593a4bdfb41d8f3718da4eaa542a81a5d5a40ed"
+}
