@@ -107,8 +107,6 @@ pub(super) async fn run<'a>(
                 session_io.sender(),
                 Arc::clone(storage),
                 Arc::clone(peer),
-                space_id.to_owned(),
-                device_id.to_owned(),
             );
             if tx.send(client_hello.message).await.is_err() {
                 let _ = session_io.finish().await;
@@ -300,21 +298,6 @@ pub(super) async fn run<'a>(
                                         break;
                                     }
                                 }
-
-                                ClientMessage::SignedIntegrationFrame(frame) => {
-                                    live_messages::handle_signed_integration_message(
-                                        client_session.is_ready(),
-                                        storage,
-                                        client_session.peer_device_id(),
-                                        device_id,
-                                        space_id,
-                                        &tx,
-                                        frame,
-                                    )
-                                    .await;
-                                }
-
-                                ClientMessage::SignedIntegrationAck => {}
 
                                 ClientMessage::LiveChange {
                                     change_id,

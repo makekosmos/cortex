@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_core::sync_server::{
-    IntegrationReplicationBackend, PeerIdentityBackend, SyncRuntimeStorage,
-};
 use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
-use ark_domain::sync_storage::{PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort};
+use ark_domain::replication_storage::PeerIdentityBackend;
+use ark_domain::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncRuntimeStorage,
+};
 use tokio::sync::{watch, Notify};
 
 use super::fixtures::{make_storage_with_identity, pick_port};

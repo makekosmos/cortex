@@ -9,7 +9,6 @@ mod storage_backend_roundtrips;
 #[path = "tests_sync/storage_backend_tombstones_and_vectors.rs"]
 mod storage_backend_tombstones_and_vectors;
 
-pub(super) use canonical_object_transaction::admit_test_registry_peer;
 pub(super) use storage_backend_roundtrips::{
     sync_tracked_app, sync_usage_event, sync_usage_session,
 };

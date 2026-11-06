@@ -2,7 +2,6 @@ use super::super::send_msg;
 use super::super::{
     AuthenticatedTx, ClientFeedInFlight, ClientMessageSender, ClientOnChangeCallback, TAG,
 };
-use ark_domain::integration_replication::SignedSyncEnvelope;
 use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::sync_storage::{OutboundAck, SyncRuntimeStorage};

@@ -43,9 +43,6 @@ use crate::db::{self, DbHandle, SqliteStorageBackend};
 use crate::direct_client::DirectClient;
 use crate::events::emit_event;
 use crate::hlc::HLC;
-use crate::integration_replication::{
-    AuthorizedNode, IntegrationCredentialEnvelope, IntegrationNodeGrant, SignedSyncEnvelope,
-};
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{PeerEntry, SyncServer};
 use crate::sync_session::{SyncSession, SyncSessionConfig};
@@ -71,8 +68,6 @@ pub(crate) use self::definitions::{
     SyncRuntime, SyncStartParams,
 };
 use self::runtime::handle_request;
-#[cfg(test)]
-pub(crate) use crate::db::RefreshLeaseAcquireParams;
 // The runtime::system handlers reach the sync handlers through the shared
 // `use super::*` chain, so the whole set is imported at this scope.
 #[cfg(test)]

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_domain::sync_contracts::transport::{
-    OutboundIntegrationFrameAuthorizer, SyncTransport, TransportEvent,
-};
+use ark_domain::sync_contracts::transport::{SyncTransport, TransportEvent};
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::endpoint::{presets, BindOpts};
 use iroh::{Endpoint, RelayMode};

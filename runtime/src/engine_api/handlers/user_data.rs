@@ -32,6 +32,10 @@ pub(super) fn user_data_ok(data: Value) -> HttpResponse {
     json_response(StatusCode::OK, json!({ "ok": true, "data": data }))
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
 pub(super) fn user_data_field<'a>(
     value: Option<&'a str>,
     field: &str,
@@ -44,7 +48,11 @@ pub(super) fn user_data_field<'a>(
     })
 }
 
-pub(super) fn user_data_header<'a>(
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
+fn user_data_header<'a>(
     request: &'a Request<Incoming>,
     name: &str,
 ) -> Result<&'a str, HttpResponse> {

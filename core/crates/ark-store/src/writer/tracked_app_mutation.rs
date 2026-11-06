@@ -1,5 +1,4 @@
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
-use rusqlite::Connection;
 
 pub struct TrackedAppMutationWrites<'scope, 'connection> {
     transaction: &'scope rusqlite::Transaction<'connection>,
@@ -30,15 +29,6 @@ impl SqliteWriter {
         mutation: crate::tracked_app_mutation::TrackedAppMutation,
     ) -> Result<ark_domain::types::SyncEntity, StoreTransactionFailure<String>> {
         self.write_with_capabilities(|capabilities| {
-            capabilities.tracked_app_mutation().apply(mutation)
-        })
-    }
-
-    pub fn apply_tracked_app_mutation_on_connection(
-        connection: &mut Connection,
-        mutation: crate::tracked_app_mutation::TrackedAppMutation,
-    ) -> Result<ark_domain::types::SyncEntity, StoreTransactionFailure<String>> {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
             capabilities.tracked_app_mutation().apply(mutation)
         })
     }

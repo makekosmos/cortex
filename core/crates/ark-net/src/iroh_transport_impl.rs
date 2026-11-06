@@ -6,7 +6,6 @@ use std::time::Duration;
 use ark_domain::sync_contracts::protocol_negotiation::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, ProtocolOffer,
 };
-use ark_domain::sync_contracts::transport::OutboundIntegrationFrameAuthorizer;
 use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
 use iroh::{Endpoint, RelayMode};
 use tokio::sync::{broadcast, watch};
@@ -36,8 +35,6 @@ pub struct IrohTransport {
     /// dial loop must not resurrect them on its own: a declined or
     /// cancelled pairing attempt would re-prompt the responder forever.
     pub(super) suppressed_endpoints: Arc<Mutex<std::collections::HashSet<EndpointId>>>,
-    pub(super) outbound_authorizer:
-        Arc<tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>>,
     /// Every spawned task (relay watch, accept/dial loops, per-connection
     /// pumps) — aborted and joined by `stop()`.
     pub(super) tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
@@ -59,7 +56,6 @@ impl IrohTransport {
             suppressed_endpoints: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
-            outbound_authorizer: Arc::new(tokio::sync::RwLock::new(None)),
             tasks: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -113,7 +109,7 @@ impl IrohTransport {
             .ok_or_else(|| "iroh transport: our_ticket() called before start()".to_string())?;
 
         // Wait for relay homing with an 8-second timeout to avoid blocking
-        // unrelated RPC calls (e.g. app_index.list_all, pomodoro.get_state)
+        // unrelated RPC calls (e.g. app_index.list_all)
         // which would time out at 30s if our_ticket() hangs here for ~50s.
         match tokio::time::timeout(Duration::from_secs(8), endpoint.online()).await {
             Ok(()) => {

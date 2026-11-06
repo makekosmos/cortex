@@ -22,11 +22,6 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/command/executor/actor/task/integration_admin.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/db/command/executor/actor/task/sync_policy_write.rs",
       "category": "SQLite mutation API",
       "count": 1
@@ -99,47 +94,12 @@
     {
       "path": "core/crates/ark-store/src/data_platform.rs",
       "category": "SQLite mutation API",
-      "count": 7
+      "count": 6
     },
     {
       "path": "core/crates/ark-store/src/device_registry.rs",
       "category": "SQLite mutation API",
       "count": 2
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/admin.rs",
-      "category": "SQLite mutation API",
-      "count": 4
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/configurations.rs",
-      "category": "SQLite mutation API",
-      "count": 2
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/credentials.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/grants.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/leases.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/nodes.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-store/src/integration_replication/signed_frame.rs",
-      "category": "SQLite mutation API",
-      "count": 4
     },
     {
       "path": "core/crates/ark-store/src/load_all.rs",

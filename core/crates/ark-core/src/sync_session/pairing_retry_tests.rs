@@ -56,13 +56,6 @@ impl IrohSessionTransport for FailOncePairingAcceptedTransport {
         Ok(())
     }
 
-    fn set_outbound_authorizer(
-        &self,
-        _: Arc<dyn ark_domain::sync_contracts::transport::OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
     fn bind_peer_for_control(&self, _: &str, _: &str) -> Result<(), String> {
         Ok(())
     }

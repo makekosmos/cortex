@@ -328,6 +328,5 @@ The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 | Dictation dev loop        | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | Dictation models          | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | Linux development         | [`docs/linux-dev.md`](docs/linux-dev.md)                         |
-| macOS package workers     | [`docs/macos-package-workers.md`](docs/macos-package-workers.md) |
 | Packaging and releases    | [`desktop/DEV.md`](desktop/DEV.md)                               |
 | Manager                   | [`manager-gpui/README.md`](manager-gpui/README.md)               |

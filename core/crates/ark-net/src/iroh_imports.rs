@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use ark_domain::sync_contracts::wire::LanSyncMessage;
-
 use super::EndpointId;
 
-/// ALPN identifier for ark-sync over Iroh QUIC streams.
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+
+/// ALPN-идентификатор протокола ark-sync поверх iroh QUIC-стримов.
+/// Версионируем отдельно от `protocol::PROTOCOL_VERSION` (см. spec §3.3).
 pub const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 
 /// Capacity for queued outbound messages.

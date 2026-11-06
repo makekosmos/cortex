@@ -24,18 +24,6 @@ impl EngineApiShutdownHandle {
 pub enum EngineApiError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("package definition registration failed: {0}")]
-    PackageDefinitionRegistration(String),
-}
-
-pub(crate) async fn register_package_definitions(
-    package_service: &PackageService,
-    dispatcher: &crate::engine_dispatch::EngineDispatcher,
-) -> Result<(), String> {
-    package_service
-        .register_package_definitions(dispatcher)
-        .await
-        .map_err(|error| error.to_string())
 }
 
 pub struct EngineApiServer {
@@ -45,11 +33,6 @@ pub struct EngineApiServer {
     ws_port: u16,
     protocol_usage: Arc<ProtocolUsageStore>,
     correlation_id: Arc<String>,
-    package_service: Arc<PackageService>,
-    pub(super) launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
-    /// ARK event bus receiver — each `/v1/apps/launch/<id>/events` request
-    /// resubscribes its own consumer off this seed.
-    launch_events: std::sync::Mutex<Option<tokio::sync::broadcast::Receiver<(String, Value)>>>,
     user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
     pub(super) operations: HttpOperationRegistry,
@@ -63,62 +46,15 @@ impl EngineApiServer {
         ws_port: u16,
         protocol_usage: Arc<ProtocolUsageStore>,
         correlation_id: String,
-        package_service: Arc<PackageService>,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
     ) -> Result<Self, EngineApiError> {
-        let server = Self::bind_with_limits(
-            auth_token,
-            ws_port,
-            protocol_usage,
-            correlation_id,
-            package_service,
-            dispatcher,
-            LAUNCH_LEASE_TTL,
-            MAX_ACTIVE_LAUNCH_LEASES,
-            Duration::from_secs(1),
-            REQUEST_TIMEOUT,
-        )
-        .await?;
-        server
-            .package_service
-            .configure_package_definition_dispatcher(server.dispatcher.clone());
-        register_package_definitions(&server.package_service, &server.dispatcher)
-            .await
-            .map_err(EngineApiError::PackageDefinitionRegistration)?;
-        Ok(server)
-    }
-
-    #[cfg(test)]
-    #[allow(clippy::too_many_arguments)]
-    pub(super) async fn bind_with_test_limits(
-        auth_token: String,
-        ws_port: u16,
-        protocol_usage: Arc<ProtocolUsageStore>,
-        correlation_id: String,
-        package_service: Arc<PackageService>,
-        ttl: Duration,
-        capacity: usize,
-        cleanup_interval: Duration,
-    ) -> Result<Self, EngineApiError> {
-        let dispatcher = Arc::new(crate::engine_dispatch::EngineDispatcher::new(Arc::new(
-            |_| {
-                Box::pin(async {
-                    Err::<serde_json::Value, crate::engine_dispatch::DispatchError>(
-                        crate::engine_dispatch::DispatchError::Unavailable,
-                    )
-                })
-            },
-        )));
         Self::bind_with_limits(
             auth_token,
             ws_port,
             protocol_usage,
             correlation_id,
-            package_service,
             dispatcher,
-            ttl,
-            capacity,
-            cleanup_interval,
+            Duration::from_secs(1),
             REQUEST_TIMEOUT,
         )
         .await
@@ -155,10 +91,7 @@ impl EngineApiServer {
             9,
             Arc::new(ProtocolUsageStore::open(dir.path()).expect("usage")),
             "00000000-0000-4000-8000-000000000001".into(),
-            Arc::new(PackageService::open(dir.path()).expect("packages")),
             dispatcher,
-            LAUNCH_LEASE_TTL,
-            MAX_ACTIVE_LAUNCH_LEASES,
             Duration::from_secs(1),
             request_timeout,
         )
@@ -167,27 +100,16 @@ impl EngineApiServer {
         Ok((dir, server))
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn bind_with_limits(
         auth_token: String,
         ws_port: u16,
         protocol_usage: Arc<ProtocolUsageStore>,
         correlation_id: String,
-        package_service: Arc<PackageService>,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
-        ttl: Duration,
-        capacity: usize,
         cleanup_interval: Duration,
         request_timeout: Duration,
     ) -> Result<Self, EngineApiError> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let launch_leases = Arc::new(Mutex::new(LaunchLeaseRegistry::with_limits(ttl, capacity)));
-        // The dispatch-side `packages.open` mints through this same registry —
-        // wire the surface before serving so the op is never half-configured.
-        package_service.configure_launch_surface(crate::package_launch::LaunchSurface {
-            leases: launch_leases.clone(),
-            http_port: listener.local_addr()?.port(),
-        });
         Ok(Self {
             listener,
             dispatcher,
@@ -195,25 +117,12 @@ impl EngineApiServer {
             ws_port,
             protocol_usage,
             correlation_id: Arc::new(correlation_id),
-            package_service,
-            launch_leases,
-            launch_events: std::sync::Mutex::new(None),
             user_data: Arc::new(crate::user_data::UserDataRoots::new()),
             cleanup_interval,
             operations: HttpOperationRegistry::default(),
             connections: Arc::new(HttpConnectionLifecycle::default()),
             request_timeout,
         })
-    }
-
-    /// Wire the ARK event bus after bind — the server is constructed before
-    /// the ArkHost in some boot paths; an unset bus answers `/events` with
-    /// 503 rather than hanging a silent stream.
-    pub fn set_launch_events(&mut self, events: tokio::sync::broadcast::Receiver<(String, Value)>) {
-        *self
-            .launch_events
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(events);
     }
 
     pub async fn shutdown(&self) -> Result<(), &'static str> {
@@ -251,10 +160,6 @@ impl EngineApiServer {
                 },
                 _ = self.connections.cancelled() => return Ok(()),
                 _ = cleanup.tick() => {
-                    self.launch_leases
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .purge_expired();
                     self.operations.reap().await;
                     None
                 }
@@ -266,17 +171,9 @@ impl EngineApiServer {
             let usage = self.protocol_usage.clone();
             let ws_port = self.ws_port;
             let correlation_id = self.correlation_id.clone();
-            let package_service = self.package_service.clone();
             let dispatcher = self.dispatcher.clone();
             let request_timeout = self.request_timeout;
             let operations = self.operations.clone();
-            let launch_leases = self.launch_leases.clone();
-            let launch_events = self
-                .launch_events
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .as_ref()
-                .map(tokio::sync::broadcast::Receiver::resubscribe);
             let user_data = self.user_data.clone();
             let http_port = self.port();
             let connections = self.connections.clone();
@@ -321,14 +218,9 @@ impl EngineApiServer {
                         ws_port,
                         usage.clone(),
                         correlation_id.clone(),
-                        package_service.clone(),
                         dispatcher.clone(),
                         request_timeout,
                         operations.clone(),
-                        launch_leases.clone(),
-                        launch_events
-                            .as_ref()
-                            .map(tokio::sync::broadcast::Receiver::resubscribe),
                         user_data.clone(),
                         http_port,
                     )

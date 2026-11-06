@@ -3,7 +3,6 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::task_set::{abort_and_join, join_all, track_task};
-use ark_domain::integration_replication::SignedSyncEnvelope;
 use ark_domain::sync_contracts::client_transport::DirectClientConnector;
 use ark_domain::sync_contracts::protocol_negotiation::*;
 use ark_domain::sync_contracts::wire::*;
@@ -181,32 +180,6 @@ impl DirectClient {
             let session = guard.take().expect("authenticated session was present");
             session.tx.close();
         }
-    }
-
-    pub async fn send_signed_integration_frame(
-        &self,
-        frame: SignedSyncEnvelope,
-    ) -> Result<(), String> {
-        if frame.space_id != self.space_id {
-            return Err("signed integration frame has the wrong space".into());
-        }
-        if frame.origin_node_id != self.device_id {
-            return Err("signed integration frame origin is not this node".into());
-        }
-        let guard = self.authenticated_tx.lock().await;
-        let Some(session) = guard.as_ref() else {
-            return Err("LAN peer is not authenticated".into());
-        };
-        if frame.recipient_node_id != session.peer_id {
-            return Err("signed integration frame is addressed to another peer".into());
-        }
-        self.storage
-            .validate_outbound_signed_integration_frame(&frame, &self.space_id, &self.device_id)
-            .await?;
-        session
-            .tx
-            .send(LanSyncMessage::SignedIntegrationFrame { frame })
-            .await
     }
 
     pub async fn set_on_change(&self, handler: ClientOnChangeCallback) {

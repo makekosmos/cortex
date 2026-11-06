@@ -15,7 +15,7 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
 
 - `core/crates/ark-core/` is the shared Rust + SQLite runtime; the Engine
   hosts it in-process via `ark_core::service::ArkService`
-  (`../../../runtime/crates/engine-packages/src/ark_host.rs`). The old `ark-core-rpc` sidecar is gone.
+  (`../../../runtime/src/ark_host.rs`). The old `ark-core-rpc` sidecar is gone.
 - Requests are dispatched to a dedicated worker thread in FIFO order under
   `catch_unwind`. A handler panic makes the active request outcome unknown,
   cancels queued requests, stops sync, and terminates the service worker. The

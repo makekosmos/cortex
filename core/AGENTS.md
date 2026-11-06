@@ -6,7 +6,7 @@ application. It now contains only:
 
 - `crates/ark-core/` — the shared Rust + SQLite runtime ("ARK"), hosted
   in-process by the Engine via `ark_core::service::ArkService`
-  (`../runtime/crates/engine-packages/src/ark_host.rs`). Local rules and invariants:
+  (`../runtime/src/ark_host.rs`). Local rules and invariants:
   [`crates/ark-core/AGENTS.md`](crates/ark-core/AGENTS.md).
 - `integrations/fatsecret/` — ARK type registration data
   (`type-registration.json`).

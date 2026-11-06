@@ -11,7 +11,7 @@ data is part of the client or the Engine, reviewed and released with them.
 ```
 Atlas (GPUI client)  ──HTTP/WS──▶  Engine (runtime/)
                                      │
-                                     ├─ ArkHost  (runtime/crates/engine-packages/src/ark_host.rs)
+                                     ├─ ArkHost  (runtime/src/ark_host.rs)
                                      │     └─ ArkService  (core/crates/ark-core/src/service.rs)
                                      │
                                      ├─ ark-core    request admission, actor, events
@@ -64,7 +64,7 @@ enforces the whitelist, so a new edge has to be argued for, not discovered.
 
 `ArkService::call` is the operation surface: `{"op","params"}` in,
 `{"ok","data","error"}` out. The Engine exposes it to Atlas over HTTP and
-WebSocket; in-process callers (agents, pomodoro, dictation) use `ArkHost`.
+WebSocket; in-process callers (agents, dictation) use `ArkHost`.
 Adding an operation means adding it there, not opening a second path to the
 database.
 

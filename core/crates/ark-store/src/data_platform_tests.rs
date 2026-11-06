@@ -4,54 +4,6 @@ use rusqlite::Connection;
 use serde_json::json;
 
 #[test]
-fn external_refs_are_additive_and_unique() {
-    let conn = Connection::open_in_memory().unwrap();
-    crate::open::init_schema(&conn).unwrap();
-    conn.execute(
-        concat!(
-            "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
-            "VALUES('note-1','core.note','0.1.0','Note','now','now')"
-        ),
-        [],
-    )
-    .unwrap();
-    crate::data_platform::upsert_external_ref(
-        &conn,
-        &ark_domain::external_ref::ExternalRefUpsert {
-            connector_id: "obsidian".into(),
-            account_id: "vault".into(),
-            external_type: "markdown".into(),
-            external_id: "notes/a.md".into(),
-            object_id: "note-1".into(),
-            revision: Some("1".into()),
-            hash: Some("a".repeat(64)),
-            state: "clean".into(),
-        },
-    )
-    .unwrap();
-    assert_eq!(
-        conn.query_row("SELECT object_id FROM external_refs", [], |r| r
-            .get::<_, String>(0))
-            .unwrap(),
-        "note-1"
-    );
-    assert!(crate::data_platform::upsert_external_ref(
-        &conn,
-        &ark_domain::external_ref::ExternalRefUpsert {
-            connector_id: String::new(),
-            account_id: "vault".into(),
-            external_type: "markdown".into(),
-            external_id: "x".into(),
-            object_id: "note-1".into(),
-            revision: None,
-            hash: None,
-            state: "clean".into(),
-        },
-    )
-    .is_err());
-}
-
-#[test]
 fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();

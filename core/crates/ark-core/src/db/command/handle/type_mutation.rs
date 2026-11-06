@@ -1,6 +1,5 @@
 use super::super::executor::actor::{
-    DeleteObjectTypeTask, RegisterApplicationTypeTask, RegisterPackageTypesTask,
-    UpsertObjectTypeTask, WriterTask,
+    DeleteObjectTypeTask, RegisterApplicationTypeTask, UpsertObjectTypeTask, WriterTask,
 };
 use super::*;
 
@@ -16,24 +15,6 @@ impl DbHandle {
             let (reply, response) = tokio::sync::oneshot::channel();
             let task: Box<dyn WriterTask> = Box::new(RegisterApplicationTypeTask {
                 registration,
-                reply,
-            });
-            actor.admit(context.class, &context.source, weight, task)?;
-            response.await.unwrap_or(Err(DbError::OutcomeUnknown))
-        }
-    }
-
-    pub(crate) async fn submit_register_package_types(
-        &self,
-        context: CommandContext,
-        registrations: Vec<ark_domain::canonical_type::TypeRegistration>,
-    ) -> Result<Vec<ark_domain::sync_storage::ReplayNotice>, DbError> {
-        let weight = validate(&context, "types.register.v1", &registrations)?;
-        {
-            let actor = &self.backend;
-            let (reply, response) = tokio::sync::oneshot::channel();
-            let task: Box<dyn WriterTask> = Box::new(RegisterPackageTypesTask {
-                registrations,
                 reply,
             });
             actor.admit(context.class, &context.source, weight, task)?;

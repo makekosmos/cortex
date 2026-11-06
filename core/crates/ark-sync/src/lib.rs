@@ -12,10 +12,8 @@ pub mod server_session;
 mod sync_client;
 pub mod task_merge_delivery;
 mod task_set;
-pub mod transport;
 pub mod transport_select;
 
-pub use ark_domain::integration_replication::SignedSyncEnvelope;
 pub use ark_domain::sync_storage::SyncRuntimeStorage;
 #[doc(hidden)]
 pub use sync_client::{

@@ -7,6 +7,10 @@ pub(in crate::engine_api) struct AuthenticatedClient {
     pub(super) version: String,
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
 pub(in crate::engine_api) fn authenticate(
     headers: &HeaderMap,
     expected_token: &str,

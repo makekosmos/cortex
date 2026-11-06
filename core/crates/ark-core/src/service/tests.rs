@@ -211,7 +211,7 @@ async fn setup_sync_with_capturing_transport(
             iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
-            bind: SyncBind::AllInterfaces,
+            bind: SyncBind::Loopback,
             app_version: None,
         },
         iroh_our_ticket: watch::channel(None).1,
@@ -262,15 +262,6 @@ impl crate::sync_transport::IrohSessionTransport for CapturingSyncTransport {
         message: ark_domain::sync_contracts::wire::LanSyncMessage,
     ) -> Result<(), String> {
         crate::sync_transport::SyncTransport::send(self, message)
-    }
-
-    fn set_outbound_authorizer(
-        &self,
-        _authorizer: Arc<
-            dyn ark_domain::sync_contracts::transport::OutboundIntegrationFrameAuthorizer,
-        >,
-    ) -> Result<(), String> {
-        Ok(())
     }
 
     fn bind_peer_for_control(&self, _device_id: &str, _key: &str) -> Result<(), String> {
@@ -375,8 +366,6 @@ fn canonical_task_props() -> Value {
 
 mod canonical_rpc;
 mod device_registry;
-mod external_ref_commands;
-mod integration_rpc;
 mod object_mutation_commands;
 mod operation_receipts;
 mod sync_policy;

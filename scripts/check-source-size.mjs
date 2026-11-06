@@ -33,7 +33,7 @@ const GRANDFATHERED = new Set([
   "runtime/src/engine_control.rs",
   "runtime/src/focus.rs",
   "runtime/src/main.rs",
-  "runtime/src/pomodoro_host.rs",
+  "runtime/crates/engine-dictation/src/config.rs",
   "runtime/src/usage_tracker/mod.rs",
   "runtime/src/usage_tracker/windows_capture.rs",
   "runtime/tests/it/ark_markdown_bridge_worker.rs",

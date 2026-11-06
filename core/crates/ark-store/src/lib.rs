@@ -10,8 +10,6 @@ pub mod data_platform;
 pub mod data_volume;
 pub mod database;
 pub mod device_registry;
-pub mod integration_admin;
-pub mod integration_replication;
 pub mod load_all;
 pub mod object_link_mutation;
 pub mod object_mutation;
@@ -25,7 +23,6 @@ pub mod pending_objects;
 mod read_capabilities;
 pub mod read_snapshot;
 pub mod schema;
-pub mod signed_integration;
 pub mod snapshot;
 pub mod sync_entities;
 pub mod sync_kv;
@@ -49,8 +46,8 @@ pub mod writer;
 pub mod test_support;
 
 pub use read_capabilities::{
-    CanonicalReadCapabilities, IntegrationReplicationReadCapabilities, ObjectReadCapabilities,
-    ReadCapabilities, SystemReadCapabilities, TypeRegistryReadCapabilities, UsageReadCapabilities,
+    CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities, SystemReadCapabilities,
+    TypeRegistryReadCapabilities, UsageReadCapabilities,
 };
 
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
@@ -65,8 +62,6 @@ mod canonical_type_bootstrap_tests;
 mod core_storage_tests;
 #[cfg(test)]
 mod data_platform_tests;
-#[cfg(test)]
-mod integration_schema_upgrade_tests;
 #[cfg(test)]
 mod load_all_json_tests;
 #[cfg(test)]

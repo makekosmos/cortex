@@ -1,8 +1,6 @@
 use crate::appearance::AppearanceStore;
 use crate::diagnostics::SharedRpcDiagnostics;
 use crate::engine_settings;
-use crate::package_service::PackageService;
-use crate::package_worker_supervisor::AutostartControl;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::updater::UpdaterService;
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
@@ -59,27 +57,11 @@ impl ManagerState {
         rpc: &SharedRpcDiagnostics,
         usage: &Arc<UsageTrackerDiagnosticsState>,
         protocol: &Arc<ProtocolUsageStore>,
-        packages: &Arc<PackageService>,
     ) -> Value {
         let rpc_snapshot = rpc.snapshot();
         let usage_snapshot = usage.snapshot();
         let protocol_snapshot = protocol.snapshot();
-        let workers = packages
-            .worker_diagnostics()
-            .into_iter()
-            .map(|worker| {
-                json!({
-                    "id": worker.id,
-                    "version": worker.version,
-                    "status": worker.state,
-                    "state": worker.state,
-                    "restart_count": worker.restart_count,
-                    "generation": worker.generation,
-                    "lifecycle_reason": worker.lifecycle_reason,
-                    "bridge_status": worker.bridge_status,
-                })
-            })
-            .collect::<Vec<_>>();
+        let workers = Vec::<Value>::new();
         let protocol_usage = json!({
             "tracking_started_at": protocol_snapshot.tracking_started_at,
             "api_v1": protocol_snapshot.api_v1,
@@ -223,15 +205,6 @@ impl ManagerState {
     }
 }
 
-// EngineCapabilityExecutor lives in engine-packages; ManagerState
-// satisfies its autostart boundary here so worker calls route through the
-// same host-side toggle.
-impl AutostartControl for ManagerState {
-    fn set_autostart(&self, enabled: bool) -> Result<Value, String> {
-        ManagerState::set_autostart(self, enabled)
-    }
-}
-
 // pub(crate): the installer's `post-install` subcommand reuses the
 // StartupApproved marker layout and the Run/Approved subkey constants
 //
@@ -353,7 +326,7 @@ mod tests {
                 json!({
                     "token": "secret-token",
                     "body": {"private": "object body"},
-                    "package_path": r"C:\Users\alice\packages\demo.kspkg",
+                    "legacy_path": r"C:\Users\alice\data\demo.bin",
                     "payload": "raw payload",
                 }),
                 json!({"authorization": "Bearer abc"}),

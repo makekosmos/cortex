@@ -15,6 +15,7 @@ mod iroh_data_admission;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_ticket_pairing;
+mod old_db_compat;
 mod registry_definition_authority;
 mod relay_round_trip;
 mod selective_sync_projection;
