@@ -216,6 +216,8 @@ impl ArkService {
                 map
             }
         };
+        definitions::reject_unknown_parameters(operation, &envelope)
+            .map_err(ArkServiceError::Request)?;
         envelope.insert("operation".into(), Value::String(operation.to_owned()));
         let request: Request = serde_json::from_value(Value::Object(envelope))
             .map_err(|e| ArkServiceError::Request(e.to_string()))?;

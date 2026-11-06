@@ -30,6 +30,35 @@ fn default_sync_filter() -> Value {
     json!({})
 }
 
+/// Parameter names an operation accepts. Operations listed here reject any
+/// other key instead of silently ignoring it: there are no old clients left to
+/// keep tolerant, and a misspelled field must not look like "no value".
+fn accepted_parameter_names(operation: &str) -> Option<&'static [&'static str]> {
+    match operation {
+        "types.register" => Some(&["typeId", "version", "schema", "name", "appId"]),
+        _ => None,
+    }
+}
+
+/// Rejects parameter keys the operation does not document.
+pub(crate) fn reject_unknown_parameters(
+    operation: &str,
+    params: &serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    let Some(accepted) = accepted_parameter_names(operation) else {
+        return Ok(());
+    };
+    for key in params.keys() {
+        if !accepted.contains(&key.as_str()) {
+            return Err(format!(
+                "{operation} does not accept parameter '{key}'; expected one of {}",
+                accepted.join(", ")
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
@@ -211,17 +240,10 @@ pub(crate) enum Request {
         #[serde(rename = "typeId")]
         type_id: String,
         version: String,
-        #[serde(alias = "schemaJson", alias = "schema_json")]
         schema: Value,
         #[serde(default)]
         name: Option<String>,
-        #[serde(
-            default,
-            rename = "appId",
-            alias = "ownerId",
-            alias = "app_id",
-            alias = "owner_id"
-        )]
+        #[serde(default, rename = "appId")]
         app_id: Option<String>,
     },
     ListObjectTypes,

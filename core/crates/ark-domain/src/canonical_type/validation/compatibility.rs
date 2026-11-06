@@ -22,6 +22,7 @@ fn compare_schema(previous: &Value, candidate: &Value, path: &[String]) -> Resul
         .ok_or_else(|| format!("{} is not a JSON schema object", describe(path)))?;
 
     compare_types(previous, candidate, path)?;
+    compare_enum(previous, candidate, path)?;
     compare_required(previous, candidate, path)?;
     compare_properties(previous, candidate, path)?;
 
@@ -56,6 +57,41 @@ fn compare_types(
         ));
     }
     Ok(())
+}
+
+/// An enum may only grow: adding a value keeps every previously valid document
+/// valid, while dropping one (or introducing an enum where the field used to
+/// accept anything of its declared type) rejects documents that were legal.
+fn compare_enum(
+    previous: &Map<String, Value>,
+    candidate: &Map<String, Value>,
+    path: &[String],
+) -> Result<(), String> {
+    let previous_values = enum_values(previous.get("enum"));
+    let candidate_values = enum_values(candidate.get("enum"));
+    let Some(previous_values) = previous_values else {
+        if candidate_values.is_some() {
+            return Err(format!("{} introduced an enum", describe(path)));
+        }
+        return Ok(());
+    };
+    let Some(candidate_values) = candidate_values else {
+        // Dropping the enum widens the field: every previous document still
+        // validates against the declared type.
+        return Ok(());
+    };
+    for value in &previous_values {
+        if !candidate_values.contains(value) {
+            return Err(format!("{} dropped enum value {}", describe(path), value));
+        }
+    }
+    Ok(())
+}
+
+fn enum_values(value: Option<&Value>) -> Option<Vec<String>> {
+    value
+        .and_then(Value::as_array)
+        .map(|values| values.iter().map(Value::to_string).collect())
 }
 
 fn compare_required(
@@ -215,6 +251,51 @@ mod tests {
         candidate["required"] = json!(["title", "note"]);
         let error = check_additive_schema_change(&base(), &candidate).unwrap_err();
         assert!(error.contains("field 'note' became required"), "{error}");
+    }
+
+    #[test]
+    fn adding_an_enum_value_is_compatible() {
+        let mut previous = base();
+        previous["properties"]["status"] = json!({"type": "string", "enum": ["open", "done"]});
+        let mut candidate = previous.clone();
+        candidate["properties"]["status"]["enum"] = json!(["open", "done", "archived"]);
+        check_additive_schema_change(&previous, &candidate).unwrap();
+    }
+
+    #[test]
+    fn dropping_an_enum_value_is_rejected() {
+        let mut previous = base();
+        previous["properties"]["status"] = json!({"type": "string", "enum": ["open", "done"]});
+        let mut candidate = previous.clone();
+        candidate["properties"]["status"]["enum"] = json!(["open"]);
+        let error = check_additive_schema_change(&previous, &candidate).unwrap_err();
+        assert!(
+            error.contains("field 'status' dropped enum value \"done\""),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn introducing_an_enum_where_the_field_was_open_is_rejected() {
+        let mut candidate = base();
+        candidate["properties"]["priority"] = json!({"type": "integer", "enum": [1, 2, 3]});
+        let error = check_additive_schema_change(&base(), &candidate).unwrap_err();
+        assert!(
+            error.contains("field 'priority' introduced an enum"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn dropping_the_enum_widens_the_field_and_stays_compatible() {
+        let mut previous = base();
+        previous["properties"]["status"] = json!({"type": "string", "enum": ["open", "done"]});
+        let mut candidate = previous.clone();
+        candidate["properties"]["status"]
+            .as_object_mut()
+            .unwrap()
+            .remove("enum");
+        check_additive_schema_change(&previous, &candidate).unwrap();
     }
 
     #[test]

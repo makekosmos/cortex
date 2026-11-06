@@ -76,6 +76,7 @@ pub(crate) use ark_domain::object_write::ObjectWriteSnapshot;
 
 #[path = "definitions/request.rs"]
 mod request;
+pub(crate) use request::reject_unknown_parameters;
 pub(crate) use request::{DataVolumeScope, Request, SyncPolicyRuleInput};
 
 #[path = "definitions/start_sync.rs"]

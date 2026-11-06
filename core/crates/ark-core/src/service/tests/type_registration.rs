@@ -249,3 +249,97 @@ async fn registered_type_and_versions_survive_a_service_restart() {
     );
     fixture.shutdown().await;
 }
+
+#[test]
+fn registration_rejects_parameter_names_no_client_uses() {
+    for payload in [
+        serde_json::json!({
+            "typeId": "com.example.note",
+            "version": "1.0.0",
+            "schema": {"type": "object"},
+            "schemaJson": {"type": "object"},
+        }),
+        serde_json::json!({
+            "typeId": "com.example.note",
+            "version": "1.0.0",
+            "schema": {"type": "object"},
+            "ownerId": "com.example",
+        }),
+        serde_json::json!({
+            "typeId": "com.example.note",
+            "version": "1.0.0",
+            "schema": {"type": "object"},
+            "owner_id": "com.example",
+        }),
+    ] {
+        let params = payload.as_object().expect("object payload");
+        let error = super::super::definitions::reject_unknown_parameters("types.register", params)
+            .expect_err("an undeclared parameter is rejected");
+        assert!(error.contains("does not accept parameter"), "{error}");
+    }
+
+    let documented = serde_json::json!({
+        "typeId": "com.example.note",
+        "version": "1.0.0",
+        "schema": {"type": "object"},
+        "name": "Note",
+        "appId": "com.example",
+    });
+    super::super::definitions::reject_unknown_parameters(
+        "types.register",
+        documented.as_object().expect("object payload"),
+    )
+    .expect("the documented parameter set is accepted");
+}
+
+#[tokio::test]
+async fn service_call_refuses_aliased_registration_parameters() {
+    let fixture = service_fixture();
+    initialize_test_database(
+        &fixture.state,
+        fixture.db_path().to_string_lossy().into_owned(),
+    )
+    .await
+    .unwrap();
+    let service = ArkService::open(fixture.db_path().to_str().unwrap())
+        .await
+        .expect("production actor opens the database");
+
+    let error = service
+        .call(
+            "types.register",
+            serde_json::json!({
+                "typeId": "com.example.note",
+                "version": "1.0.0",
+                "schemaJson": {"type": "object"},
+            }),
+        )
+        .await
+        .expect_err("schemaJson is not a parameter any more");
+    assert!(
+        format!("{error:?}").contains("does not accept parameter 'schemaJson'"),
+        "{error:?}"
+    );
+
+    service
+        .call(
+            "types.register",
+            serde_json::json!({
+                "typeId": "com.example.note",
+                "version": "1.0.0",
+                "appId": "com.example",
+                "schema": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "properties": {"title": {"type": "string"}},
+                },
+            }),
+        )
+        .await
+        .expect("the documented parameter set registers the type");
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
+    fixture.shutdown().await;
+}
