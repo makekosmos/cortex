@@ -60,7 +60,7 @@ fn parse_backup_timestamp(name: &str) -> Option<DateTime<Utc>> {
 
 async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
     let resp = ark
-        .request("get_sync_kv", json!({ "key": SYNC_KV_LAST_BACKUP }))
+        .request("kv.get", json!({ "key": SYNC_KV_LAST_BACKUP }))
         .await
         .ok()?;
     let value = resp.data.as_str()?;
@@ -71,7 +71,7 @@ async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
 
 async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), String> {
     ark.request(
-        "set_sync_kv",
+        "kv.set",
         json!({ "key": SYNC_KV_LAST_BACKUP, "value": ts.to_rfc3339() }),
     )
     .await
@@ -266,7 +266,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     // фоне, не блокируя серийный request-loop сервиса.
     BACKUP_ACTIVE.store(true, Ordering::SeqCst);
     let start_result = ark
-        .request("db_backup", json!({ "dest_path": dest_str.clone() }))
+        .request("backup.create", json!({ "dest_path": dest_str.clone() }))
         .await
         .map_err(|e| format!("db_backup RPC failed: {e}"));
     if let Err(e) = start_result {
@@ -332,7 +332,7 @@ async fn core_snapshot_request(
 }
 
 async fn list_snapshots(ark: &ArkHost) -> Result<serde_json::Value, String> {
-    core_snapshot_request(ark, "db_backup_list", json!({})).await
+    core_snapshot_request(ark, "backup.list", json!({})).await
 }
 
 async fn validate_snapshot(
@@ -340,7 +340,7 @@ async fn validate_snapshot(
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let id = snapshot_id(params)?;
-    core_snapshot_request(ark, "db_backup_validate", json!({ "backup_id": id })).await
+    core_snapshot_request(ark, "backup.check", json!({ "backup_id": id })).await
 }
 
 /// Атомарный restore через Core. После успеха публикует `db_restored` всем
@@ -351,8 +351,7 @@ async fn restore_snapshot(
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let id = snapshot_id(params)?;
-    let report =
-        core_snapshot_request(ark, "db_backup_restore", json!({ "backup_id": id })).await?;
+    let report = core_snapshot_request(ark, "backup.restore", json!({ "backup_id": id })).await?;
     let mut event = serde_json::Map::new();
     event.insert("event".to_string(), json!("db_restored"));
     if let Some(fields) = report.as_object() {

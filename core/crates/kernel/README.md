@@ -37,22 +37,22 @@ Typical lifecycle:
 
 1. `init` with `dbPath`.
 2. Object/usage CRUD and query operations through RPC.
-3. Optional `start_sync` for LAN sync.
+3. Optional `sync.start` for LAN sync.
 4. `stop_sync` before shutdown.
 
 When `relay_url` is provided, the service starts a relay bridge beside LAN sync. The bridge exchanges `hello`, `version_vector`, `sync_changes`, and `live_change` frames through the relay server.
 
-`start_sync` accepts an optional `auth_secret`. When configured, LAN/P2P peers must prove they know the same secret by sending `auth_nonce` + `auth_hmac` in the `hello` message. This authenticates peers; it does not encrypt WebSocket traffic.
+`sync.start` accepts an optional `auth_secret`. When configured, LAN/P2P peers must prove they know the same secret by sending `auth_nonce` + `auth_hmac` in the `hello` message. This authenticates peers; it does not encrypt WebSocket traffic.
 
 ## Snapshot Restore (KOS-51)
 
 Privileged ops over the Core-owned `<db_dir>/backups/` directory:
 
-- `db_backup_list` → `{ "backups": [{ "id", "size_bytes", "modified_ms" }] }` — regular files only.
-- `db_backup_validate` `{ "backup_id": "<basename>" }` → `{ "id", "exists", "integrity_ok", "schema_match", "valid", "error?" }` — dry-run; never mutates live DB.
-- `db_backup_restore` `{ "backup_id": "<basename>" }` → `{ "id", "restored": true, "objects", "links" }` — atomic in-place restore via SQLite Online Backup API into the live connection.
+- `backup.list` → `{ "backups": [{ "id", "size_bytes", "modified_ms" }] }` — regular files only.
+- `backup.check` `{ "backup_id": "<basename>" }` → `{ "id", "exists", "integrity_ok", "schema_match", "valid", "error?" }` — dry-run; never mutates live DB.
+- `backup.restore` `{ "backup_id": "<basename>" }` → `{ "id", "restored": true, "objects", "links" }` — atomic in-place restore via SQLite Online Backup API into the live connection.
 
-`backup_id` is a basename only — no paths/traversal. Sources are opened without following symlinks/reparse points, staged into `backups/`, checked with `PRAGMA integrity_check` and a normalized `sqlite_schema` + migration-provenance fingerprint against the live DB before apply. A pre-restore rollback snapshot is kept until post-restore verification passes; verification failure restores the rollback. If the rollback itself fails, the snapshot is preserved as `ark.db.pre-restore-failed-*` (listed by `db_backup_list`, restorable via `db_backup_restore`) and the error reports the preserved id — prior data is never discarded. `db_backup` and `db_backup_restore` are serialized by a shared gate — they never overlap. Callers should reload UI after a successful `db_backup_restore`.
+`backup_id` is a basename only — no paths/traversal. Sources are opened without following symlinks/reparse points, staged into `backups/`, checked with `PRAGMA integrity_check` and a normalized `sqlite_schema` + migration-provenance fingerprint against the live DB before apply. A pre-restore rollback snapshot is kept until post-restore verification passes; verification failure restores the rollback. If the rollback itself fails, the snapshot is preserved as `ark.db.pre-restore-failed-*` (listed by `backup.list`, restorable via `backup.restore`) and the error reports the preserved id — prior data is never discarded. `backup.create` and `backup.restore` are serialized by a shared gate — they never overlap. Callers should reload UI after a successful `backup.restore`.
 
 Production backups use `ark.db.backup-v1-*` plus a JSON manifest containing the id, database byte length, SHA-256, and schema fingerprint. The staged SQLite Online Backup is integrity-checked and both files are flushed before publication. The manifest is published first as the visibility marker, then the database name; list/restore ignore a v1 database without a manifest and a manifest without a database. Publication uses same-directory no-clobber links, so a destination collision preserves the existing files. On Unix the containing directory is also synced after publication. On Windows Rust's portable filesystem API does not flush directory metadata here: the files are synced and verified, but sudden power loss can still lose the newly published names. SQLite commit durability is separate: the live connection requests WAL + `synchronous=FULL`; actual power-loss guarantees still depend on the filesystem, device, and their honoring flush requests. The local benchmark in `docs/experiments/2026-10-16-sync-durability.md` compares FULL/NORMAL commit timing on one macOS environment and is not a cross-platform durability or production-latency measurement.
 
@@ -101,7 +101,7 @@ New app-domain data should prefer the generic object model unless it is high-vol
 
 Runtime query endpoints include:
 
-- `list_objects_by_type`
+- `objects.list` with `typeId`
 - `get_objects_by_ids`
 - `list_recent_usage_processes`
 - `search_usage_processes`

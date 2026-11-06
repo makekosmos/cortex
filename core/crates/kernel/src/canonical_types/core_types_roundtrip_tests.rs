@@ -59,7 +59,7 @@ async fn every_core_type_round_trips_through_upsert_get_and_list() {
             let id = format!("core-type-{index}");
             service
                 .call(
-                    "upsert_object",
+                    "objects.upsert",
                     json!({
                         "object": {
                             "id": id.clone(),
@@ -78,7 +78,7 @@ async fn every_core_type_round_trips_through_upsert_get_and_list() {
                 .map_err(|error| format!("{type_id} upsert failed: {error}"))?;
 
             let stored = service
-                .call("get_object", json!({"id": id}))
+                .call("objects.get", json!({"id": id}))
                 .await
                 .map_err(|error| format!("{type_id} get failed: {error}"))?;
             if stored["typeId"] != type_id
@@ -91,7 +91,7 @@ async fn every_core_type_round_trips_through_upsert_get_and_list() {
             }
 
             let listed = service
-                .call("list_objects_by_type", json!({"type_id": type_id}))
+                .call("objects.list", json!({"typeId": type_id}))
                 .await
                 .map_err(|error| format!("{type_id} list failed: {error}"))?;
             if listed.as_array().map(Vec::len) != Some(1)

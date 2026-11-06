@@ -183,35 +183,35 @@ impl MobileEngine {
         params
             .entry("app_version")
             .or_insert_with(|| json!(concat!("engine-mobile/", env!("CARGO_PKG_VERSION"))));
-        self.call_service("start_sync", Value::Object(params))
+        self.call_service("sync.start", Value::Object(params))
     }
 
     pub fn stop_sync(&self) -> Result<String, EngineError> {
-        self.call_service("stop_sync", json!({}))
+        self.call_service("sync.stop", json!({}))
     }
 
     /// `get_sync_snapshot` — running state, peers, transport choice.
     pub fn sync_status(&self) -> Result<String, EngineError> {
-        self.call_service("get_sync_snapshot", json!({}))
+        self.call_service("sync.snapshot", json!({}))
     }
 
     /// Escalate to a LAN-reachable bind and return our iroh pairing ticket
     /// (the desktop-side user action for pairing; `show_pairing_code` in
     /// ark terms).
     pub fn show_pairing_code(&self) -> Result<String, EngineError> {
-        self.call_service("show_pairing_code", json!({"bind": "all_interfaces"}))
+        self.call_service("sync.pair.show", json!({"bind": "all_interfaces"}))
     }
 
     /// Passive read of our iroh ticket — `null` inside `data` until sync is
     /// running with the iroh transport.
     pub fn own_iroh_ticket(&self) -> Result<String, EngineError> {
-        self.call_service("get_own_iroh_ticket", json!({}))
+        self.call_service("sync.ticket", json!({}))
     }
 
     /// Pair with a peer by its ticket/pairing code.
     pub fn connect_with_pairing_code(&self, code: String) -> Result<String, EngineError> {
         self.call_service(
-            "connect_with_pairing_code",
+            "sync.pair.connect",
             json!({"pairing_code": code, "bind": "all_interfaces"}),
         )
     }

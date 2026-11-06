@@ -138,6 +138,7 @@ mod local_writes;
 mod object_revision_compat;
 mod object_validation;
 mod object_write_snapshot;
+mod operation_names;
 mod pairing_iroh;
 mod pairing_proto;
 mod replace_object_link;

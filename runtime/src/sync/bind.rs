@@ -55,10 +55,7 @@ pub fn has_paired_peers(
 }
 
 async fn get_sync_kv(ark: &ArkHost, key: &str) -> Option<String> {
-    let resp = ark
-        .request("get_sync_kv", json!({ "key": key }))
-        .await
-        .ok()?;
+    let resp = ark.request("kv.get", json!({ "key": key })).await.ok()?;
     if !resp.ok {
         return None;
     }

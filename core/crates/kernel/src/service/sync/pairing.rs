@@ -95,13 +95,7 @@ pub(crate) async fn handle_connect_with_pairing_code(
     // before the transport starts dialing — a responder Hello arriving
     // during the first connect attempt must already be recognized as
     // consented.
-    restart_sync_with_restore(
-        state,
-        restart_params,
-        restore_params,
-        "connect_with_pairing_code",
-    )
-    .await?;
+    restart_sync_with_restore(state, restart_params, restore_params, "sync.pair.connect").await?;
 
     Ok(json!({
         "status": "pending",
@@ -223,7 +217,7 @@ pub(crate) async fn handle_show_pairing_code(
             state,
             lan_opt_in_params(&runtime, None, bind),
             restore_params,
-            "show_pairing_code",
+            "sync.pair.show",
         )
         .await?;
     }

@@ -77,6 +77,8 @@ pub(crate) use ::domain::object_write::ObjectWriteSnapshot;
 #[path = "definitions/request.rs"]
 mod request;
 pub(crate) use request::reject_unknown_parameters;
+#[cfg(test)]
+pub(crate) use request::OPERATION_NAMES;
 pub(crate) use request::{DataVolumeScope, Request, SyncPolicyRuleInput};
 
 #[path = "definitions/start_sync.rs"]

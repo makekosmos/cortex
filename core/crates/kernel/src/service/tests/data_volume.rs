@@ -13,7 +13,7 @@ async fn estimate_data_volume_preserves_request_and_result_contract_through_acto
         .expect("fixture objects should be inserted");
 
     let request: Request = serde_json::from_value(json!({
-        "operation": "estimate_data_volume",
+        "operation": "objects.volume",
         "scopes": [{
             "typeId": "estimate_type",
             "typeVersion": "1.0.0",
@@ -41,7 +41,7 @@ async fn estimate_data_volume_preserves_request_and_result_contract_through_acto
 #[test]
 fn estimate_data_volume_rejects_unknown_scope_fields() {
     let error = serde_json::from_value::<Request>(json!({
-        "operation": "estimate_data_volume",
+        "operation": "objects.volume",
         "scopes": [{
             "typeId": "estimate_type",
             "typeVersion": "1.0.0",

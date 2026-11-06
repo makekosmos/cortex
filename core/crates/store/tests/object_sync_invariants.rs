@@ -98,7 +98,7 @@ fn bump_local_delete(conn: &Connection, id: &str) {
 
 fn read_version_vector(conn: &Connection) -> VersionVector {
     let raw = store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")
-        .expect("get_sync_kv")
+        .expect("kv.get")
         .unwrap_or_else(|| "{}".to_string());
     serde_json::from_str(&raw).expect("version_vector parses")
 }

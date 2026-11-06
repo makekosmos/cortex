@@ -67,7 +67,7 @@ fn ark_api_v1_requests_remain_deserializable() {
 #[test]
 fn object_mutation_operation_id_is_optional_and_separate_from_request_correlation() {
     let request_json = concat!(
-        r#"{"operation":"delete_object","id":"object-a",""#,
+        r#"{"operation":"objects.delete","id":"object-a",""#,
         r#"operationId":"retry-17","_req_id":"request-42"}"#,
     );
     let request: Request = serde_json::from_str(request_json).unwrap();

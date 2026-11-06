@@ -383,9 +383,9 @@ fn db_backup_restore_waits_for_backup_gate() {
 #[test]
 fn db_backup_snapshot_ops_parse_snake_case_wire_format() {
     for (operation, extra) in [
-        ("db_backup_list", json!({})),
-        ("db_backup_validate", json!({"backup_id": "x"})),
-        ("db_backup_restore", json!({"backup_id": "x"})),
+        ("backup.list", json!({})),
+        ("backup.check", json!({"backup_id": "x"})),
+        ("backup.restore", json!({"backup_id": "x"})),
     ] {
         let mut value = json!({"operation": operation});
         value

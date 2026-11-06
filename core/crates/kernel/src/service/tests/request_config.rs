@@ -8,7 +8,7 @@ use super::*;
 fn request_deserialization_ignores_optional_id_field() {
     let request = serde_json::from_value::<Request>(json!({
         "id": "req-3",
-        "operation": "get_host_device_name"
+        "operation": "sync.host"
     }))
     .expect("request id must be backward-compatible metadata");
 
@@ -18,7 +18,7 @@ fn request_deserialization_ignores_optional_id_field() {
 #[test]
 fn request_deserialization_accepts_iroh_config() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "start_sync",
+        "operation": "sync.start",
         "space_id": "space",
         "device_id": "device",
         "bind": "loopback",
@@ -42,7 +42,7 @@ fn request_deserialization_accepts_iroh_config() {
 #[test]
 fn request_deserialization_accepts_code_alias_for_pairing() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "connect_with_pairing_code",
+        "operation": "sync.pair.connect",
         "code": "endpointdemo123",
         "bind": "loopback"
     }))
@@ -58,7 +58,7 @@ fn request_deserialization_accepts_code_alias_for_pairing() {
 #[test]
 fn pairing_requests_require_an_explicit_bind() {
     let missing_bind = json!({
-        "operation": "connect_with_pairing_code",
+        "operation": "sync.pair.connect",
         "pairing_code": "endpointdemo123"
     });
     assert!(
@@ -66,7 +66,7 @@ fn pairing_requests_require_an_explicit_bind() {
         "connect_with_pairing_code must not default to all-interfaces"
     );
     assert!(
-        serde_json::from_value::<Request>(json!({"operation": "show_pairing_code"})).is_err(),
+        serde_json::from_value::<Request>(json!({"operation": "sync.pair.show"})).is_err(),
         "show_pairing_code must not default to all-interfaces"
     );
 }
@@ -322,7 +322,7 @@ async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
 #[test]
 fn request_deserialization_defaults_iroh_fields_when_absent() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "start_sync",
+        "operation": "sync.start",
         "space_id": "space",
         "device_id": "device",
         "bind": "loopback"
@@ -341,7 +341,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
 #[test]
 fn request_deserialization_accepts_discovery_opt_out() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "start_sync",
+        "operation": "sync.start",
         "space_id": "space",
         "device_id": "device",
         "bind": "loopback",
@@ -358,7 +358,7 @@ fn request_deserialization_accepts_discovery_opt_out() {
 #[test]
 fn request_deserialization_accepts_relay_and_auth_config() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "start_sync",
+        "operation": "sync.start",
         "space_id": "space",
         "device_id": "device",
         "bind": "loopback",
@@ -381,7 +381,7 @@ fn request_deserialization_accepts_relay_and_auth_config() {
 #[test]
 fn params_struct_variants_keep_their_wire_format() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "start_sync",
+        "operation": "sync.start",
         "space_id": "space",
         "device_id": "device",
         "bind": "loopback",

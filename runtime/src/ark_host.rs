@@ -225,7 +225,7 @@ mod tests {
         let host = ArkHost::open(db_path.to_str().unwrap()).await.unwrap();
 
         let failed = host
-            .request("get_object", serde_json::json!({"id": "missing"}))
+            .request("objects.get", serde_json::json!({"id": "missing"}))
             .await
             .unwrap();
         // unknown/missing object returns null data or an error envelope —
@@ -289,7 +289,7 @@ mod tests {
             .unwrap();
         let exe = format!("{windows_dir}\\explorer.exe");
         host.request(
-            "upsert_tracked_app",
+            "usage.apps.upsert",
             serde_json::json!({
                 "tracked_app": {
                     "id": "app-explorer",
@@ -308,7 +308,7 @@ mod tests {
         .await
         .unwrap();
         host.request(
-            "upsert_usage_session",
+            "usage.sessions.upsert",
             serde_json::json!({
                 "usage_session": {
                     "id": "s-1",
@@ -333,7 +333,7 @@ mod tests {
         .unwrap();
 
         let report = host
-            .request("get_usage_analytics", serde_json::json!({}))
+            .request("usage.analytics", serde_json::json!({}))
             .await
             .unwrap();
         let explorer = report.data["topApps"]

@@ -37,23 +37,20 @@ async fn old_database_with_pomodoro_and_integration_rows_still_opens_and_reads()
         .await
         .expect("old database opens with the current service");
     let entries = service
-        .call(
-            "list_objects_by_type",
-            json!({"type_id": "core.time-entry"}),
-        )
+        .call("objects.list", json!({"typeId": "core.time-entry"}))
         .await
         .expect("old time entries list");
     assert_eq!(entries.as_array().map(Vec::len), Some(3));
 
     for id in ["old-pomodoro-1", "old-pomodoro-2"] {
         let object = service
-            .call("get_object", json!({"id": id}))
+            .call("objects.get", json!({"id": id}))
             .await
             .expect("old pomodoro entry reads");
         assert_eq!(object["propsJson"]["source"], "pomodoro");
     }
     let manual = service
-        .call("get_object", json!({"id": "old-manual-1"}))
+        .call("objects.get", json!({"id": "old-manual-1"}))
         .await
         .expect("old manual entry reads");
     assert_eq!(manual["propsJson"]["source"], "manual");

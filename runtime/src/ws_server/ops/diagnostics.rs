@@ -26,7 +26,7 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
         "engine_supervisor": crate::engine_supervisor::diagnostics_snapshot(data_dir),
         "background_workers": {
             "app_index": app_index_background_worker,
-            "db_backup": crate::db_backup::diagnostics_snapshot(),
+            "backup.create": crate::db_backup::diagnostics_snapshot(),
         },
     })
 }

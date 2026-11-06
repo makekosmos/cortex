@@ -215,7 +215,7 @@ pub mod tests {
             });
             log_app_rpc_rejection(
                 "memoria-gpui",
-                "upsert_object",
+                "objects.upsert",
                 app_rpc_type_id(&params),
                 RejectionReason::Dispatch(
                     "canonical_ingress:invalid_request:canonical_field:/recurrence/dayOfMonth",
@@ -224,14 +224,14 @@ pub mod tests {
             // A reason that embeds a payload value collapses to the class.
             log_app_rpc_rejection(
                 "memoria-gpui",
-                "upsert_object",
+                "objects.upsert",
                 app_rpc_type_id(&params),
                 RejectionReason::Dispatch("rejected value PRIVATE TITLE at /title"),
             );
             // No type id → the field is still emitted, empty.
             log_app_rpc_rejection(
                 "agenda-gpui",
-                "list_objects",
+                "objects.list",
                 None,
                 RejectionReason::Dispatch("forbidden"),
             );
@@ -239,7 +239,7 @@ pub mod tests {
         let line = buf.text();
         assert!(line.contains("app RPC rejected"));
         assert!(line.contains("memoria-gpui"));
-        assert!(line.contains("upsert_object"));
+        assert!(line.contains("objects.upsert"));
         assert!(line.contains("core.note"));
         assert!(line.contains("canonical_ingress:invalid_request"));
         assert!(line.contains("reason=unavailable"));

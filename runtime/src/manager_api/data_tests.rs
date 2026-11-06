@@ -37,7 +37,7 @@ async fn data_page_counts_core_objects() {
     ] {
         let result = ark
             .request(
-                "upsert_object",
+                "objects.upsert",
                 json!({"object": {
                     "id": id,
                     "typeId": type_id,
@@ -100,7 +100,7 @@ async fn data_search_resolves_hits_back_to_objects() {
     let (_dir, ark, state) = fixture().await;
     let created = ark
         .request(
-            "upsert_object",
+            "objects.upsert",
             json!({"object": {
                 "id": "note-found",
                 "typeId": "core.note",

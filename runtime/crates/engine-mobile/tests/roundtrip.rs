@@ -124,18 +124,14 @@ fn task_roundtrip_survives_reopen() {
             .subscribe(Box::new(Listener { tx: tx.clone() }))
             .expect("subscribe");
 
-        let upserted = call(&engine, "upsert_object", json!({"object": task_object()}));
+        let upserted = call(&engine, "objects.upsert", json!({"object": task_object()}));
         assert_eq!(upserted, json!(true));
         assert!(
             wait_for_upsert(&rx, TASK_ID),
             "no object_upserted event within 10s"
         );
 
-        let listed = call(
-            &engine,
-            "list_objects_by_type",
-            json!({"type_id": "core.task"}),
-        );
+        let listed = call(&engine, "objects.list", json!({"typeId": "core.task"}));
         let ids: Vec<&str> = listed
             .as_array()
             .expect("list")
@@ -144,7 +140,7 @@ fn task_roundtrip_survives_reopen() {
             .collect();
         assert!(ids.contains(&TASK_ID), "task missing from list: {listed}");
 
-        let fetched = call(&engine, "get_object", json!({"id": TASK_ID}));
+        let fetched = call(&engine, "objects.get", json!({"id": TASK_ID}));
         assert_eq!(fetched["title"], json!("Call mom"));
         assert_eq!(
             fetched["propsJson"]["planning"]["date"],
@@ -157,13 +153,9 @@ fn task_roundtrip_survives_reopen() {
 
     // Reopen on the same dir: the task must still be there.
     let engine = MobileEngine::open(data_dir).expect("reopen");
-    let fetched = call(&engine, "get_object", json!({"id": TASK_ID}));
+    let fetched = call(&engine, "objects.get", json!({"id": TASK_ID}));
     assert_eq!(fetched["title"], json!("Call mom"));
-    let listed = call(
-        &engine,
-        "list_objects_by_type",
-        json!({"type_id": "core.task"}),
-    );
+    let listed = call(&engine, "objects.list", json!({"typeId": "core.task"}));
     assert!(
         listed
             .as_array()
@@ -219,31 +211,31 @@ fn replace_object_link_moves_task_to_another_project() {
     let dir = tempfile::tempdir().expect("tempdir");
     let engine = MobileEngine::open(dir.path().to_string_lossy().into_owned()).expect("open");
 
-    call(&engine, "upsert_object", json!({"object": task_object()}));
+    call(&engine, "objects.upsert", json!({"object": task_object()}));
     call(
         &engine,
-        "upsert_object",
+        "objects.upsert",
         json!({"object": project_object(PROJECT_A)}),
     );
     call(
         &engine,
-        "upsert_object",
+        "objects.upsert",
         json!({"object": project_object(PROJECT_B)}),
     );
     call(
         &engine,
-        "upsert_object_link",
+        "links.upsert",
         json!({"object_link": project_link("link-mobile-a", PROJECT_A)}),
     );
 
     let stored = call(
         &engine,
-        "replace_object_link",
+        "links.replace",
         json!({"object_link": project_link("link-mobile-b", PROJECT_B)}),
     );
     assert_eq!(stored["targetObjectId"], json!(PROJECT_B));
 
-    let listed = call(&engine, "list_object_links", json!({}));
+    let listed = call(&engine, "links.list", json!({}));
     let project_links: Vec<&Value> = listed
         .as_array()
         .expect("list")

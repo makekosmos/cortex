@@ -73,45 +73,118 @@ impl Request {
     }
 }
 
+/// Every operation name on the wire. `Request` owns the routing — each variant
+/// is its handler — so this table is checked against the router rather than
+/// used by it: `operation_names_are_lowercase_dotted_and_complete` fails when
+/// the two drift apart.
+#[cfg(test)]
+pub(crate) const OPERATION_NAMES: &[&str] = &[
+    "usage.apps.upsert",
+    "usage.apps.delete",
+    "usage.sessions.upsert",
+    "usage.sessions.delete",
+    "usage.events.upsert",
+    "usage.events.delete",
+    "usage.spans.upsert",
+    "usage.totals",
+    "usage.analytics",
+    "usage.processes.recent",
+    "usage.processes.search",
+    "usage.summary",
+    "objects.list",
+    "objects.volume",
+    "time.running",
+    "objects.get",
+    "objects.snapshot",
+    "objects.conflicts",
+    "objects.merge",
+    "objects.upsert",
+    "objects.delete",
+    "types.list",
+    "types.get",
+    "types.versions",
+    "types.alias",
+    "types.register",
+    "links.list",
+    "links.upsert",
+    "links.delete",
+    "links.replace",
+    "kv.get",
+    "kv.set",
+    "db.clear",
+    "backup.create",
+    "backup.list",
+    "backup.check",
+    "backup.restore",
+    "usage.log.compact",
+    "sync.start",
+    "sync.stop",
+    "sync.broadcast",
+    "sync.peers",
+    "sync.snapshot",
+    "sync.policy.get",
+    "sync.policy.set",
+    "devices.snapshot",
+    "devices.rename",
+    "devices.disable",
+    "sync.disconnect",
+    "sync.pair.connect",
+    "sync.pair.accept",
+    "sync.pair.decline",
+    "sync.pair.cancel",
+    "sync.leave",
+    "sync.seed.add",
+    "sync.addresses",
+    "sync.host",
+    "sync.ticket",
+    "sync.pair.show",
+    "test.panic",
+];
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
+    #[serde(rename = "usage.apps.upsert")]
     UpsertTrackedApp {
         tracked_app: TrackedApp,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "usage.apps.delete")]
     DeleteTrackedApp {
         id: String,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "usage.sessions.upsert")]
     UpsertUsageSession {
         usage_session: UsageSession,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "usage.sessions.delete")]
     DeleteUsageSession {
         id: String,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "usage.events.upsert")]
     UpsertUsageEvent {
         usage_event: UsageEvent,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "usage.events.delete")]
     DeleteUsageEvent {
         id: String,
         #[serde(default)]
         device_id: Option<String>,
     },
-    UpsertUsageSpan {
-        usage_span: UsageSpanWrite,
-    },
-    GetUsageTitleTotal {
-        query: String,
-    },
+    #[serde(rename = "usage.spans.upsert")]
+    UpsertUsageSpan { usage_span: UsageSpanWrite },
+    #[serde(rename = "usage.totals")]
+    GetUsageTitleTotal { query: String },
+    #[serde(rename = "usage.analytics")]
     GetUsageAnalytics {
         #[serde(default)]
         range_days: Option<i64>,
@@ -120,10 +193,12 @@ pub(crate) enum Request {
         #[serde(default)]
         recent_sessions_limit: Option<i64>,
     },
+    #[serde(rename = "usage.processes.recent")]
     ListRecentUsageProcesses {
         #[serde(default)]
         limit: Option<i64>,
     },
+    #[serde(rename = "usage.processes.search")]
     SearchUsageProcesses {
         query: String,
         #[serde(default)]
@@ -150,32 +225,31 @@ pub(crate) enum Request {
         #[serde(default)]
         summaries: bool,
     },
-    EstimateDataVolume {
-        scopes: Vec<DataVolumeScope>,
-    },
+    #[serde(rename = "objects.volume")]
+    EstimateDataVolume { scopes: Vec<DataVolumeScope> },
+    #[serde(rename = "time.running")]
     ListRunningTimeEntries {
         #[serde(default)]
         source: Option<String>,
     },
-    GetObject {
-        id: String,
-    },
-    GetObjectWriteSnapshot {
-        id: String,
-    },
-    #[serde(rename = "task.merge.conflicts")]
+    #[serde(rename = "objects.get")]
+    GetObject { id: String },
+    #[serde(rename = "objects.snapshot")]
+    GetObjectWriteSnapshot { id: String },
+    #[serde(rename = "objects.conflicts")]
     TaskMergeConflicts {
         #[serde(rename = "objectId")]
         object_id: String,
         unit: ::domain::task_merge::TaskMergeUnit,
     },
-    #[serde(rename = "task.merge.append")]
+    #[serde(rename = "objects.merge")]
     TaskMergeAppend {
         #[serde(rename = "mergeOperation")]
         merge_operation: ::domain::task_merge::TaskMergeOperation,
         #[serde(default, rename = "expectedConflictDigest")]
         expected_conflict_digest: Option<String>,
     },
+    #[serde(rename = "objects.upsert")]
     UpsertObject {
         object: ArkObjectWrite,
         #[serde(default, rename = "expectedSnapshot")]
@@ -185,6 +259,7 @@ pub(crate) enum Request {
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "objects.delete")]
     DeleteObject {
         id: String,
         #[serde(default, rename = "expectedSnapshot")]
@@ -203,15 +278,13 @@ pub(crate) enum Request {
         #[serde(default)]
         version: Option<String>,
     },
-    #[serde(rename = "types.listVersions")]
+    #[serde(rename = "types.versions")]
     TypesListVersions {
         #[serde(rename = "typeId")]
         type_id: String,
     },
-    #[serde(rename = "types.resolveAlias")]
-    TypesResolveAlias {
-        alias: String,
-    },
+    #[serde(rename = "types.alias")]
+    TypesResolveAlias { alias: String },
     /// Register an application-owned type from a bare JSON schema. A new
     /// version must be an additive schema change.
     #[serde(rename = "types.register")]
@@ -225,12 +298,15 @@ pub(crate) enum Request {
         #[serde(default, rename = "appId")]
         app_id: Option<String>,
     },
+    #[serde(rename = "links.list")]
     ListObjectLinks,
+    #[serde(rename = "links.upsert")]
     UpsertObjectLink {
         object_link: ObjectLink,
         #[serde(default)]
         device_id: Option<String>,
     },
+    #[serde(rename = "links.delete")]
     DeleteObjectLink {
         id: String,
         #[serde(default)]
@@ -238,26 +314,24 @@ pub(crate) enum Request {
     },
     /// Move a link to a new target in one transaction: delete every other link
     /// with the same source and link_type, then upsert `object_link`.
+    #[serde(rename = "links.replace")]
     ReplaceObjectLink {
         object_link: ObjectLink,
         #[serde(default)]
         device_id: Option<String>,
     },
-    GetSyncKv {
-        key: String,
-    },
-    SetSyncKv {
-        key: String,
-        value: String,
-    },
+    #[serde(rename = "kv.get")]
+    GetSyncKv { key: String },
+    #[serde(rename = "kv.set")]
+    SetSyncKv { key: String, value: String },
+    #[serde(rename = "db.clear")]
     ClearAll,
 
     /// SQLite Online Backup в указанный path. Source DB остаётся live —
     /// concurrent readers/writer safe. Используется db_backup scheduler
     /// в mundus-engine (раз в 24h). См. hardening proof loop 2026-05-18.
-    DbBackup {
-        dest_path: String,
-    },
+    #[serde(rename = "backup.create")]
+    DbBackup { dest_path: String },
 
     /// privileged snapshot ops над Core-owned `<db_dir>/backups/`.
     /// `backup_id` — только basename файла из этой директории (см.
@@ -265,19 +339,19 @@ pub(crate) enum Request {
     /// Restore применяется через SQLite Online Backup API в live conn под
     /// `BACKUP_GATE` + глобальным DB mutex — нет момента с отсутствующей
     /// primary DB. См. `.agent/tasks/2026-09-15-ark-snapshot-restore-rpc/`.
+    #[serde(rename = "backup.list")]
     DbBackupList,
-    DbBackupValidate {
-        backup_id: String,
-    },
-    DbBackupRestore {
-        backup_id: String,
-    },
+    #[serde(rename = "backup.check")]
+    DbBackupValidate { backup_id: String },
+    #[serde(rename = "backup.restore")]
+    DbBackupRestore { backup_id: String },
 
     /// один батч компакции `usage_sync_log` (правило — в
     /// Компактор usage-журнала находится в
     /// `::store::usage_sync_log`). Engine maintenance loop вызывает его
     /// повторно: каждый вызов — короткая транзакция ≤ batch_limit строк,
     /// worker остаётся отзывчивым между батчами.
+    #[serde(rename = "usage.log.compact")]
     CompactUsageSyncLog {
         #[serde(default)]
         older_than_days: Option<i64>,
@@ -291,16 +365,19 @@ pub(crate) enum Request {
     },
 
     // --- Sync ops (new) ---
+    #[serde(rename = "sync.start")]
     StartSync(StartSyncParams),
+    #[serde(rename = "sync.stop")]
     StopSync,
-    BroadcastChange {
-        entity: SyncEntity,
-    },
+    #[serde(rename = "sync.broadcast")]
+    BroadcastChange { entity: SyncEntity },
+    #[serde(rename = "sync.peers")]
     GetConnectedPeers,
+    #[serde(rename = "sync.snapshot")]
     GetSyncSnapshot,
-    #[serde(rename = "sync_policy.get")]
+    #[serde(rename = "sync.policy.get")]
     SyncPolicyGet,
-    #[serde(rename = "sync_policy.set")]
+    #[serde(rename = "sync.policy.set")]
     SyncPolicySet {
         #[serde(rename = "profileId")]
         profile_id: String,
@@ -310,20 +387,20 @@ pub(crate) enum Request {
         expected_revision: Option<i64>,
         rules: Vec<SyncPolicyRuleInput>,
     },
-    #[serde(rename = "device_registry.snapshot")]
+    #[serde(rename = "devices.snapshot")]
     DeviceRegistrySnapshot,
-    #[serde(rename = "device_registry.rename")]
+    #[serde(rename = "devices.rename")]
     DeviceRegistryRename {
         target_device_id: ::domain::device_registry::DeviceId,
         display_name: ::domain::device_registry::DisplayName,
     },
-    #[serde(rename = "device_registry.disable")]
+    #[serde(rename = "devices.disable")]
     DeviceRegistryDisable {
         target_device_id: ::domain::device_registry::DeviceId,
     },
-    DisconnectPeer {
-        device_id: String,
-    },
+    #[serde(rename = "sync.disconnect")]
+    DisconnectPeer { device_id: String },
+    #[serde(rename = "sync.pair.connect")]
     ConnectWithPairingCode {
         #[serde(alias = "code")]
         pairing_code: String,
@@ -332,37 +409,38 @@ pub(crate) enum Request {
     /// consent decisions on the receiving side. `accept_pairing`
     /// completes the handshake for a pending request; `decline_pairing`
     /// sends `pairing_rejected` and closes the connection.
-    AcceptPairing {
-        device_id: String,
-    },
-    DeclinePairing {
-        device_id: String,
-    },
+    #[serde(rename = "sync.pair.accept")]
+    AcceptPairing { device_id: String },
+    #[serde(rename = "sync.pair.decline")]
+    DeclinePairing { device_id: String },
     /// «Отмена» on the initiator (or dismissal of a terminal
     /// outcome): drops the outbound attempt and, while still pending, cuts
     /// the dialled connection.
+    #[serde(rename = "sync.pair.cancel")]
     CancelPairing,
+    #[serde(rename = "sync.leave")]
     LeaveSpace,
-    AddSeedPeer {
-        addresses: Vec<String>,
-    },
+    #[serde(rename = "sync.seed.add")]
+    AddSeedPeer { addresses: Vec<String> },
+    #[serde(rename = "sync.addresses")]
     GetOwnAddresses {
         #[serde(default)]
         port: Option<u16>,
     },
+    #[serde(rename = "sync.host")]
     GetHostDeviceName,
     /// Step 4a: fetch our iroh pairing ticket, if the running sync runtime
     /// selected the iroh transport. `null`/error otherwise (e.g. relay
     /// selected or sync not running).
+    #[serde(rename = "sync.ticket")]
     GetOwnIrohTicket,
     /// explicit "show my pairing code" — escalates a loopback-bound
     /// runtime to `all_interfaces` (and the iroh transport) so the returned
     /// ticket is LAN-reachable, then returns it. This is the user action
     /// that owns the firewall prompt; `get_own_iroh_ticket` stays a passive
     /// read and never changes the bind.
-    ShowPairingCode {
-        bind: SyncBind,
-    },
+    #[serde(rename = "sync.pair.show")]
+    ShowPairingCode { bind: SyncBind },
 
     /// Test-only fault-injection op: the service worker panics on it so tests
     /// can verify that the service fails closed at the request boundary.

@@ -115,7 +115,7 @@ pub async fn start_lan_sync(
         }
     }
 
-    let response = ark.request("start_sync", params).await?;
+    let response = ark.request("sync.start", params).await?;
     if response.ok {
         return Ok(());
     }
@@ -144,7 +144,7 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
         return;
     }
 
-    match ark.request("get_own_iroh_ticket", json!({})).await {
+    match ark.request("sync.ticket", json!({})).await {
         Ok(response) if response.ok => match response.data.as_str() {
             Some(ticket) if !ticket.is_empty() => {
                 let banner = "=".repeat(ticket.len().max(24) + 22);

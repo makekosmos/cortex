@@ -9,7 +9,7 @@ async fn set_sync_kv_request_uses_interactive_db_command() {
         .unwrap();
 
     let request: Request = serde_json::from_value(json!({
-        "operation": "set_sync_kv",
+        "operation": "kv.set",
         "key": "test.local-setting",
         "value": "enabled"
     }))

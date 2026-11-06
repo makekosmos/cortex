@@ -5,13 +5,13 @@ use ::domain::device_registry::{DeviceId, DisplayName};
 #[test]
 fn device_registry_operations_have_a_stable_wire_shape() {
     let snapshot = serde_json::from_value::<Request>(json!({
-        "operation": "device_registry.snapshot"
+        "operation": "devices.snapshot"
     }))
     .expect("snapshot operation should deserialize");
     assert!(matches!(snapshot, Request::DeviceRegistrySnapshot));
 
     let rename = serde_json::from_value::<Request>(json!({
-        "operation": "device_registry.rename",
+        "operation": "devices.rename",
         "target_device_id": "device-a",
         "display_name": "Office Mac"
     }))
@@ -19,7 +19,7 @@ fn device_registry_operations_have_a_stable_wire_shape() {
     assert!(matches!(rename, Request::DeviceRegistryRename { .. }));
 
     let disable = serde_json::from_value::<Request>(json!({
-        "operation": "device_registry.disable",
+        "operation": "devices.disable",
         "target_device_id": "device-a"
     }))
     .expect("disable operation should deserialize");

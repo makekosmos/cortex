@@ -39,7 +39,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             .unwrap();
         ::store::test_support::seed_legacy_type(&path, "rpc-phase2", "RPC").unwrap();
         let object_request: Request = serde_json::from_value(json!({
-            "operation": "upsert_object",
+            "operation": "objects.upsert",
             "object": {
                 "id": "rpc-object", "typeId": "rpc-phase2", "title": "x",
                 "contentJson": {}, "propsJson": {}, "createdAt": "c", "updatedAt": "u",
@@ -72,7 +72,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         .await
         .unwrap();
         let unknown_request: Request = serde_json::from_value(json!({
-            "operation": "upsert_object",
+            "operation": "objects.upsert",
             "object": {
                 "id": "rpc-unknown", "typeId": "rpc-phase2",
                 "typeVersion": "9.9.9", "title": "unknown", "contentJson": {},
@@ -239,17 +239,12 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
 
 #[test]
 fn dotted_type_operations_are_exact_and_underscore_aliases_rejected() {
-    for operation in [
-        "types.list",
-        "types.get",
-        "types.listVersions",
-        "types.resolveAlias",
-    ] {
+    for operation in ["types.list", "types.get", "types.versions", "types.alias"] {
         let mut value = json!({"operation": operation});
-        if operation == "types.get" || operation == "types.listVersions" {
+        if operation == "types.get" || operation == "types.versions" {
             value["typeId"] = json!("x");
         }
-        if operation == "types.resolveAlias" {
+        if operation == "types.alias" {
             value["alias"] = json!("x");
         }
         assert!(

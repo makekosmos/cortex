@@ -4,7 +4,7 @@ use crate::db::{CommandContext, LoadActiveLocalSyncProfileQuery};
 #[test]
 fn sync_policy_request_parses_canonical_filter_inputs() {
     let request = serde_json::from_value::<Request>(json!({
-        "operation": "sync_policy.set",
+        "operation": "sync.policy.set",
         "profileId": "phone",
         "name": "Phone",
         "active": true,

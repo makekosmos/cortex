@@ -461,7 +461,7 @@ async fn sqlite_service_replicas_keep_rich_text_documents_as_atomic_variants() {
 #[test]
 fn task_merge_append_request_deserializes_without_colliding_with_operation_tag() {
     let request: Request = serde_json::from_value(json!({
-        "operation": "task.merge.append",
+        "operation": "objects.merge",
         "mergeOperation": {
             "id": "00000000000000000000000000000001",
             "objectId": "service-task",

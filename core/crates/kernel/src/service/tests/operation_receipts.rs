@@ -20,7 +20,7 @@ fn upsert_params(title: &str) -> serde_json::Value {
 
 fn upsert_request(title: &str) -> Request {
     let mut envelope = upsert_params(title).as_object().unwrap().clone();
-    envelope.insert("operation".into(), json!("upsert_object"));
+    envelope.insert("operation".into(), json!("objects.upsert"));
     serde_json::from_value(serde_json::Value::Object(envelope)).unwrap()
 }
 
@@ -121,23 +121,20 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
         .await
         .expect("production actor reopens the database");
     service
-        .call("upsert_object", upsert_params("Note"))
+        .call("objects.upsert", upsert_params("Note"))
         .await
         .expect("the Store recognizes and replays the old receipt fingerprint");
 
     assert_eq!(
         service
-            .call(
-                "get_object_write_snapshot",
-                json!({"id":"operation-receipt-note"})
-            )
+            .call("objects.snapshot", json!({"id":"operation-receipt-note"}))
             .await
             .expect("object snapshot reads after reopen"),
         snapshot_before_reopen
     );
     assert_eq!(
         service
-            .call("get_object", json!({"id":"operation-receipt-note"}))
+            .call("objects.get", json!({"id":"operation-receipt-note"}))
             .await
             .expect("object reads after receipt replay")["title"],
         "Note"
