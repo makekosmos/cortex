@@ -182,6 +182,11 @@ pub(super) async fn user_data_endpoint_requires_desktop_host_and_round_trips_by_
     let _ = task.await;
 }
 
+/// End-to-end: a real `upsert_object` rejected by ark-core lands in the Engine
+/// log as a wire code, and a producer that *does* quote a payload value (a
+/// leaky package worker, say) still cannot reach the log —
+/// `RejectionReason::Dispatch` collapses it to the public class.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 pub(super) async fn rejected_app_rpc_logs_the_wire_code_but_never_payload_values() {
     let dir = tempfile::tempdir().expect("fixture dir");
     let ark = Arc::new(

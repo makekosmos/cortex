@@ -13,8 +13,8 @@
 //!     by a rollback must not delete the newer payload;
 //!   * names that are not strict `X.Y.Z` are never touched;
 //!   * the installer's own temp shape `<v>.<pid>.tmp` is removed only past
-//! [`LEFTOVER_GRACE`], same reasoning as — a live extract holds
-//!     its temp for seconds, so the grace protects an in-flight install;
+//!     [`LEFTOVER_GRACE`] for the same reason as the temp sweep — a live extract
+//!     holds its temp for seconds, so the grace protects an in-flight install;
 //!   * `.tombstone-*` dirs are this pass's own crash leftovers and are
 //!     removed unconditionally.
 //!

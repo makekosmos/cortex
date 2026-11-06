@@ -6,7 +6,7 @@
 //! matching a process to an exe path uses `QueryFullProcessImageNameW` —
 //! the same semantics as `Win32_Process.ExecutablePath`.
 //!
-//! a kill is only done when the process is *gone* — the installer's
+//! A kill is only done when the process is *gone* — the installer's
 //! next step renames directories the dying process still holds handles into.
 //! `TerminateProcess` merely requests the exit, so every kill waits on the
 //! process handle, and `kill-product-processes` exits non-zero when any

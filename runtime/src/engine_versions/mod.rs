@@ -5,7 +5,7 @@
 //!   * `mundus-engine prune-versions` — one-shot CLI mode for direct
 //!     invocation (the installer itself calls [`prune_at`] in-process after
 //!     switching `current.json`, so the selection rule is never
-//! duplicated —);
+//!     duplicated;
 //!   * [`prune_self_install`] — the startup pass `setup()` runs once the
 //!     singleton is held, cleaning what existing users already accumulated.
 //!
