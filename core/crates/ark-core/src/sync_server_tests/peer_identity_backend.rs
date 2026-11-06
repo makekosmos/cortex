@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::MemBackend;
+use super::tests::MemBackend;
 use crate::replication_storage::PeerIdentityBackend;
 
 #[async_trait::async_trait]

@@ -1,10 +1,16 @@
 use super::*;
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncServer;
+use ark_domain::sync_contracts::protocol_negotiation::*;
+use ark_domain::sync_contracts::wire::*;
 use ark_domain::sync_storage::{PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort};
+use ark_domain::types::*;
+use futures_util::{SinkExt, StreamExt};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::net::TcpListener;
+use tokio_tungstenite::tungstenite::Message;
 
 pub(super) async fn registry_backend(
     device_id: &str,

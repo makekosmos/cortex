@@ -1,21 +1,20 @@
 use super::*;
 
 #[cfg(test)]
+#[path = "sync_client_start/registry_admission_tests.rs"]
+pub(super) mod registry_admission_tests;
+#[cfg(test)]
+#[path = "sync_client_start/task_merge_tests.rs"]
+pub(super) mod task_merge_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use ark_domain::sync_contracts::protocol_negotiation::*;
     use ark_domain::sync_contracts::wire::*;
-    use ark_domain::types::*;
     use futures_util::{SinkExt, StreamExt};
-    use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio_tungstenite::{accept_async, tungstenite::Message};
-
-    #[path = "../sync_client_start/registry_admission_tests.rs"]
-    mod registry_admission_tests;
-
-    #[path = "../sync_client_start/task_merge_tests.rs"]
-    mod task_merge_tests;
 
     #[tokio::test]
     async fn client_refuses_legacy_peer_before_registry_admission() {

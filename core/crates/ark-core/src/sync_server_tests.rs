@@ -1,4 +1,14 @@
 use super::*;
+#[cfg(test)]
+#[path = "sync_server_tests/peer_identity_backend.rs"]
+pub(super) mod peer_identity_backend;
+#[cfg(test)]
+#[path = "sync_server_tests/peer_management.rs"]
+pub(super) mod peer_management;
+#[cfg(test)]
+#[path = "sync_server_tests/version_vector_merge.rs"]
+pub(super) mod version_vector_merge;
+
 use ark_domain::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
@@ -10,9 +20,9 @@ pub(crate) mod tests {
 
     // Minimal in-memory backend for unit tests.
     pub(crate) struct MemBackend {
-        kv: StdMutex<HashMap<String, String>>,
-        entities: StdMutex<HashMap<String, SyncEntity>>,
-        peer_transport_keys_error: StdMutex<Option<String>>,
+        pub(super) kv: StdMutex<HashMap<String, String>>,
+        pub(super) entities: StdMutex<HashMap<String, SyncEntity>>,
+        pub(super) peer_transport_keys_error: StdMutex<Option<String>>,
         newer_version_vector_before_next_merge: StdMutex<Option<VersionVector>>,
     }
 
@@ -37,7 +47,7 @@ pub(crate) mod tests {
                 .insert(key.to_string(), value.to_string());
         }
 
-        fn race_next_vector_merge_with(&self, vector: VersionVector) {
+        pub(super) fn race_next_vector_merge_with(&self, vector: VersionVector) {
             *self.newer_version_vector_before_next_merge.lock().unwrap() = Some(vector);
         }
     }
@@ -392,12 +402,6 @@ pub(crate) mod tests {
         }
     }
 
-    #[path = "../sync_server_tests/peer_identity_backend.rs"]
-    mod peer_identity_backend;
-
-    #[path = "../sync_server_tests/version_vector_merge.rs"]
-    mod version_vector_merge;
-
     #[async_trait::async_trait]
     impl AuthenticatedEntityBackend for MemBackend {
         async fn receive_authenticated_entity_with_id(
@@ -457,7 +461,4 @@ pub(crate) mod tests {
                 .await
         }
     }
-
-    #[path = "../sync_server_tests/peer_management.rs"]
-    mod peer_management;
 }

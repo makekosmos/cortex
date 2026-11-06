@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
-use super::MemBackend;
+use super::tests::MemBackend;
 use crate::sync_server::{
     test_server_session_handle, PeerMessageSender, PeerState, SyncRuntimeStorage, SyncServer,
 };
