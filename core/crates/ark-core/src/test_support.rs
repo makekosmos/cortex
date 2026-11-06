@@ -5,7 +5,7 @@
 //! падает без имени теста. Здесь удаление проверяется явно: тест, который
 //! закрыл базу не до конца, падает с путём к каталогу в сообщении.
 //!
-//! KOS-398: в каталог пишется `LEAK_OWNER` с именем потока/теста (nextest
+//! в каталог пишется `LEAK_OWNER` с именем потока/теста (nextest
 //! выставляет его), чтобы гейт в логе назвал виновника даже когда к моменту
 //! sweep процесс уже вышел и handle отпущен.
 
@@ -44,7 +44,8 @@ impl Drop for TestTempDir {
         if let Err(error) = dir.close() {
             if !std::thread::panicking() {
                 panic!(
-                    "temp dir {} (test {}) could not be removed, a file in it is still open: {error}",
+                    "temp dir {} (test {}) could not be removed, \
+                     a file in it is still open: {error}",
                     path.display(),
                     owner.trim()
                 );

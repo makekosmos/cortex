@@ -1,4 +1,4 @@
-// KOS-236: the Engine tray is the full replacement for the Electron shell's
+// the Engine tray is the full replacement for the Electron shell's
 // tray/command palette (Manager, Agenda, Memoria, Открыть/Выход) on
 // Windows — see `windows_impl` for the menu contract.
 //
@@ -50,7 +50,7 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
 /// Manager exe path for the `/v1/rpc` caller-identity check: identical to
 /// the launch resolution in debug builds, but release builds ignore the
 /// `MUNDUS_MANAGER_EXECUTABLE` env override — an env var must not decide who
-/// may trigger the elevated install (KOS-269 round 4).
+/// may trigger the elevated install (round 4).
 #[cfg(windows)]
 pub(crate) fn manager_executable_for_auth() -> Option<std::path::PathBuf> {
     windows_impl::manager_executable_for_auth()

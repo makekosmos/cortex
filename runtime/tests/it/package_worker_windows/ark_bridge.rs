@@ -63,7 +63,7 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         .await
         .expect("worker stop");
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
     drop(supervisor);
     shutdown_ark(ark).await;
@@ -214,7 +214,7 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
         .await
         .expect("fake provider worker stop");
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
 }
 

@@ -174,7 +174,7 @@ fn reset_clears_everything() {
 
 /// The firewall op is parameterless on the wire by design — the service
 /// derives the program path from the pipe client, so nothing a caller sends
-/// can widen the grant (KOS-269).
+/// can widen the grant.
 #[cfg(windows)]
 #[test]
 fn ensure_engine_allow_is_parameterless_and_pipe_only() {

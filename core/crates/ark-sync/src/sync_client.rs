@@ -71,7 +71,7 @@ pub struct DirectClient {
     on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     /// The connection loop from `start`. It owns each transport session and
     /// `stop_and_join` aborts and joins it so none outlives teardown
-    /// (KOS-270, KOS-369).
+    /// (,).
     tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     callbacks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }

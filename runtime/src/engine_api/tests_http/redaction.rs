@@ -177,7 +177,7 @@ pub(super) async fn user_data_endpoint_requires_desktop_host_and_round_trips_by_
     assert_eq!(body["ok"], false);
     assert_eq!(body["error"], "not-found");
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -314,11 +314,11 @@ pub(super) async fn rejected_app_rpc_logs_the_wire_code_but_never_payload_values
     assert!(!captured.contains("SECRET-VALUE-123"), "{captured}");
     assert!(!captured.contains("SECRET-TITLE-456"), "{captured}");
     // The launch credential is a bearer for the data channel — it must
-    // never be logged (KOS-299 browser sessions rely on that).
+    // never be logged (browser sessions rely on that).
     assert!(!captured.contains(launch_token), "{captured}");
 
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
     let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("API task released ArkHost"));

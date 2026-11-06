@@ -340,7 +340,7 @@ async fn core_ready_handshake_times_out_on_stalled_peer() {
             .await;
     // Err(Timeout) is itself the event proving the deadline fired; an
     // upper-bound elapsed assertion would only measure scheduler starvation
-    // under parallel gate load (KOS-308).
+    // under parallel gate load.
     assert!(matches!(result, Err(ControlError::Timeout)));
     peer.abort();
 }

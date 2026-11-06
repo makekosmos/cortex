@@ -1,7 +1,7 @@
 use super::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 pub(super) async fn dropped_api_server_releases_package_service_back_reference() {
-    // KOS-270: PackageService stores its package-definition dispatcher
+    // PackageService stores its package-definition dispatcher
     // as a Weak ref — a server dropped without shutdown() must not keep
     // the dispatcher (and every component its dispatch closure captures)
     // alive. The fixture dir is removable immediately after drop.

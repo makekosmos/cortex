@@ -1,4 +1,4 @@
-//! Periodic storage maintenance (KOS-302).
+//! Periodic storage maintenance.
 //!
 //! Two duties, both off the hot path:
 //!   * `usage_sync_log` compaction in ark.db — the superseded-ref rule lives

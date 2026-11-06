@@ -72,9 +72,9 @@ mod load_all_json_tests;
 #[cfg(test)]
 mod load_and_clear_tests;
 #[cfg(test)]
-mod pending_objects_and_integrity_tests;
+mod object_version_state_tests;
 #[cfg(test)]
-mod phase2_object_versions_tests;
+mod pending_objects_and_integrity_tests;
 #[cfg(test)]
 mod query_contract_tests;
 #[cfg(test)]
@@ -88,4 +88,4 @@ mod sync_transaction_contract_tests;
 #[cfg(test)]
 mod transactions_and_usage_tests;
 #[cfg(test)]
-mod type_registry_slice1_tests;
+mod type_registry_mutation_tests;

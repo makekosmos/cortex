@@ -27,7 +27,7 @@ use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::RelayMode;
 
 /// Generous hang guard for event drains — the awaited message is the real
-/// condition; the cap only bounds a wedged transport under load (KOS-308).
+/// condition; the cap only bounds a wedged transport under load.
 const EVENT_GUARD: Duration = Duration::from_secs(60);
 
 /// Дренирует события до нужного типа или таймаута.
@@ -126,14 +126,14 @@ async fn iroh_round_trip() {
     .await
     .expect("B must receive Hello from A (auto-injected) — connection not established");
 
-    // KOS-369: the registry maps B's endpoint only after B's Hello lands.
+    // the registry maps B's endpoint only after B's Hello lands.
     find_message(&mut a_events_rx, EVENT_GUARD, |from, msg| {
         from == "device-B" && matches!(msg, LanSyncMessage::Hello { .. })
     })
     .await
     .expect("A must receive Hello from B (auto-injected)");
 
-    // KOS-369: data frames only flow to endpoints bound as authenticated
+    // data frames only flow to endpoints bound as authenticated
     // (pairing consent at the SyncSession layer). These transport-level tests
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.

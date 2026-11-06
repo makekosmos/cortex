@@ -141,7 +141,7 @@ impl EngineApiServer {
 
     /// The TempDir is returned to the caller: the server's stores keep open
     /// file handles inside it, so the directory must outlive the server —
-    /// dropping it at helper return leaks it (KOS-270).
+    /// dropping it at helper return leaks it.
     #[cfg(test)]
     pub(super) async fn bind_with_test_dispatcher_and_deadline(
         auth_token: String,

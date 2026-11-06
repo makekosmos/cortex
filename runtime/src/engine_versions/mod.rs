@@ -1,11 +1,11 @@
-//! Pruning of `<engine_root>/versions/<v>` install dirs (KOS-261) — the rule
+//! Pruning of `<engine_root>/versions/<v>` install dirs — the rule
 //! itself lives in [`prune`]; this module only hosts the two runners that
 //! share it:
 //!
 //!   * `mundus-engine prune-versions` — one-shot CLI mode for direct
 //!     invocation (the installer itself calls [`prune_at`] in-process after
 //!     switching `current.json`, so the selection rule is never
-//!     duplicated — KOS-306);
+//! duplicated —);
 //!   * [`prune_self_install`] — the startup pass `setup()` runs once the
 //!     singleton is held, cleaning what existing users already accumulated.
 //!
@@ -19,7 +19,7 @@ pub use prune::{engine_root_of_exe, Report};
 
 /// Apply the retention rule to an explicit engine root — the `install`
 /// subcommand calls this in-process after switching `current.json`
-/// (KOS-306; previously a separate `prune-versions` child process from
+/// (; previously a separate `prune-versions` child process from
 /// install-engine.ps1).
 pub(crate) fn prune_at(engine_root: &std::path::Path) -> Result<Option<Report>, String> {
     prune::prune(engine_root)

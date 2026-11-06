@@ -221,7 +221,7 @@ pub(super) async fn db_backup(
     // mutex) — серийный RPC-loop сразу свободен для других запросов.
     // Завершение сообщается событием `db_backup_result`; mundus-engine
     // ждёт его, чтобы записать last_backup_ts + ротацию.
-    // KOS-51: BACKUP_GATE удерживается на всё копирование —
+    // BACKUP_GATE удерживается на всё копирование —
     // `db_backup_restore` не может начаться посреди backup'а.
     std::thread::Builder::new()
         .name("ark-db-backup".to_string())
@@ -253,7 +253,7 @@ pub(super) async fn db_backup(
     Ok(json!({ "started": true, "dest": dest_path }))
 }
 
-// KOS-51: list/validate — read-only над backups dir + live conn,
+// list/validate — read-only над backups dir + live conn,
 // BACKUP_GATE не нужен (не мутируют ничего).
 pub(super) async fn db_backup_list(state: &Arc<ServiceState>) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
@@ -275,7 +275,7 @@ pub(super) async fn db_backup_validate(
         .map_err(|error| error.to_string())
 }
 
-// KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB handle.
+// атомарный restore. Порядок захвата: BACKUP_GATE → DB handle.
 // Restore держит оба на всю операцию — ни backup, ни
 // обычные ARK ops не выполняются параллельно, момента с отсутствующей
 // или частично заменённой primary DB нет (Online Backup API пишет

@@ -2,7 +2,7 @@ pub use ark_domain::app_identity::canonical_app_key;
 use ark_domain::types::{TopAppEntry, UsageProcessCandidate};
 use std::collections::{HashMap, HashSet};
 
-// Canonical app identity + top-apps merge (KOS-287).
+// Canonical app identity + top-apps merge.
 //
 // `tracked_apps.id` historically hashed the full normalized exe path. Apps
 // whose exe moves on update (Squirrel `app-1.0.x`, per-version browser dirs)

@@ -23,7 +23,7 @@ pub(crate) struct SyncStartParams {
     /// `RelayMode::Custom` — self-hosted relays and tests pointing the
     /// endpoint at an unreachable relay.
     pub(crate) iroh_relay_url: Option<String>,
-    /// KOS-369: this start is the user entering a pairing code — mark the
+    /// this start is the user entering a pairing code — mark the
     /// endpoint as an outgoing consent attempt. One-shot: the runtime's
     /// persisted `start_params` carry `false` so internal restarts and boot
     /// restores don't resurrect it.

@@ -32,7 +32,7 @@ const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 async fn iroh_offline_loopback_round_trip() {
     // No wall-clock cap around the whole test: every await inside is on a real
     // endpoint event, and a genuine hang is caught by nextest's slow-timeout —
-    // under parallel gate load 10 s was not enough for a healthy run (KOS-308).
+    // under parallel gate load 10 s was not enough for a healthy run.
     run().await;
 }
 

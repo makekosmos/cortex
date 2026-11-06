@@ -73,7 +73,7 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
             .wait_object_0());
         assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
         // Drain every supervisor registry so no task keeps a worker child or
-        // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+        // an ArkHost handle alive past the test's tempdir cleanup.
         let _ = supervisor.stop_all().await;
     }
     test_support::reset();
@@ -102,7 +102,7 @@ async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
     );
     assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
 }
 

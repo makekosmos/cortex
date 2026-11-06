@@ -91,7 +91,7 @@ use self::sync::{
 /// Host-provided environment facts the service must not discover on its own
 /// — ark-core never guesses OS paths. `windows_dir` is the real %SystemRoot%
 /// the Engine resolved via `GetSystemWindowsDirectoryW`; usage analytics
-/// marks rows under it as system apps (KOS-287). `None` marks nothing.
+/// marks rows under it as system apps. `None` marks nothing.
 #[derive(Clone, Debug, Default)]
 pub struct ArkHostConfig {
     pub windows_dir: Option<String>,
@@ -106,12 +106,12 @@ pub(crate) struct ServiceState {
     /// read connection so it does not hold the DB mutex for the whole copy.
     db_path: StdMutex<Option<String>>,
     sync: TokioMutex<Option<Arc<SyncRuntime>>>,
-    /// KOS-51: serializes background `db_backup` copying and
+    /// serializes background `db_backup` copying and
     /// `db_backup_restore` — backup and restore never overlap. Always taken
     /// before the DB mutex (deadlock-safe: the backup thread works on its own
     /// read connection and never takes the DB mutex).
     backup_gate: TokioMutex<()>,
-    /// Host config resolved by the Engine at construction (KOS-287).
+    /// Host config resolved by the Engine at construction.
     windows_dir: Option<String>,
 }
 

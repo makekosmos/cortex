@@ -206,7 +206,7 @@ fn directories_are_not_files_for_any_operation() {
     assert!(app_dir(dir.path()).join("folder").exists());
 }
 
-/// Data written before KOS-49 through the Host's pathname store sits at
+/// Data written before through the Host's pathname store sits at
 /// the same `extension-data/<app>/<key>` layout and must stay readable
 /// through the handle-relative boundary.
 #[test]

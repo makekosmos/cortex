@@ -5,7 +5,7 @@ use super::{
 use crate::sync_server::PeerEntry;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use std::time::{Duration, Instant};
-// SyncSession pairing consent (KOS-369): unknown endpoints park their Hello
+// SyncSession pairing consent: unknown endpoints park their Hello
 // here until a human presses «Принять»/«Отклонить», and the initiator's own
 // attempt resolves through `outgoing_pairing` in the snapshot.
 impl SyncSession {

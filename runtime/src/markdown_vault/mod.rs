@@ -1,5 +1,5 @@
 //! Markdown vault primitives ported from `shared/electron/markdown-vault.ts`
-//! and `markdown-file-operations.ts` (KOS-155). All filesystem access goes
+//! and `markdown-file-operations.ts`. All filesystem access goes
 //! through `handle_relative_fs` root handles — callers never receive absolute
 //! paths, and traversal/symlink rejection is inherited from that layer.
 

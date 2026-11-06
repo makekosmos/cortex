@@ -441,7 +441,7 @@ pub(super) struct WhisperServerProcess {
     // ProcessTree, not a bare Child: the KILL_ON_JOB_CLOSE job (Unix: process
     // group) is what kills whisper-server when the Engine dies — installer
     // kill, crash, Task Manager — instead of leaving it holding the tools dir
-    // and its port (KOS-312). Dropping it also covers our own stop path.
+    // and its port. Dropping it also covers our own stop path.
     child: Mutex<ProcessTree>,
 }
 

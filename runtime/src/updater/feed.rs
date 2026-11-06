@@ -1,10 +1,10 @@
 use super::release_manifest::{parse_release_manifest, FeedRelease};
 use super::UpdaterError;
 
-// KOS-304: releases live in makekosmos/cortex.
+// releases live in makekosmos/cortex.
 pub(crate) const DEFAULT_FEED_BASE: &str =
     "https://github.com/makekosmos/cortex/releases/latest/download";
-/// KOS-350: the one release document.
+/// the one release document.
 pub(crate) const MANIFEST_FILE: &str = "manifest.json";
 
 /// `platforms` key in `manifest.json` for the OS this Engine runs on.
@@ -45,7 +45,7 @@ async fn fetch_text(client: &reqwest::Client, url: &str) -> Result<String, Updat
 
 /// Newest release for `platform`. A manifest without an entry for it means
 /// no installable update yet (`file: None`); the next check sees it once the
-/// platform's build is merged in and the CDN refreshes (KOS-377).
+/// platform's build is merged in and the CDN refreshes.
 pub(crate) async fn fetch_release(
     client: &reqwest::Client,
     feed_base: &str,

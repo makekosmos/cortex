@@ -48,7 +48,7 @@ pub fn resolve_component_executable(component: Component) -> Option<PathBuf> {
 /// Manager exe resolution for *authorization* (the `/v1/rpc` caller-identity
 /// check). Unlike launch resolution, the `MUNDUS_MANAGER_EXECUTABLE` env
 /// override exists only in debug builds: in a release Engine an env var must
-/// never decide who may trigger the elevated install (KOS-269 round 4). The
+/// never decide who may trigger the elevated install (round 4). The
 /// tray's launch path keeps honouring it — that is pre-existing behaviour
 /// and not an auth source.
 pub fn resolve_manager_for_auth() -> Option<PathBuf> {

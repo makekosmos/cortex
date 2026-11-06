@@ -2,7 +2,7 @@
 // Windows it owns no foreground window, so a spawned GUI app inherits no
 // foreground rights: `SetForegroundWindow` calls it makes are swallowed
 // by the foreground lock and its window opens *behind* the Manager, while
-// the Manager keeps focus and appears to flicker/reopen (KOS-354). After
+// the Manager keeps focus and appears to flicker/reopen. After
 // spawn we hand the child explicit foreground permission via
 // `AllowSetForegroundWindow(pid)` — the child (or, on relaunch, the
 // already-running instance it forwards to) can then raise its own window.

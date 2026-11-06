@@ -1,6 +1,8 @@
 use crate::appearance::AppearanceStore;
 use crate::diagnostics::SharedRpcDiagnostics;
 use crate::engine_settings;
+use crate::package_service::PackageService;
+use crate::package_worker_supervisor::AutostartControl;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::updater::UpdaterService;
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
@@ -57,11 +59,27 @@ impl ManagerState {
         rpc: &SharedRpcDiagnostics,
         usage: &Arc<UsageTrackerDiagnosticsState>,
         protocol: &Arc<ProtocolUsageStore>,
+        packages: &Arc<PackageService>,
     ) -> Value {
         let rpc_snapshot = rpc.snapshot();
         let usage_snapshot = usage.snapshot();
         let protocol_snapshot = protocol.snapshot();
-        let workers = Vec::<Value>::new();
+        let workers = packages
+            .worker_diagnostics()
+            .into_iter()
+            .map(|worker| {
+                json!({
+                    "id": worker.id,
+                    "version": worker.version,
+                    "status": worker.state,
+                    "state": worker.state,
+                    "restart_count": worker.restart_count,
+                    "generation": worker.generation,
+                    "lifecycle_reason": worker.lifecycle_reason,
+                    "bridge_status": worker.bridge_status,
+                })
+            })
+            .collect::<Vec<_>>();
         let protocol_usage = json!({
             "tracking_started_at": protocol_snapshot.tracking_started_at,
             "api_v1": protocol_snapshot.api_v1,
@@ -75,7 +93,7 @@ impl ManagerState {
             "api_v1_last_seen": protocol_snapshot.api_v1.last_seen,
             "tracking_started_at": protocol_snapshot.tracking_started_at,
             "ready": true,
-            "note": "legacy transport removed (KOS-333); 30-day observation no longer tracked",
+            "note": "transport removed; no observation window is tracked",
         });
         let components = json!([
             {"name": "rpc", "status": "ok", "state": "ok", "details": rpc_snapshot},
@@ -205,9 +223,18 @@ impl ManagerState {
     }
 }
 
+// EngineCapabilityExecutor lives in engine-packages; ManagerState
+// satisfies its autostart boundary here so worker calls route through the
+// same host-side toggle.
+impl AutostartControl for ManagerState {
+    fn set_autostart(&self, enabled: bool) -> Result<Value, String> {
+        ManagerState::set_autostart(self, enabled)
+    }
+}
+
 // pub(crate): the installer's `post-install` subcommand reuses the
 // StartupApproved marker layout and the Run/Approved subkey constants
-// (KOS-306).
+//
 #[cfg(windows)]
 pub(crate) mod windows_autostart;
 
@@ -269,7 +296,7 @@ mod tests {
         assert!(!autostart.contains("Command::new"));
         assert!(autostart.contains("RegSetKeyValueW"));
         // The subkey constants live in installer::registry, shared with the
-        // post-install subcommand (KOS-306).
+        // post-install subcommand.
         let registry = include_str!("installer/registry.rs");
         assert!(registry.contains("Explorer\\StartupApproved\\Run"));
     }
@@ -326,7 +353,7 @@ mod tests {
                 json!({
                     "token": "secret-token",
                     "body": {"private": "object body"},
-                    "legacy_path": r"C:\Users\alice\data\demo.bin",
+                    "package_path": r"C:\Users\alice\packages\demo.kspkg",
                     "payload": "raw payload",
                 }),
                 json!({"authorization": "Bearer abc"}),

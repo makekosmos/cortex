@@ -17,7 +17,7 @@ pub(super) fn test_state() -> Arc<ServiceState> {
 /// before `dir`, so the db file is closed before the directory is removed.
 /// Two separate `let` locals would drop in reverse declaration order and a
 /// `tempdir()` declared after `test_state()` leaked its dir on Windows,
-/// where an open file cannot be deleted (KOS-270).
+/// where an open file cannot be deleted.
 pub(super) struct ServiceFixture {
     pub(crate) state: Arc<ServiceState>,
     pub(crate) dir: crate::test_support::TestTempDir,
@@ -107,7 +107,7 @@ pub(super) async fn shutdown_test_state(state: &Arc<ServiceState>) {
 
 impl Drop for ServiceFixture {
     fn drop(&mut self) {
-        // KOS-398: drop the shared SQLite handle before TempDir tries to
+        // drop the shared SQLite handle before TempDir tries to
         // delete ark.db. A forgotten StopSync (or a transport task that still
         // holds its own Arc) keeps the file open on Windows; TestTempDir then
         // panics with the test name instead of leaving a silent leftover.
@@ -142,7 +142,7 @@ mod pairing_iroh;
 mod pairing_proto;
 mod replace_object_link;
 mod request_config;
-/// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
+/// atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
 mod snapshot_restore_identity;
 mod sync_lifecycle;

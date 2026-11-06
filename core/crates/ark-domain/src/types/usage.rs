@@ -10,10 +10,10 @@ pub struct UsageSummary {
     pub event_count: i64,
     /// Visible wall-clock time across all sessions — raw data, NOT "time
     /// used" (it counts background-visible windows and is what inflated
-    /// headlines pre-KOS-287). Consumers presenting a total must read
+    /// headlines pre-). Consumers presenting a total must read
     /// `total_foreground_ms`.
     pub total_runtime_ms: i64,
-    /// The headline total: ACTIVE time — focused and not idle (KOS-287).
+    /// The headline total: ACTIVE time — focused and not idle.
     pub total_foreground_ms: i64,
     pub total_idle_ms: i64,
     pub first_recorded_at: Option<String>,

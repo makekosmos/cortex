@@ -120,7 +120,7 @@ pub(super) fn render(
                         ),
                 ),
         );
-        // KOS-369: the connect RPC returns `pending` at once — the outcome
+        // the connect RPC returns `pending` at once — the outcome
         // arrives through `outgoing_pairing` in the snapshot. While pending
         // the row offers «Отмена»; a terminal state shows the result and a
         // «Скрыть» that clears it engine-side.
@@ -185,7 +185,7 @@ pub(super) fn render(
         .into_any_element()
 }
 
-/// KOS-269 «Расширенные права»: the LocalSystem service that keeps the
+/// «Расширенные права»: the LocalSystem service that keeps the
 /// firewall rule current across Engine updates. `enable` triggers the one
 /// UAC prompt; `status` (read on tab load) never elevates.
 fn privileged_row(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {

@@ -35,7 +35,7 @@ fn write_app(root: &Path, bundle_id: &str, extra: &[(&str, &str)]) {
 #[cfg(unix)]
 #[tokio::test]
 async fn mac_install_stages_the_dmg_app_over_the_running_bundle_and_relaunches() {
-    // KOS-377: the full mac arm — check finds the DMG, downloads it, install
+    // the full mac arm — check finds the DMG, downloads it, install
     // mounts it, stages the .app next to the running bundle, and the detached
     // helper swaps it in and relaunches. The mac tools (hdiutil, ditto,
     // whole flow runs on any unix host.

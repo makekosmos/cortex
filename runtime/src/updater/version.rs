@@ -4,10 +4,10 @@ use semver::Version;
 
 /// Running Engine version, compared against the update feed to decide
 /// whether a newer build is available. It is the Mundus product version
-/// that `build-backend.mjs` bakes in (`build_info`, KOS-233), the same
+/// that `build-backend.mjs` bakes in (`build_info`,), the same
 /// value the About page shows. Reading any other source made a released
 /// 0.10.0 Engine report the crate's 0.1.0 and offer 0.10.0 as an update
-/// forever (KOS-278).
+/// forever.
 pub(crate) fn current_version() -> String {
     crate::build_info::display_version().to_string()
 }

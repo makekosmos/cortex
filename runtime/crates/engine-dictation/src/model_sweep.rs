@@ -1,4 +1,4 @@
-//! Startup sweep of interrupted local-model download leftovers (KOS-301).
+//! Startup sweep of interrupted local-model download leftovers.
 //!
 //! `local_models` downloads into `models/dictation/` (model files) and
 //! `tools/dictation/` (whisper.cpp runtimes — the temp archive sits next to

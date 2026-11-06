@@ -16,7 +16,7 @@ enum Category {
     Updates,
     FileIndex,
     AppIndex,
-    // KOS-302: 0.9.x leftover with no writer in cortex — surfaced as its own
+    // 0.9.x leftover with no writer in cortex — surfaced as its own
     // row so the «Данные» page can offer the «Очистить» action.
     LegacyQuarantine,
     Installations,

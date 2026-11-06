@@ -295,7 +295,7 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
     };
 
     let mut connected = runtime.server.get_connected_peer_entries().await;
-    // KOS-369 consent surface: unknown endpoints that Hello'd us wait in
+    // consent surface: unknown endpoints that Hello'd us wait in
     // `incoming_pairing_requests` for «Принять / Отклонить»; `outgoing_pairing`
     // reports our own attempt (pending / declined / connected) to the
     // initiator's UI.

@@ -190,7 +190,7 @@ fn test_sync_changes_serialization() {
 #[test]
 fn test_sync_changes_usage_complete_through_compat() {
     // Old senders omit the field — a new receiver deserializes to None
-    // and keeps contiguous-only cursor advancement (KOS-302).
+    // and keeps contiguous-only cursor advancement.
     let json = r#"{"type":"sync_changes","batch_id":"b1","entities":[],"is_last":true}"#;
     let msg = deserialize_message(json).unwrap();
     match msg {

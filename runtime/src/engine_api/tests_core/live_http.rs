@@ -41,7 +41,7 @@ pub(super) async fn live_http_rejects_unsupported_malformed_and_oversized_reques
     assert!(oversized.starts_with("HTTP/1.1 413"));
 
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -278,7 +278,7 @@ pub(super) async fn loopback_http_launch_lease_lifecycle_uses_signed_installed_p
     .await
     .starts_with("HTTP/1.1 404"));
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }

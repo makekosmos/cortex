@@ -1,4 +1,4 @@
-//! Shared NTFS MFT-scan plumbing (KOS-335).
+//! Shared NTFS MFT-scan plumbing.
 //!
 //! `file_index::scanner::ntfs` (user-mode fast path) and
 //! `privileged::ntfs_scan` (service-side scan) used to carry ~12 identical

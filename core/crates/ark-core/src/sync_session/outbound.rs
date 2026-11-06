@@ -182,7 +182,7 @@ impl SyncSession {
             }
         };
         merge_usage_cursors(&mut load_vector, remote_vector);
-        // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
+        // Hole-tolerant cursors: a relay must advertise these too —
         // it may itself have compacted refs the next hop still needs a claim
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.

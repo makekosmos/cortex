@@ -44,7 +44,7 @@ pub enum Request {
         exclude_noisy: bool,
     },
     /// Keep the managed inbound firewall rule pointed at the *caller's*
-    /// Engine exe (KOS-269). Carries no parameters: the service derives the
+    /// Engine exe. Carries no parameters: the service derives the
     /// program path from the pipe client's own process image, so a request
     /// can never name an arbitrary binary to open the firewall for.
     /// Additive change — no `PROTOCOL_VERSION` bump: an older service

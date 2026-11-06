@@ -3,7 +3,7 @@
 //! Integration test: `SyncSession` peer-state handling for transport lifecycle
 //! events.
 //!
-//! Regression coverage for KOS-226: a dropped transport-level socket (e.g.
+//! Regression coverage for a dropped transport-level socket (e.g.
 //! the relay WebSocket) must evict all authenticated peers, and a per-peer
 //! `Disconnected` carrying our own device id must evict nothing.
 
@@ -152,7 +152,7 @@ async fn relay_with_stub() -> (
 }
 
 /// Generous hang guard for event waits — the peer list state is the real
-/// condition; the cap only bounds a wedged relay under load (KOS-308).
+/// condition; the cap only bounds a wedged relay under load.
 const EVENT_GUARD: Duration = Duration::from_secs(60);
 
 async fn wait_for_peer(relay: &SyncSession) {
@@ -215,12 +215,12 @@ async fn transport_dropped_evicts_all_peers() {
     );
 
     // RelayTransport emits TransportDropped when the multiplexed relay
-    // socket drops (see relay_transport.rs reconnect loop). Before KOS-226
+    // socket drops (see relay_transport.rs reconnect loop). Before
     // it emitted Disconnected{our own id}, which evicted nothing and left
     // stale authenticated peers — reconnects never re-fired on_peer_connect.
     tx.send(TransportEvent::TransportDropped).unwrap();
     // Wait on the eviction itself — a fixed sleep both flakes under load and
-    // can pass before the event is even processed (KOS-308).
+    // can pass before the event is even processed.
     wait_for_no_peers(&relay).await;
     relay.stop().await;
     drop(relay);

@@ -905,7 +905,7 @@ async fn start_recording_transitions_to_recording() {
     assert_eq!(state.data["state"], "recording");
 }
 
-// KOS-337: exercises the local backend — only built with `local-dictation`.
+// exercises the local backend — only built with `local-dictation`.
 #[cfg(feature = "local-dictation")]
 #[tokio::test]
 async fn start_recording_preloads_local_sidecar() {
@@ -1054,7 +1054,7 @@ async fn submit_audio_provider_disabled_returns_state_error_not_ipc_error() {
     );
 }
 
-// KOS-337: exercises the local backend — only built with `local-dictation`.
+// exercises the local backend — only built with `local-dictation`.
 #[cfg(feature = "local-dictation")]
 #[tokio::test]
 async fn submit_audio_local_provider_without_model_reports_missing_local_model() {
@@ -1320,7 +1320,7 @@ async fn submit_audio_groq_transcript_succeeds_with_test_api_key_and_cleans_up()
     std::env::remove_var("MUNDUS_TEST_MODE");
 }
 
-// KOS-337: exercises the local backend — only built with `local-dictation`.
+// exercises the local backend — only built with `local-dictation`.
 #[cfg(feature = "local-dictation")]
 #[tokio::test]
 async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() {
@@ -1395,7 +1395,7 @@ async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() 
     std::env::remove_var("MUNDUS_TEST_MODE");
 }
 
-// KOS-337: exercises the local backend — only built with `local-dictation`.
+// exercises the local backend — only built with `local-dictation`.
 #[cfg(feature = "local-dictation")]
 #[tokio::test]
 async fn submit_audio_local_missing_model_path_returns_error_and_keeps_pending() {
@@ -1437,7 +1437,7 @@ async fn submit_audio_local_missing_model_path_returns_error_and_keeps_pending()
     assert_eq!(pending.data["items"].as_array().unwrap().len(), 1);
 }
 
-// KOS-337: exercises the local backend — only built with `local-dictation`.
+// exercises the local backend — only built with `local-dictation`.
 #[cfg(feature = "local-dictation")]
 #[tokio::test]
 async fn submit_audio_local_sidecar_unavailable_keeps_pending() {

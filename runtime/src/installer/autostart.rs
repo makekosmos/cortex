@@ -1,8 +1,8 @@
 //! Autostart seeding and migration — the in-process port of
 //! `engine-post-install.ps1 -MigrateAutostart` and install-engine.ps1's
-//! `Update-EngineAutostart` (KOS-306). The opt-out contract is unchanged: a
-//! disabled `StartupApproved\Run` marker under the current product name means
-//! the user turned autostart off and we keep it off.
+//! `Update-EngineAutostart`. The opt-out contract is unchanged: a
+//! disabled `StartupApproved\Run` marker under the current OR any legacy
+//! product name means the user turned autostart off and we keep it off.
 
 use std::path::Path;
 
@@ -13,8 +13,20 @@ use super::registry;
 #[cfg(windows)]
 use crate::brand;
 
-/// Run value names that count as a persisted opt-out — the current name.
-const OPT_OUT_NAMES: &[&str] = &["Mundus Engine"];
+/// Run value names that count as a persisted opt-out — the current name plus
+/// every prior generation's. MIGRATION(KOS-267): remove the legacy names
+/// after 2026-11-01.
+const OPT_OUT_NAMES: &[&str] = &[
+    "Mundus Engine",
+    "Kosmos Engine",       // MIGRATION(KOS-267)
+    "Kosmos",              // MIGRATION(KOS-267)
+    "electron.app.Kosmos", // MIGRATION(KOS-267)
+    "com.kazui.kosmos",    // MIGRATION(KOS-267)
+    "com.kazui.kepler",    // MIGRATION(KOS-267)
+    "Kepler",              // MIGRATION(KOS-267)
+    "KeplerKosmos",        // MIGRATION(KOS-267)
+    "KosmosKepler",        // MIGRATION(KOS-267)
+];
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "autostart")]
@@ -86,14 +98,28 @@ mod imp {
             }
             let exe = version_root.join(format!("{}.exe", brand::ENGINE_BINARY_STEM));
             let command = format!("\"{}\" --start", exe.display());
-            let Some(value) = registry::read_sz(registry::RUN_SUBKEY, brand::AUTOSTART_RUN_VALUE)
-            else {
-                return Ok(());
-            };
-            let lower = value.to_lowercase();
-            let points_at_engine = lower.contains("--start") && lower.contains("mundus-engine.exe");
-            if points_at_engine {
-                registry::write_sz(registry::RUN_SUBKEY, brand::AUTOSTART_RUN_VALUE, &command)?;
+            // MIGRATION(KOS-267): keep reading/rewriting the legacy Run value
+            // names until cleanup; always write under the new name.
+            for name in ["Mundus Engine", "Kosmos Engine"] {
+                // MIGRATION(KOS-267)
+                let Some(value) = registry::read_sz(registry::RUN_SUBKEY, name) else {
+                    continue;
+                };
+                let lower = value.to_lowercase();
+                let points_at_engine = lower.contains("--start")
+                    && [
+                        "kepler-backend.exe", // MIGRATION(KOS-267)
+                        "mundus-engine.exe",
+                        "kosmos runtime.exe", // MIGRATION(KOS-267)
+                    ]
+                    .iter()
+                    .any(|name| lower.contains(name));
+                if points_at_engine {
+                    registry::write_sz(registry::RUN_SUBKEY, brand::AUTOSTART_RUN_VALUE, &command)?;
+                }
+                if name != brand::AUTOSTART_RUN_VALUE {
+                    registry::delete_value(registry::RUN_SUBKEY, name);
+                }
             }
             Ok(())
         })();

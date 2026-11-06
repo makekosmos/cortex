@@ -458,7 +458,7 @@ pub(super) async fn production_dispatcher_has_real_http_ws_socket_parity_and_own
         .await
         .expect("idempotent ws shutdown");
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = api_shutdown_handle.shutdown().await;
     let _ = api_task.await;
     let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("HTTP and WS released ArkHost"));
@@ -466,7 +466,7 @@ pub(super) async fn production_dispatcher_has_real_http_ws_socket_parity_and_own
         .await
         .expect("ARK closes before fixture cleanup");
     // Shutdown must deterministically release every fixture handle: the
-    // data dir is removable immediately, with no retry window (KOS-270).
+    // data dir is removable immediately, with no retry window.
     dir.close()
         .expect("fixture dir still locked after shutdown");
 }

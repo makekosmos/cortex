@@ -1,6 +1,6 @@
 //! `engine-manifest.json` validation and file hashing for `install` —
 //! in-process port of `Assert-Manifest`/`Get-EngineSha256` from the removed
-//! install-engine.ps1 (KOS-306). The manifest is written by
+//! install-engine.ps1. The manifest is written by
 //! `desktop/scripts/engine-distribution.mjs` next to the staged payload.
 
 use std::path::Path;

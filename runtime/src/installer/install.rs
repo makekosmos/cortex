@@ -1,5 +1,5 @@
 //! `mundus-engine install` — in-process port of install-engine.ps1
-//! (KOS-306). The NSIS installer stages the Engine payload unpacked under
+//! The NSIS installer stages the Engine payload unpacked under
 //! `resources\engine\` and runs the staged exe directly:
 //!
 //!   mundus-engine.exe install --manifest <engine-manifest.json> --target-root <root>
@@ -194,7 +194,7 @@ pub fn install(options: &Options) -> Result<Value, String> {
     }
     autostart::update_for_install(&version_root, &options.target_root);
 
-    // KOS-261: prune superseded versions/<v> dirs — keep current + one
+    // prune superseded versions/<v> dirs — keep current + one
     // previous. Runs in-process now (no `prune-versions` child process, no
     // temp log file); any failure is a warning, never a failed install.
     match crate::engine_versions::prune_at(&options.target_root) {

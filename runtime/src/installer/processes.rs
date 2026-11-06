@@ -1,4 +1,4 @@
-//! Process handling for the installer subcommands (KOS-306).
+//! Process handling for the installer subcommands.
 //!
 //! Replaces the fifteen `taskkill /F /IM …` spawns the NSIS script used to
 //! run, and the `Get-CimInstance Win32_Process` lookups the PowerShell
@@ -6,7 +6,7 @@
 //! matching a process to an exe path uses `QueryFullProcessImageNameW` —
 //! the same semantics as `Win32_Process.ExecutablePath`.
 //!
-//! KOS-309: a kill is only done when the process is *gone* — the installer's
+//! a kill is only done when the process is *gone* — the installer's
 //! next step renames directories the dying process still holds handles into.
 //! `TerminateProcess` merely requests the exit, so every kill waits on the
 //! process handle, and `kill-product-processes` exits non-zero when any
@@ -34,7 +34,7 @@ const PRODUCT_PROCESS_NAMES: &[&str] = &[
     "Mundus.exe",
     "mundus-engine.exe",
     "Mundus Manager.exe",
-    // Store-installed native apps (KOS-265) — must not hold their dir while
+    // Store-installed native apps — must not hold their dir while
     // the Engine or an uninstall replaces/removes it.
     "agenda-gpui.exe",
     "memoria-gpui.exe",

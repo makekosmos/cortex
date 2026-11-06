@@ -62,7 +62,7 @@ pub(super) async fn http_preserves_request_identity_and_defaults_client_context(
     assert_eq!(request.client.version.as_deref(), Some(API_VERSION));
     assert!(request.client.connection_id.is_some());
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
     let _ = child.kill();
@@ -134,7 +134,7 @@ pub(super) async fn direct_http_rpc_records_only_authenticated_requests_in_bound
     assert!(!raw.contains("2147483647"));
     assert!(!raw.contains("noted"));
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -250,7 +250,7 @@ pub(super) async fn response_timeout_stays_primary_with_bounded_continuation() {
     assert_eq!(writes.load(Ordering::SeqCst), 2);
     assert_eq!(cleanups.load(Ordering::SeqCst), 2);
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -318,7 +318,7 @@ pub(super) async fn http_timeout_keeps_started_write_exactly_once_and_cleans_con
     assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(cleanups.load(std::sync::atomic::Ordering::SeqCst), 1);
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }

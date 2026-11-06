@@ -1,8 +1,8 @@
 //! Executable image path of a same-user process, queried by PID —
 //! trustworthy process identity, unlike self-declared client headers.
 //!
-//! Moved verbatim from `engine::auth` via `engine-indexes` (KOS-335);
-//! relocated to `engine-base` (KOS-342) so `crate::auth::process_image_path`
+//! Moved verbatim from `engine::auth` via `engine-indexes`;
+//! relocated to `engine-base` so `crate::auth::process_image_path`
 //! can wrap it directly — engine-indexes re-exports it for
 //! `privileged::impersonate`.
 
@@ -20,7 +20,7 @@ pub enum ProcessImageError {
 }
 
 /// Used to pin `/v1/rpc` callers that claim to be the Manager
-/// (KOS-269 round 3).
+/// (round 3).
 pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, ProcessImageError> {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Threading::{

@@ -1,6 +1,6 @@
-//! Rejection logging for app-facing RPC entry points (KOS-298).
+//! Rejection logging for app-facing RPC entry points.
 //!
-//! During KOS-295 the Engine log held no record of rejected `upsert_object`
+//! During the Engine log held no record of rejected `upsert_object`
 //! calls, so the reason could not be recovered on the user's machine. Every
 //! app-RPC rejection now emits one WARN with client class, operation, object
 //! type id and the internal reason — metadata only, never payload values.
@@ -196,7 +196,7 @@ pub mod tests {
     }
 
     /// A rejected app RPC must log client class, op, type id and the
-    /// internal reason — and nothing from the payload (KOS-298).
+    /// internal reason — and nothing from the payload.
     #[test]
     fn rejection_log_carries_metadata_but_never_payload_values() {
         let buf = CaptureBuf::default();

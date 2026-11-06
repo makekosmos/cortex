@@ -278,7 +278,7 @@ pub(crate) enum Request {
         dest_path: String,
     },
 
-    /// KOS-51: privileged snapshot ops над Core-owned `<db_dir>/backups/`.
+    /// privileged snapshot ops над Core-owned `<db_dir>/backups/`.
     /// `backup_id` — только basename файла из этой директории (см.
     /// `db::validate_snapshot_id`), никаких произвольных путей.
     /// Restore применяется через SQLite Online Backup API в live conn под
@@ -292,7 +292,7 @@ pub(crate) enum Request {
         backup_id: String,
     },
 
-    /// KOS-302: один батч компакции `usage_sync_log` (правило — в
+    /// один батч компакции `usage_sync_log` (правило — в
     /// Компактор usage-журнала находится в
     /// `ark-store::usage_sync_log`). Engine maintenance loop вызывает его
     /// повторно: каждый вызов — короткая транзакция ≤ batch_limit строк,
@@ -347,7 +347,7 @@ pub(crate) enum Request {
         #[serde(alias = "code")]
         pairing_code: String,
     },
-    /// KOS-369 consent decisions on the receiving side. `accept_pairing`
+    /// consent decisions on the receiving side. `accept_pairing`
     /// completes the handshake for a pending request; `decline_pairing`
     /// sends `pairing_rejected` and closes the connection.
     AcceptPairing {
@@ -356,7 +356,7 @@ pub(crate) enum Request {
     DeclinePairing {
         device_id: String,
     },
-    /// KOS-369 «Отмена» on the initiator (or dismissal of a terminal
+    /// «Отмена» on the initiator (or dismissal of a terminal
     /// outcome): drops the outbound attempt and, while still pending, cuts
     /// the dialled connection.
     CancelPairing,
@@ -373,7 +373,7 @@ pub(crate) enum Request {
     /// selected the iroh transport. `null`/error otherwise (e.g. relay
     /// selected or sync not running).
     GetOwnIrohTicket,
-    /// KOS-269: explicit "show my pairing code" — escalates a loopback-bound
+    /// explicit "show my pairing code" — escalates a loopback-bound
     /// runtime to `all_interfaces` (and the iroh transport) so the returned
     /// ticket is LAN-reachable, then returns it. This is the user action
     /// that owns the firewall prompt; `get_own_iroh_ticket` stays a passive

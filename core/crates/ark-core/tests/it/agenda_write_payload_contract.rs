@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-//! KOS-297 contract test: every payload agenda-gpui's write path produces must
+//! contract test: every payload agenda-gpui's write path produces must
 //! pass the exact validation the Engine runs on `upsert_object`
 //! (`ark_store::object_write::prepare_object` → `validate_canonical`).
 //!

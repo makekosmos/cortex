@@ -1,4 +1,4 @@
-// KOS-51: unit-level snapshot restore тесты. RPC-level покрытие —
+// unit-level snapshot restore тесты. RPC-level покрытие —
 // src/main/tests/snapshot_restore.rs.
 
 #![allow(clippy::unwrap_used)]
@@ -142,7 +142,7 @@ fn restore_rolls_back_to_pre_restore_state_when_post_verify_fails() {
     assert_eq!(leftovers, vec!["ark.db.backup-rollback".to_string()]);
 }
 
-/// KOS-83: провал post-verify + провал rollback — pre-restore snapshot
+/// провал post-verify + провал rollback — pre-restore snapshot
 /// НЕ удаляется, а сохраняется под видимым basename'ом и остаётся
 /// валидной точкой восстановления pre-restore данных.
 #[test]

@@ -262,7 +262,7 @@ pub(crate) async fn handle_start_sync(
             let ticket_tx = iroh_our_ticket_tx;
             // Tracked by the transport, not detached: this task holds the
             // transport, and the transport holds the ark.db connection, so
-            // `stop()` must abort and join it (KOS-369).
+            // `stop` must abort and join it.
             let ticket_task = crate::task_set::spawn(async move {
                 match ticket_transport.our_ticket().await {
                     Ok(ticket) => {

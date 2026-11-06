@@ -38,7 +38,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
             .await
     });
     // The barrier fires inside the worker's pre-resume hook — the event is the
-    // synchronization, no wall-clock cap needed (KOS-308).
+    // synchronization, no wall-clock cap needed.
     barrier.suspended_ready().await;
     assert!(!launch.is_finished());
     assert!(!markers.entry.exists());
@@ -119,7 +119,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     let health = format!("{:?}", supervisor.health(&m.id, &m.version));
     assert!(!health.contains("hash") && !health.contains("corr"));
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
 }
 
@@ -152,7 +152,7 @@ async fn stop_suppresses_initial_failure_retries() {
     });
     // Wait on the real event — generation 2 means the first attempt failed and
     // the 400 ms retry was consumed — instead of a fixed sleep that CPU
-    // starvation can delay past the point it was meant to observe (KOS-308).
+    // starvation can delay past the point it was meant to observe.
     // The 3 s second delay is then the window `stop` must cancel.
     tokio::time::timeout(HANG_GUARD, async {
         loop {
@@ -185,6 +185,6 @@ async fn stop_suppresses_initial_failure_retries() {
         WorkerState::Stopped
     );
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
 }

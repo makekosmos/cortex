@@ -90,7 +90,7 @@ impl NativeAppStore {
         Ok(record)
     }
 
-    /// KOS-301: `cleanup_stale` only runs after a successful install — an app
+    /// `cleanup_stale` only runs after a successful install — an app
     /// that is never reinstalled kept its crashed `.download-*` files,
     /// `.staging-*`/`.tombstone-*` dirs and `write_owner_only_json` temps
     /// forever. Called from `NativeAppStore::new`: sweeps every app dir, but

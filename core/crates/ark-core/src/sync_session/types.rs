@@ -40,7 +40,7 @@ pub(super) struct IncomingSyncState {
     pub(super) last_update: Instant,
 }
 
-/// A first-contact Hello parked for explicit user consent (KOS-369). The
+/// A first-contact Hello parked for explicit user consent. The
 /// stored Hello is replayed through `handle_message` on «Принять», so
 /// acceptance applies exactly the same checks and persistence as a live
 /// Hello; «Отклонить» answers `PairingRejected` and closes the connection.
@@ -101,6 +101,6 @@ pub struct SyncSession {
     pub(super) on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     /// Background tasks spawned by `start()` — aborted and joined by
     /// `stop()` so a task holding `storage` (the shared db connection)
-    /// cannot outlive teardown (KOS-270).
+    /// cannot outlive teardown.
     pub(super) tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }

@@ -12,7 +12,7 @@ use windows::Win32::System::Registry::{
     RRF_RT_REG_BINARY,
 };
 
-// Shared with the installer's post-install subcommand (KOS-306).
+// Shared with the installer's post-install subcommand.
 pub(crate) use crate::installer::registry::{APPROVED_SUBKEY, RUN_SUBKEY};
 
 fn wide(value: &str) -> Vec<u16> {

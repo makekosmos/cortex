@@ -4,7 +4,7 @@
 // раз в N часов (default 24, override через MUNDUS_BACKUP_INTERVAL_HOURS).
 // Online Backup API не блокирует concurrent readers/writer — safe для live DB.
 //
-// Retention (см. `retention` модуль, KOS-300): после успешного backup'а и на
+// Retention (см. `retention` модуль,): после успешного backup'а и на
 // каждом старте Engine держим последние `MUNDUS_BACKUP_RETAIN_COUNT`
 // (default 7) backup'ов, убираем orphan SQLite sidecar'ы и stale temp файлы
 // crashed restore.
@@ -292,7 +292,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
 }
 
 // ---------------------------------------------------------------------------
-// KOS-77: privileged Core snapshot RPCs (KOS-51: db_backup_list /
+// privileged Core snapshot RPCs (db_backup_list /
 // db_backup_validate / db_backup_restore). Manager не трогает файлы сам —
 // `<db_dir>/backups/` принадлежит Core; restore идёт Online Backup API в live
 // conn под BACKUP_GATE, без момента с отсутствующей primary DB.

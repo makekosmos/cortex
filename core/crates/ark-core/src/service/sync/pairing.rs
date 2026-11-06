@@ -1,4 +1,4 @@
-//! Pairing — the two explicit "turn sync on" transitions (KOS-269):
+//! Pairing — the two explicit "turn sync on" transitions:
 //! entering a peer's code and showing our own. Both escalate a
 //! loopback-bound runtime to `AllInterfaces` and the iroh transport; the
 //! restart lives here so the firewall prompt is owned by a user action, not
@@ -58,7 +58,7 @@ async fn restart_sync_with_restore(
     }
 }
 
-/// KOS-369: entering a code kicks off an *asynchronous* pairing attempt.
+/// entering a code kicks off an *asynchronous* pairing attempt.
 /// The RPC answers `pending` right after the sync restart — the outcome
 /// (the other human pressing «Принять»/«Отклонить») is reported through
 /// `get_sync_snapshot` as `outgoing_pairing`. A blocking wait here stalled
@@ -192,7 +192,7 @@ pub(super) async fn snapshot(relay: &SyncSession) -> (Vec<Value>, Value) {
     (incoming, outgoing)
 }
 
-/// `show_pairing_code` (KOS-269): the explicit LAN opt-in for the device
+/// `show_pairing_code`: the explicit LAN opt-in for the device
 /// that *shows* its code. A loopback-booted sync runs iroh with
 /// `RelayMode::Disabled` and would hand out a ticket advertising only
 /// 127.0.0.1 — unreachable for the other device — so the bind is escalated

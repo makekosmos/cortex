@@ -2,7 +2,7 @@ use super::super::{UserDataError, UserDataRoots, APP_DIRECTORY};
 use super::{app_dir, roots, APP};
 use std::fs;
 
-/// The KOS-49 race: a parent component is swapped for a junction after
+/// The race: a parent component is swapped for a junction after
 /// the root was pinned. Every operation must fail closed and the foreign
 /// file must stay unread, unmodified, and undeleted.
 #[test]

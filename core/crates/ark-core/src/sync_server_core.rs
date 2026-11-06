@@ -173,7 +173,7 @@ impl SyncServer {
         // `sync.peers` is written by the transport path (iroh pairing)
         // too — refresh the in-memory copy so a transport-paired peer that
         // goes offline still shows as an offline row instead of vanishing
-        // until the next start (KOS-367).
+        // until the next start.
         self.load_known_peers().await?;
         Ok(self.known_peer_records.lock().await.clone())
     }

@@ -1,4 +1,4 @@
-//! KOS-355 (round 3): the update-overlay logo is a pre-baked animated WebP
+//! (round 3): the update-overlay logo is a pre-baked animated WebP
 //! of the Paper-matched liquid-metal Mundus mark — 256×252 canvas, 48
 //! frames @ 30 fps (1.6 s loop), lossless, ~2.2 MiB, checked in at
 //! `assets/logo-256-48.webp`. The mark is the full `icons/mundus.svg`

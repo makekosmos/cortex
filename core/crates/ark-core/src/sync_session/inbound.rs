@@ -180,7 +180,7 @@ impl SyncSession {
                 // Persist the pairing into `sync.peers` — the WS server does
                 // this on Hello too. Without it a transport-paired device
                 // vanishes from the snapshot and from `lan_bind_at_boot`'s
-                // "sync is enabled" check after an Engine restart (KOS-367).
+                // "sync is enabled" check after an Engine restart.
                 let record = PeerRecord {
                     device_id: device_id.clone(),
                     device_name: device_name.clone(),

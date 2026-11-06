@@ -154,7 +154,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         .expect("bridge restart");
     // The restarted worker reports `bridge_status` in its first heartbeat only
     // after completing a full sync pass, so Some(..) proves the projection ran
-    // — no fixed sleep that CPU starvation could stretch or compress (KOS-308).
+    // — no fixed sleep that CPU starvation could stretch or compress.
     tokio::time::timeout(HANG_GUARD, async {
         loop {
             if supervisor
@@ -183,7 +183,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         WorkerState::Stopped
     );
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
     drop(supervisor);
     shutdown_ark(ark).await;
@@ -448,6 +448,6 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
     // remove it explicitly.
     std::fs::remove_dir_all(&crash_root).expect("crash test root cleanup");
     // Drain every supervisor registry so no task keeps a worker child or
-    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    // an ArkHost handle alive past the test's tempdir cleanup.
     let _ = supervisor.stop_all().await;
 }

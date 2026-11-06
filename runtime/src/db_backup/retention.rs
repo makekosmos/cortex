@@ -1,6 +1,6 @@
-//! Retention policy for `<data_dir>/backups/` (KOS-300).
+//! Retention policy for `<data_dir>/backups/`.
 //!
-//! Директорию пишут несколько writer'ов, и до KOS-300 ротация трогала только
+//! Директорию пишут несколько writer'ов, и до ротация трогала только
 //! `ark.db.backup-<ts>` — всё остальное копилось бесконечно:
 //!
 //! - `ark.db.backup-<ts>` — scheduler + `db_backups.create` (online backup

@@ -1,5 +1,5 @@
-//! Root layout: sidebar + titlebar + active view, with the Engine banner and
-//! confirm modal layered on top.
+//! Root layout: sidebar + titlebar + active view, with the Engine banner,
+//! confirm modal and disclosure/detail overlays layered on top.
 use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
@@ -7,7 +7,7 @@ use gpui_component::scroll::ScrollableElement;
 use serde_json::Value;
 
 use crate::app::ManagerApp;
-use crate::modals::{render_confirm, render_pairing_prompt};
+use crate::modals::{render_confirm, render_overlay, render_pairing_prompt};
 use crate::theme::*;
 use crate::views;
 use crate::widgets::*;
@@ -118,7 +118,10 @@ impl Render for ManagerApp {
         if self.key_editor.is_some() {
             root = root.child(views::secrets::render_modal(self, window, cx));
         }
-        // KOS-369: an unanswered pairing request pops on top of any view.
+        if self.disclosure.is_some() || self.detail.is_some() {
+            root = root.child(render_overlay(self, cx));
+        }
+        // an unanswered pairing request pops on top of any view.
         let pairing_request = self
             .data("sync.snapshot")
             .get("incoming_pairing_requests")
@@ -127,7 +130,7 @@ impl Render for ManagerApp {
         if let Some(request) = pairing_request {
             root = root.child(render_pairing_prompt(&request, cx));
         }
-        // KOS-355: full-window update overlay, topmost layer. The state is
+        // full-window update overlay, topmost layer. The state is
         // resolved every frame from the Engine status slot; `Failed` needs
         // the previous state, so the resolution is stored back on the app.
         let update_state = crate::update_overlay::resolve(

@@ -435,7 +435,7 @@ impl ProcessProbeCache {
     }
 }
 
-/// App identity hashes the canonical exe path (KOS-287): version-looking
+/// App identity hashes the canonical exe path: version-looking
 /// directories are stripped so an update that moves the exe — Squirrel
 /// `app-1.0.x`, per-version browser dirs — keeps one tracked_app row instead
 /// of spawning a duplicate. The shared domain identity rule merges
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn tracked_app_id_survives_version_folder_updates() {
-        // KOS-287 regression: a Squirrel-style update moves the exe into a new
+        // Regression: a Squirrel-style update moves the exe into a new
         // `app-<version>` dir — the app must keep one id, not double-list.
         let before =
             tracked_app_id_for("C:\\Users\\k\\AppData\\Local\\Discord\\app-1.0.1\\Discord.exe");

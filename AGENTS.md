@@ -27,7 +27,7 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
 
 - Приложения не ходят в ОС и в базу сами: микрофон, хоткеи, вставка текста,
   блокировка фокуса, ключи API и запись в SQLite принадлежат Engine
-  (`docs/repo-split-decisions.md`, `docs/write-boundary.md`). Новая
+  (`docs/ark-exocortex.md`, `docs/write-boundary.md`). Новая
   возможность для приложения — это новая операция Engine, а не обход.
 
 ## Запуск
@@ -85,7 +85,7 @@ CI на GitHub запускается на каждый PR и на push в `main
 - Локальная диктовка (whisper.cpp, Parakeet/ONNX) собирается только с фичей
   `engine/local-dictation`: её включает `pnpm run clippy`, а CI и обычные
   сборки нет. Правя `runtime/crates/engine-dictation/src/local/`, проверяй с
-  фичей (`docs/onnxruntime.md`, `docs/experiments/2026-10-04-local-dictation-feature.md`).
+  фичей (`docs/dictation-dev.md`, `docs/experiments/2026-10-04-local-dictation-feature.md`).
 - Линкер и флаги кодогенерации держи в `.cargo/config.toml`, не в
   `RUSTFLAGS`: тогда кеш сборки общий у всех рабочих копий.
 

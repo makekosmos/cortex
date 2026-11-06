@@ -180,7 +180,7 @@ pub(super) async fn handle_connection(params: ConnectionParams) {
     // A JoinSet — not two detached handles: when the transport's `stop()`
     // aborts this connection task, the set drops and aborts writer and
     // reader, so they cannot outlive teardown holding the authorizer
-    // (KOS-369).
+    //
     let mut conn_tasks = tokio::task::JoinSet::new();
 
     let writer_notify = done_notify.clone();

@@ -74,7 +74,7 @@ pub(super) async fn http_disconnect_keeps_owned_operation_and_cleanup_after_resp
     .expect("owned operation must finish and clean up after disconnect");
     assert!(permits.available_permits() > 0);
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }

@@ -93,7 +93,7 @@ impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
 
 struct LocalSttSidecarClient {
     // ProcessTree, not a bare Child: the sidecar is long-lived and must not
-    // outlive the Engine — the job kills it even on a hard kill (KOS-312).
+    // outlive the Engine — the job kills it even on a hard kill.
     child: ProcessTree,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
@@ -131,14 +131,14 @@ pub enum LocalError {
     EmptyTranscript,
     #[error("Локальный STT sidecar недоступен: {0}")]
     SidecarUnavailable(String),
-    // KOS-337: the whole local backend (whisper.cpp sidecar/direct, Parakeet
+    // the whole local backend (whisper.cpp sidecar/direct, Parakeet
     // ONNX) is behind the `local-dictation` Cargo feature — dev/agent builds
     // compile without it and every local entry returns this error.
     #[error("local dictation backend not built with local-dictation feature")]
     NotBuiltWithLocalDictation,
 }
 
-/// KOS-337 feature gate: локальный backend собирается только с
+/// feature gate: локальный backend собирается только с
 /// `local-dictation`. `cfg!` (а не `#[cfg]` на вызовах) сохраняет весь код
 /// компилируемым в обоих режимах — cfg'нуты только куски, требующие
 /// transcribe-rs/ort (Parakeet path).
@@ -322,7 +322,7 @@ pub(crate) use backend::{discard_parakeet_partial, finish_parakeet_stream, start
 #[cfg(all(test, feature = "local-dictation"))]
 pub(crate) use backend::{preload_with_whisper_backend, strip_whisper_timestamps};
 
-// KOS-337: local backend tests are compiled only with the local backend.
+// local backend tests are compiled only with the local backend.
 #[cfg(all(test, not(feature = "local-dictation")))]
 #[path = "local/tests_disabled.rs"]
 mod tests_disabled_source;

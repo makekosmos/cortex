@@ -138,7 +138,7 @@ pub(super) fn emit_replay_notices(notices: Vec<ark_domain::sync_storage::ReplayN
 /// Spawns the live-change broadcast only when a sync runtime is running —
 /// without one the detached task is a no-op anyway, and the captured
 /// `Arc<ServiceState>` would keep the db connection alive past teardown
-/// (KOS-270). A sync runtime that starts between the check and the spawn
+/// A sync runtime that starts between the check and the spawn
 /// misses nothing: it loads current state on startup.
 pub(super) async fn maybe_broadcast_local_change(state: &Arc<ServiceState>, entity: SyncEntity) {
     maybe_broadcast_local_changes(state, vec![entity]).await;

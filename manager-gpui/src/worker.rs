@@ -39,7 +39,13 @@ impl Worker {
             for request in requests {
                 let reply = match request {
                     Command::Rpc { slot, op, params } => {
-                        let result = engine.rpc(op, params).map_err(engine_error_message);
+                        let result = engine.rpc(op, params).map_err(|error| {
+                            if slot == "pkg.open" {
+                                package_open_message(error)
+                            } else {
+                                engine_error_message(error)
+                            }
+                        });
                         Reply { slot, result }
                     }
                     Command::Get { slot, path } => Reply {
@@ -62,9 +68,9 @@ impl Worker {
 
 /// Engine failures reach the UI as `message()` text; the raw wire code in
 /// `detail` is what a support session needs, so it goes to the app log
-/// (KOS-298 — KOS-295 could not recover why a write was rejected).
+/// (could not recover why a write was rejected).
 ///
-/// KOS-353: Engine wire errors look like `area.op: <class>` — note the space
+/// Engine wire errors look like `area.op: <class>` — note the space
 /// after the colon. The kit's `from_engine_code` exact-matches the class
 /// segment, so the padded form lands in `Unknown` and the user saw only the
 /// generic "неизвестная ошибка" banner. Re-classify the trimmed tail first;
@@ -86,6 +92,24 @@ fn engine_error_message(error: EngineError) -> String {
         return format!("Engine сообщил об ошибке: {}", error.detail);
     }
     error.message()
+}
+
+/// `packages.open` answers carry typed codes (`packages.open: <code>`) that
+/// mean more than the generic Engine error classes — "отключено" is an
+/// instruction, not a failure. Map them to a precise Russian line; a
+/// non-open Engine failure keeps the generic class text.
+fn package_open_message(error: EngineError) -> String {
+    let Some(code) = error.detail.strip_prefix("packages.open:").map(str::trim) else {
+        return engine_error_message(error);
+    };
+    tracing::warn!(error = %error, "packages.open failed");
+    match code {
+        "not-installed" => "Приложение не установлено.".into(),
+        "disabled" => "Приложение отключено. Включите его в списке.".into(),
+        "at-capacity" => "Открыто слишком много приложений. Закройте одно и повторите.".into(),
+        "unavailable" => "Запуск приложений недоступен. Перезапустите Engine.".into(),
+        _ => "Не удалось открыть приложение. Повторите попытку.".into(),
+    }
 }
 
 /// store.ts normalizePath parity: trim + '/'→'\\' + lowercase.
@@ -124,7 +148,7 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
         return Ok(snapshot);
     };
 
-    // KOS-287: one batched `app_index.exe_info` call enriches every row with
+    // one batched `app_index.exe_info` call enriches every row with
     // the exe version-info display name (fixes legacy rows whose displayName
     // is a stale window title, e.g. a browser's last tab) and an on-demand
     // extracted icon for apps the index never saw.
@@ -166,7 +190,7 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
         let info = exe_info.get(&normalize_path(&normalized_path));
 
         // Version-info name wins over the stored displayName — the stored one
-        // may be a window title persisted before KOS-287.
+        // may be a window title persisted before.
         if let Some(name) = info
             .and_then(|v| v.get("displayName"))
             .and_then(Value::as_str)
@@ -205,7 +229,28 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
 mod tests {
     use super::*;
 
-    /// KOS-353: `packages.*` wire errors are `op: <class>` — the padded
+    /// The typed `packages.open` codes must each land on a specific Russian
+    /// line — a bare Engine error keeps the generic class text.
+    #[test]
+    fn package_open_message_maps_typed_codes() {
+        let message =
+            |code| package_open_message(EngineError::engine(&format!("packages.open: {code}")));
+        assert_eq!(message("not-installed"), "Приложение не установлено.");
+        assert_eq!(
+            message("disabled"),
+            "Приложение отключено. Включите его в списке."
+        );
+        assert_eq!(
+            message("at-capacity"),
+            "Открыто слишком много приложений. Закройте одно и повторите."
+        );
+        assert_eq!(
+            message("launch-failed"),
+            "Не удалось открыть приложение. Повторите попытку."
+        );
+    }
+
+    /// `packages.*` wire errors are `op: <class>` — the padded
     /// colon defeats the kit's exact-match classification, so every
     /// set_enabled/uninstall failure surfaced as "неизвестная ошибка".
     /// The banner must name the real class, or the Engine's own text.

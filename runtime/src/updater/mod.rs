@@ -1,6 +1,6 @@
-//! Mundus self-update (KOS-236 "Mundus без Electron"). Ports the update half
+//! Mundus self-update ("Mundus без Electron"). Ports the update half
 //! of the former Electron autoupdater into the Engine, which owns the flow:
-//! it reads the release `manifest.json` (KOS-350; `release_manifest.rs`)
+//! it reads the release `manifest.json` (; `release_manifest.rs`)
 //! plus the platform installer (NSIS `.exe` on Windows, DMG
 //! `.app` on macOS) from the `makekosmos/cortex` GitHub releases feed. See
 //! `service.rs` for the state machine and

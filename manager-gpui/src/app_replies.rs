@@ -31,13 +31,13 @@ impl ManagerApp {
     /// `connect_with_pairing_code` answers `{"status":"connected", …}` once
     /// the peer's Hello completed, so the notice names the device instead of
     /// the generic «Выполнено.»; an Engine error goes to the banner
-    /// (KOS-367 — pairing must never fail silently).
+    /// (pairing must never fail silently).
     pub(crate) fn action_reply(&mut self, result: Result<Value, String>) {
         self.action_busy = false;
         match result {
             Ok(value) => {
                 match value.get("status").and_then(Value::as_str) {
-                    // KOS-369: «Подключить» now answers `pending` — the human
+                    // «Подключить» now answers `pending` — the human
                     // decision arrives through the snapshot, so no notice yet.
                     Some("pending") => {}
                     Some("declined") => {

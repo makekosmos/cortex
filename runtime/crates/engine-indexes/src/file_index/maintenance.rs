@@ -1,4 +1,4 @@
-//! file-index.db growth policy (KOS-302).
+//! file-index.db growth policy.
 //!
 //! The index is a rebuildable local cache — losing a row is at worst a
 //! rescan, so the policy can be strict:
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn maintenance_skips_rows_under_an_unavailable_root() {
-        // Regression for KOS-302 review: a configured root that is absent
+        // Regression for review: a configured root that is absent
         // (unplugged USB drive, offline share) must not lose its index —
         // every file under it stats as NotFound and pruning used to delete
         // the whole subtree.

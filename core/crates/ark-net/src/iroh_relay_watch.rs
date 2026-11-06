@@ -16,7 +16,7 @@ pub(super) fn relay_connectivity_change(prev: Option<bool>, relays: &[bool]) -> 
 /// Spawn the watcher that logs one WARN per relay connectivity transition
 /// (up→down / down→up). iroh's relay actor retries internally and warns per
 /// attempt — the Engine filters those to error (`runtime::main::init_tracing`),
-/// so this transition log is the signal that survives (KOS-298).
+/// so this transition log is the signal that survives.
 /// No-op when `relay_mode` is `Disabled` (tests bind loopback only).
 pub(super) fn spawn_relay_connectivity_watch(
     endpoint: &Endpoint,

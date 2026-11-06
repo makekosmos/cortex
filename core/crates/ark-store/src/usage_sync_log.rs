@@ -147,7 +147,7 @@ pub fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Resul
 }
 
 // ---------------------------------------------------------------------------
-// usage_sync_log compaction (KOS-302)
+// usage_sync_log compaction
 // ---------------------------------------------------------------------------
 //
 // `usage_sync_log` is not user data — it is the replication journal for usage

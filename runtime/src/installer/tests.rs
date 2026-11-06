@@ -1,7 +1,7 @@
 //! Ports of the deleted PowerShell test suites
 //! (engine-install-headless.test.mjs / engine-post-install-headless.test.mjs)
 //! against an isolated temp target root — every behaviour the scripts had a
-//! test for keeps one here (KOS-306). Registry-touching tests point at
+//! test for keeps one here. Registry-touching tests point at
 //! scratch HKCU subkeys, never the real Run/Uninstall state.
 
 use std::path::{Path, PathBuf};
@@ -184,7 +184,7 @@ fn same_version_rebuild(options: install::Options) -> (TempDir, install::Options
 
 #[test]
 fn a_failed_move_in_restores_the_previous_install() {
-    // KOS-306 round 2: the second rename of a same-version replace is forced
+    // round 2: the second rename of a same-version replace is forced
     // to fail through the move_in seam — the previously installed Engine
     // must still be intact afterwards, not deleted.
     let (_root, _payload, target_root, options) = fixture("1.2.3");
@@ -215,7 +215,7 @@ fn a_failed_move_in_restores_the_previous_install() {
 
 #[test]
 fn a_failed_restore_reports_where_the_engine_stayed() {
-    // KOS-306 round 3: when even the restore rename fails, the error must
+    // round 3: when even the restore rename fails, the error must
     // name the aside dir — otherwise the previous Engine is silently lost.
     let (_root, _payload, target_root, options) = fixture("1.2.3");
     install::install(&options).unwrap();

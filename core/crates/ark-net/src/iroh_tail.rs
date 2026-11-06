@@ -183,7 +183,7 @@ mod relay_connectivity_tests {
 
     /// The watcher fires on every retry (each `Disconnected` carries a fresh
     /// error) — only real up/down transitions must produce a new state, so
-    /// the log keeps exactly one warn per flap (KOS-298).
+    /// the log keeps exactly one warn per flap.
     #[test]
     fn relay_connectivity_logs_only_on_state_transitions() {
         // First observation records state without reporting a flap.

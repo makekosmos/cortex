@@ -1,6 +1,6 @@
 use super::*;
 
-// Engine-owned Start-menu shortcuts for store-installed apps (KOS-265).
+// Engine-owned Start-menu shortcuts for store-installed apps.
 //
 // Links live under `<Programs>\Mundus\<Name>.lnk` — inside a product
 // subfolder — so the installer's legacy cleanup of the flat bundled-era

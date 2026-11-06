@@ -122,7 +122,7 @@ pub trait AppSource: Send + Sync {
     fn discover(&self) -> Result<Vec<App>>;
 }
 
-/// Memoized per-exe metadata for the usage report (KOS-287): version-info
+/// Memoized per-exe metadata for the usage report: version-info
 /// display name + icon PNG. Extraction failures are cached too — re-reading a
 /// permanently iconless exe on every refresh would just burn FFI calls.
 #[derive(Debug, Clone, Default)]
@@ -214,7 +214,7 @@ impl AppIndex {
             mtime: 0,
         };
         // The result is memoized — a failure is never retried, so it must be
-        // logged here or it is invisible (KOS-287).
+        // logged here or it is invisible.
         let icon_path = match icons::ensure_icon(&self.icon_cache_dir, &app) {
             Ok(path) => Some(path),
             Err(error) => {

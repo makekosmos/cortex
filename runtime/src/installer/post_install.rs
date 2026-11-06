@@ -1,5 +1,5 @@
 //! `mundus-engine post-install` — port of engine-post-install.ps1
-//! (KOS-306). Resolves the installed Engine from `<engine_root>\current.json`
+//! Resolves the installed Engine from `<engine_root>\current.json`
 //! failing closed if the pointer or binary is missing, then:
 //!
 //!   --migrate-autostart   write HKCU Run "Mundus Engine" = "<exe>" --start

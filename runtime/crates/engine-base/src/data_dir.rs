@@ -9,7 +9,7 @@
 //!            the same Application Support dir on macOS, `$XDG_DATA_HOME` or
 //!            `~/.local/share` otherwise.
 //!
-//! Migration rules (KOS-266):
+//! Migration rules:
 //!   * If the Mundus roaming dir does not exist and the legacy one does, the
 //!     Engine atomically renames it (`MoveFileEx`/`std::fs::rename`, same
 //!     volume). Never copy-then-delete, never merge into a non-empty target.

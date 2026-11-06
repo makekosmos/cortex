@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-// KOS-306: ship every exe with icon + VERSIONINFO + application manifest —
+// ship every exe with icon + VERSIONINFO + application manifest —
 // Defender's ML treats a bare exe with empty CompanyName/FileDescription as
 // dropper-shaped. `pe-version-info` holds the single resource script shared
 // with manager-gpui's build.rs.

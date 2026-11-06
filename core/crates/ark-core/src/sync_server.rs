@@ -220,7 +220,7 @@ pub struct SyncServer {
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     /// Accept/ticker task, joined by `stop()` so its `storage` Arc (the
     /// shared db connection) is released deterministically on shutdown
-    /// rather than whenever the task happens to exit (KOS-270).
+    /// rather than whenever the task happens to exit.
     accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Per-connection protocol handlers, joined by `stop()`.
     conn_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,

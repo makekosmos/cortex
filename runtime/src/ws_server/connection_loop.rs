@@ -203,7 +203,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             return;
                         }
                         let _permit = permit.lock().unwrap_or_else(|p| p.into_inner()).take();
-                        // Rejection metadata for the Engine log (KOS-298) —
+                        // Rejection metadata for the Engine log —
                         // captured before `request` is consumed by dispatch.
                         // Metadata only, never payload values.
                         let client_class = request.client.class.clone();

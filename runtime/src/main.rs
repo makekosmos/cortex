@@ -4,6 +4,7 @@
     windows_subsystem = "windows"
 )]
 #![cfg_attr(any(test, not(windows)), allow(dead_code))]
+#![allow(clippy::useless_conversion)]
 
 // Mundus backend — native runtime and Windows tray owner.
 //
@@ -36,6 +37,8 @@ use engine::{
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
     manager_api::ManagerState,
     observability::{self, CORRELATION_ID_ENV},
+    package_service::PackageService,
+    package_worker_supervisor::{EngineCapabilityExecutor, PackageWorkerSupervisor},
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -48,6 +51,8 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 
 struct SetupState {
     ark: Arc<ArkHost>,
+    package_workers: PackageWorkerSupervisor,
+    package_service: Arc<engine::package_service::PackageService>,
     ws: WsServer,
     api: EngineApiServer,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
@@ -81,7 +86,7 @@ fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::W
     // iroh's relay actor warns on every reconnect attempt ("Failed to
     // connect to relay server") — that spam is redundant: ark-core logs one
     // warn per connectivity transition. `error` keeps real actor failures
-    // (task panic/cancel) visible (KOS-298).
+    // (task panic/cancel) visible.
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,iroh::socket::transports::relay=error"));
 
@@ -119,7 +124,7 @@ fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
 }
 
 fn main() -> ExitCode {
-    // KOS-376: inside `Mundus Manager.app` the Engine would otherwise claim a
+    // inside `Mundus Manager.app` the Engine would otherwise claim a
     // second Dock tile at its first WindowServer connection; transform it
     // before anything can touch AppKit.
     engine::macos_dock::suppress_dock_tile();
@@ -130,13 +135,13 @@ fn main() -> ExitCode {
         return code;
     }
     // `prune-versions` — one-shot version-dir cleanup kept for an Engine
-    // invoked directly (KOS-261); dedicated process, never starts the Engine
+    // invoked directly; dedicated process, never starts the Engine
     // runtime.
     if let Some(code) = engine::engine_versions::run_if_prune_versions(&args) {
         return code;
     }
     // `install` / `post-install` / `kill-product-processes` — the NSIS
-    // installer's one-shot modes (KOS-306); never starts the Engine runtime.
+    // installer's one-shot modes; never starts the Engine runtime.
     if let Some(code) = engine::installer::run_if_installer(&args) {
         return code;
     }
@@ -165,6 +170,8 @@ async fn run_core_worker() -> ExitCode {
 
     let SetupState {
         ark,
+        package_workers,
+        package_service,
         ws,
         api,
         usage_diagnostics,
@@ -179,8 +186,10 @@ async fn run_core_worker() -> ExitCode {
     let api_shutdown = api.shutdown_handle();
     let ws_shutdown = ws.shutdown_handle();
     let desktop_authority = ws.desktop_authority();
+    let grant_authority = ws.grant_authority();
 
     let supervised = std::env::var("MUNDUS_ENGINE_SUPERVISED").as_deref() == Ok("1");
+    let agents_shutdown = ws.agents_handle();
     let ws_task = tokio::spawn(async move {
         if let Err(e) = ws.run().await {
             observability::stderr(format!("[mundus-engine] WS server exited: {e}"));
@@ -291,6 +300,7 @@ async fn run_core_worker() -> ExitCode {
                         }
                     }
                     Some(ControlMessage::DesktopLeaseRevoked { generation }) => {
+                        grant_authority.close_generation(receiver.session_id(), generation);
                         desktop_authority.revoke_generation(receiver.session_id(), generation);
                     }
                     other => break other,
@@ -320,6 +330,20 @@ async fn run_core_worker() -> ExitCode {
     let _ = ws_task.await;
     let http_shutdown_result = api_shutdown.shutdown().await;
     let ws_shutdown_result = ws_shutdown.shutdown().await;
+
+    if let Some(agents) = agents_shutdown.get() {
+        agents.shutdown().await;
+    }
+    // Join every spawned install/migration task so no write into the data
+    // dir outlives the service.
+    package_service.drain_background().await;
+    if let Err(error) = package_workers.stop_all().await {
+        tracing::error!(
+            target: "package_worker",
+            error,
+            "package worker cleanup failed during shutdown",
+        );
+    }
 
     if matches!(
         requested_control,
@@ -370,6 +394,34 @@ where
     T: Send,
 {
     startup_orchestration(timeout, http_probe, ws_probe, control_start).await
+}
+
+fn legacy_migration_recovery_pending(data_dir: &std::path::Path) -> bool {
+    [
+        "com.kosmos.arcadia",
+        "com.kosmos.memoria",
+        "com.kosmos.agenda",
+    ]
+    .into_iter()
+    .any(|target| {
+        let root = data_dir.join("legacy-migrations").join("v1").join(target);
+        if root.join("before").join("package-state.pending").is_file() {
+            return true;
+        }
+        let journal = root.join("journal.json");
+        let Ok(bytes) = std::fs::read(journal) else {
+            return false;
+        };
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("phase")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|phase| phase == "prepared")
+            })
+            .unwrap_or(false)
+    })
 }
 
 async fn setup() -> Result<SetupState, DynError> {
@@ -429,7 +481,7 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
-    // KOS-301: crash leftover temp files (`.<name>.tmp.<pid>`,
+    // crash leftover temp files (`.<name>.tmp.<pid>`,
     // `<name>.json.tmp`, …) of every atomic writer that targets the data-dir
     // root. Runs after the singleton acquire, so no other Engine can be
     // mid-write; the sweep's own grace window covers suspended processes.
@@ -442,7 +494,7 @@ async fn setup() -> Result<SetupState, DynError> {
         );
     }
 
-    // KOS-261: prune superseded `versions/<v>` dirs — current + one previous
+    // prune superseded `versions/<v>` dirs — current + one previous
     // are kept for rollback. Runs under the singleton, after the temp sweep;
     // a dev build launched from target/ never matches the install layout and
     // prunes nothing.
@@ -484,19 +536,114 @@ async fn setup() -> Result<SetupState, DynError> {
         "usage tracker startup policy resolved"
     );
     let protocol_usage = Arc::new(ProtocolUsageStore::open(&lock_dir)?);
+    let mut package_service = PackageService::open(&lock_dir)?;
+    let mut worker_roots = vec![lock_dir.clone()];
+    worker_roots.extend(
+        [
+            "USERPROFILE",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "PROGRAMDATA",
+        ]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_dir()),
+    );
+    if let Some(value) = std::env::var_os("MUNDUS_WORKER_FILESYSTEM_ROOTS") {
+        worker_roots.extend(std::env::split_paths(&value).filter(|path| path.is_dir()));
+    }
+    worker_roots.sort();
+    worker_roots.dedup();
     let dictation_host = DictationHost::new(lock_dir.clone());
     let manager_state = ManagerState::new(lock_dir.clone());
     let updater = manager_state.updater();
+    let package_workers = PackageWorkerSupervisor::with_ark_executor(
+        API_VERSION_CURRENT.major.into(),
+        Arc::new(EngineCapabilityExecutor::new(
+            ark.clone(),
+            dictation_host.clone(),
+            Arc::new(manager_state.clone()),
+        )),
+    );
+    package_service.configure_workers(
+        package_workers.clone(),
+        worker_roots,
+        correlation_id.clone(),
+    );
+    if legacy_migration_recovery_pending(&lock_dir) {
+        tracing::warn!("deferring package worker restore until legacy migration recovery");
+    } else {
+        package_service.restore_enabled_workers().await?;
+    }
+    let package_service = Arc::new(package_service);
 
-    // Hotkey hooks are Engine-owned; without package workers the normalized
-    // trigger always goes to the in-engine orchestration path.
+    // A clean installation has no persisted catalog. Fetch it on every start
+    // without blocking Engine readiness; never install packages implicitly.
+    {
+        let catalog_service = package_service.clone();
+        let task = tokio::spawn(async move {
+            if let Err(error) = catalog_service.refresh_catalog().await {
+                tracing::warn!(%error, "integration catalog refresh failed");
+            }
+        });
+        package_service.track_background_task("catalog-refresh", task);
+    }
+
+    // MIGRATION(KOS-267): remove after 2026-11-01
+    // 0.9.x → 0.10.0: users who had Agenda/Memoria/Dictation in the old
+    // package store (or as bundled components) get the native GPUI build
+    // installed from its GitHub release. Runs in the background — failures
+    // are logged and retried next start; Engine startup never waits on it.
+    {
+        let migration_service = package_service.clone();
+        let task = tokio::spawn(async move {
+            migration_service.migrate_legacy_native_apps().await;
+        });
+        package_service.track_background_task("legacy-native-migration", task);
+    }
+
+    // The Engine owns the Start-menu entries for store-installed apps:
+    // reconcile on every start so installs made before this existed, a
+    // user's manual delete and update repoints all self-heal without
+    // waiting for an install event. Blocking COM/fs work off the runtime.
+    {
+        let shortcut_service = package_service.clone();
+        package_service.track_background_task(
+            "native-shortcut-reconcile",
+            tokio::task::spawn_blocking(move || shortcut_service.reconcile_native_shortcuts()),
+        );
+    }
+
+    // Hotkey hooks are Engine-owned; forward their normalized trigger to the
+    // installed Dictation worker, falling back to in-engine orchestration
+    // (host_capture::handle_engine_trigger) when neither worker nor the
+    // dictation app process is alive — the control path must survive a
+    // crashed or absent Dictation app.
     let mut dictation_events = dictation_host.subscribe();
+    let dictation_packages = package_service.clone();
     let dictation_host_for_triggers = dictation_host.clone();
     tokio::spawn(async move {
         loop {
             match dictation_events.recv().await {
                 Ok(event) => {
-                    dictation::handle_engine_trigger(&dictation_host_for_triggers, &event).await;
+                    dictation::route_trigger_event(
+                        &event,
+                        |params| {
+                            dictation_packages.invoke_worker_operation("dictation.trigger", params)
+                        },
+                        || dictation_packages.dictation_app_running(),
+                        |event| {
+                            if event.get("event").and_then(serde_json::Value::as_str)
+                                == Some("dictation.trigger")
+                            {
+                                dictation_packages.ensure_dictation_running();
+                            }
+                            let host = &dictation_host_for_triggers;
+                            async move { dictation::handle_engine_trigger(host, &event).await }
+                        },
+                    )
+                    .await;
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -533,10 +680,12 @@ async fn setup() -> Result<SetupState, DynError> {
     let ws = WsServer::bind_with_hosts(
         ark.clone(),
         token.clone(),
+        lock_dir.clone(),
         app_index.clone(),
         file_index.clone(),
         usage_diagnostics.clone(),
         protocol_usage.clone(),
+        package_service.clone(),
         correlation_id.clone(),
         dictation_host,
         manager_state,
@@ -546,14 +695,16 @@ async fn setup() -> Result<SetupState, DynError> {
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
     let dispatcher = Arc::new(ws.dispatcher());
-    let api = EngineApiServer::bind(
+    let mut api = EngineApiServer::bind(
         token.clone(),
         port,
         protocol_usage,
         correlation_id.clone(),
+        package_service.clone(),
         dispatcher,
     )
     .await?;
+    api.set_launch_events(ark.subscribe_events());
     let http_port = api.port();
     tracing::info!(port = http_port, "Engine HTTP listening on 127.0.0.1");
 
@@ -576,6 +727,20 @@ async fn setup() -> Result<SetupState, DynError> {
     // `%APPDATA%\Kosmos\engine.lock.json`; mirror the lock until repin.
     engine::data_dir::write_legacy_lock_shim(&engine_lock);
     tracing::info!(path = ?engine_lock_path, "Engine lock-file written");
+
+    // Dictation is Engine-managed: an installed com.kosmos.dictation runs in
+    // background mode while the Engine runs — started here (the lock file
+    // exists, so the app can discover a ready Engine) and after every
+    // install/update (see dictation_app.rs). The legacy HKCU Run value the
+    // app's own autostart wrote is deleted once. Best-effort, off the async
+    // path — a missing app or a failed spawn must not gate startup.
+    {
+        let lifecycle = package_service.clone();
+        tokio::task::spawn_blocking(move || {
+            engine::package_service::cleanup_legacy_dictation_autostart();
+            lifecycle.ensure_dictation_running();
+        });
+    }
 
     // LAN sync must not gate local readiness. If its fixed discovery port is
     // busy or slow, Eden/launcher still need immediate local ARK access.
@@ -600,7 +765,7 @@ async fn setup() -> Result<SetupState, DynError> {
                 }
             };
             let device_name = sync::resolve_device_name();
-            // KOS-269: the bind choice decides whether Windows shows a
+            // the bind choice decides whether Windows shows a
             // firewall prompt for this exe path. Resolved before start_sync.
             let bind = sync::lan_bind_at_boot(&ark_for_sync, &device_id).await;
             match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name, bind)
@@ -678,12 +843,14 @@ async fn setup() -> Result<SetupState, DynError> {
         );
     }
 
-    // Storage maintenance (KOS-302): usage_sync_log compaction in ark.db +
+    // Storage maintenance: usage_sync_log compaction in ark.db +
     // file-index.db prune/VACUUM, at most once per 24h, off the hot path.
     storage_maintenance::spawn(ark.clone(), file_index.clone());
 
     Ok(SetupState {
         ark,
+        package_workers,
+        package_service,
         ws,
         api,
         usage_diagnostics,
@@ -1034,6 +1201,7 @@ mod tests {
         );
         let usage_diagnostics = Arc::new(UsageTrackerDiagnosticsState::default());
         let protocol_usage = Arc::new(ProtocolUsageStore::open(dir.path()).unwrap());
+        let package_service = Arc::new(PackageService::open(dir.path()).unwrap());
         let ws = WsServer::bind(
             ark.clone(),
             "t".repeat(64),
@@ -1044,6 +1212,7 @@ mod tests {
             Arc::new(engine::file_index::FileIndex::new_disabled(dir.path()).unwrap()),
             usage_diagnostics,
             protocol_usage.clone(),
+            package_service.clone(),
             "00000000-0000-4000-8000-000000000001".into(),
         )
         .await
@@ -1054,6 +1223,7 @@ mod tests {
             ws_port,
             protocol_usage,
             "00000000-0000-4000-8000-000000000001".into(),
+            package_service,
             Arc::new(ws.dispatcher()),
         )
         .await
@@ -1191,7 +1361,7 @@ mod tests {
         ws_task.await.unwrap().unwrap();
         ws_shutdown.shutdown().await.unwrap();
         // Drain the HTTP server like the WS server above so neither task
-        // holds fixture files past the tempdir cleanup (KOS-270).
+        // holds fixture files past the tempdir cleanup.
         let _ = api_shutdown.shutdown().await;
         let _ = http_task.await;
         drop(ws_dispatcher);
@@ -1213,7 +1383,7 @@ mod tests {
         // The packaged build enables the windows-subsystem feature so the
         // shipped binary does not allocate a console.
         assert!(package_build.contains("\"windows-gui-subsystem\""));
-        // KOS-337: release ships the local dictation backend — the packaged
+        // release ships the local dictation backend — the packaged
         // build must keep enabling the feature dev builds skip.
         assert!(package_build.contains("\"local-dictation\""));
         // And it must never enable the test-only fixture feature — the

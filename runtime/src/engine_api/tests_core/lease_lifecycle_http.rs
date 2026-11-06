@@ -70,7 +70,7 @@ pub(super) async fn native_directory_grant_returns_only_an_opaque_package_bound_
         b"save"
     );
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -126,7 +126,7 @@ pub(super) async fn lifecycle_cleanup_purges_an_idle_lease_without_a_registry_re
     .await
     .starts_with("HTTP/1.1 404"));
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }
@@ -213,7 +213,7 @@ pub(super) async fn http_capacity_preserves_live_assets_and_accepts_a_launch_aft
     .await
     .starts_with("HTTP/1.1 200"));
     // Drain connection/request tasks so nothing holds test
-    // fixture files past the tempdir cleanup (KOS-270).
+    // fixture files past the tempdir cleanup.
     let _ = server_shutdown_handle.shutdown().await;
     let _ = task.await;
 }

@@ -69,7 +69,7 @@ fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) ->
 }
 
 // -------------------------------------------------------------------
-// KOS-302: usage_sync_log compaction — superseded-ref rule
+// usage_sync_log compaction — superseded-ref rule
 // -------------------------------------------------------------------
 
 fn usage_log_refs(conn: &Connection) -> Vec<(String, i64, String, String)> {
@@ -410,7 +410,7 @@ fn compaction_keeps_usage_aggregates_and_served_set_identical() {
     assert_eq!(
         serde_json::to_value(&analytics_before).unwrap(),
         serde_json::to_value(&analytics_after).unwrap(),
-        "KOS-287 aggregates must not move under log compaction"
+        "usage aggregates must not move under log compaction"
     );
     assert_eq!(
         crate::usage_queries::get_usage_title_total(&conn, "news").unwrap(),

@@ -1,4 +1,4 @@
-//! KOS-369 wire compatibility: the `pairing_rejected` control message
+//! wire compatibility: the `pairing_rejected` control message
 //! round-trips, and frames an old peer can't parse drop cleanly.
 use ark_domain::sync_contracts::wire::{deserialize_message, serialize_message, LanSyncMessage};
 
@@ -30,7 +30,7 @@ fn pairing_accepted_is_a_device_identified_control_frame() {
     );
 }
 
-/// The exact ticket from the KOS-367 report must decode to the reported
+/// The exact ticket from the report must decode to the reported
 /// EndpointId — the wire format was never the problem.
 #[test]
 fn reported_ticket_decodes() {

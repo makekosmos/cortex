@@ -126,7 +126,7 @@ pub fn load_usage_analytics(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    // KOS-287: per-id aggregates are merged in Rust under the canonical exe
+    // per-id aggregates are merged in Rust under the canonical exe
     // identity (path case / version folders / updates collapse to one row),
     // then sorted by active time. The SQL therefore has no LIMIT — the
     // `top_apps_limit` applies after the merge.

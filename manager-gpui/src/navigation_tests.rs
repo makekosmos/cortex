@@ -87,7 +87,7 @@ fn saved_updates_page_redirects_to_about() {
     assert_eq!(View::from_key("updates"), Some(View::About));
 }
 
-/// KOS-368: on macOS the Dock's window list showed two entries for the
+/// on macOS the Dock's window list showed two entries for the
 /// single Manager window. Root cause: gpui-pre-macos `set_title` calls
 /// `changeWindowsItem`, which *adds* the NSWindow to the Dock/Window list
 /// when AppKit has not tracked it yet; running it during `open_window`

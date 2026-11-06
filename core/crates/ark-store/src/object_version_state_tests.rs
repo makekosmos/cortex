@@ -17,7 +17,7 @@ fn setup() -> Connection {
     conn
 }
 
-fn phase2_state_snapshot(conn: &Connection) -> serde_json::Value {
+fn object_version_state_snapshot(conn: &Connection) -> serde_json::Value {
     let object_types: Vec<_> = conn
         .prepare(concat!(
             "SELECT id,name,schema_json,ui_schema_json,created_at,updated_at,",
@@ -201,7 +201,7 @@ fn legacy_upsert_rejects_alias_canonical_collision_atomically() {
         false,
     )
     .unwrap();
-    let before = phase2_state_snapshot(&conn);
+    let before = object_version_state_snapshot(&conn);
     let error = upsert_object_type(
         &conn,
         &ObjectType {
@@ -216,7 +216,7 @@ fn legacy_upsert_rejects_alias_canonical_collision_atomically() {
     )
     .unwrap_err();
     assert!(error.contains("alias"), "unexpected error: {error}");
-    assert_eq!(phase2_state_snapshot(&conn), before);
+    assert_eq!(object_version_state_snapshot(&conn), before);
 }
 
 #[test]

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Snapshot restore (KOS-51)
+// Snapshot restore
 // ---------------------------------------------------------------------------
 //
 // Atomic restore живой ARK DB из snapshot'а в Store-owned `backups/` директории
@@ -23,7 +23,7 @@
 //     не удался, snapshot НЕ удаляется: переименовывается в обычный
 //     basename `ark.db.pre-restore-failed-*`, видимый в `db_backup_list`
 //     и пригодный для `db_backup_restore` — это последний путь к
-//     pre-restore данным (KOS-83).
+// pre-restore данным.
 
 use std::fs;
 use std::io;

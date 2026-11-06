@@ -1,6 +1,6 @@
 /// Is the `/v1/rpc` caller the Manager *process*? The bearer token alone is
 /// not Manager identity — `engine.lock.json` is readable by any same-user
-/// process, and app clients share the credential class (KOS-269 round 3).
+/// process, and app clients share the credential class (round 3).
 /// What proves it is the caller's process image (queried by its already
 /// same-user-validated PID, never self-declared) being the *same file* as
 /// the Manager exe the Engine itself resolves — file identity, not path
