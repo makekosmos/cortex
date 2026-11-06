@@ -79,7 +79,7 @@ fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::W
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // iroh's relay actor warns on every reconnect attempt ("Failed to
-    // connect to relay server") — that spam is redundant: ark-core logs one
+    // connect to relay server") — that spam is redundant: kernel logs one
     // warn per connectivity transition. `error` keeps real actor failures
     // (task panic/cancel) visible.
     let filter = EnvFilter::try_from_default_env()
@@ -246,7 +246,7 @@ async fn run_core_worker() -> ExitCode {
         tokio::spawn(async move {
             // Уводим backup со startup hot path: тяжёлое копирование БД не должно
             // совпадать с cold-start CPU/IO burst. (Понижение приоритета самого
-            // копирования внутри ark-core service — Phase 2, см. spec.)
+            // копирования внутри kernel service — Phase 2, см. spec.)
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             db_backup::maybe_backup_on_startup(ark_for_backup, backup_dir).await;
         });

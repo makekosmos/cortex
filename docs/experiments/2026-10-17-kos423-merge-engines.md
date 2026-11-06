@@ -9,7 +9,7 @@ cargo test --locked --manifest-path experiments/kos423-merge-harness/Cargo.toml
 cargo run --locked --manifest-path experiments/kos423-merge-harness/Cargo.toml
 ```
 
-The input fixture copies the canonical `core.task` ingress shape from `core/crates/ark-core/src/service/tests.rs:165-193` (including the Tiptap text leaf `hello`), the stable checklist item shape from `core/crates/ark-core/src/db/tests_core/part6.rs:3-16`, and the legacy TodoItem `project_id` relation represented by `core/crates/ark-core/src/types/part01.rs:10-33`. The harness exercises those values through each engine's native map/list/text API. It flattens `state.kind` and `planning.date` into map keys and checklist entries into ID strings; it does not implement a Cortex JSON/Tiptap adapter or a SQLite integration test.
+The input fixture copies the canonical `core.task` ingress shape from `core/crates/kernel/src/service/tests.rs:165-193` (including the Tiptap text leaf `hello`), the stable checklist item shape from `core/crates/kernel/src/db/tests_core/part6.rs:3-16`, and the legacy TodoItem `project_id` relation represented by `core/crates/kernel/src/types/part01.rs:10-33`. The harness exercises those values through each engine's native map/list/text API. It flattens `state.kind` and `planning.date` into map keys and checklist entries into ID strings; it does not implement a Cortex JSON/Tiptap adapter or a SQLite integration test.
 
 ## Results
 
@@ -29,22 +29,22 @@ The stale-proposal check uses each library's document-wide version token (Autome
 
 ## Production gap and next contract
 
-KOS-423 remains open. Cortex already has a guarded `UpsertObject` path using an `ObjectWriteSnapshot`; its tests reject stale object snapshots (`core/crates/ark-core/src/service/tests/object_write_snapshot.rs:22-36,57-99`). That guard is object-wide and does not represent a merge conflict set or a human/AI resolution proposal. `SyncEntity` carries JSON data, HLC, and deletion metadata (`core/crates/ark-core/src/types/part03.rs:21-35`), but no conflict-set identity or resolution envelope.
+KOS-423 remains open. Cortex already has a guarded `UpsertObject` path using an `ObjectWriteSnapshot`; its tests reject stale object snapshots (`core/crates/kernel/src/service/tests/object_write_snapshot.rs:22-36,57-99`). That guard is object-wide and does not represent a merge conflict set or a human/AI resolution proposal. `SyncEntity` carries JSON data, HLC, and deletion metadata (`core/crates/kernel/src/types/part03.rs:21-35`), but no conflict-set identity or resolution envelope.
 
 The minimum next production step is to define a conflict-resolution request/record contract before choosing a library: object ID plus merge unit/field path; common ancestor reference; stable set of competing variants (including deletion); digest/version of that exact set; and an explicitly selected resolution. A SQLite transaction must compare the supplied digest against the current local conflict set and reject if it differs, then atomically store the resolution and append sync delivery metadata. Preserve the existing per-person/device database boundary. HLC may order metadata but cannot resolve conflicts. AI may propose a resolution, but must never apply it without explicit acceptance. Cross-object link/deletion validation and revalidation at commit must be defined in the same domain contract.
 
-After that contract is agreed, add a real `ark-core` SQLite/API test that creates two concurrent object revisions, queries accessible variants and ancestor, changes one variant, then proves an old resolution proposal is rejected transactionally. This experiment does not implement that API, schema, migration, or sync wire change.
+After that contract is agreed, add a real `kernel` SQLite/API test that creates two concurrent object revisions, queries accessible variants and ancestor, changes one variant, then proves an old resolution proposal is rejected transactionally. This experiment does not implement that API, schema, migration, or sync wire change.
 
 ## Design review after the harness
 
 Two independently drafted production shapes were cross-judged against the current
-`ark-core` boundaries and KOS-423 acceptance. The public contract is a typed
+`kernel` boundaries and KOS-423 acceptance. The public contract is a typed
 conflict set: report the object and merge unit, a known or explicitly unknown
 ancestor, every current competing value including deletion, and an opaque digest
 of that exact set. Resolution must reload and compare that digest inside the
 existing bounded SQLite write transaction before it writes anything. The
 existing canonical object remains the read projection. The implementation must
-still provide the per-unit causal context required by `docs/ark-exocortex.md`
+still provide the per-unit causal context required by `docs/exocortex.md`
 §13.2; the harness and candidate sketches do not yet justify choosing its
 physical representation (an operation ledger or a CRDT encoding) or a history
 compaction policy.

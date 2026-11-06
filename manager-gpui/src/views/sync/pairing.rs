@@ -34,7 +34,7 @@ pub(super) fn render(
                         if app.sync_pairing_open {
                             app.refresh(
                                 "sync.ticket",
-                                "show_pairing_code",
+                                "sync.pair.show",
                                 json!({"bind": "all_interfaces"}),
                             );
                         }
@@ -105,7 +105,7 @@ pub(super) fn render(
                                     let code = app.input_value("sync.peer", cx);
                                     if !code.is_empty() {
                                         app.action(
-                                            "connect_with_pairing_code",
+                                            "sync.pair.connect",
                                             json!({
                                                 "ticket": code,
                                                 "pairing_code": code,
@@ -165,7 +165,7 @@ pub(super) fn render(
                         false,
                         cx,
                         |app, cx| {
-                            app.action("cancel_pairing", json!({}));
+                            app.action("sync.pair.cancel", json!({}));
                             cx.notify();
                         },
                     )

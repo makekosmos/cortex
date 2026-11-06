@@ -1,6 +1,7 @@
 use super::*;
 use tokio::io::AsyncReadExt;
 
+mod events;
 mod handshake;
 mod lifecycle;
 mod lifecycle_requests;

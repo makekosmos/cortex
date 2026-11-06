@@ -34,12 +34,12 @@ impl ManagerApp {
             if !self.background_slots.contains("sync.snapshot")
                 && !matches!(self.slots.get("sync.snapshot"), Some(Slot::Loading))
             {
-                self.refresh("sync.snapshot", "get_sync_snapshot", json!({}));
+                self.refresh("sync.snapshot", "sync.snapshot", json!({}));
             }
             if !self.background_slots.contains("sync.registry")
                 && !matches!(self.slots.get("sync.registry"), Some(Slot::Loading))
             {
-                self.refresh("sync.registry", "device_registry.snapshot", json!({}));
+                self.refresh("sync.registry", "devices.snapshot", json!({}));
             }
             if self.view == View::Sync
                 && self.sync_pairing_open
@@ -47,7 +47,7 @@ impl ManagerApp {
                 && !self.background_slots.contains("sync.ticket")
                 && !matches!(self.slots.get("sync.ticket"), Some(Slot::Loading))
             {
-                self.refresh("sync.ticket", "get_own_iroh_ticket", json!({}));
+                self.refresh("sync.ticket", "sync.ticket", json!({}));
             }
         }
         // Model downloads run as Engine-side tasks; progress is only visible

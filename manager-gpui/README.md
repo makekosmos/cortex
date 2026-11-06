@@ -134,7 +134,7 @@ Windows-only. Другие платформы могут узнать о нов�
 | Девайсы | `get_sync_snapshot`, `show_pairing_code`, `connect_with_pairing_code`, `disconnect_peer`, `system.privileged.status/enable` |
 | Маркетплейс | `store.catalog/refresh`, `packages.list/install/set_enabled/uninstall/disclosure/refresh_catalog` |
 | Движок | `engine.settings.get/set` (usage tracker) |
-| Настройки | `manager.db_backups.list/create/validate/restore`, автозапуск (Host) |
+| Настройки | `backup.list/create/check/restore`, автозапуск (Host) |
 | Интеграции | `integrations.list/set_credential/clear_credential/sync_now` |
 | О приложении | `/v1/health`, `/v1/info`; инструменты поддержки и `manager.diagnostics.support_bundle.*` по явному действию |
 | Обновления | `store.refresh`, `packages.refresh_catalog`, `packages.install` |

@@ -177,14 +177,14 @@ test("reportGateTmpSweep names the LEAK_OWNER marker when present", () => {
     const entry = join(dirty, ".tmpOwner");
     mkdirSync(entry);
     writeFileSync(join(entry, "ark.db"), "");
-    writeFileSync(join(entry, "LEAK_OWNER"), "ark_core::leaky_test\n");
+    writeFileSync(join(entry, "LEAK_OWNER"), "kernel::leaky_test\n");
     const lines = [];
     assert.equal(
       reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] }),
       true,
     );
     assert.ok(
-      lines.some((l) => /owner ark_core::leaky_test/.test(l)),
+      lines.some((l) => /owner kernel::leaky_test/.test(l)),
       lines.join("\n"),
     );
   } finally {

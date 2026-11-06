@@ -188,7 +188,7 @@ fn name_editor(
                         return;
                     }
                     this.action(
-                        "device_registry.rename",
+                        "devices.rename",
                         json!({
                             "target_device_id": id,
                             "display_name": display_name,
@@ -253,7 +253,7 @@ fn render_device(
                         format!(
                             "Устройство «{confirmation_name}» больше не сможет синхронизироваться. "
                         ) + "Уже сохранённые на нём данные не удалятся.",
-                        "device_registry.disable",
+                        "devices.disable",
                         json!({"target_device_id": disable_id}),
                         cx,
                     );
@@ -271,7 +271,7 @@ fn render_device(
                         "Убрать устройство только здесь",
                         format!("«{name}» будет удалено из локального списка подключений. ")
                             + "Остальные устройства не отключатся.",
-                        "disconnect_peer",
+                        "sync.disconnect",
                         json!({"device_id": forget_id}),
                         cx,
                     );

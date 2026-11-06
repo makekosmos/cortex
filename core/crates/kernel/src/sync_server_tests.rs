@@ -1,0 +1,460 @@
+use super::*;
+#[cfg(test)]
+#[path = "sync_server_tests/peer_identity_backend.rs"]
+pub(super) mod peer_identity_backend;
+#[cfg(test)]
+#[path = "sync_server_tests/peer_management.rs"]
+pub(super) mod peer_management;
+#[cfg(test)]
+#[path = "sync_server_tests/version_vector_merge.rs"]
+pub(super) mod version_vector_merge;
+
+use ::domain::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
+};
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use std::sync::Mutex as StdMutex;
+
+    // Minimal in-memory backend for unit tests.
+    pub(crate) struct MemBackend {
+        pub(super) kv: StdMutex<HashMap<String, String>>,
+        pub(super) entities: StdMutex<HashMap<String, SyncEntity>>,
+        pub(super) peer_transport_keys_error: StdMutex<Option<String>>,
+        newer_version_vector_before_next_merge: StdMutex<Option<VersionVector>>,
+    }
+
+    impl MemBackend {
+        pub(crate) fn new() -> Self {
+            Self {
+                kv: StdMutex::new(HashMap::new()),
+                entities: StdMutex::new(HashMap::new()),
+                peer_transport_keys_error: StdMutex::new(None),
+                newer_version_vector_before_next_merge: StdMutex::new(None),
+            }
+        }
+
+        pub(crate) fn fail_peer_transport_keys_read(&self, error: &str) {
+            *self.peer_transport_keys_error.lock().unwrap() = Some(error.to_string());
+        }
+
+        pub(crate) fn set_sync_kv(&self, key: &str, value: &str) {
+            self.kv
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_string());
+        }
+
+        pub(super) fn race_next_vector_merge_with(&self, vector: VersionVector) {
+            *self.newer_version_vector_before_next_merge.lock().unwrap() = Some(vector);
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SyncEntityReadPort for MemBackend {
+        async fn load_entities(&self, _vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
+            Ok(self.entities.lock().unwrap().values().cloned().collect())
+        }
+
+        async fn load_entities_page(
+            &self,
+            _vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+        ) -> Result<Vec<SyncEntity>, String> {
+            Ok(self
+                .entities
+                .lock()
+                .unwrap()
+                .values()
+                .skip(offset)
+                .take(limit)
+                .cloned()
+                .collect())
+        }
+        async fn load_entities_page_for_peer(
+            &self,
+            _peer_device_id: &str,
+            _class: ::domain::sync_storage::SyncReadClass,
+            vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+        ) -> Result<Vec<SyncEntity>, String> {
+            self.load_entities_page(vector, offset, limit).await
+        }
+        async fn load_policy_bound_entities_page_for_peer(
+            &self,
+            peer_device_id: &str,
+            class: ::domain::sync_storage::SyncReadClass,
+            vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+            expected_identity: &::domain::sync_policy::PolicyIdentity,
+        ) -> Result<
+            ::domain::sync_storage::PolicyBoundSnapshotPage,
+            ::domain::sync_storage::PolicyBoundSnapshotReadError,
+        > {
+            let accepted_identity = ::domain::sync_policy::default_sync_policy_identity();
+            if expected_identity != &accepted_identity {
+                return Err(::domain::sync_storage::PolicyBoundSnapshotReadError::StalePolicy);
+            }
+            let entities = self
+                .load_entities_page_for_peer(peer_device_id, class, vector, offset, limit)
+                .await
+                .map_err(::domain::sync_storage::PolicyBoundSnapshotReadError::Storage)?;
+            Ok(::domain::sync_storage::PolicyBoundSnapshotPage {
+                identity: accepted_identity,
+                entities,
+            })
+        }
+        async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String> {
+            Ok(HashMap::new())
+        }
+        async fn usage_complete_through_for_peer(
+            &self,
+            _: &str,
+            _: ::domain::sync_storage::SyncReadClass,
+        ) -> Result<HashMap<String, u64>, String> {
+            Ok(HashMap::new())
+        }
+        fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+            Some(entity.clone())
+        }
+        async fn filter_outgoing_entity_for_peer(
+            &self,
+            _peer_device_id: &str,
+            entity: &SyncEntity,
+        ) -> Result<Option<SyncEntity>, String> {
+            Ok(self.filter_outgoing_entity(entity))
+        }
+    }
+    #[async_trait::async_trait]
+    impl SyncEntityMutationPort for MemBackend {
+        async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
+            if entity.deleted == Some(true) {
+                self.entities.lock().unwrap().remove(&entity.id);
+            } else {
+                self.entities
+                    .lock()
+                    .unwrap()
+                    .insert(entity.id.clone(), entity.clone());
+            }
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ::domain::sync_storage::PeerSyncPolicyPort for MemBackend {
+        async fn accepted_policy_identity_for_peer(
+            &self,
+            _peer_device_id: &str,
+        ) -> Result<Option<::domain::sync_policy::PolicyIdentity>, String> {
+            Ok(Some(::domain::sync_policy::default_sync_policy_identity()))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TaskMergeDeliveryPort for MemBackend {
+        async fn prepare_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _expected_identity: &::domain::sync_policy::PolicyIdentity,
+            _limit: usize,
+        ) -> Result<
+            Option<::domain::task_merge_sync::TaskMergeBatch>,
+            ::domain::task_merge::TaskMergePrepareError,
+        > {
+            Ok(None)
+        }
+
+        async fn acknowledge_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _expected_identity: &::domain::sync_policy::PolicyIdentity,
+            _batch_id: &str,
+            through_position: i64,
+        ) -> Result<i64, String> {
+            Ok(through_position)
+        }
+
+        async fn apply_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _local_device_id: &str,
+            _expected_identity: &::domain::sync_policy::PolicyIdentity,
+            _batch: &::domain::task_merge_sync::TaskMergeBatch,
+        ) -> Result<::domain::task_merge_sync::TaskMergeBatchAck, String> {
+            Err("test_task_merge_receive_unsupported".into())
+        }
+    }
+    #[async_trait::async_trait]
+    impl PeerProgressPort for MemBackend {
+        async fn load_version_vector(&self) -> Result<VersionVector, String> {
+            self.kv
+                .lock()
+                .unwrap()
+                .get(crate::db::VERSION_VECTOR_KEY)
+                .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
+                .transpose()
+                .map(|vector| vector.unwrap_or_default())
+        }
+        async fn replace_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::VERSION_VECTOR_KEY.into(),
+                serde_json::to_string(vector).unwrap(),
+            );
+            Ok(())
+        }
+        async fn replace_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &::domain::sync_policy::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.replace_version_vector(vector).await
+        }
+        async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+            if let Some(newer) = self
+                .newer_version_vector_before_next_merge
+                .lock()
+                .unwrap()
+                .take()
+            {
+                self.kv.lock().unwrap().insert(
+                    crate::db::VERSION_VECTOR_KEY.into(),
+                    serde_json::to_string(&newer).unwrap(),
+                );
+            }
+            let mut current = self.load_version_vector().await?;
+            ::domain::sync_storage::merge_version_vector_entries(&mut current, vector);
+            self.kv.lock().unwrap().insert(
+                crate::db::VERSION_VECTOR_KEY.into(),
+                serde_json::to_string(&current).unwrap(),
+            );
+            Ok(())
+        }
+        async fn merge_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &::domain::sync_policy::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.merge_version_vector(vector).await
+        }
+        async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String> {
+            self.kv
+                .lock()
+                .unwrap()
+                .get(crate::db::constants::KNOWN_PEERS_KEY)
+                .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
+                .transpose()
+        }
+        async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::constants::KNOWN_PEERS_KEY.into(),
+                serde_json::to_string(peers).unwrap(),
+            );
+            Ok(())
+        }
+        async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
+            self.kv
+                .lock()
+                .unwrap()
+                .get(crate::db::constants::REMOVED_PEERS_KEY)
+                .map_or_else(
+                    || Ok(Vec::new()),
+                    |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
+                )
+        }
+        async fn store_removed_peer_ids(&self, ids: &[String]) -> Result<(), String> {
+            self.kv.lock().unwrap().insert(
+                crate::db::constants::REMOVED_PEERS_KEY.into(),
+                serde_json::to_string(ids).unwrap(),
+            );
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ::domain::sync_storage::CommittedFeedPort for MemBackend {
+        fn selective_sync_policy_generation(&self) -> i64 {
+            0
+        }
+
+        async fn selective_sync_policy_generation_for_peer(&self, _: &str) -> Result<i64, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_snapshot(
+            &self,
+        ) -> Result<::domain::sync_storage::FeedSnapshot, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_page(
+            &self,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<Vec<::domain::sync_storage::CommittedFeedEntry>, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_delivery_page(
+            &self,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<::domain::sync_storage::CommittedFeedDeliveryPage, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn committed_feed_delivery_page_for_peer(
+            &self,
+            _: &str,
+            _: &::domain::sync_policy::PolicyIdentity,
+            _: i64,
+            _: i64,
+            _: usize,
+        ) -> Result<
+            ::domain::sync_storage::PolicyBoundFeedPage,
+            ::domain::sync_storage::PolicyBoundFeedReadError,
+        > {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn begin_outbound_policy(
+            &self,
+            _: &str,
+            _: i64,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Ok(::domain::sync_storage::OutboundProgress {
+                initial_snapshot: ::domain::sync_storage::InitialSnapshot::Complete { through: 0 },
+                ..Default::default()
+            })
+        }
+
+        async fn begin_outbound_policy_identity(
+            &self,
+            _: &str,
+            _: &::domain::sync_policy::PolicyIdentity,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+        async fn complete_outbound_snapshot(
+            &self,
+            _: &str,
+            _: i64,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Ok(::domain::sync_storage::OutboundProgress {
+                initial_snapshot: ::domain::sync_storage::InitialSnapshot::Complete { through: 0 },
+                ..Default::default()
+            })
+        }
+        async fn complete_outbound_snapshot_identity(
+            &self,
+            _: &str,
+            _: &::domain::sync_policy::PolicyIdentity,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_policy_identity_completion_observed".into())
+        }
+        async fn record_outbound_scan(
+            &self,
+            _: &str,
+            _: i64,
+            _: i64,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn record_outbound_scan_identity(
+            &self,
+            _: &str,
+            _: &::domain::sync_policy::PolicyIdentity,
+            _: i64,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+        async fn acknowledge_outbound(
+            &self,
+            _: &str,
+            _: i64,
+            _: i64,
+            _: ::domain::sync_storage::OutboundAck,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+
+        async fn acknowledge_outbound_identity(
+            &self,
+            _: &str,
+            _: &::domain::sync_policy::PolicyIdentity,
+            _: i64,
+            _: ::domain::sync_storage::OutboundAck,
+        ) -> Result<::domain::sync_storage::OutboundProgress, String> {
+            Err("test_feed_unsupported".into())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AuthenticatedEntityBackend for MemBackend {
+        async fn receive_authenticated_entity_with_id(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+        ) -> Result<bool, String> {
+            Ok(false)
+        }
+
+        async fn receive_authenticated_entity_with_policy(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+            _: &str,
+            policy: Option<::domain::sync_policy::PolicyIdentity>,
+        ) -> Result<bool, String> {
+            if policy.is_some() {
+                return Err("policy_bound_receipt_unsupported".into());
+            }
+            Ok(false)
+        }
+
+        async fn apply_authenticated_entity(
+            &self,
+            entity: &SyncEntity,
+            _authenticated_peer_id: &str,
+        ) -> Result<(), String> {
+            self.apply_entity(entity).await
+        }
+
+        async fn apply_authenticated_entity_with_id(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            _: &str,
+        ) -> Result<::domain::sync_storage::InboundApplyOutcome, String> {
+            let _ = peer;
+            self.apply_entity(entity).await?;
+            Ok(::domain::sync_storage::InboundApplyOutcome::Applied)
+        }
+
+        async fn apply_authenticated_entity_with_policy(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            message_id: &str,
+            _: &str,
+            policy: Option<::domain::sync_policy::PolicyIdentity>,
+        ) -> Result<::domain::sync_storage::InboundApplyOutcome, String> {
+            if policy.is_some() {
+                return Err("policy_bound_apply_unsupported".into());
+            }
+            self.apply_authenticated_entity_with_id(entity, peer, message_id)
+                .await
+        }
+    }
+}

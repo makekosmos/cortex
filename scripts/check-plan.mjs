@@ -88,8 +88,8 @@ function manifestPlan(file, revisions) {
 function classify(file, revisions) {
   const path = file.path;
   if (
-    /^scripts\/(?:audit-ark-db-writers(?:\.test)?|rust-source-scan)\.mjs$/.test(path) ||
-    path === "scripts/ark-db-writers.allow.json"
+    /^scripts\/(?:audit-db-writers(?:\.test)?|rust-source-scan)\.mjs$/.test(path) ||
+    path === "scripts/db-writers.allow.json"
   )
     return ["ark-db-writers", "lint", "format"];
   if (Object.hasOwn(DOC_CONTRACTS, path)) return DOC_CONTRACTS[path];
@@ -109,7 +109,7 @@ function classify(file, revisions) {
   // gates, everything else (docs, tooling) is not built by Cortex checks.
   // Manifests/lockfiles under core/ already failed
   // closed via isFullInfluence above.
-  if (/^core\/crates\/ark-core\/.*\.rs$/.test(path))
+  if (/^core\/crates\/kernel\/.*\.rs$/.test(path))
     return ["ark-db-writers", "rustfmt", "clippy", "test:rust"];
   if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
   if (/^core\//.test(path)) return [];
