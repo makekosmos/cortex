@@ -69,7 +69,14 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
 
     /// Record the endpoint authenticated by Core before registry frames arrive.
     pub async fn begin_peer(&self, peer: &str, endpoint: &str, policy_negotiated: bool) {
-        self.peers.lock().await.insert(
+        let mut peers = self.peers.lock().await;
+        if peers.get(peer).is_some_and(|current| {
+            current.endpoint == endpoint && current.policy_negotiated == policy_negotiated
+        }) {
+            // Duplicate Hellos for the same endpoint must not reset an active exchange.
+            return;
+        }
+        peers.insert(
             peer.to_owned(),
             RelayRegistryPeer {
                 endpoint: endpoint.to_owned(),

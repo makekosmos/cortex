@@ -200,6 +200,59 @@ fn coordinator(transport: Arc<FakeTransport>) -> (Coordinator, Arc<FakeStorage>)
     )
 }
 
+#[tokio::test]
+async fn duplicate_admission_preserves_the_active_registry_session() {
+    let transport = Arc::new(FakeTransport::default());
+    let coordinator = RelayRegistryCoordinator::new(
+        "a-device".into(),
+        Arc::new(FakeStorage::default()),
+        transport.clone(),
+    );
+    coordinator
+        .begin_peer("z-device", "endpoint-z", false)
+        .await;
+    coordinator
+        .start_exchange("z-device", "endpoint-z")
+        .await
+        .unwrap();
+    let session_id = transport
+        .sends
+        .lock()
+        .unwrap()
+        .iter()
+        .find_map(|(_, message)| match message {
+            LanSyncMessage::RegistrySyncStart { session_id } => Some(session_id.clone()),
+            _ => None,
+        })
+        .expect("initial admission must start a registry session");
+
+    // A repeated Hello for the same endpoint must not replace that session.
+    coordinator
+        .begin_peer("z-device", "endpoint-z", false)
+        .await;
+    coordinator
+        .start_exchange("z-device", "endpoint-z")
+        .await
+        .unwrap();
+    let prior_session_page = coordinator
+        .handle_registry_frame(
+            "z-device",
+            "endpoint-z",
+            RegistryFrame::EventsPage {
+                session_id,
+                page_index: 0,
+                page_count: 1,
+                events: Vec::new(),
+            },
+            &[],
+        )
+        .await;
+    assert!(
+        prior_session_page.is_ok(),
+        "duplicate admission must leave the in-flight session intact: {prior_session_page:?}"
+    );
+}
+
 fn event(target: &str, operation: RegistryOperation) -> RegistryEvent {
     event_from("local-device", target, operation)
 }
