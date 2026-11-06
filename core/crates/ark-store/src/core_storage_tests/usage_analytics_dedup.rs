@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-// KOS-287: canonical app identity, top-apps merge, active-time sort.
+// canonical app identity, top-apps merge, active-time sort.
 
 fn top_app_entry(
     id: &str,
@@ -234,7 +234,7 @@ fn load_usage_analytics_dedups_version_dirs_on_stored_data() {
 
 #[test]
 fn summary_headline_is_active_time_not_visible_runtime() {
-    // KOS-287 regression: the summary card's total must be active
+    // Regression: the summary card's total must be active
     // (foreground && !idle) time — the removed `totalRuntimeMs` carried
     // visible wall-clock time and inflated the headline.
     let conn = setup_db();
@@ -257,7 +257,7 @@ fn summary_headline_is_active_time_not_visible_runtime() {
 #[test]
 fn usage_process_candidates_dedup_across_version_dirs() {
     // The game-binding picker must not list the same app twice when its
-    // exe moved between version dirs (pre-KOS-287 ids hashed the path).
+    // exe moved between version dirs (pre-ids hashed the path).
     let conn = setup_db();
     let mut old_app = make_tracked_app("cand-old");
     old_app.exe_path = "C:\\Games\\Nebula\\app-1.0.1\\nebula.exe".to_string();

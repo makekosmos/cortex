@@ -55,7 +55,7 @@ fn storage_breakdown_splits_known_dirs_and_buckets_the_rest() {
     assert_eq!(bytes_of(&breakdown, "file_index"), 120);
     assert_eq!(bytes_of(&breakdown, "app_index"), 18);
     // legacy-quarantine is its own row, not «Прочее» — the page offers
-    // «Очистить» for it (KOS-302).
+    // «Очистить» for it.
     assert_eq!(bytes_of(&breakdown, "legacy_quarantine"), 124);
     assert_eq!(bytes_of(&breakdown, "other"), 7 + 30);
     assert_eq!(

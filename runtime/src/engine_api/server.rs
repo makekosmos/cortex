@@ -1,3 +1,6 @@
+use super::handlers::handle_request;
+use super::*;
+
 #[derive(Clone)]
 pub struct EngineApiShutdownHandle {
     operations: HttpOperationRegistry,
@@ -32,7 +35,7 @@ pub struct EngineApiServer {
     correlation_id: Arc<String>,
     user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
-    operations: HttpOperationRegistry,
+    pub(super) operations: HttpOperationRegistry,
     connections: Arc<HttpConnectionLifecycle>,
     request_timeout: Duration,
 }
@@ -58,7 +61,7 @@ impl EngineApiServer {
     }
 
     #[cfg(test)]
-    async fn bind_with_test_dispatcher(
+    pub(super) async fn bind_with_test_dispatcher(
         auth_token: String,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
         request_timeout: Duration,
@@ -72,11 +75,11 @@ impl EngineApiServer {
         .await
     }
 
-    /// The TempDir is returned to the caller: the server keeps open file
-    /// handles inside it, so the directory must outlive the server —
-    /// dropping it at helper return leaks it (KOS-270).
+    /// The TempDir is returned to the caller: the server's stores keep open
+    /// file handles inside it, so the directory must outlive the server —
+    /// dropping it at helper return leaks it.
     #[cfg(test)]
-    async fn bind_with_test_dispatcher_and_deadline(
+    pub(super) async fn bind_with_test_dispatcher_and_deadline(
         auth_token: String,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
         request_timeout: Duration,

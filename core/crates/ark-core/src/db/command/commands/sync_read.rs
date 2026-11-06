@@ -1,8 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use crate::types::{SyncEntity, VersionVector};
-use ark_application::sync_storage::SyncReadClass;
-use ark_application::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
 use ark_domain::selective_sync::SelectiveSyncProfile;
+use ark_domain::sync_storage::SyncReadClass;
+use ark_domain::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -124,7 +124,7 @@ impl LoadEntitiesQuery {
                 .accepted_peer_policy(&peer_device_id)
                 .map_err(DbError::from_application_error)?;
             policy_identity = Some(policy.as_ref().map_or_else(
-                ark_application::sync_policy::default_sync_policy_identity,
+                ark_domain::sync_policy::default_sync_policy_identity,
                 |policy| policy.identity(),
             ));
             profile = policy.and_then(|policy| policy.active.then(|| policy.selective_profile()));

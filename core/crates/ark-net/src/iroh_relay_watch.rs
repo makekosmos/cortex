@@ -1,8 +1,11 @@
+use iroh::{Endpoint, RelayMode, Watcher};
+use tokio::sync::watch;
+
 /// Collapse iroh's home-relay status list into a connectivity transition.
 /// Returns the new connected flag only when it changed — every retry writes
 /// a fresh `Disconnected` error into the watcher, so repeated updates must
 /// not re-log. An empty list (no home relay chosen yet) is not a state.
-fn relay_connectivity_change(prev: Option<bool>, relays: &[bool]) -> Option<bool> {
+pub(super) fn relay_connectivity_change(prev: Option<bool>, relays: &[bool]) -> Option<bool> {
     if relays.is_empty() {
         return prev;
     }
@@ -13,9 +16,9 @@ fn relay_connectivity_change(prev: Option<bool>, relays: &[bool]) -> Option<bool
 /// Spawn the watcher that logs one WARN per relay connectivity transition
 /// (up→down / down→up). iroh's relay actor retries internally and warns per
 /// attempt — the Engine filters those to error (`runtime::main::init_tracing`),
-/// so this transition log is the signal that survives (KOS-298).
+/// so this transition log is the signal that survives.
 /// No-op when `relay_mode` is `Disabled` (tests bind loopback only).
-fn spawn_relay_connectivity_watch(
+pub(super) fn spawn_relay_connectivity_watch(
     endpoint: &Endpoint,
     relay_mode: Option<&RelayMode>,
     mut stop_rx: watch::Receiver<bool>,

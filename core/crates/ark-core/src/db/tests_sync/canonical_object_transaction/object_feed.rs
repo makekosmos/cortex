@@ -1,4 +1,6 @@
-fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
+use super::*;
+
+pub(in crate::db::tests) fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
     let mut entity = sync_object(id, "core.task", title);
     entity.hlc = hlc.into();
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
@@ -68,7 +70,7 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
             "device-a",
             3,
             snapshot.high_watermark,
-            ark_application::sync_storage::OutboundAck::Applied,
+            ark_domain::sync_storage::OutboundAck::Applied,
         )
         .await
         .unwrap();

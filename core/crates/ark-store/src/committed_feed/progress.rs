@@ -1,5 +1,5 @@
 use super::committed_feed_snapshot;
-use ark_application::sync_storage::{InitialSnapshot, OutboundAck, OutboundProgress};
+use ark_domain::sync_storage::{InitialSnapshot, OutboundAck, OutboundProgress};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn begin_outbound_policy(

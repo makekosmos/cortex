@@ -6,7 +6,7 @@ impl DbHandle {
     pub(crate) async fn submit_tracked_app_mutation(
         &self,
         context: CommandContext,
-        mutation: ark_application::tracked_app_mutation::TrackedAppMutation,
+        mutation: ark_store::tracked_app_mutation::TrackedAppMutation,
     ) -> Result<crate::types::SyncEntity, DbError> {
         let weight = validate(&context, "tracked_app.mutate.v1", &mutation)?;
         {

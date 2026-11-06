@@ -235,7 +235,7 @@ pub fn render_banner(
     cx: &mut Context<ManagerApp>,
 ) -> impl IntoElement {
     // The banner is also the success notice (e.g. a completed pairing) —
-    // `notice` used to be write-only, so «Выполнено.» was invisible (KOS-367).
+    // `notice` used to be write-only, so «Выполнено.» was invisible.
     let is_error = app.error.is_some();
     let text = app
         .error

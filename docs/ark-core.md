@@ -64,7 +64,7 @@ startup recovery must complete before the service accepts requests again.
 
 The current SQLite failure evidence is in
 `core/crates/ark-core/src/db/command/tests/production_actor/failures.rs` and
-`.../lifecycle.rs`: `SQLITE_FULL`, commit failure, restore failure, and
+[`runtime/src/engine_api/lifecycle.rs`](../runtime/src/engine_api/lifecycle.rs): `SQLITE_FULL`, commit failure, restore failure, and
 recovery-required restore all fail closed; panic rolls back and requires
 reopen. `core/crates/ark-core/src/service/tests/pairing_iroh/recovery_tests/`
 proves a stale restore is refused when an existing peer has observed a change,

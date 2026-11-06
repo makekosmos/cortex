@@ -44,7 +44,7 @@ pub(in crate::ws_server) async fn handle_app_index_op(
             }
         }
         "exe_info" => {
-            // KOS-287: usage report needs per-exe display name (version info)
+            // usage report needs per-exe display name (version info)
             // + icon for rows the index never saw. Blocking FFI batch — off
             // the async executor.
             let paths: Vec<String> = params

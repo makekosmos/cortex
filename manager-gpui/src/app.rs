@@ -92,7 +92,7 @@ pub struct ManagerApp {
     pub storage_database_only: bool,
     pub storage_ui: crate::views::storage_motion::StorageUi,
     pub confirm: Option<Confirm>,
-    /// KOS-355 update overlay: «Позже» hides it until the app restarts.
+    /// update overlay: «Позже» hides it until the app restarts.
     pub update_snoozed: bool,
     /// Last resolved overlay state — `Failed` is gated on the overlay
     /// already being open when the Engine reports `error`.

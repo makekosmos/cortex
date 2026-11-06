@@ -9,7 +9,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SKIP_DIRS = new Set([".git", "node_modules", "target", "dist"]);
+// .tmp is the gitignored local scratch dir; nothing tracked lives there.
+const SKIP_DIRS = new Set([".git", ".tmp", "node_modules", "target", "dist"]);
 
 // `#[ignore]` or `#[cfg_attr(..., ignore)]` — but never `ignore = "..."`.
 const BARE_IGNORE = /#\s*\[[^\]\n]*\bignore\b(?!\s*=)[^\]\n]*\]/g;

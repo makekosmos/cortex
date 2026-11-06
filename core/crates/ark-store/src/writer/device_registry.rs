@@ -26,8 +26,7 @@ impl DeviceRegistryWrites<'_, '_> {
         &mut self,
         sender_device_id: &str,
         events: &[RegistryEvent],
-    ) -> Result<ark_application::replication_storage::RegistryPageApply, RegistryEventApplyError>
-    {
+    ) -> Result<ark_domain::replication_storage::RegistryPageApply, RegistryEventApplyError> {
         let transaction = self.transaction;
         // Known revoked peers may still deliver registry control events; ordinary sync data has
         // a separate admission check in the same Store transaction path.
@@ -114,7 +113,7 @@ impl DeviceRegistryWrites<'_, '_> {
         let digest = crate::device_registry::registry_digest(transaction)
             .map_err(RegistryEventApplyError::Storage)?;
 
-        Ok(ark_application::replication_storage::RegistryPageApply {
+        Ok(ark_domain::replication_storage::RegistryPageApply {
             digest,
             sender_is_admitted,
             local_device_is_admitted,
@@ -130,7 +129,7 @@ impl SqliteWriter {
         sender_device_id: &str,
         events: &[RegistryEvent],
     ) -> Result<
-        ark_application::replication_storage::RegistryPageApply,
+        ark_domain::replication_storage::RegistryPageApply,
         StoreTransactionFailure<RegistryEventApplyError>,
     > {
         self.write_with_capabilities(|capabilities| {

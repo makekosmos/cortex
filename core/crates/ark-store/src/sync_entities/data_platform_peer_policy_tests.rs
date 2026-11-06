@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
-use ark_application::sync_policy::{digest_sync_policy, SyncProfile, SyncProfileRule};
 use ark_domain::selective_sync::{FilterV1, SyncMode};
+use ark_domain::sync_policy::{digest_sync_policy, SyncProfile, SyncProfileRule};
 use ark_domain::types::VersionVector;
 use rusqlite::Connection;
 

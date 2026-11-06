@@ -4,12 +4,12 @@ mod state;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
-use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
+use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use tokio::sync::Mutex;
 
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use state::{Admission, RelayRegistryPeer};
 
 #[derive(Debug, Clone)]
@@ -69,7 +69,14 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
 
     /// Record the endpoint authenticated by Core before registry frames arrive.
     pub async fn begin_peer(&self, peer: &str, endpoint: &str, policy_negotiated: bool) {
-        self.peers.lock().await.insert(
+        let mut peers = self.peers.lock().await;
+        if peers.get(peer).is_some_and(|current| {
+            current.endpoint == endpoint && current.policy_negotiated == policy_negotiated
+        }) {
+            // Duplicate Hellos for the same endpoint must not reset an active exchange.
+            return;
+        }
+        peers.insert(
             peer.to_owned(),
             RelayRegistryPeer {
                 endpoint: endpoint.to_owned(),
@@ -134,9 +141,7 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
 }
 
 impl RegistryOutcome {
-    pub(super) fn applied(
-        applied: &ark_application::replication_storage::RegistryPageApply,
-    ) -> Self {
+    pub(super) fn applied(applied: &ark_domain::replication_storage::RegistryPageApply) -> Self {
         Self {
             applied_events: applied.applied_events.clone(),
             disabled_device_ids: applied.disabled_device_ids.clone(),

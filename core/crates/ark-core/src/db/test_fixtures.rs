@@ -1,4 +1,7 @@
-fn make_tracked_app(id: &str) -> TrackedApp {
+use crate::types::{ArkObject, TrackedApp, UsageEvent, UsageSession};
+use serde_json::json;
+
+pub(super) fn make_tracked_app(id: &str) -> TrackedApp {
     TrackedApp {
         id: id.to_string(),
         platform: "windows".to_string(),
@@ -13,7 +16,7 @@ fn make_tracked_app(id: &str) -> TrackedApp {
     }
 }
 
-fn make_usage_session(id: &str, tracked_app_id: &str) -> UsageSession {
+pub(super) fn make_usage_session(id: &str, tracked_app_id: &str) -> UsageSession {
     UsageSession {
         id: id.to_string(),
         tracked_app_id: tracked_app_id.to_string(),
@@ -34,7 +37,11 @@ fn make_usage_session(id: &str, tracked_app_id: &str) -> UsageSession {
     }
 }
 
-fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) -> UsageEvent {
+pub(super) fn make_usage_event(
+    id: &str,
+    tracked_app_id: &str,
+    session_id: Option<&str>,
+) -> UsageEvent {
     UsageEvent {
         id: id.to_string(),
         tracked_app_id: tracked_app_id.to_string(),
@@ -54,7 +61,7 @@ fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) ->
     }
 }
 
-fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
+pub(super) fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
     let mut object = ArkObject {
         id: id.to_string(),
         type_id: type_id.to_string(),

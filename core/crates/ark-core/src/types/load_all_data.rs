@@ -1,1 +1,1 @@
-pub use ark_application::load_all_data::LoadAllData;
+pub use ark_domain::load_all_data::LoadAllData;

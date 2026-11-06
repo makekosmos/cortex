@@ -4,7 +4,7 @@
 
 use super::runtime::get_db_handle;
 use super::*;
-use ark_application::sync_storage::SyncEntityMutationPort;
+use ark_domain::sync_storage::SyncEntityMutationPort;
 
 /// Fresh per-test service state — replaces the old global `DB`/`SYNC`
 /// statics and the `TEST_DB_MUTEX` serialization they forced.
@@ -17,7 +17,7 @@ pub(super) fn test_state() -> Arc<ServiceState> {
 /// before `dir`, so the db file is closed before the directory is removed.
 /// Two separate `let` locals would drop in reverse declaration order and a
 /// `tempdir()` declared after `test_state()` leaked its dir on Windows,
-/// where an open file cannot be deleted (KOS-270).
+/// where an open file cannot be deleted.
 pub(super) struct ServiceFixture {
     pub(crate) state: Arc<ServiceState>,
     pub(crate) dir: crate::test_support::TestTempDir,
@@ -107,7 +107,7 @@ pub(super) async fn shutdown_test_state(state: &Arc<ServiceState>) {
 
 impl Drop for ServiceFixture {
     fn drop(&mut self) {
-        // KOS-398: drop the shared SQLite handle before TempDir tries to
+        // drop the shared SQLite handle before TempDir tries to
         // delete ark.db. A forgotten StopSync (or a transport task that still
         // holds its own Arc) keeps the file open on Windows; TestTempDir then
         // panics with the test name instead of leaving a silent leftover.
@@ -142,7 +142,7 @@ mod pairing_iroh;
 mod pairing_proto;
 mod replace_object_link;
 mod request_config;
-/// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
+/// atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
 mod snapshot_restore_identity;
 mod sync_lifecycle;
@@ -157,11 +157,11 @@ mod usage_read_queries;
 /// Возвращает буфер перехваченных сообщений.
 async fn setup_sync_with_capturing_transport(
     state: &Arc<ServiceState>,
-) -> Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>> {
-    use crate::relay_sync::{RelaySync, RelaySyncConfig};
+) -> Arc<TokioMutex<Vec<ark_domain::sync_contracts::wire::LanSyncMessage>>> {
     use crate::sync_server::SyncRuntimeStorage;
+    use crate::sync_session::{SyncSession, SyncSessionConfig};
 
-    let captured: Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>> =
+    let captured: Arc<TokioMutex<Vec<ark_domain::sync_contracts::wire::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
     let transport = Arc::new(CapturingSyncTransport {
         sent: captured.clone(),
@@ -172,9 +172,9 @@ async fn setup_sync_with_capturing_transport(
     ));
     backend.set_device_id("test-device").unwrap();
 
-    let relay = RelaySync::with_iroh_transport(
+    let relay = SyncSession::with_iroh_transport(
         backend.clone() as Arc<dyn SyncRuntimeStorage>,
-        RelaySyncConfig {
+        SyncSessionConfig {
             relay_url: String::new(),
             relay_api_key: None,
             space_id: "test-space".to_string(),
@@ -228,7 +228,7 @@ async fn setup_sync_with_capturing_transport(
 }
 
 struct CapturingSyncTransport {
-    sent: Arc<TokioMutex<Vec<ark_sync_contracts::wire::LanSyncMessage>>>,
+    sent: Arc<TokioMutex<Vec<ark_domain::sync_contracts::wire::LanSyncMessage>>>,
 }
 
 #[async_trait::async_trait]
@@ -240,7 +240,10 @@ impl crate::sync_transport::SyncTransport for CapturingSyncTransport {
         Ok(())
     }
 
-    fn send(&self, message: ark_sync_contracts::wire::LanSyncMessage) -> Result<(), String> {
+    fn send(
+        &self,
+        message: ark_domain::sync_contracts::wire::LanSyncMessage,
+    ) -> Result<(), String> {
         self.sent
             .try_lock()
             .expect("no concurrent capture lock")
@@ -256,7 +259,7 @@ impl crate::sync_transport::IrohSessionTransport for CapturingSyncTransport {
     async fn send_to(
         &self,
         _device_id: &str,
-        message: ark_sync_contracts::wire::LanSyncMessage,
+        message: ark_domain::sync_contracts::wire::LanSyncMessage,
     ) -> Result<(), String> {
         crate::sync_transport::SyncTransport::send(self, message)
     }
@@ -276,36 +279,36 @@ impl crate::sync_transport::IrohSessionTransport for CapturingSyncTransport {
     async fn send_to_transport_peer(
         &self,
         _key: &str,
-        message: ark_sync_contracts::wire::LanSyncMessage,
-    ) -> Result<ark_sync_contracts::transport::AddressedSendOutcome, String> {
+        message: ark_domain::sync_contracts::wire::LanSyncMessage,
+    ) -> Result<ark_domain::sync_contracts::transport::AddressedSendOutcome, String> {
         crate::sync_transport::SyncTransport::send(self, message)?;
-        Ok(ark_sync_contracts::transport::AddressedSendOutcome::Sent)
+        Ok(ark_domain::sync_contracts::transport::AddressedSendOutcome::Sent)
     }
 
     fn disconnect_peer(
         &self,
         _device_id: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 
     fn disconnect_transport_peer(
         &self,
         _key: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
 #[async_trait::async_trait]
-impl ark_sync_contracts::peer_control::PeerSessionControl for CapturingSyncTransport {
+impl ark_domain::sync_contracts::peer_control::PeerSessionControl for CapturingSyncTransport {
     async fn send_control_to_endpoint(
         &self,
         _endpoint: &str,
-        message: ark_sync_contracts::wire::LanSyncMessage,
-    ) -> Result<ark_sync_contracts::peer_control::PeerControlSendOutcome, String> {
+        message: ark_domain::sync_contracts::wire::LanSyncMessage,
+    ) -> Result<ark_domain::sync_contracts::peer_control::PeerControlSendOutcome, String> {
         crate::sync_transport::SyncTransport::send(self, message)?;
-        Ok(ark_sync_contracts::peer_control::PeerControlSendOutcome::Sent)
+        Ok(ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::Sent)
     }
 
     fn mark_peer_data_ready(&self, _device_id: &str, _key: &str) -> Result<(), String> {
@@ -319,15 +322,15 @@ impl ark_sync_contracts::peer_control::PeerSessionControl for CapturingSyncTrans
     fn disconnect_peer(
         &self,
         _device_id: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 
     fn disconnect_transport_endpoint(
         &self,
         _endpoint: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 

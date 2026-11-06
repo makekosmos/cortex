@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ark_sync_contracts::wire::{deserialize_message, serialize_message};
+use ark_domain::sync_contracts::wire::{deserialize_message, serialize_message};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

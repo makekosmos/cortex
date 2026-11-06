@@ -1,4 +1,4 @@
-use ark_application::canonical_game::{
+use ark_domain::canonical_game::{
     plan_game_upsert, read_game_props, GameLink, GameLinkTarget, GameLocalState,
     GameMutationResult, GameQuarantine, GameRecord, GameUpsertCommand, GameUpsertDecision,
     GameUpsertError, GameUpsertFacts, GameUsage, GAME_QUARANTINE_CONTRACT, GAME_TYPE_ID,

@@ -104,7 +104,7 @@ fn pairing_form_is_hidden_until_opened(cx: &mut TestAppContext) {
     assert!(!opened.contains("private-pairing-code"));
 }
 
-/// KOS-369: a pending incoming pairing request renders the «Принять /
+/// a pending incoming pairing request renders the «Принять /
 /// Отклонить» consent prompt with the requester's name and platform,
 /// regardless of which view is active.
 #[gpui::test]
@@ -132,7 +132,7 @@ fn pairing_consent_prompt_renders_requester(cx: &mut TestAppContext) {
     assert!(tree.contains("Отклонить"), "{tree}");
 }
 
-/// KOS-369: after «Подключить» the initiator waits on the human — the card
+/// after «Подключить» the initiator waits on the human — the card
 /// shows «Ожидание подтверждения» with a «Отмена» action, and a declined
 /// answer surfaces «Подключение отклонено» with the button usable again.
 #[gpui::test]

@@ -1,27 +1,43 @@
+use std::collections::HashMap;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use ark_domain::sync_contracts::protocol_negotiation::{
+    compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, ProtocolOffer,
+};
+use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
+use iroh::{Endpoint, RelayMode};
+use tokio::sync::{broadcast, watch};
+
+use super::config::{from_ticket, ticket_string, IrohConfig};
+use super::registry::DeviceRegistry;
+use super::transport_types::{OutgoingMessage, OUTGOING_BROADCAST_CAPACITY};
+use super::{EndpointAddr, EndpointId};
+
 pub struct IrohTransport {
-    config: IrohConfig,
+    pub(super) config: IrohConfig,
     /// Запущенный `Endpoint` после `start()`. `None` до старта.
-    endpoint: Mutex<Option<Endpoint>>,
+    pub(super) endpoint: Mutex<Option<Endpoint>>,
     /// Broadcast-канал исходящих сообщений — `send()` кладёт сюда, каждая
     /// активная connection-задача подписывается и пишет в свой QUIC bi-стрим.
-    out_tx: broadcast::Sender<OutgoingMessage>,
+    pub(super) out_tx: broadcast::Sender<OutgoingMessage>,
     /// Shutdown watch channel. `true` = нужно остановиться.
-    stop_tx: watch::Sender<bool>,
-    stop_rx: watch::Receiver<bool>,
+    pub(super) stop_tx: watch::Sender<bool>,
+    pub(super) stop_rx: watch::Receiver<bool>,
     /// Шаг 3: device_id ↔ EndpointId реестр, заполняется по входящим Hello.
-    registry: std::sync::Arc<DeviceRegistry>,
+    pub(super) registry: Arc<DeviceRegistry>,
     /// Live connections by remote endpoint so «Отключить» can actually
     /// close the QUIC link, not just evict the peer's auth state.
-    connections:
-        std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
-    connection_generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    pub(super) connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
+    pub(super) connection_generation: Arc<std::sync::atomic::AtomicU64>,
     /// Endpoints we deliberately cut (`disconnect_transport_peer`) — the
     /// dial loop must not resurrect them on its own: a declined or
     /// cancelled pairing attempt would re-prompt the responder forever.
-    suppressed_endpoints: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<EndpointId>>>,
+    pub(super) suppressed_endpoints: Arc<Mutex<std::collections::HashSet<EndpointId>>>,
     /// Every spawned task (relay watch, accept/dial loops, per-connection
     /// pumps) — aborted and joined by `stop()`.
-    tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+    pub(super) tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
 impl IrohTransport {
@@ -112,7 +128,7 @@ impl IrohTransport {
 
     /// Резолвит эффективный адрес пира: явный `peer_addr` имеет приоритет,
     /// иначе парсим `peer_ticket`.
-    fn resolve_peer_addr(&self) -> Result<EndpointAddr, String> {
+    pub(super) fn resolve_peer_addr(&self) -> Result<EndpointAddr, String> {
         if let Some(addr) = self.config.peer_addr.clone() {
             return Ok(addr);
         }
@@ -148,7 +164,7 @@ impl IrohTransport {
 
     /// Строит аутентифицированный `Hello` для инжекции при подключении.
     /// Зеркалит `relay_transport.rs` строки 128-148.
-    fn make_hello(&self) -> LanSyncMessage {
+    pub(super) fn make_hello(&self) -> LanSyncMessage {
         let auth_secret = normalize_auth_secret(self.config.auth_secret.clone());
         let (auth_nonce, auth_hmac) = match auth_secret.as_ref() {
             Some(secret) => {
@@ -164,23 +180,18 @@ impl IrohTransport {
             None => (None, None),
         };
         let offer =
-            ark_sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
-                true,
-            )
-            .with_task_merge_bootstrap_v2();
-        let negotiation_hmac =
-            auth_secret
-                .as_deref()
-                .zip(auth_nonce.as_deref())
-                .map(|(secret, nonce)| {
-                    ark_sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(
-                        secret,
-                        &self.config.space_id,
-                        &self.config.device_id,
-                        nonce,
-                        &offer,
-                    )
-                });
+            ProtocolOffer::current_with_registry_history(true).with_task_merge_bootstrap_v2();
+        let negotiation_hmac = auth_secret.as_deref().zip(auth_nonce.as_deref()).map(
+            |(secret, nonce)| {
+                ark_domain::sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(
+                    secret,
+                    &self.config.space_id,
+                    &self.config.device_id,
+                    nonce,
+                    &offer,
+                )
+            },
+        );
         LanSyncMessage::Hello {
             protocol_version: PROTOCOL_VERSION,
             device_id: self.config.device_id.clone(),

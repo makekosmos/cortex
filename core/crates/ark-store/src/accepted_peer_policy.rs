@@ -1,6 +1,6 @@
 use super::{default_sync_policy_identity, sync_mode_name};
-use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfileRule};
 use ark_domain::selective_sync::{FilterV1, SyncMode};
+use ark_domain::sync_policy::{AcceptedPeerSyncPolicy, SyncProfileRule};
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -182,7 +182,7 @@ mod accepted_peer_sync_policy_tests {
         ensure_schema, load_active_sync_profile, load_latest_sync_profile,
         load_sync_profile_for_sync, upsert_sync_profile,
     };
-    use ark_application::sync_policy::digest_sync_policy;
+    use ark_domain::sync_policy::digest_sync_policy;
 
     fn policy_rule(resource_id: &str) -> SyncProfileRule {
         SyncProfileRule {

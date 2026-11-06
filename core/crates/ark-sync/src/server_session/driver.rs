@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 
 use super::{
     ConnectedServerSessionHost, DirectServerSessionEnd, ResponderHelloRequest,
@@ -31,7 +31,7 @@ impl ConnectedServerSessionDriver {
 
     pub async fn run_controlled(
         &mut self,
-        session_io: &mut ark_sync_contracts::session_io::SessionIo,
+        session_io: &mut ark_domain::sync_contracts::session_io::SessionIo,
     ) -> DirectServerSessionEnd {
         super::runner::run_connected_server_session_controlled(session_io, &mut self.actor).await
     }

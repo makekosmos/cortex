@@ -21,7 +21,6 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::sync::Notify;
 
-use crate::auth;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::protocol_version::{
     Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION,
@@ -52,6 +51,9 @@ const MAX_IN_FLIGHT_HTTP_OPERATIONS: usize = 128;
 const MAX_ACTIVE_HTTP_CONNECTIONS: usize = 128;
 const SHUTDOWN_DEADLINE: Duration = Duration::from_secs(5);
 
-include!("engine_api/lifecycle.rs");
-include!("engine_api/server.rs");
-include!("engine_api/handlers.rs");
+mod handlers;
+mod lifecycle;
+mod server;
+
+use lifecycle::*;
+pub use server::{EngineApiError, EngineApiServer, EngineApiShutdownHandle};

@@ -1,4 +1,3 @@
-use ark_application::usage::UsageWriteSession;
 use ark_domain::types::{UsageDay, UsageEvent, UsageSession, UsageSpanWrite};
 use rusqlite::Transaction;
 
@@ -12,32 +11,32 @@ impl<'tx, 'connection> SqliteUsageWriteSession<'tx, 'connection> {
     }
 }
 
-impl UsageWriteSession for SqliteUsageWriteSession<'_, '_> {
-    fn ensure_sequence_migrated(&self, device_id: &str) -> Result<(), String> {
+impl SqliteUsageWriteSession<'_, '_> {
+    pub(crate) fn ensure_sequence_migrated(&self, device_id: &str) -> Result<(), String> {
         crate::usage_sync_log::ensure_usage_sequence_migrated(self.transaction, device_id)
     }
 
-    fn upsert_session(&self, session: &UsageSession) -> Result<(), String> {
+    pub(crate) fn upsert_session(&self, session: &UsageSession) -> Result<(), String> {
         crate::usage::upsert_usage_session(self.transaction, session)
     }
 
-    fn delete_session(&self, id: &str) -> Result<(), String> {
+    pub(crate) fn delete_session(&self, id: &str) -> Result<(), String> {
         crate::usage::delete_usage_session(self.transaction, id)
     }
 
-    fn upsert_event(&self, event: &UsageEvent) -> Result<(), String> {
+    pub(crate) fn upsert_event(&self, event: &UsageEvent) -> Result<(), String> {
         crate::usage::upsert_usage_event(self.transaction, event)
     }
 
-    fn delete_event(&self, id: &str) -> Result<(), String> {
+    pub(crate) fn delete_event(&self, id: &str) -> Result<(), String> {
         crate::usage::delete_usage_event(self.transaction, id)
     }
 
-    fn upsert_span(&self, span: &UsageSpanWrite) -> Result<Vec<UsageDay>, String> {
+    pub(crate) fn upsert_span(&self, span: &UsageSpanWrite) -> Result<Vec<UsageDay>, String> {
         crate::usage_queries::upsert_usage_span(self.transaction, span)
     }
 
-    fn record_revision(
+    pub(crate) fn record_revision(
         &self,
         entity_type: &str,
         id: &str,

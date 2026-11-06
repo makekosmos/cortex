@@ -1,3 +1,5 @@
+use super::*;
+
 #[tokio::test]
 async fn negotiated_receipt_ack_advances_delivery_without_claiming_application() {
     let test_backend = make_backend().await;
@@ -51,7 +53,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         &first_id,
         &tx,
         &flight,
-        ark_application::sync_storage::OutboundAck::DurableReceipt,
+        ark_domain::sync_storage::OutboundAck::DurableReceipt,
         true,
         false,
         None,
@@ -73,7 +75,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         &second_id,
         &tx,
         &flight,
-        ark_application::sync_storage::OutboundAck::DurableReceipt,
+        ark_domain::sync_storage::OutboundAck::DurableReceipt,
         true,
         false,
         None,

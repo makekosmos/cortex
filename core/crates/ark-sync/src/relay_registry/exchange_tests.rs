@@ -3,17 +3,16 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use ark_application::replication_storage::{PeerIdentityBackend, RegistryPageApply};
-use ark_application::{
-    registry_admission::RegistryAdmissionStorage, sync_storage::SyncRuntimeStorage,
-};
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
+use ark_domain::replication_storage::{PeerIdentityBackend, RegistryPageApply};
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ed25519_dalek::SigningKey;
 
-use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 
 use crate::relay_registry::{RegistryFrame, RelayRegistryCoordinator};
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 #[derive(Default)]
 struct FakeStorage {
@@ -25,7 +24,7 @@ impl PeerIdentityBackend for FakeStorage {
     async fn load_local_sync_profile(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         Ok(None)
     }
 
@@ -35,15 +34,15 @@ impl PeerIdentityBackend for FakeStorage {
         _: i64,
         _: &str,
         _: bool,
-        _: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        _: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         Err("test_sync_policy_unsupported".into())
     }
 
     async fn load_accepted_peer_sync_policy(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         Ok(None)
     }
 
@@ -163,24 +162,24 @@ impl PeerSessionControl for FakeTransport {
     fn disconnect_peer(
         &self,
         peer: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
         self.trace
             .lock()
             .unwrap()
             .push(format!("disconnect-peer:{peer}"));
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 
     fn disconnect_transport_endpoint(
         &self,
         endpoint: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
         self.disconnected.lock().unwrap().push(endpoint.to_owned());
         self.trace
             .lock()
             .unwrap()
             .push(format!("disconnect:{endpoint}"));
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -198,6 +197,59 @@ fn coordinator(transport: Arc<FakeTransport>) -> (Coordinator, Arc<FakeStorage>)
         Coordinator::new("local-device".into(), storage.clone(), transport),
         storage,
     )
+}
+
+#[tokio::test]
+async fn duplicate_admission_preserves_the_active_registry_session() {
+    let transport = Arc::new(FakeTransport::default());
+    let coordinator = RelayRegistryCoordinator::new(
+        "a-device".into(),
+        Arc::new(FakeStorage::default()),
+        transport.clone(),
+    );
+    coordinator
+        .begin_peer("z-device", "endpoint-z", false)
+        .await;
+    coordinator
+        .start_exchange("z-device", "endpoint-z")
+        .await
+        .unwrap();
+    let session_id = transport
+        .sends
+        .lock()
+        .unwrap()
+        .iter()
+        .find_map(|(_, message)| match message {
+            LanSyncMessage::RegistrySyncStart { session_id } => Some(session_id.clone()),
+            _ => None,
+        })
+        .expect("initial admission must start a registry session");
+
+    // A repeated Hello for the same endpoint must not replace that session.
+    coordinator
+        .begin_peer("z-device", "endpoint-z", false)
+        .await;
+    coordinator
+        .start_exchange("z-device", "endpoint-z")
+        .await
+        .unwrap();
+    let prior_session_page = coordinator
+        .handle_registry_frame(
+            "z-device",
+            "endpoint-z",
+            RegistryFrame::EventsPage {
+                session_id,
+                page_index: 0,
+                page_count: 1,
+                events: Vec::new(),
+            },
+            &[],
+        )
+        .await;
+    assert!(
+        prior_session_page.is_ok(),
+        "duplicate admission must leave the in-flight session intact: {prior_session_page:?}"
+    );
 }
 
 fn event(target: &str, operation: RegistryOperation) -> RegistryEvent {

@@ -1,7 +1,7 @@
 use super::*;
-use ark_application::registry_admission::RegistryAdmissionStorage;
-use ark_application::replication_storage::RegistryPageApply;
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
+use ark_domain::replication_storage::RegistryPageApply;
 use ed25519_dalek::SigningKey;
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};

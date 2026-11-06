@@ -3,7 +3,7 @@ use super::{
     task_causal_dependencies_pending, TaskMergeOperationCheck, TaskMergeOperationOrigin,
     TaskMergeStoreError,
 };
-use ark_application::task_merge::TaskMergeAppendResult;
+use ark_domain::task_merge::TaskMergeAppendResult;
 use ark_domain::task_merge::TaskMergeOperation;
 use rusqlite::Connection;
 

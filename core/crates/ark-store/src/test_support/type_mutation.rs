@@ -41,7 +41,7 @@ impl TypeMutationFixture {
         &self,
         type_id: &str,
         version: &str,
-    ) -> Result<Option<ark_application::type_registry::TypeGetResponse>, String> {
+    ) -> Result<Option<ark_domain::type_registry::TypeGetResponse>, String> {
         crate::type_registry::get_type(&self.connection, type_id, Some(version))
     }
 

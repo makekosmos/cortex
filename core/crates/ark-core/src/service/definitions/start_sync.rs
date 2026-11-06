@@ -1,3 +1,7 @@
+use super::default_discovery_enabled;
+use super::SyncBind;
+use serde::Deserialize;
+
 /// Params of `start_sync`. The variant is a newtype over this struct so the
 /// handler receives the request params object directly.
 #[derive(Debug, Deserialize)]
@@ -33,7 +37,7 @@ pub(crate) struct StartSyncParams {
     /// tests that need a deterministically unreachable relay.
     #[serde(default)]
     pub(crate) iroh_relay_url: Option<String>,
-    /// KOS-369: set only when this start IS the user entering a code
+    /// set only when this start IS the user entering a code
     /// (`connect_with_pairing_code`) — marks the endpoint as a
     /// human-consented outgoing pairing and surfaces it in the snapshot.
     /// Boot restores replay the stored ticket without it.

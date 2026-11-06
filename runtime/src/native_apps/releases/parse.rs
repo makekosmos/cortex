@@ -1,3 +1,5 @@
+use super::*;
+
 // SHA256SUMS.txt parsing: sha256sum line format, host-target line selection,
 // asset-name version extraction, and the redirect-Location → tag check.
 

@@ -1,3 +1,5 @@
+use super::*;
+
 #[tokio::test]
 async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse() {
     let test_backend = make_backend().await;
@@ -50,7 +52,7 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
         &replay_id,
         &tx,
         &flight,
-        ark_application::sync_storage::OutboundAck::Applied,
+        ark_domain::sync_storage::OutboundAck::Applied,
         false,
         false,
         None,
@@ -80,7 +82,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
     let _database = test_backend._database;
     let backend = Arc::new(test_backend.backend);
     admit_test_registry_peer(&backend, "legacy-peer").await;
-    let digest = ark_application::sync_policy::digest_sync_policy(&[]);
+    let digest = ark_domain::sync_policy::digest_sync_policy(&[]);
     backend
         .accept_peer_sync_policy("legacy-peer", 1, &digest, false, &[])
         .await
@@ -111,7 +113,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .await
         .unwrap();
     let change_id = match rx.try_recv().unwrap() {
-        ark_sync_contracts::wire::LanSyncMessage::LiveChange {
+        ark_domain::sync_contracts::wire::LanSyncMessage::LiveChange {
             change_id,
             policy_identity,
             ..
@@ -132,7 +134,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         &change_id,
         &tx,
         &flight,
-        ark_application::sync_storage::OutboundAck::Applied,
+        ark_domain::sync_storage::OutboundAck::Applied,
         false,
         false,
         None,

@@ -25,7 +25,7 @@
     clippy::unnecessary_lazy_evaluations
 )]
 
-//! Foundation modules extracted from `engine` (KOS-331).
+//! Foundation modules extracted from `engine`.
 //!
 //! These modules carry no heavy dependencies and sit below the Engine
 //! application layer; `engine` re-exports them wholesale via
@@ -52,7 +52,7 @@ pub mod process_tree;
 mod process_tree_tests;
 pub mod protocol_version;
 pub mod singleton;
-// KOS-338: dispatch hub API (request/handler/dispatcher) extracted from
+// dispatch hub API (request/handler/dispatcher) extracted from
 // engine so all Engine transports share one boundary crate.
 pub mod engine_dispatch;
 #[cfg(windows)]

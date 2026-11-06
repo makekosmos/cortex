@@ -1,16 +1,31 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use ark_domain::sync_contracts::transport::TransportEvent;
+use ark_domain::sync_contracts::wire::{
+    deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
+};
+use tokio::sync::{broadcast, mpsc, watch, Notify};
+
+use super::framing::{read_frame, write_frame};
+use super::message_helpers::message_variant_name;
+use super::registry::DeviceRegistry;
+use super::transport_types::OutgoingMessage;
+use super::EndpointId;
+
 /// Runs one long-lived Iroh connection with separate reader and writer tasks.
 // Each field is an independently-owned channel/endpoint the connection pumps
 // between; the struct only names the bundle the spawn sites already clone.
-struct ConnectionParams {
-    conn: iroh::endpoint::Connection,
-    is_dialer: bool,
-    hello: LanSyncMessage,
-    out_rx: broadcast::Receiver<OutgoingMessage>,
-    stop_rx: watch::Receiver<bool>,
-    event_tx: mpsc::UnboundedSender<TransportEvent>,
-    registry: Arc<DeviceRegistry>,
-    connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
-    connection_generation: Arc<std::sync::atomic::AtomicU64>,
+pub(super) struct ConnectionParams {
+    pub(super) conn: iroh::endpoint::Connection,
+    pub(super) is_dialer: bool,
+    pub(super) hello: LanSyncMessage,
+    pub(super) out_rx: broadcast::Receiver<OutgoingMessage>,
+    pub(super) stop_rx: watch::Receiver<bool>,
+    pub(super) event_tx: mpsc::UnboundedSender<TransportEvent>,
+    pub(super) registry: Arc<DeviceRegistry>,
+    pub(super) connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
+    pub(super) connection_generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 fn is_current_connection(
@@ -64,7 +79,7 @@ fn control_message_is_safe_without_admission(message: &LanSyncMessage, addressed
     is_pre_admission_control_message(message)
 }
 
-async fn handle_connection(params: ConnectionParams) {
+pub(super) async fn handle_connection(params: ConnectionParams) {
     let ConnectionParams {
         conn,
         is_dialer,
@@ -111,7 +126,7 @@ async fn handle_connection(params: ConnectionParams) {
     eprintln!("[iroh] bi-stream established ({role}) remote={remote_endpoint_id}");
 
     // ── Инжектируем Hello как первый фрейм. ──────────────────────────────────
-    // Запускает CRDT-рукопожатие через RelaySync::handle_message без явного
+    // Запускает CRDT-рукопожатие через SyncSession::handle_message без явного
     // вызова send() сверху — зеркалит relay_transport.rs строки 128-148.
     let hello_payload = serialize_message(&hello);
     if let Err(e) = write_frame(&mut send, hello_payload.as_bytes()).await {
@@ -139,7 +154,7 @@ async fn handle_connection(params: ConnectionParams) {
     // A JoinSet — not two detached handles: when the transport's `stop()`
     // aborts this connection task, the set drops and aborts writer and
     // reader, so they cannot outlive teardown holding the authorizer
-    // (KOS-369).
+    //
     let mut conn_tasks = tokio::task::JoinSet::new();
 
     let writer_notify = done_notify.clone();

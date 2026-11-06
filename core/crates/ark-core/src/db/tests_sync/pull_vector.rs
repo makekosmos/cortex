@@ -1,4 +1,7 @@
-/// KOS-370 regression: a pull-side vector snapshot is stale by the time
+use super::storage_backend_roundtrips::make_backend;
+use super::*;
+
+/// Regression: a pull-side vector snapshot is stale by the time
 /// `is_last` persists it — the incoming session loads it at the first
 /// batch and keeps it in memory for the whole exchange. Keys written
 /// concurrently (local mutations, other concurrent bumps like

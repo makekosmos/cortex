@@ -2,7 +2,7 @@
 //! then ProductName, then the file stem). The usage tracker stamps it into
 //! `tracked_apps.display_name` and the `app_index.exe_info` op serves it for
 //! legacy rows — a browser must report "Microsoft Edge", never the last tab
-//! title (KOS-287).
+//! title.
 //!
 //! Sync FFI; callers run it on a blocking-pool thread.
 

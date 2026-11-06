@@ -2,19 +2,19 @@ use super::*;
 
 pub(in crate::db::command) struct RegisterApplicationTypeTask {
     pub registration: ark_domain::canonical_type::TypeRegistration,
-    pub reply: oneshot::Sender<Result<Vec<ark_application::sync_storage::ReplayNotice>, DbError>>,
+    pub reply: oneshot::Sender<Result<Vec<ark_domain::sync_storage::ReplayNotice>, DbError>>,
 }
 
 pub(in crate::db::command) struct UpsertObjectTypeTask {
     pub object_type: ark_domain::types::ObjectType,
     pub device_id: Option<String>,
-    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::type_mutation::TypeMutationCommit, DbError>>,
 }
 
 pub(in crate::db::command) struct DeleteObjectTypeTask {
     pub id: String,
     pub device_id: Option<String>,
-    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::type_mutation::TypeMutationCommit, DbError>>,
 }
 
 macro_rules! impl_type_mutation_task {
@@ -44,19 +44,19 @@ macro_rules! impl_type_mutation_task {
 
 impl_type_mutation_task!(
     RegisterApplicationTypeTask,
-    Vec<ark_application::sync_storage::ReplayNotice>,
+    Vec<ark_domain::sync_storage::ReplayNotice>,
     register_application_type,
     { registration }
 );
 impl_type_mutation_task!(
     UpsertObjectTypeTask,
-    ark_application::type_mutation::TypeMutationCommit,
+    ark_store::type_mutation::TypeMutationCommit,
     upsert_object_type,
     { object_type, device_id }
 );
 impl_type_mutation_task!(
     DeleteObjectTypeTask,
-    ark_application::type_mutation::TypeMutationCommit,
+    ark_store::type_mutation::TypeMutationCommit,
     delete_object_type,
     { id, device_id }
 );

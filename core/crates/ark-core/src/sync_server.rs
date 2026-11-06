@@ -9,14 +9,14 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
 use crate::types::*;
+use ark_domain::sync_contracts::protocol_negotiation::normalize_auth_secret;
+use ark_domain::sync_contracts::wire::*;
 use ark_sync::protocol::merge_peer_records;
-use ark_sync_contracts::protocol_negotiation::normalize_auth_secret;
-use ark_sync_contracts::wire::*;
 
 pub use crate::replication_storage::{
     AuthenticatedEntityBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
-pub use ark_application::sync_storage::SyncReadClass;
+pub use ark_domain::sync_storage::SyncReadClass;
 
 #[cfg(test)]
 #[path = "sync_server/sync_round_trip.rs"]
@@ -71,13 +71,13 @@ pub(crate) fn test_server_session_with_keepalive(
 
 #[derive(Clone)]
 enum PeerMessageSender {
-    Session(ark_sync_contracts::session_io::SessionIoSender),
+    Session(ark_domain::sync_contracts::session_io::SessionIoSender),
     #[cfg(test)]
     Test(mpsc::UnboundedSender<Message>),
 }
 
 impl PeerMessageSender {
-    fn session(session: ark_sync_contracts::session_io::SessionIoSender) -> Self {
+    fn session(session: ark_domain::sync_contracts::session_io::SessionIoSender) -> Self {
         Self::Session(session)
     }
 
@@ -220,7 +220,7 @@ pub struct SyncServer {
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     /// Accept/ticker task, joined by `stop()` so its `storage` Arc (the
     /// shared db connection) is released deterministically on shutdown
-    /// rather than whenever the task happens to exit (KOS-270).
+    /// rather than whenever the task happens to exit.
     accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Per-connection protocol handlers, joined by `stop()`.
     conn_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,

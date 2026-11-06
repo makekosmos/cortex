@@ -1,48 +1,22 @@
-// Iroh QUIC transport. Each connection uses separate reader and writer tasks
-// so cancellation cannot consume a frame prefix and desynchronize later reads.
-// Reconnect uses exponential backoff. Version-vector catch-up repairs changes
-// missed while no peer connection is active. Desktop-only Iroh features are
-// owned by ark-net.
+use std::sync::Arc;
 
-use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use super::EndpointId;
 
-use iroh::endpoint::{presets, BindOpts};
-use iroh::{Endpoint, Watcher};
-use iroh_tickets::endpoint::EndpointTicket;
-use iroh_tickets::Ticket;
-use tokio::sync::{broadcast, mpsc, watch, Notify};
-
-use crate::sync_bind::SyncBind;
-use ark_sync_contracts::protocol_negotiation::{
-    compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret,
-};
-use ark_sync_contracts::transport::{SyncTransport, TransportEvent};
-use ark_sync_contracts::wire::{
-    deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
-    PROTOCOL_VERSION,
-};
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 /// ALPN-идентификатор протокола ark-sync поверх iroh QUIC-стримов.
 /// Версионируем отдельно от `protocol::PROTOCOL_VERSION` (см. spec §3.3).
 pub const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 
-/// Ёмкость broadcast-канала исходящих сообщений. Выбрана щедро: реальные
-/// CRDT-потоки не достигают такого burst. При `RecvError::Lagged` задача
-/// просто пропускает старые кадры — они будут компенсированы VV-обменом
-/// при следующем (ре)коннекте (см. модульный doc).
-const OUTGOING_BROADCAST_CAPACITY: usize = 256;
+/// Capacity for queued outbound messages.
+pub(super) const OUTGOING_BROADCAST_CAPACITY: usize = 256;
 
-// Shared slot for the caller-side oneshot that resolves when a queued
-// message has actually been written to the peer.
-type SharedCompletion =
+pub(super) type SharedCompletion =
     Option<Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<(), String>>>>>>;
 
 #[derive(Clone)]
-struct OutgoingMessage {
-    target: Option<EndpointId>,
-    msg: LanSyncMessage,
-    completion: SharedCompletion,
+pub(super) struct OutgoingMessage {
+    pub(super) target: Option<EndpointId>,
+    pub(super) msg: LanSyncMessage,
+    pub(super) completion: SharedCompletion,
 }

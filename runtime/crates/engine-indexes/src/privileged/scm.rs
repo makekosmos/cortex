@@ -222,7 +222,7 @@ pub fn uninstall() -> Outcome {
         }
     }
 
-    // KOS-269: drop the managed inbound firewall rule alongside the service.
+    // drop the managed inbound firewall rule alongside the service.
     // Best-effort — a leftover rule pointing at a removed exe path is inert,
     // and blocking uninstall on COM would be worse.
     if let Err(e) = crate::privileged::firewall::uninstall_cleanup() {

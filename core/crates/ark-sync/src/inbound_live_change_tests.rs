@@ -1,17 +1,17 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
 
-use ark_application::replication_storage::AuthenticatedEntityBackend;
-use ark_application::sync_policy::SyncProfile;
-use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort};
+use ark_domain::replication_storage::AuthenticatedEntityBackend;
 use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_policy::SyncProfile;
+use ark_domain::sync_storage::{InboundApplyOutcome, PeerProgressPort};
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 
 use super::{
     apply_live_change, prepare_live_change, IncomingLiveChange, LiveChangeDisposition,
     VersionVectorWriteMode,
 };
-use ark_sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
+use ark_domain::sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
 
 struct FakeStorage {
     trace: Mutex<Vec<&'static str>>,
@@ -127,7 +127,7 @@ impl PeerProgressPort for FakeStorage {
 
     async fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
         self.trace.lock().unwrap().push("merge_vector");
-        ark_application::sync_storage::merge_version_vector_entries(
+        ark_domain::sync_storage::merge_version_vector_entries(
             &mut self.vector.lock().unwrap(),
             vector,
         );

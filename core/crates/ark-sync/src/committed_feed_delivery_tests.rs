@@ -1,9 +1,9 @@
 use super::{acknowledge, FeedAck, FeedAckOutcome, FeedFlight};
-use ark_application::sync_storage::{
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, CommittedFeedPort, FeedSnapshot, OutboundAck,
     OutboundProgress,
 };
-use ark_domain::sync_policy::PolicyIdentity;
 use std::sync::Mutex;
 
 struct FakeFeedStore {
@@ -103,8 +103,8 @@ impl CommittedFeedPort for FakeFeedStore {
         _: i64,
         _: usize,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundFeedPage,
-        ark_application::sync_storage::PolicyBoundFeedReadError,
+        ark_domain::sync_storage::PolicyBoundFeedPage,
+        ark_domain::sync_storage::PolicyBoundFeedReadError,
     > {
         Err("unused".into())
     }
@@ -197,7 +197,7 @@ fn identity(revision: i64) -> PolicyIdentity {
 fn progress() -> OutboundProgress {
     OutboundProgress {
         policy_generation: 2,
-        initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete { through: 4 },
+        initial_snapshot: ark_domain::sync_storage::InitialSnapshot::Complete { through: 4 },
         scanned_through: 4,
         receipt_through: 0,
         applied_through: 0,

@@ -1,4 +1,6 @@
-async fn apply_local_model_selection(
+use super::*;
+
+pub(super) async fn apply_local_model_selection(
     host: &DictationHost,
     model_id: &str,
     model_path: std::path::PathBuf,
@@ -15,7 +17,7 @@ async fn apply_local_model_selection(
     .await
 }
 
-async fn apply_local_model_selection_to_config(
+pub(super) async fn apply_local_model_selection_to_config(
     config_state: &Arc<Mutex<DictationConfig>>,
     events_tx: &broadcast::Sender<Value>,
     data_dir: &std::path::Path,
@@ -34,7 +36,7 @@ async fn apply_local_model_selection_to_config(
     .await
 }
 
-async fn apply_local_model_selection_values_to_config(
+pub(super) async fn apply_local_model_selection_values_to_config(
     config_state: &Arc<Mutex<DictationConfig>>,
     events_tx: &broadcast::Sender<Value>,
     data_dir: &std::path::Path,
@@ -58,7 +60,7 @@ async fn apply_local_model_selection_values_to_config(
     Ok(snapshot)
 }
 
-fn local_engine_for_model(model_id: &str) -> &'static str {
+pub(super) fn local_engine_for_model(model_id: &str) -> &'static str {
     if model_id.starts_with("parakeet") {
         local::PARAKEET_LOCAL_ENGINE
     } else {
@@ -66,7 +68,7 @@ fn local_engine_for_model(model_id: &str) -> &'static str {
     }
 }
 
-fn platform_local_engine() -> &'static str {
+pub(super) fn platform_local_engine() -> &'static str {
     #[cfg(test)]
     {
         DEFAULT_LOCAL_ENGINE
@@ -77,14 +79,14 @@ fn platform_local_engine() -> &'static str {
     }
 }
 
-fn platform_local_engine_for_os(os: &str) -> &'static str {
+pub(super) fn platform_local_engine_for_os(os: &str) -> &'static str {
     match os {
         "macos" => DEFAULT_LOCAL_ENGINE,
         _ => DEFAULT_LOCAL_ENGINE,
     }
 }
 
-fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
+pub(super) fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
     // Parakeet — полноценный in-process движок (новая фича): никогда не
     // даунгрейдим его до whisper.cpp, иначе выбор Parakeet (вместе с путём к
     // модели) затирается на каждом старте/`update_config`, и provider
@@ -109,7 +111,7 @@ fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
 /// The best already-downloaded model for the local provider: the catalog's
 /// `recommended` entry first, then catalog order. Models that need the
 /// whisper.cpp runtime count only while it is installed.
-fn autoselect_local_model_spec(
+pub(super) fn autoselect_local_model_spec(
     data_dir: &std::path::Path,
 ) -> Option<(
     &'static local_models::ModelSpec,
@@ -146,7 +148,10 @@ fn autoselect_local_model_spec(
 /// own off-switch and is respected; `local_model == None` is the cleared
 /// state a migration/reset leaves behind, not a choice.
 /// Returns true when a model was selected and `cfg` was updated.
-fn autoselect_local_model(data_dir: &std::path::Path, cfg: &mut DictationConfig) -> bool {
+pub(super) fn autoselect_local_model(
+    data_dir: &std::path::Path,
+    cfg: &mut DictationConfig,
+) -> bool {
     if !provider_uses_local_runtime(&cfg.provider)
         || (!cfg.provider_enabled && cfg.local_model.is_some())
         || local_selection_valid(cfg)
@@ -168,13 +173,16 @@ fn autoselect_local_model(data_dir: &std::path::Path, cfg: &mut DictationConfig)
     true
 }
 
-async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
     let _ = reconcile_unready_local_config(host).await;
     let cfg = host.snapshot_config().await;
     DictationResponse::ok(json!(host.local_models_snapshot(&cfg)))
 }
 
-async fn op_download_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_download_local_model(
+    params: Value,
+    host: &DictationHost,
+) -> DictationResponse {
     let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
         Some(value) if !value.trim().is_empty() => value.trim().to_owned(),
         _ => return DictationResponse::err("download_local_model: missing modelId"),
@@ -310,7 +318,7 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
     }))
 }
 
-async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationResponse {
     let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => return DictationResponse::err("use_local_model: missing modelId"),
@@ -329,10 +337,10 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
         Some((_, _)) => {
             return DictationResponse::err(format!(
                 "use_local_model: model is not downloaded: {model_id}"
-            ))
+            ));
         }
         None => {
-            return DictationResponse::err(format!("use_local_model: model not found: {model_id}"))
+            return DictationResponse::err(format!("use_local_model: model not found: {model_id}"));
         }
     };
     if !local_models::model_supports_transcription(model_id).unwrap_or(false) {
@@ -357,7 +365,10 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
     }
 }
 
-async fn op_delete_local_model(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_delete_local_model(
+    params: Value,
+    host: &DictationHost,
+) -> DictationResponse {
     let model_id = match params.get("modelId").and_then(|v| v.as_str()) {
         Some(value) if !value.trim().is_empty() => value.trim(),
         _ => return DictationResponse::err("delete_local_model: missing modelId"),
@@ -443,7 +454,7 @@ pub(crate) fn validate_config_patch(params: &Value) -> Result<(), String> {
     Ok(())
 }
 
-async fn op_update_config(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_update_config(params: Value, host: &DictationHost) -> DictationResponse {
     // Валидация до применения — иначе невалидный URL попал бы в JSON и
     // фейлил бы каждый последующий build_client.
     if let Err(msg) = validate_config_patch(&params) {
@@ -463,7 +474,7 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
             other => {
                 return DictationResponse::err(format!(
                     "update_config: invalid triggerMode '{other}'"
-                ))
+                ));
             }
         };
     }
@@ -477,7 +488,7 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
             other => {
                 return DictationResponse::err(format!(
                     "update_config: invalid injectMode '{other}'"
-                ))
+                ));
             }
         };
     }
@@ -632,7 +643,7 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
             other => {
                 return DictationResponse::err(format!(
                     "update_config: invalid networkProfile.kind '{other}'"
-                ))
+                ));
             }
         };
     }

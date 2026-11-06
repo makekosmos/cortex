@@ -163,7 +163,7 @@ async fn install_requires_finished_download() {
 
 #[test]
 fn construction_sweeps_payloads_left_by_a_previous_run() {
-    // KOS-301: applied installers and crashed `.part` downloads used to
+    // applied installers and crashed `.part` downloads used to
     // accumulate in updates/ forever.
     let dir = tempfile::tempdir().unwrap();
     let updates = dir.path().join("updates");

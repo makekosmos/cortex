@@ -1,14 +1,12 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::sync::{Mutex, RwLock};
 
 use crate::task_set::{abort_and_join, join_all, track_task};
-use ark_application::sync_storage::SyncRuntimeStorage;
-use ark_domain::hlc::HLC;
-use ark_sync_contracts::client_transport::DirectClientConnector;
-use ark_sync_contracts::protocol_negotiation::*;
-use ark_sync_contracts::wire::*;
+use ark_domain::sync_contracts::client_transport::DirectClientConnector;
+use ark_domain::sync_contracts::protocol_negotiation::*;
+use ark_domain::sync_contracts::wire::*;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 
 #[path = "sync_client/config.rs"]
 mod config;
@@ -46,7 +44,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) tx: ClientMessageSender,
     pub(crate) sync_started: bool,
     pub(crate) outbound_snapshot: crate::outbound_snapshot::OutboundSnapshotProgress,
-    pub(crate) protocol: ark_sync_contracts::protocol_negotiation::NegotiatedProtocol,
+    pub(crate) protocol: ark_domain::sync_contracts::protocol_negotiation::NegotiatedProtocol,
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
@@ -72,7 +70,7 @@ pub struct DirectClient {
     on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     /// The connection loop from `start`. It owns each transport session and
     /// `stop_and_join` aborts and joins it so none outlives teardown
-    /// (KOS-270, KOS-369).
+    /// (,).
     tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     callbacks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }

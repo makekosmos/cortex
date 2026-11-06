@@ -16,12 +16,12 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use ark_sync_contracts::protocol_negotiation::{
+use ark_domain::sync_contracts::protocol_negotiation::{
     compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
     normalize_auth_secret, ProtocolOffer,
 };
-use ark_sync_contracts::transport::{SyncTransport, TransportEvent};
-use ark_sync_contracts::wire::{
+use ark_domain::sync_contracts::transport::{SyncTransport, TransportEvent};
+use ark_domain::sync_contracts::wire::{
     deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
     PROTOCOL_VERSION,
 };

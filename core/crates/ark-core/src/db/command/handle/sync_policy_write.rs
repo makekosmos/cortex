@@ -10,7 +10,7 @@ impl DbHandle {
         &self,
         context: CommandContext,
         command: SaveLocalSyncProfileCommand,
-    ) -> Result<ark_application::sync_policy::SyncProfile, DbError> {
+    ) -> Result<ark_domain::sync_policy::SyncProfile, DbError> {
         match self
             .submit_sync_policy_write(context, SyncPolicyWrite::SaveLocal(command))
             .await?
@@ -26,7 +26,7 @@ impl DbHandle {
         &self,
         context: CommandContext,
         command: AcceptPeerSyncPolicyCommand,
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, DbError> {
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, DbError> {
         match self
             .submit_sync_policy_write(context, SyncPolicyWrite::AcceptPeer(command))
             .await?

@@ -1,5 +1,17 @@
-include!("handlers/request.rs");
-include!("handlers/request_routes.rs");
-include!("handlers/user_data.rs");
-include!("handlers/auth.rs");
-include!("handlers/manager_identity.rs");
+use super::*;
+
+mod auth;
+mod manager_identity;
+mod request;
+mod request_routes;
+mod user_data;
+
+use auth::*;
+use manager_identity::*;
+use request_routes::*;
+use user_data::*;
+
+pub(super) use request::handle_request;
+
+#[cfg(test)]
+pub(super) use auth::authenticate;

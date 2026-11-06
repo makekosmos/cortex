@@ -1,4 +1,4 @@
-//! Accessibility-tree tests (KOS-142).
+//! Accessibility-tree tests.
 //!
 //! The vendored gpui `TestWindow` activates accessibility immediately
 //! (vendor/gpui-pre-0.3.6-patched/PATCH.md), so every drawn frame's accesskit
@@ -242,7 +242,7 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
     assert_eq!(labels["Боковая панель"], "Switch");
 }
 
-/// KOS-287 regression: the usage page renders rows through
+/// Regression: the usage page renders rows through
 /// `v_virtual_list`, so a 600-row report must materialize only the visible
 /// window of ListItem nodes — before virtualization every row hit the tree
 /// and scrolling stuttered.
@@ -287,7 +287,7 @@ async fn usage_list_is_virtualized(cx: &mut TestAppContext) {
     );
 }
 
-/// KOS-287 regression: prepared rows are built once per data/sort/filter
+/// Regression: prepared rows are built once per data/sort/filter
 /// change — re-rendering the view must not re-sort or re-format the table
 /// (that per-frame O(n log n) was the scroll stutter).
 #[gpui::test]

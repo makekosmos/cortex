@@ -118,7 +118,8 @@ pub enum NativeAppError {
 
 pub type Result<T> = std::result::Result<T, NativeAppError>;
 
-include!("native_apps/descriptor.rs");
+mod descriptor;
+pub use descriptor::{app_descriptor, host_app_target, NativeAppDescriptor, NATIVE_APPS};
 
 /// Everything the install flow needs to place a version on disk. The sha256
 /// comes from the release's `SHA256SUMS.txt` — never from the archive itself.
@@ -373,9 +374,15 @@ impl NativeAppStore {
 
 pub mod releases;
 
-include!("native_apps/install.rs");
-include!("native_apps/launch.rs");
-include!("native_apps/shortcuts.rs");
+mod install;
+mod launch;
+mod shortcuts;
+#[cfg(test)]
+use launch::foreground_grant_target;
+pub use launch::spawn_detached;
+#[cfg(test)]
+use shortcuts::{link_path, link_points_at, same_path};
+pub use shortcuts::{reconcile_shortcuts, start_menu_dir, sync_shortcut};
 
 impl NativeAppStore {
     /// Remove the whole `<root>/<id>` tree: record + every version dir. User

@@ -9,7 +9,10 @@ fn stale_connection_cleanup_cannot_remove_replacement_generation() {
     let endpoint = iroh::SecretKey::generate().public();
     let mut connections = HashMap::from([(endpoint, (2, "replacement"))]);
 
-    assert_eq!(take_current_connection(&mut connections, &endpoint, 1), None);
+    assert_eq!(
+        take_current_connection(&mut connections, &endpoint, 1),
+        None
+    );
     assert_eq!(
         connections
             .get(&endpoint)

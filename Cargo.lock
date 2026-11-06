@@ -115,26 +115,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-application"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "async-trait",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
 name = "ark-core"
 version = "0.1.0"
 dependencies = [
- "ark-application",
  "ark-domain",
  "ark-net",
  "ark-store",
  "ark-sync",
- "ark-sync-contracts",
  "async-trait",
  "chrono",
  "ed25519-dalek",
@@ -154,13 +141,16 @@ dependencies = [
 name = "ark-domain"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "ed25519-dalek",
+ "rand 0.8.8",
  "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
@@ -168,8 +158,6 @@ name = "ark-net"
 version = "0.1.0"
 dependencies = [
  "ark-domain",
- "ark-net-policy",
- "ark-sync-contracts",
  "async-trait",
  "ed25519-dalek",
  "futures-util",
@@ -185,14 +173,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-net-policy"
-version = "0.1.0"
-
-[[package]]
 name = "ark-store"
 version = "0.1.0"
 dependencies = [
- "ark-application",
  "ark-domain",
  "chrono",
  "ed25519-dalek",
@@ -211,29 +194,14 @@ dependencies = [
 name = "ark-sync"
 version = "0.1.0"
 dependencies = [
- "ark-application",
  "ark-domain",
  "ark-store",
- "ark-sync-contracts",
  "async-trait",
  "chrono",
  "ed25519-dalek",
  "rand 0.8.8",
  "rusqlite",
  "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "ark-sync-contracts"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "async-trait",
- "rand 0.8.8",
- "serde",
- "serde_json",
- "sha2 0.10.9",
  "tokio",
 ]
 

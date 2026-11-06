@@ -35,13 +35,13 @@ fn sync_policy_request_parses_canonical_filter_inputs() {
 
 #[test]
 fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
-    let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
+    let rule = |resource_id: &str| ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: resource_id.into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let profile = ark_application::sync_policy::SyncProfile {
+    let profile = ark_domain::sync_policy::SyncProfile {
         profile_id: "phone".into(),
         device_id: "phone-device".into(),
         revision: 1,

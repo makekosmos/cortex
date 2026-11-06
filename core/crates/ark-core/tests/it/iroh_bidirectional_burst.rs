@@ -30,7 +30,7 @@ use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage};
 use iroh::RelayMode;
 
 /// Number of messages each side sends. Must be large enough to reliably
@@ -161,7 +161,7 @@ async fn iroh_bidirectional_burst_no_desync() {
     // We need both connections to be established so the broadcast subscriber is
     // active on both sides before we fire the burst. The deadline is only a
     // hang guard — the Hello event is the real condition; under parallel gate
-    // load a healthy handshake can be arbitrarily slow (KOS-308).
+    // load a healthy handshake can be arbitrarily slow.
     let hello_timeout = Duration::from_secs(60);
 
     // Wait for B to receive A's Hello.
@@ -231,8 +231,8 @@ async fn iroh_bidirectional_burst_no_desync() {
         a_got_hello,
         "A must receive Hello from B within {hello_timeout:?}"
     );
-    // KOS-369: data frames only flow to endpoints bound as authenticated
-    // (pairing consent at the RelaySync layer). These transport-level tests
+    // data frames only flow to endpoints bound as authenticated
+    // (pairing consent at the SyncSession layer). These transport-level tests
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a
@@ -288,7 +288,7 @@ async fn iroh_bidirectional_burst_no_desync() {
 
     // ── 6. Collect and assert ALL messages arrived. ────────────────────────────
     // Hang guard only — receiving every change_id is the real assertion
-    // (KOS-308).
+    //
     let collect_timeout = Duration::from_secs(120);
 
     // B should receive everything A sent.

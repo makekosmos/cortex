@@ -10,4 +10,5 @@ pub use vector::{
 };
 
 #[cfg(test)]
-include!("protocol/tests.rs");
+#[path = "protocol/tests.rs"]
+mod tests;

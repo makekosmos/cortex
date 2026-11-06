@@ -192,7 +192,7 @@ pub struct FileIndex {
     // Regression H3 (2026-05-24): coalesce overlapping spawn_rescan calls.
     // Toggling 5 patterns in a row used to queue 5 full rescans on scan_lock.
     pub(super) rescan_pending: AtomicBool,
-    // KOS-270: fire-and-forget background work (rescan, removed-root cleanup)
+    // fire-and-forget background work (rescan, removed-root cleanup)
     // holds Arc<FileStore> — an open SQLite connection. Shutdown must be able
     // to await it instead of racing a caller's tempdir teardown.
     pub(super) background_tasks: StdMutex<Vec<tokio::task::JoinHandle<()>>>,

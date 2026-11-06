@@ -1,4 +1,4 @@
-//! Minimal HKCU registry access for the installer subcommands (KOS-306).
+//! Minimal HKCU registry access for the installer subcommands.
 //!
 //! Everything the installer used to do through `Get-ItemProperty` /
 //! `Set-ItemProperty` / `New-ItemProperty` in PowerShell goes through the

@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 use super::*;
-use ark_application::sync_storage::SyncEntityMutationPort;
+use ark_domain::sync_storage::SyncEntityMutationPort;
 
 mod disconnect;
 mod events;
@@ -11,7 +11,7 @@ mod pairing;
 mod start;
 pub(crate) use self::disconnect::handle_disconnect_peer;
 use self::events::{
-    wire_relay_registry_fanout, wire_relay_sync_events, wire_server_registry_fanout,
+    wire_relay_registry_fanout, wire_server_registry_fanout, wire_sync_session_events,
 };
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
@@ -33,7 +33,7 @@ struct ClientEnv {
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
-    relay: Option<Arc<RelaySync>>,
+    relay: Option<Arc<SyncSession>>,
 }
 
 async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
@@ -295,7 +295,7 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
     };
 
     let mut connected = runtime.server.get_connected_peer_entries().await;
-    // KOS-369 consent surface: unknown endpoints that Hello'd us wait in
+    // consent surface: unknown endpoints that Hello'd us wait in
     // `incoming_pairing_requests` for «Принять / Отклонить»; `outgoing_pairing`
     // reports our own attempt (pending / declined / connected) to the
     // initiator's UI.

@@ -126,7 +126,7 @@ directly. The microphone, hotkeys, text insertion, focus blocking, API keys,
 and every SQLite write belong to the Engine. If an app needs a new capability,
 it gets a new Engine operation, never a bypass. See
 [`docs/write-boundary.md`](docs/write-boundary.md) and
-[`docs/repo-split-decisions.md`](docs/repo-split-decisions.md).
+[`docs/ark-exocortex.md`](docs/ark-exocortex.md).
 
 The shipped package is `mundus-engine` with ARK in-process, plus GPUI
 components under `resources/components/<name>/`.
@@ -164,8 +164,7 @@ MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.tom
 
 > [!NOTE]
 > The first build compiles several hundred crates and is slow. Later builds are
-> incremental. For cache tuning, see
-> [`docs/rust-build-cache.md`](docs/rust-build-cache.md).
+> incremental; `sccache`/`rtk` proxy settings are a local machine choice.
 
 ## Checks
 
@@ -290,10 +289,9 @@ baseline from `source.commit`. A release publishes only the installers and
 
 The Windows installer is a standalone NSIS script
 (`desktop/build/installer.nsi`) compiled by `makensis`. The build downloads the
-pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It writes
-`release/release-provenance.json` and, atomically,
-`release/release-receipt.v2.json`. `publish-release.mjs` consumes only that
-receipt. It never builds or packages, and it re-derives the BOM from HEAD, so it
+pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It writes the
+provenance JSON and, atomically, the v2 release receipt into the build's
+`release/` output directory. `publish-release.mjs` consumes only that receipt. It never builds or packages, and it re-derives the BOM from HEAD, so it
 rejects a receipt from any other commit. Signing secrets are never read by the
 BOM validator or the provenance emitter.
 
@@ -323,15 +321,12 @@ The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 
 | Topic                     | Doc                                                              |
 | ------------------------- | ---------------------------------------------------------------- |
-| ARK data core             | [`docs/ark-core.md`](docs/ark-core.md)                           |
+| ARK architecture          | [`docs/ark-exocortex.md`](docs/ark-exocortex.md)                 |
 | Sync: iroh, relay, beacon | [`docs/sync.md`](docs/sync.md)                                   |
 | Write boundary            | [`docs/write-boundary.md`](docs/write-boundary.md)               |
 | Focus                     | [`docs/focus.md`](docs/focus.md)                                 |
 | Dictation dev loop        | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
-| ONNX Runtime              | [`docs/onnxruntime.md`](docs/onnxruntime.md)                     |
+| Dictation models          | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | Linux development         | [`docs/linux-dev.md`](docs/linux-dev.md)                         |
-| macOS package workers     | [`docs/macos-package-workers.md`](docs/macos-package-workers.md) |
-| Build cache               | [`docs/rust-build-cache.md`](docs/rust-build-cache.md)           |
-| Repo split decisions      | [`docs/repo-split-decisions.md`](docs/repo-split-decisions.md)   |
 | Packaging and releases    | [`desktop/DEV.md`](desktop/DEV.md)                               |
 | Manager                   | [`manager-gpui/README.md`](manager-gpui/README.md)               |

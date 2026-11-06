@@ -152,7 +152,7 @@ mod tests {
             .expect("object snapshot reads");
         let error = crate::object_mutation::apply_local_object_delete(
             &mut connection,
-            ark_application::object_mutation::LocalObjectDelete {
+            crate::object_mutation::LocalObjectDelete {
                 id: "note-1".into(),
                 expected_snapshot: Some(snapshot),
                 device_id: "device-1".into(),
@@ -164,7 +164,7 @@ mod tests {
         assert!(matches!(
             error,
             crate::writer::StoreTransactionFailure::Operation(
-                ark_application::object_mutation::ObjectDeleteError::Storage(message)
+                crate::object_mutation::ObjectDeleteError::Storage(message)
             ) if message.contains("injected receipt failure")
         ));
         assert_eq!(

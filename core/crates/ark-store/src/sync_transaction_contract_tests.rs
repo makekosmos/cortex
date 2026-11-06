@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::committed_feed::{receive_inbox_payload, InboxState};
+use crate::object_write::{NewObjectReceipt, ReceiptOutcome};
+use crate::task_object_write::{AuthenticatedCoreTaskWrite, RemoteCoreTaskOutcome};
 use crate::test_support::TestDatabase;
 use crate::writer::{SqliteWriter, StoreTransactionFailure};
-use ark_application::object_write::{NewObjectReceipt, ReceiptOutcome};
-use ark_application::sync_storage::{InboundApplyOutcome, InboxReceiptWrite};
-use ark_application::task_object_write::{AuthenticatedCoreTaskWrite, RemoteCoreTaskOutcome};
+use ark_domain::sync_storage::{InboundApplyOutcome, InboxReceiptWrite};
 use ark_domain::types::SyncEntity;
 use rusqlite::Connection;
 use serde_json::{json, Map};

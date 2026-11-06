@@ -69,7 +69,7 @@ pub struct EngineLockFile {
     pub auth_token: String,
     pub started_at: String,
     pub correlation_id: String,
-    /// Product version this Engine was built as part of (KOS-233: Engine no
+    /// Product version this Engine was built as part of (Engine no
     /// longer has its own release line). Empty for a build that did not go
     /// through `desktop/scripts/build-backend.mjs`. `#[serde(default)]` so a
     /// lock-file written by an older Engine still parses.
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn engine_version_and_source_commit_default_to_empty_for_old_lock_files() {
-        // A lock-file written before KOS-233 lacks these fields; a newer
+        // A lock-file written before lacks these fields; a newer
         // Engine reading it (e.g. during an in-place upgrade race) must not
         // fail to parse.
         let dir = tempdir().unwrap();

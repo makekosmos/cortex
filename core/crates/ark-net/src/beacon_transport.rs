@@ -1,4 +1,6 @@
-async fn send_beacon_once(
+use super::*;
+
+pub(super) async fn send_beacon_once(
     socket: &UdpSocket,
     options: &Mutex<BroadcastDiscoveryOptions>,
 ) -> Result<(), String> {

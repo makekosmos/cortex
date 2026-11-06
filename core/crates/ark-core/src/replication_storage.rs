@@ -1,12 +1,12 @@
-pub use ark_application::replication_storage::{
+pub use ark_domain::replication_storage::{
     AuthenticatedEntityBackend, PeerIdentityBackend, RegistryPageApply,
 };
-pub use ark_application::sync_storage::SyncRuntimeStorage;
+pub use ark_domain::sync_storage::SyncRuntimeStorage;
 
 #[cfg(test)]
 mod tests {
     use crate::types::VersionVector;
-    use ark_application::sync_storage::SyncReadClass;
+    use ark_domain::sync_storage::SyncReadClass;
 
     #[test]
     fn usage_only_peer_vector_is_still_backfill() {

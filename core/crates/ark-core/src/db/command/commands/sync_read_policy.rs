@@ -1,6 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use crate::types::VersionVector;
-use ark_application::sync_storage::SyncReadClass;
+use ark_domain::sync_storage::SyncReadClass;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ impl LoadPolicyBoundEntitiesPageQuery {
 impl sealed::Sealed for LoadPolicyBoundEntitiesPageQuery {}
 
 impl StoreReadQuery for LoadPolicyBoundEntitiesPageQuery {
-    type Output = ark_application::sync_storage::PolicyBoundSnapshotPage;
+    type Output = ark_domain::sync_storage::PolicyBoundSnapshotPage;
 
     fn class(&self) -> CommandClass {
         self.class
@@ -104,7 +104,7 @@ impl PolicyBoundFeedDeliveryPageQuery {
 impl sealed::Sealed for PolicyBoundFeedDeliveryPageQuery {}
 
 impl StoreReadQuery for PolicyBoundFeedDeliveryPageQuery {
-    type Output = ark_application::sync_storage::PolicyBoundFeedPage;
+    type Output = ark_domain::sync_storage::PolicyBoundFeedPage;
 
     fn class(&self) -> CommandClass {
         CommandClass::SyncLive
@@ -136,15 +136,9 @@ impl StoreReadQuery for PolicyBoundFeedDeliveryPageQuery {
     }
 }
 
-fn map_policy_bound_read_error(
-    error: ark_application::sync_storage::PolicyBoundReadError,
-) -> DbError {
+fn map_policy_bound_read_error(error: ark_domain::sync_storage::PolicyBoundReadError) -> DbError {
     match error {
-        ark_application::sync_storage::PolicyBoundReadError::StalePolicy => {
-            DbError::StaleSyncPolicy
-        }
-        ark_application::sync_storage::PolicyBoundReadError::Storage(error) => {
-            DbError::Storage(error)
-        }
+        ark_domain::sync_storage::PolicyBoundReadError::StalePolicy => DbError::StaleSyncPolicy,
+        ark_domain::sync_storage::PolicyBoundReadError::Storage(error) => DbError::Storage(error),
     }
 }

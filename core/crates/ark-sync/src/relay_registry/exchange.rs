@@ -1,7 +1,7 @@
-use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::{RegistryEvent, RegistryOperation};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
 
-use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage};
 
 use super::{
     state::{exchanging, valid_digest, Admission},
@@ -40,6 +40,13 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                 .get_mut(peer)
                 .filter(|entry| entry.endpoint == endpoint)
                 .ok_or_else(|| "registry_sync_peer_state_missing".to_owned())?;
+            if matches!(
+                entry.admission,
+                Admission::Exchanging { .. } | Admission::Ready { .. }
+            ) {
+                // The same authenticated peer may present its Hello twice; keep the live session.
+                return Ok(());
+            }
             entry.admission = exchanging(session.clone(), 0);
         }
         if !self.is_exchanging(peer, endpoint, &session, Some(0)).await {

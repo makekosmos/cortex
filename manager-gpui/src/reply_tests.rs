@@ -1,10 +1,10 @@
-//! KOS-367: pairing reply surfacing — the «Подключить» result must reach
+//! pairing reply surfacing — the «Подключить» result must reach
 //! the banner/notice and re-enable the button.
 use gpui::TestAppContext;
 use serde_json::json;
 
 use crate::a11y_tests::launch;
-/// KOS-367: «Подключить» must never fail silently — an Engine error lands in
+/// «Подключить» must never fail silently — an Engine error lands in
 /// the banner and re-enables the button, and a connected reply names the
 /// peer in the notice.
 #[gpui::test]
@@ -51,7 +51,7 @@ async fn pairing_connect_reply_surfaces_outcome(cx: &mut TestAppContext) {
     });
 }
 
-/// KOS-369: a `pending` connect reply unblocks the button without a success
+/// a `pending` connect reply unblocks the button without a success
 /// notice (the consent wait lives in the pairing card), and the responder's
 /// «Отклонить» reply reads «Подключение отклонено.».
 #[gpui::test]
@@ -97,7 +97,11 @@ async fn updater_check_reply_names_the_outcome(cx: &mut TestAppContext) {
             None,
         ),
         (
-            json!({"state": "error", "currentVersion": "0.10.13", "message": "GET manifest.json: HTTP 503"}),
+            json!({
+                "state": "error",
+                "currentVersion": "0.10.13",
+                "message": "GET manifest.json: HTTP 503"
+            }),
             None,
             Some("GET manifest.json: HTTP 503"),
         ),

@@ -11,7 +11,7 @@ use super::state::{Phase, UpdaterStatus};
 use super::{cleanup, download, feed, install, version, UpdaterError};
 
 const STARTUP_GRACE: Duration = Duration::from_secs(5);
-// Engine-owned discovery (KOS-357): Manager polls `updater.status`, which is
+// Engine-owned discovery: Manager polls `updater.status`, which is
 // side-effect free, so it must never be the only trigger. Recheck the feed
 // periodically so an update released while Mundus is running still surfaces.
 const RECHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
@@ -34,7 +34,7 @@ pub struct UpdaterService {
     // The current installer is Windows-only. UI consumes this capability,
     // never guesses it from its own OS, and other hosts don't download .exe.
     install_supported: bool,
-    // `manifest.json` platforms key this Engine updates from (KOS-350).
+    // `manifest.json` platforms key this Engine updates from.
     platform: &'static str,
     feed_base: String,
     downloads_dir: PathBuf,
@@ -71,7 +71,7 @@ impl UpdaterService {
         platform: &'static str,
     ) -> Result<Arc<Self>, UpdaterError> {
         let downloads_dir = data_dir.join("updates");
-        // KOS-301: a fresh service has no pending update and no live download,
+        // a fresh service has no pending update and no live download,
         // so every payload in `updates/` is a leftover from a previous run
         // (applied installer, superseded version, crashed .part).
         let report = cleanup::sweep_downloads(&downloads_dir, &cleanup::keep_set(None));
@@ -256,7 +256,7 @@ impl UpdaterService {
         }
     }
 
-    /// macOS apply (KOS-377): mount the DMG, stage the `.app` next to the
+    /// macOS apply: mount the DMG, stage the `.app` next to the
     /// running bundle, spawn the detached swap+relaunch helper. Runs on a
     /// spawned task — staging a ~40 MB app takes seconds — so the RPC
     /// returns immediately with the current status; failures land in
@@ -310,7 +310,7 @@ impl UpdaterService {
             .clone()
     }
 
-    /// Engine-owned update discovery (KOS-357): one check shortly after
+    /// Engine-owned update discovery: one check shortly after
     /// startup, then a recheck every `RECHECK_INTERVAL` for the life of the
     /// process. Runs unconditionally — desktop authority previously gated the
     /// startup check, so with Manager already connected a new release was
@@ -338,7 +338,8 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-include!("service_download.rs");
+#[path = "service_download.rs"]
+mod service_download;
 
 #[cfg(test)]
 #[path = "service_tests.rs"]

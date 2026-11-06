@@ -25,14 +25,4 @@ pub(crate) use command::{
 pub use committed_feed::{InboxState, MAX_FEED_DELIVERY_BYTES};
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-    use crate::types::*;
-    use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
-    use serde_json::{json, Value};
-
-    include!("db/test_fixtures.rs");
-    include!("db/tests_sync.rs");
-}
+mod tests;

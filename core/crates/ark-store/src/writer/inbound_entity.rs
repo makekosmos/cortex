@@ -1,6 +1,6 @@
 use super::{SqliteWriter, StoreTransactionFailure};
 use crate::committed_feed::InboxState;
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     InboundApplyOutcome, InboxReceiptWrite, InboxReceiptWriteError, ReplayNotice,
 };
 
@@ -133,7 +133,7 @@ fn apply_inbound_entity(
                         error,
                     ))
                 })?;
-        if ark_application::sync_policy::sync_profile_identity(profile.as_ref())
+        if ark_domain::sync_policy::sync_profile_identity(profile.as_ref())
             != policy.expected_identity
         {
             return Err(AuthenticatedInboundEntityError::Receipt(
@@ -244,7 +244,7 @@ mod tests {
     };
     use crate::committed_feed::InboxState;
     use crate::writer::{SqliteWriter, TransactionFailure};
-    use ark_application::sync_storage::{InboundApplyOutcome, InboxReceiptWrite};
+    use ark_domain::sync_storage::{InboundApplyOutcome, InboxReceiptWrite};
     use ark_domain::types::SyncEntity;
     use rusqlite::Connection;
     use serde_json::{Map, Value};

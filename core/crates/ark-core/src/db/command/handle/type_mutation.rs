@@ -8,7 +8,7 @@ impl DbHandle {
         &self,
         context: CommandContext,
         registration: ark_domain::canonical_type::TypeRegistration,
-    ) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, DbError> {
+    ) -> Result<Vec<ark_domain::sync_storage::ReplayNotice>, DbError> {
         let weight = validate(&context, "types.register_app.v1", &registration)?;
         {
             let actor = &self.backend;
@@ -27,7 +27,7 @@ impl DbHandle {
         context: CommandContext,
         object_type: ark_domain::types::ObjectType,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
+    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "types.upsert.v1", &(&object_type, &device_id))?;
         {
             let actor = &self.backend;
@@ -47,7 +47,7 @@ impl DbHandle {
         context: CommandContext,
         id: String,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
+    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "types.delete.v1", &(&id, &device_id))?;
         {
             let actor = &self.backend;

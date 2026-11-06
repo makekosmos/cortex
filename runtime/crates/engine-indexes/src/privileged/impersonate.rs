@@ -54,7 +54,7 @@ pub fn client_process_id(pipe: HANDLE) -> Result<u32, String> {
 
 /// Filesystem image path of the pipe client process. Combined with
 /// `client_profile_dir` this pins down "which exe is asking" without ever
-/// trusting a path the client sent (KOS-269 firewall rule).
+/// trusting a path the client sent (firewall rule).
 pub fn client_image_path(pipe: HANDLE) -> Result<PathBuf, String> {
     let pid = client_process_id(pipe)?;
     crate::process_image::process_image_path(pid).map_err(|e| e.to_string())

@@ -1,4 +1,8 @@
-use super::*;
+use super::super::pump_client_committed_feed;
+use super::super::{AuthenticatedTx, ClientFeedInFlight};
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_storage::SyncRuntimeStorage;
+use std::sync::Arc;
 
 pub(super) async fn pump(
     storage: &Arc<dyn SyncRuntimeStorage>,
@@ -22,7 +26,7 @@ pub(super) async fn pump(
         })
     });
     if let Some((peer_id, tx, receipt_ack, policy_bound)) = authenticated_peer {
-        super::pump_client_committed_feed(
+        pump_client_committed_feed(
             storage,
             &peer_id,
             &tx,

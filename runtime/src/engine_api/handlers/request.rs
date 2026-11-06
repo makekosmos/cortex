@@ -1,5 +1,7 @@
+use super::*;
+
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
-async fn handle_request(
+pub(in crate::engine_api) async fn handle_request(
     request: Request<Incoming>,
     expected_token: Arc<String>,
     ws_port: u16,
@@ -32,7 +34,7 @@ async fn handle_request(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn handle_authenticated_request(
+pub(super) async fn handle_authenticated_request(
     request: Request<Incoming>,
     client: AuthenticatedClient,
     ws_port: u16,

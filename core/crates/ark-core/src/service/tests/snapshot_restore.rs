@@ -1,9 +1,9 @@
-// KOS-51: RPC-level покрытие db_backup_list/validate/restore.
+// RPC-level покрытие db_backup_list/validate/restore.
 
 use super::*;
 
 /// The fixture owns both the state and the TempDir: `state` drops first,
-/// closing the connection before the directory is removed (KOS-270).
+/// closing the connection before the directory is removed.
 async fn init_snapshot_db(fixture: &ServiceFixture) -> String {
     let db_str = fixture.db_path().to_string_lossy().to_string();
     initialize_test_database(&fixture.state, db_str.clone())

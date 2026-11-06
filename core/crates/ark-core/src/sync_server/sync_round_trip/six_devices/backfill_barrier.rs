@@ -38,7 +38,7 @@ impl SyncEntityReadPort for BackfillBarrier {
     async fn load_entities_page_for_peer(
         &self,
         peer: &str,
-        class: ark_application::sync_storage::SyncReadClass,
+        class: ark_domain::sync_storage::SyncReadClass,
         vector: &ark_core::VersionVector,
         offset: usize,
         limit: usize,
@@ -57,14 +57,14 @@ impl SyncEntityReadPort for BackfillBarrier {
     async fn load_policy_bound_entities_page_for_peer(
         &self,
         peer: &str,
-        class: ark_application::sync_storage::SyncReadClass,
+        class: ark_domain::sync_storage::SyncReadClass,
         vector: &ark_core::VersionVector,
         offset: usize,
         limit: usize,
         expected_identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundSnapshotPage,
-        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+        ark_domain::sync_storage::PolicyBoundSnapshotPage,
+        ark_domain::sync_storage::PolicyBoundSnapshotReadError,
     > {
         self.inner
             .load_policy_bound_entities_page_for_peer(
@@ -80,7 +80,7 @@ impl SyncEntityReadPort for BackfillBarrier {
     async fn usage_complete_through_for_peer(
         &self,
         peer: &str,
-        class: ark_application::sync_storage::SyncReadClass,
+        class: ark_domain::sync_storage::SyncReadClass,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
         self.inner
             .usage_complete_through_for_peer(peer, class)
@@ -149,7 +149,7 @@ impl PeerProgressPort for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
+impl ark_domain::sync_storage::CommittedFeedPort for BackfillBarrier {
     fn selective_sync_policy_generation(&self) -> i64 {
         self.inner.selective_sync_policy_generation()
     }
@@ -162,7 +162,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_domain::sync_storage::FeedSnapshot, String> {
         self.inner.committed_feed_snapshot().await
     }
 
@@ -171,7 +171,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
+    ) -> Result<Vec<ark_domain::sync_storage::CommittedFeedEntry>, String> {
         self.inner
             .committed_feed_page(after_position, high_watermark, limit)
             .await
@@ -182,7 +182,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
+    ) -> Result<ark_domain::sync_storage::CommittedFeedDeliveryPage, String> {
         self.inner
             .committed_feed_delivery_page(after_position, high_watermark, limit)
             .await
@@ -196,8 +196,8 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         high_watermark: i64,
         limit: usize,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundFeedPage,
-        ark_application::sync_storage::PolicyBoundFeedReadError,
+        ark_domain::sync_storage::PolicyBoundFeedPage,
+        ark_domain::sync_storage::PolicyBoundFeedReadError,
     > {
         self.inner
             .committed_feed_delivery_page_for_peer(
@@ -214,14 +214,14 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         &self,
         peer: &str,
         generation: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner.begin_outbound_policy(peer, generation).await
     }
     async fn complete_outbound_snapshot(
         &self,
         peer: &str,
         generation: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .complete_outbound_snapshot(peer, generation)
             .await
@@ -230,7 +230,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         &self,
         peer: &str,
         identity: &ark_domain::sync_policy::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .begin_outbound_policy_identity(peer, identity)
             .await
@@ -239,7 +239,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         &self,
         peer: &str,
         identity: &ark_domain::sync_policy::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .complete_outbound_snapshot_identity(peer, identity)
             .await
@@ -249,7 +249,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         peer: &str,
         generation: i64,
         through: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .record_outbound_scan(peer, generation, through)
             .await
@@ -259,7 +259,7 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         peer: &str,
         identity: &ark_domain::sync_policy::PolicyIdentity,
         through: i64,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .record_outbound_scan_identity(peer, identity, through)
             .await
@@ -269,8 +269,8 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         peer: &str,
         generation: i64,
         position: i64,
-        ack: ark_application::sync_storage::OutboundAck,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ack: ark_domain::sync_storage::OutboundAck,
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .acknowledge_outbound(peer, generation, position, ack)
             .await
@@ -280,8 +280,8 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         peer: &str,
         identity: &ark_domain::sync_policy::PolicyIdentity,
         position: i64,
-        ack: ark_application::sync_storage::OutboundAck,
-    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ack: ark_domain::sync_storage::OutboundAck,
+    ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
         self.inner
             .acknowledge_outbound_identity(peer, identity, position, ack)
             .await
@@ -293,7 +293,7 @@ impl PeerIdentityBackend for BackfillBarrier {
     async fn load_local_sync_profile(
         &self,
         local_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         self.inner.load_local_sync_profile(local_device_id).await
     }
 
@@ -303,8 +303,8 @@ impl PeerIdentityBackend for BackfillBarrier {
         revision: i64,
         digest: &str,
         active: bool,
-        rules: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        rules: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         self.inner
             .accept_peer_sync_policy(peer_device_id, revision, digest, active, rules)
             .await
@@ -313,7 +313,7 @@ impl PeerIdentityBackend for BackfillBarrier {
     async fn load_accepted_peer_sync_policy(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         self.inner
             .load_accepted_peer_sync_policy(peer_device_id)
             .await

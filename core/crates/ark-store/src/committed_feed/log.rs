@@ -1,4 +1,4 @@
-use ark_application::sync_storage::{CommittedFeedEntry, FeedSnapshot};
+use ark_domain::sync_storage::{CommittedFeedEntry, FeedSnapshot};
 use rusqlite::{params, Connection};
 
 pub fn committed_feed_snapshot(conn: &Connection) -> Result<FeedSnapshot, String> {

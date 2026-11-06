@@ -1,3 +1,12 @@
+use super::process_projection::merge_top_apps;
+use super::spans_and_title_totals::{clamp_positive_i64, enumerate_dates, iso_date_days_ago};
+use ark_domain::types::{
+    DailyTrendPoint, HourlyHeatmapCell, RecentSessionEntry, TopAppEntry, UsageAnalyticsSnapshot,
+    UsageSummary,
+};
+use chrono::Utc;
+use rusqlite::{params, Connection};
+
 /// `windows_dir` is the real OS system dir (resolved engine-side via
 /// `GetSystemWindowsDirectoryW`); `None` marks nothing as system — ark-core
 /// must not guess host paths from the environment.
@@ -117,7 +126,7 @@ pub fn load_usage_analytics(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
-    // KOS-287: per-id aggregates are merged in Rust under the canonical exe
+    // per-id aggregates are merged in Rust under the canonical exe
     // identity (path case / version folders / updates collapse to one row),
     // then sorted by active time. The SQL therefore has no LIMIT — the
     // `top_apps_limit` applies after the merge.

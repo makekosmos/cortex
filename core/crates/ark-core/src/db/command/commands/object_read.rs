@@ -11,7 +11,7 @@ pub(crate) enum ObjectReadQuery {
     ListSummaries,
     ListByType(String),
     ListSummariesByType(String),
-    EstimateDataVolume(ark_application::data_volume::DataVolumeQuery),
+    EstimateDataVolume(ark_store::data_volume::DataVolumeQuery),
     ListRunningTime(Option<String>),
     GetByIds(Vec<String>),
     Search(String),

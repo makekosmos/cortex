@@ -1,6 +1,6 @@
 use super::*;
 use crate::db::command::executor::actor::AppendTaskMergeOperationTask;
-use ark_application::task_merge::TaskMergeAppendResult;
+use ark_domain::task_merge::TaskMergeAppendResult;
 
 impl DbHandle {
     pub(crate) async fn append_task_merge_operation(

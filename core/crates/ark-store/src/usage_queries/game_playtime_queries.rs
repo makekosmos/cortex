@@ -1,28 +1,35 @@
+use super::process_queries::normalize_usage_binding_value;
+use ark_domain::types::UsageGamePlaytimeBinding;
+use rusqlite::Row;
+use std::collections::HashMap;
+
 #[derive(Debug)]
-struct UsageGameBindingIndex {
+pub(super) struct UsageGameBindingIndex {
     game_names_by_id: HashMap<String, String>,
     game_ids_by_path: HashMap<String, String>,
     game_ids_by_process_name: HashMap<String, String>,
 }
 
 #[derive(Debug)]
-struct UsageTrackedAggregateRow {
-    normalized_path: Option<String>,
-    normalized_process_name: Option<String>,
-    total_seconds: i64,
-    session_count: i64,
-    last_played: Option<String>,
+pub(super) struct UsageTrackedAggregateRow {
+    pub(super) normalized_path: Option<String>,
+    pub(super) normalized_process_name: Option<String>,
+    pub(super) total_seconds: i64,
+    pub(super) session_count: i64,
+    pub(super) last_played: Option<String>,
 }
 
 #[derive(Debug)]
-struct UsageTrackedDailyRow {
-    normalized_path: Option<String>,
-    normalized_process_name: Option<String>,
-    date: String,
-    seconds: i64,
+pub(super) struct UsageTrackedDailyRow {
+    pub(super) normalized_path: Option<String>,
+    pub(super) normalized_process_name: Option<String>,
+    pub(super) date: String,
+    pub(super) seconds: i64,
 }
 
-fn build_usage_game_binding_index(bindings: &[UsageGamePlaytimeBinding]) -> UsageGameBindingIndex {
+pub(super) fn build_usage_game_binding_index(
+    bindings: &[UsageGamePlaytimeBinding],
+) -> UsageGameBindingIndex {
     let mut index = UsageGameBindingIndex {
         game_names_by_id: HashMap::new(),
         game_ids_by_path: HashMap::new(),
@@ -64,7 +71,7 @@ fn build_usage_game_binding_index(bindings: &[UsageGamePlaytimeBinding]) -> Usag
     index
 }
 
-fn append_usage_binding_where_clause(
+pub(super) fn append_usage_binding_where_clause(
     index: &UsageGameBindingIndex,
     params: &mut Vec<String>,
 ) -> Option<String> {
@@ -99,7 +106,7 @@ fn append_usage_binding_where_clause(
     }
 }
 
-fn find_usage_game_for_tracked_row(
+pub(super) fn find_usage_game_for_tracked_row(
     normalized_path: Option<&str>,
     normalized_process_name: Option<&str>,
     index: &UsageGameBindingIndex,
@@ -136,7 +143,9 @@ fn find_usage_game_for_tracked_row(
         })
 }
 
-fn map_usage_tracked_aggregate_row(row: &Row<'_>) -> rusqlite::Result<UsageTrackedAggregateRow> {
+pub(super) fn map_usage_tracked_aggregate_row(
+    row: &Row<'_>,
+) -> rusqlite::Result<UsageTrackedAggregateRow> {
     Ok(UsageTrackedAggregateRow {
         normalized_path: row.get(0)?,
         normalized_process_name: row.get(1)?,
@@ -146,7 +155,7 @@ fn map_usage_tracked_aggregate_row(row: &Row<'_>) -> rusqlite::Result<UsageTrack
     })
 }
 
-fn map_usage_tracked_daily_row(row: &Row<'_>) -> rusqlite::Result<UsageTrackedDailyRow> {
+pub(super) fn map_usage_tracked_daily_row(row: &Row<'_>) -> rusqlite::Result<UsageTrackedDailyRow> {
     Ok(UsageTrackedDailyRow {
         normalized_path: row.get(0)?,
         normalized_process_name: row.get(1)?,

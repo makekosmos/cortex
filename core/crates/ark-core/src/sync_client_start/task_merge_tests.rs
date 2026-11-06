@@ -4,11 +4,13 @@ use crate::db::{
     EnrollPairedDeviceCommand, SqliteStorageBackend, TaskConflictSetQuery,
 };
 use crate::sync_server::SyncServer;
-use ark_application::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
+use ark_domain::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
 use ark_domain::task_merge::{
     OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit, TaskMergeValue,
 };
+use std::time::Duration;
 use std::time::Instant;
+use tokio::net::TcpListener;
 
 struct PeerFixture {
     db: DbHandle,
@@ -111,7 +113,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         )
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let bootstrap = bootstrap();
     sender
         .db

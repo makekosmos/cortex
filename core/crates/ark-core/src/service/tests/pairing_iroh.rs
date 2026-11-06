@@ -1,6 +1,6 @@
 use super::*;
 
-/// KOS-369: the Manager pairing flow end-to-end at the service level, now
+/// the Manager pairing flow end-to-end at the service level, now
 /// gated on an explicit «Принять / Отклонить» consent instead of a timed
 /// pairing window. Device A runs sync and exposes a ticket, device B
 /// consumes it through `connect_with_pairing_code`; B's RPC answers

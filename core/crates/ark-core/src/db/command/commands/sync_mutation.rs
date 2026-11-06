@@ -1,5 +1,5 @@
 use super::super::{CommandContext, DbError};
-use ark_application::sync_storage::{OutboundProgress, OutboundProgressWrite};
+use ark_domain::sync_storage::{OutboundProgress, OutboundProgressWrite};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -36,7 +36,7 @@ impl CommittedFeedProgressCommand {
 
 fn map_outbound_progress_failure(
     failure: ark_store::writer::StoreTransactionFailure<
-        ark_application::sync_storage::OutboundProgressWriteError,
+        ark_domain::sync_storage::OutboundProgressWriteError,
     >,
 ) -> DbError {
     use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};

@@ -27,11 +27,11 @@ use tokio::sync::mpsc;
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::RelayMode;
 
 /// Generous hang guard for event drains — the awaited message is the real
-/// condition; the cap only bounds a wedged transport under load (KOS-308).
+/// condition; the cap only bounds a wedged transport under load.
 const EVENT_GUARD: Duration = Duration::from_secs(60);
 
 /// Дренирует события пока не найдёт `MessageReceived` с нужным `from_device_id`
@@ -132,7 +132,7 @@ async fn iroh_ticket_pairing_round_trip() {
     .await
     .expect("B must receive Hello from A (auto-injected by transport)");
 
-    // KOS-369: A only learns B's endpoint id when B's Hello arrives — wait
+    // A only learns B's endpoint id when B's Hello arrives — wait
     // for it before binding, and before asserting registry resolution below.
     find_message(&mut a_events_rx, EVENT_GUARD, |from, msg| {
         from == "device-B" && matches!(msg, LanSyncMessage::Hello { .. })
@@ -140,8 +140,8 @@ async fn iroh_ticket_pairing_round_trip() {
     .await
     .expect("A must receive Hello from B (auto-injected by transport)");
 
-    // KOS-369: data frames only flow to endpoints bound as authenticated
-    // (pairing consent at the RelaySync layer). These transport-level tests
+    // data frames only flow to endpoints bound as authenticated
+    // (pairing consent at the SyncSession layer). These transport-level tests
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a

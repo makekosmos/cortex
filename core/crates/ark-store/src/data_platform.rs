@@ -96,7 +96,7 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub use ark_application::sync_policy::{
+pub use ark_domain::sync_policy::{
     default_sync_policy_identity, digest_sync_policy, AcceptedPeerSyncPolicy, SyncProfile,
     SyncProfileRule,
 };

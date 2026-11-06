@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use ark_sync_contracts::wire::{deserialize_message, serialize_message, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{deserialize_message, serialize_message, LanSyncMessage};
 
 // ---------------------------------------------------------------------------
 // Minimal in-process relay server
@@ -196,7 +196,7 @@ async fn relay_round_trip() {
 
     // 6. Assert B receives the message. The cap is only a hang guard — the
     // message itself is the event; under parallel gate load 5 s was not enough
-    // headroom (KOS-308).
+    // headroom.
     let received = tokio::time::timeout(Duration::from_secs(60), received_rx.recv())
         .await
         .expect("timed out waiting for relay message")

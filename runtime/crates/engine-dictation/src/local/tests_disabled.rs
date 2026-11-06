@@ -1,4 +1,6 @@
-// KOS-337: контракт выключенного backend'а. Компилируется только без
+use super::*;
+
+// контракт выключенного backend'а. Компилируется только без
 // `local-dictation`; с фичей живёт `local/tests.rs`.
 mod tests {
     use super::*;

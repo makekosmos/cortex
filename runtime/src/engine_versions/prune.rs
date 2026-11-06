@@ -1,4 +1,4 @@
-//! Retention for `<engine_root>/versions/` (KOS-261).
+//! Retention for `<engine_root>/versions/`.
 //!
 //! The installer (`mundus-engine install`) extracts every new Engine into
 //! `versions/<semver>/` and rewrites `current.json`; nothing ever removed the
@@ -13,8 +13,8 @@
 //!     by a rollback must not delete the newer payload;
 //!   * names that are not strict `X.Y.Z` are never touched;
 //!   * the installer's own temp shape `<v>.<pid>.tmp` is removed only past
-//!     [`LEFTOVER_GRACE`], same reasoning as KOS-301 — a live extract holds
-//!     its temp for seconds, so the grace protects an in-flight install;
+//!     [`LEFTOVER_GRACE`] for the same reason as the temp sweep — a live extract
+//!     holds its temp for seconds, so the grace protects an in-flight install;
 //!   * `.tombstone-*` dirs are this pass's own crash leftovers and are
 //!     removed unconditionally.
 //!
@@ -299,7 +299,7 @@ fn remove_version_dir(versions_dir: &Path, entry: Entry, report: &mut Report) {
     }
 }
 
-/// Moved to `engine-indexes` (KOS-335): `privileged::firewall::validation`
+/// Moved to `engine-indexes`: `privileged::firewall::validation`
 /// resolves the calling user's install root from the same rule.
 pub use engine_indexes::install_layout::engine_root_of_exe;
 

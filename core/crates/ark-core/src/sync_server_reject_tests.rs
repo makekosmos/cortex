@@ -4,7 +4,7 @@ use super::*;
 pub(super) mod reject_tests {
     use super::super::sync_server_tests::tests::MemBackend;
     use super::*;
-    use ark_sync_contracts::protocol_negotiation::{
+    use ark_domain::sync_contracts::protocol_negotiation::{
         compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
         validate_protocol_selection, verify_hello_auth_hmac, ProtocolCapability, ProtocolOffer,
     };

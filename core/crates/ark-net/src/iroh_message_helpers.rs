@@ -1,9 +1,11 @@
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+
 // ---------------------------------------------------------------------------
 // Diagnostics helpers
 // ---------------------------------------------------------------------------
 
 /// Returns a short, non-allocating variant name for logging (BUG 3).
-fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
+pub(super) fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
     match msg {
         LanSyncMessage::Hello { .. } => "Hello",
         LanSyncMessage::VersionVector { .. } => "VersionVector",

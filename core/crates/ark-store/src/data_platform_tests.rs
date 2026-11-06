@@ -64,7 +64,7 @@ fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
 fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes() {
     let dir = crate::test_support::test_temp_dir().expect("profile fixture directory");
     let path = dir.path().join("profiles.db");
-    let rules = [ark_application::sync_policy::SyncProfileRule {
+    let rules = [ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.note".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,

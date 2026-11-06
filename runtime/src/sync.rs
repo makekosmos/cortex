@@ -65,7 +65,7 @@ fn resolve_use_iroh_by_default() -> bool {
     )
 }
 
-// Boot-time listener bind choice (KOS-269) lives in `sync::bind`.
+// Boot-time listener bind choice lives in `sync::bind`.
 mod bind;
 pub use bind::lan_bind_at_boot;
 

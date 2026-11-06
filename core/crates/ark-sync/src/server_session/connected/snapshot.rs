@@ -1,6 +1,6 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
 
 use crate::outbound_snapshot::{acknowledge_snapshot, OutboundSnapshot, SnapshotEmission};
 use ark_domain::types::VersionVector;

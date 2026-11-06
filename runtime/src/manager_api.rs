@@ -75,7 +75,7 @@ impl ManagerState {
             "api_v1_last_seen": protocol_snapshot.api_v1.last_seen,
             "tracking_started_at": protocol_snapshot.tracking_started_at,
             "ready": true,
-            "note": "legacy transport removed (KOS-333); 30-day observation no longer tracked",
+            "note": "transport removed; no observation window is tracked",
         });
         let components = json!([
             {"name": "rpc", "status": "ok", "state": "ok", "details": rpc_snapshot},
@@ -207,7 +207,7 @@ impl ManagerState {
 
 // pub(crate): the installer's `post-install` subcommand reuses the
 // StartupApproved marker layout and the Run/Approved subkey constants
-// (KOS-306).
+//
 #[cfg(windows)]
 pub(crate) mod windows_autostart;
 
@@ -269,7 +269,7 @@ mod tests {
         assert!(!autostart.contains("Command::new"));
         assert!(autostart.contains("RegSetKeyValueW"));
         // The subkey constants live in installer::registry, shared with the
-        // post-install subcommand (KOS-306).
+        // post-install subcommand.
         let registry = include_str!("installer/registry.rs");
         assert!(registry.contains("Explorer\\StartupApproved\\Run"));
     }

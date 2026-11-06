@@ -340,7 +340,8 @@ fn corrupt_record_reads_as_absent() {
     assert!(!app_dir.exists());
 }
 
-// --- Release metadata (KOS-265): sums parsing, tag/version agreement, ---
+// --- Release metadata: sums parsing, tag/version agreement, ---
 // --- target line selection, redirect Location → tag extraction.        ---
 
-include!("releases_tests.rs");
+#[path = "releases_tests.rs"]
+mod releases_tests;

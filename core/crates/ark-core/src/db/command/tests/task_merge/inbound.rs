@@ -133,7 +133,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
             .await
             .unwrap();
     }
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let batch = left
         .prepare_task_merge_batch(
             CommandContext::authenticated_peer("right-device".into()),
@@ -179,7 +179,7 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
         .await
         .unwrap();
 
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let bootstrap = bootstrap();
     let title_baseline = bootstrap.baseline_ids[0].1.clone();
     let mut edit = operation('f', &[], "edited after bootstrap");
@@ -261,7 +261,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
         )
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![bootstrap().baseline_ids[0].1.clone()];
     let operation_batch = ark_domain::task_merge_sync::TaskMergeBatch {
@@ -336,7 +336,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
         )
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "a1".repeat(16),
         identity: identity.clone(),
@@ -425,7 +425,7 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
                 "Phone".into(),
                 true,
                 None,
-                vec![ark_application::sync_policy::SyncProfileRule {
+                vec![ark_domain::sync_policy::SyncProfileRule {
                     resource_kind: "type".into(),
                     resource_id: "core.task".into(),
                     mode: ark_domain::selective_sync::SyncMode::None,

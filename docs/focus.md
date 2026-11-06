@@ -2,7 +2,7 @@
 
 Focus is a **privileged Engine capability**: the ops and the OS-level
 blocking live in cortex, while the session UI lives in the ordo app
-(repo-split decision — `docs/repo-split-decisions.md` п.6). Apps interact
+(repo-split decision — `docs/ark-exocortex.md` п.6). Apps interact
 with focus only through Engine ops and manifest grants.
 
 ## Engine ops (`runtime/src/focus.rs`)

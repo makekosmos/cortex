@@ -8,7 +8,7 @@ mod ticket_tests {
 
     use iroh::{EndpointAddr, SecretKey};
 
-    use super::{from_ticket, IrohTransport};
+    use super::super::{from_ticket, IrohTransport};
 
     fn sample_addr() -> EndpointAddr {
         let secret = SecretKey::generate();
@@ -41,7 +41,7 @@ mod ticket_tests {
 mod registry_tests {
     use iroh::SecretKey;
 
-    use super::DeviceRegistry;
+    use super::super::DeviceRegistry;
 
     #[test]
     fn resolves_device_id_by_endpoint_id_after_insert() {
@@ -179,11 +179,11 @@ mod registry_tests {
 
 #[cfg(test)]
 mod relay_connectivity_tests {
-    use super::relay_connectivity_change;
+    use super::super::relay_watch::relay_connectivity_change;
 
     /// The watcher fires on every retry (each `Disconnected` carries a fresh
     /// error) — only real up/down transitions must produce a new state, so
-    /// the log keeps exactly one warn per flap (KOS-298).
+    /// the log keeps exactly one warn per flap.
     #[test]
     fn relay_connectivity_logs_only_on_state_transitions() {
         // First observation records state without reporting a flap.

@@ -1,12 +1,12 @@
 use super::*;
 
 /// Wires the standard event-stream callbacks (`entity_changed`,
-/// `peer_connected`, `peer_disconnected`) onto a `RelaySync` instance.
+/// `peer_connected`, `peer_disconnected`) onto a `SyncSession` instance.
 /// Shared between the relay and iroh branches of `handle_start_sync` — the
-/// orchestration layer (`RelaySync`) is transport-neutral, so the same
+/// orchestration layer (`SyncSession`) is transport-neutral, so the same
 /// callback wiring applies regardless of which `SyncTransport` drives it.
-pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
-    relay_sync
+pub(super) async fn wire_sync_session_events(sync_session: &Arc<SyncSession>) {
+    sync_session
         .set_on_change(Arc::new(|entity| {
             // Incoming peer-write notification. `entity_changed` — общее событие
             // (raw consumers). Но renderer-подписчики (Eden) слушают типизированные
@@ -33,7 +33,7 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
             }
         }))
         .await;
-    relay_sync
+    sync_session
         .set_on_peer_connect(Arc::new(|peer_device_id| {
             emit_event(json!({
                 "event": "peer_connected",
@@ -41,7 +41,7 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
             }));
         }))
         .await;
-    relay_sync
+    sync_session
         .set_on_peer_disconnect(Arc::new(|peer_device_id, remaining| {
             emit_event(json!({
                 "event": "peer_disconnected",
@@ -50,7 +50,7 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
             }));
         }))
         .await;
-    relay_sync
+    sync_session
         .set_on_pairing_changed(Arc::new(|| {
             emit_event(json!({"event": "pairing_changed"}));
         }))
@@ -58,13 +58,13 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
 }
 
 pub(super) async fn wire_relay_registry_fanout(
-    relay_sync: &Arc<RelaySync>,
+    sync_session: &Arc<SyncSession>,
     server: &Arc<SyncServer>,
     clients: &Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
 ) {
     let server = Arc::downgrade(server);
     let clients = Arc::downgrade(clients);
-    relay_sync
+    sync_session
         .set_on_registry_events(Arc::new(move |events| {
             let server = server.clone();
             let clients = clients.clone();
@@ -91,10 +91,10 @@ pub(super) async fn wire_relay_registry_fanout(
 pub(super) async fn wire_server_registry_fanout(
     server: &Arc<SyncServer>,
     clients: &Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
-    relay_sync: Option<&Arc<RelaySync>>,
+    sync_session: Option<&Arc<SyncSession>>,
 ) {
     let clients = Arc::downgrade(clients);
-    let relay = relay_sync.map(Arc::downgrade);
+    let relay = sync_session.map(Arc::downgrade);
     server
         .set_on_registry_events(Arc::new(move |events| {
             let clients = clients.clone();

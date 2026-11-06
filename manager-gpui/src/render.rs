@@ -118,7 +118,7 @@ impl Render for ManagerApp {
         if self.key_editor.is_some() {
             root = root.child(views::secrets::render_modal(self, window, cx));
         }
-        // KOS-369: an unanswered pairing request pops on top of any view.
+        // an unanswered pairing request pops on top of any view.
         let pairing_request = self
             .data("sync.snapshot")
             .get("incoming_pairing_requests")
@@ -127,7 +127,7 @@ impl Render for ManagerApp {
         if let Some(request) = pairing_request {
             root = root.child(render_pairing_prompt(&request, cx));
         }
-        // KOS-355: full-window update overlay, topmost layer. The state is
+        // full-window update overlay, topmost layer. The state is
         // resolved every frame from the Engine status slot; `Failed` needs
         // the previous state, so the resolution is stored back on the app.
         let update_state = crate::update_overlay::resolve(

@@ -11,14 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark_core::db::SqliteStorageBackend;
-use ark_core::direct_client::{new_direct_client, DirectClient};
-use ark_core::replication_storage::PeerIdentityBackend;
-use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
-use ark_core::types::{
-    PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector,
-};
+use ark_core::types::{SyncEntity, TrackedApp, UsageEvent, UsageSession};
+use ark_domain::replication_storage::PeerIdentityBackend;
+use ark_domain::sync_storage::SyncEntityReadPort;
 use serde_json::{json, Value};
-use tokio::sync::Mutex;
 
 pub(super) struct TestStorage {
     backend: Arc<SqliteStorageBackend>,
@@ -98,7 +94,12 @@ pub(super) async fn pair_storages(
         .expect("enroll device A on B");
 }
 
-fn task_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+pub(super) fn task_object_entity(
+    id: &str,
+    title: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
     let data = json!({
         "typeId": "core.task",
         "typeVersion": "0.1.0",
@@ -132,7 +133,12 @@ fn task_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> S
     }
 }
 
-fn note_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
+pub(super) fn note_object_entity(
+    id: &str,
+    title: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
     let data = json!({
         "typeId": "core.note",
         "typeVersion": "0.1.0",
@@ -157,7 +163,7 @@ fn note_object_entity(id: &str, title: &str, device_id: &str, counter: u64) -> S
     }
 }
 
-fn sync_entity_from_value(
+pub(super) fn sync_entity_from_value(
     entity_type: &str,
     id: &str,
     value: Value,
@@ -180,7 +186,7 @@ fn sync_entity_from_value(
     }
 }
 
-fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
+pub(super) fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
     let tracked_app = TrackedApp {
         id: id.to_string(),
         platform: "windows".to_string(),
@@ -202,7 +208,7 @@ fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
     )
 }
 
-fn usage_session_entity(
+pub(super) fn usage_session_entity(
     id: &str,
     tracked_app_id: &str,
     device_id: &str,
@@ -235,7 +241,7 @@ fn usage_session_entity(
     )
 }
 
-fn usage_event_entity(
+pub(super) fn usage_event_entity(
     id: &str,
     tracked_app_id: &str,
     usage_session_id: &str,
@@ -268,9 +274,35 @@ fn usage_event_entity(
     )
 }
 
-async fn pick_port() -> u16 {
+pub(super) async fn pick_port() -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     drop(listener);
     addr.port()
+}
+
+pub(super) async fn wait_for_entities(
+    storage: &SqliteStorageBackend,
+    condition: impl Fn(&[SyncEntity]) -> bool,
+) -> Vec<SyncEntity> {
+    let mut observed_ids = Vec::new();
+    let result = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let entities = storage.load_entities(&HashMap::new()).await.unwrap();
+            if condition(&entities) {
+                return entities;
+            }
+            observed_ids = entities
+                .iter()
+                .map(|entity| format!("{}:{}", entity.entity_type, entity.id))
+                .collect();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await;
+    let timeout_message = format!(
+        "selected sync entities should arrive before the timeout; observed: {}",
+        observed_ids.join(", ")
+    );
+    result.expect(&timeout_message)
 }

@@ -1,4 +1,4 @@
-use ark_application::object_write::{NewObjectReceipt, ReceiptOutcome, StoredObjectReceipt};
+use crate::object_write::{NewObjectReceipt, ReceiptOutcome, StoredObjectReceipt};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn load_receipt(
@@ -75,7 +75,7 @@ pub fn insert_receipt(
 #[cfg(test)]
 mod tests {
     use super::{insert_receipt, load_receipt};
-    use ark_application::object_write::{NewObjectReceipt, ReceiptOutcome};
+    use crate::object_write::{NewObjectReceipt, ReceiptOutcome};
     use rusqlite::Connection;
 
     #[test]

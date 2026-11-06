@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
-use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
+use ark_domain::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
 
 pub(crate) struct SaveLocalSyncProfileCommand {
     device_id: String,

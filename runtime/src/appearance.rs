@@ -199,7 +199,7 @@ fn read(path: &Path) -> Result<AppearanceSettings, String> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(AppearanceSettings::default())
+            return Ok(AppearanceSettings::default());
         }
         Err(error) => return Err(error.to_string()),
     };
@@ -266,8 +266,15 @@ pub struct AppearanceStore {
     wallpaper: Arc<WallpaperCache>,
 }
 
-include!("appearance/wallpaper.rs");
-include!("appearance/apps.rs");
+mod wallpaper;
+#[cfg(all(test, target_os = "macos"))]
+use wallpaper::extract_image;
+use wallpaper::{desktop_wallpaper_accent, WallpaperCache, WallpaperCacheState, WallpaperSampler};
+
+mod apps;
+#[cfg(test)]
+use apps::APPS_DIR;
+pub use apps::{is_safe_app_id, AppAppearanceSettings};
 
 impl AppearanceStore {
     pub fn new(data_dir: PathBuf) -> Self {
@@ -376,7 +383,5 @@ impl AppearanceStore {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("appearance/tests.rs");
-    include!("appearance/apps_tests.rs");
-}
+#[path = "appearance/tests.rs"]
+mod tests;

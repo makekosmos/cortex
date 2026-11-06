@@ -7,7 +7,7 @@ use crate::db::{
 };
 use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
 use crate::types::{SyncEntity, VersionVector};
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
 };
 use serde::de::DeserializeOwned;
@@ -18,7 +18,7 @@ mod peer_identity;
 #[path = "adapter/task_merge.rs"]
 mod task_merge;
 
-fn publish_replay_notices(notices: Vec<ark_application::sync_storage::ReplayNotice>) {
+fn publish_replay_notices(notices: Vec<ark_domain::sync_storage::ReplayNotice>) {
     for notice in notices {
         crate::events::emit_event(notice.event_payload());
     }
@@ -53,7 +53,7 @@ async fn store_progress_value<T: Serialize + ?Sized>(
         .db
         .set_sync_progress(
             CommandContext::sync_system(CommandClass::SyncLive),
-            ark_application::sync_storage::SyncProgressWrite::new(key.to_owned(), raw),
+            ark_store::sync_progress_write::SyncProgressWrite::new(key.to_owned(), raw),
         )
         .await
         .map_err(|error| error.to_string())
@@ -70,7 +70,9 @@ impl SqliteStorageBackend {
             .unwrap_or_else(|error| error.into_inner()) = profile;
     }
 
-    fn selective_sync_profile(&self) -> Option<ark_domain::selective_sync::SelectiveSyncProfile> {
+    pub(super) fn selective_sync_profile(
+        &self,
+    ) -> Option<ark_domain::selective_sync::SelectiveSyncProfile> {
         self.selective_profile
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -145,14 +147,14 @@ impl SyncEntityReadPort for SqliteStorageBackend {
     async fn load_policy_bound_entities_page_for_peer(
         &self,
         peer_device_id: &str,
-        class: ark_application::sync_storage::SyncReadClass,
+        class: ark_domain::sync_storage::SyncReadClass,
         vector: &VersionVector,
         offset: usize,
         limit: usize,
         expected_identity: &ark_domain::sync_policy::PolicyIdentity,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundSnapshotPage,
-        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+        ark_domain::sync_storage::PolicyBoundSnapshotPage,
+        ark_domain::sync_storage::PolicyBoundSnapshotReadError,
     > {
         self.db
             .query_with_store(
@@ -170,9 +172,9 @@ impl SyncEntityReadPort for SqliteStorageBackend {
             .await
             .map_err(|error| match error {
                 crate::db::DbError::StaleSyncPolicy => {
-                    ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
+                    ark_domain::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
                 }
-                error => ark_application::sync_storage::PolicyBoundSnapshotReadError::Storage(
+                error => ark_domain::sync_storage::PolicyBoundSnapshotReadError::Storage(
                     error.to_string(),
                 ),
             })
@@ -236,7 +238,8 @@ impl SyncEntityReadPort for SqliteStorageBackend {
     }
 }
 
-include!("adapter/committed_feed.rs");
+#[path = "adapter/committed_feed.rs"]
+mod committed_feed;
 
 #[async_trait::async_trait]
 impl SyncEntityMutationPort for SqliteStorageBackend {
@@ -284,7 +287,7 @@ impl PeerProgressPort for SqliteStorageBackend {
         self.db
             .set_sync_progress(
                 CommandContext::sync_system(CommandClass::SyncLive),
-                ark_application::sync_storage::SyncProgressWrite::new(
+                ark_store::sync_progress_write::SyncProgressWrite::new(
                     ark_store::VERSION_VECTOR_KEY.to_owned(),
                     serde_json::to_string(vector).map_err(|error| error.to_string())?,
                 )
@@ -298,7 +301,7 @@ impl PeerProgressPort for SqliteStorageBackend {
         self.db
             .set_sync_progress(
                 CommandContext::sync_system(CommandClass::SyncLive),
-                ark_application::sync_storage::SyncProgressWrite::merge_version_vector(
+                ark_store::sync_progress_write::SyncProgressWrite::merge_version_vector(
                     vector.clone(),
                 ),
             )
@@ -315,7 +318,7 @@ impl PeerProgressPort for SqliteStorageBackend {
         self.db
             .set_sync_progress(
                 CommandContext::sync_system(CommandClass::SyncLive),
-                ark_application::sync_storage::SyncProgressWrite::merge_version_vector(
+                ark_store::sync_progress_write::SyncProgressWrite::merge_version_vector(
                     vector.clone(),
                 )
                 .with_policy_identity(local_device_id.to_owned(), policy_identity.clone()),

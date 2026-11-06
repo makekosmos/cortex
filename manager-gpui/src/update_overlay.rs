@@ -1,4 +1,4 @@
-//! Full-window update overlay (KOS-355): the Mundus petal mark rendered as
+//! Full-window update overlay: the Mundus petal mark rendered as
 //! Paper "Liquid Metal" — a pre-baked animated WebP loop decoded once into
 //! a `RenderImage` ring (see `logo_anim.rs`) — floating over an opaque
 //! shell, state-driven content underneath. No badge or plate behind the

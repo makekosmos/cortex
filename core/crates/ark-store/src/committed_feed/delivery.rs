@@ -1,4 +1,4 @@
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     CommittedFeedDelivery, CommittedFeedDeliveryPage, CommittedFeedEntry, PolicyBoundFeedPage,
 };
 use rusqlite::{params, Connection, OptionalExtension};
@@ -172,20 +172,20 @@ pub fn read_committed_feed_delivery_page_for_peer(
     high_watermark: i64,
     limit: usize,
     max_delivery_bytes: usize,
-) -> Result<PolicyBoundFeedPage, ark_application::sync_storage::PolicyBoundFeedReadError> {
+) -> Result<PolicyBoundFeedPage, ark_domain::sync_storage::PolicyBoundFeedReadError> {
     conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
         .map_err(|error| {
-            ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
+            ark_domain::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
         })?;
-    let result = (|| -> Result<_, ark_application::sync_storage::PolicyBoundFeedReadError> {
+    let result = (|| -> Result<_, ark_domain::sync_storage::PolicyBoundFeedReadError> {
         let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)
-            .map_err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage)?;
+            .map_err(ark_domain::sync_storage::PolicyBoundFeedReadError::Storage)?;
         let identity = policy.as_ref().map_or_else(
-            ark_application::sync_policy::default_sync_policy_identity,
+            ark_domain::sync_policy::default_sync_policy_identity,
             |policy| policy.identity(),
         );
         if &identity != expected_identity {
-            return Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy);
+            return Err(ark_domain::sync_storage::PolicyBoundFeedReadError::StalePolicy);
         }
         let profile = policy
             .as_ref()
@@ -200,7 +200,7 @@ pub fn read_committed_feed_delivery_page_for_peer(
             || {},
             profile.as_ref(),
         )
-        .map_err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage)?;
+        .map_err(ark_domain::sync_storage::PolicyBoundFeedReadError::Storage)?;
         Ok(PolicyBoundFeedPage { identity, page })
     })();
     match result {
@@ -208,7 +208,7 @@ pub fn read_committed_feed_delivery_page_for_peer(
             .execute_batch("RELEASE committed_feed_policy_snapshot")
             .map(|()| page)
             .map_err(|error| {
-                ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
+                ark_domain::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
             }),
         Err(error) => {
             let _ = conn.execute_batch(

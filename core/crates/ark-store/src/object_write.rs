@@ -1,4 +1,3 @@
-use ark_application::object_write::{NewObjectReceipt, ObjectWriteSession, StoredObjectReceipt};
 use ark_domain::canonical_type::{prepare_resolved_object, CanonicalIngressError};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
@@ -31,12 +30,12 @@ pub fn prepare_object(
 /// Execute one local object upsert and its receipt in one Store-owned transaction.
 pub fn apply_local_object_upsert(
     connection: &mut Connection,
-    write: ark_application::object_mutation::LocalObjectUpsert,
+    write: crate::object_mutation::LocalObjectUpsert,
     principal: &str,
     operation_id: Option<&str>,
 ) -> Result<
-    ark_application::object_mutation::ObjectUpsertOutcome,
-    crate::writer::TransactionFailure<ark_application::object_mutation::ObjectUpsertError>,
+    crate::object_mutation::ObjectUpsertOutcome,
+    crate::writer::TransactionFailure<crate::object_mutation::ObjectUpsertError>,
 > {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -53,14 +52,12 @@ pub fn apply_local_object_upsert(
 
 pub(crate) fn apply_local_object_upsert_in(
     transaction: &Transaction<'_>,
-    write: ark_application::object_mutation::LocalObjectUpsert,
+    write: crate::object_mutation::LocalObjectUpsert,
     principal: &str,
     operation_id: Option<&str>,
-) -> Result<
-    ark_application::object_mutation::ObjectUpsertOutcome,
-    ark_application::object_mutation::ObjectUpsertError,
-> {
-    use ark_application::object_mutation::{
+) -> Result<crate::object_mutation::ObjectUpsertOutcome, crate::object_mutation::ObjectUpsertError>
+{
+    use crate::object_mutation::{
         build_local_object_upsert_commit, validate_local_object_upsert,
         validate_local_object_upsert_type, ObjectUpsertError, ObjectUpsertOutcome,
     };
@@ -189,8 +186,8 @@ impl<'connection> SqliteObjectWriteSession<'connection> {
     }
 }
 
-impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
-    fn resolve_type_identity(
+impl SqliteObjectWriteSession<'_> {
+    pub(crate) fn resolve_type_identity(
         &self,
         type_id: &str,
         requested_version: Option<&str>,
@@ -202,15 +199,15 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         )
     }
 
-    fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
+    pub(crate) fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
         read_object_write_snapshot(self.connection, id)
     }
 
-    fn current_revision(&self, id: &str) -> Result<Option<String>, String> {
+    pub(crate) fn current_revision(&self, id: &str) -> Result<Option<String>, String> {
         crate::sync_versions::object_revision(self.connection, id)
     }
 
-    fn is_peer_removed(&self, peer_id: &str) -> Result<bool, String> {
+    pub(crate) fn is_peer_removed(&self, peer_id: &str) -> Result<bool, String> {
         let removed: Vec<String> =
             crate::sync_kv::get_sync_kv(self.connection, "sync.removed_peers")?
                 .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
@@ -219,7 +216,11 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         Ok(removed.iter().any(|removed_id| removed_id == peer_id))
     }
 
-    fn persist_object(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String> {
+    pub(crate) fn persist_object(
+        &self,
+        object: &ArkObject,
+        links: &[ObjectLink],
+    ) -> Result<(), String> {
         crate::objects::upsert_object(self.connection, object)?;
         for link in links {
             crate::objects::upsert_object_link(self.connection, link)?;
@@ -227,24 +228,11 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         Ok(())
     }
 
-    fn record_local_revision(&self, id: &str, device_id: Option<&str>) -> Result<String, String> {
-        let device_id = device_id
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .unwrap_or("ark-core-rpc-local");
-        crate::sync_versions::bump_local_revision(
-            self.connection,
-            crate::sync_versions::LocalRevisionTarget::Object,
-            id,
-            device_id,
-        )
-    }
-
-    fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
+    pub(crate) fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
         crate::sync_versions::record_remote_object_revision(self.connection, id, source_hlc, false)
     }
 
-    fn load_receipt(
+    pub(crate) fn load_receipt(
         &self,
         entity_id: &str,
         representation_kind: &str,
@@ -258,7 +246,10 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         )
     }
 
-    fn insert_receipt(&self, receipt: NewObjectReceipt) -> Result<StoredObjectReceipt, String> {
+    pub(crate) fn insert_receipt(
+        &self,
+        receipt: NewObjectReceipt,
+    ) -> Result<StoredObjectReceipt, String> {
         crate::object_write_receipts::insert_receipt(self.connection, receipt)
     }
 }
@@ -329,4 +320,51 @@ mod tests {
         let error = prepare_object(&connection, write).expect_err("unknown type is rejected");
         assert!(error.to_string().contains("unknown_type_or_version"));
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObjectWriteOrigin {
+    Local {
+        device_id: Option<String>,
+        expected_snapshot: Option<ObjectWriteSnapshot>,
+    },
+    AuthenticatedRemote {
+        peer_id: String,
+    },
+    TrustedRemote,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ReceiptOutcome {
+    Applied,
+    Stale,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StoredObjectReceipt {
+    pub change_seq: i64,
+    pub payload_sha256: String,
+    pub payload_json: String,
+    pub outcome: ReceiptOutcome,
+    pub resulting_hlc: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewObjectReceipt {
+    pub entity_id: String,
+    pub representation_kind: String,
+    pub source_hlc: String,
+    pub source_origin_device_id: Option<String>,
+    pub type_id: String,
+    pub payload_sha256: String,
+    pub payload_json: String,
+    pub outcome: ReceiptOutcome,
+    pub resulting_hlc: Option<String>,
+    pub authenticated_peer_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectWriteResult {
+    pub receipt: Option<StoredObjectReceipt>,
+    pub duplicate: bool,
 }

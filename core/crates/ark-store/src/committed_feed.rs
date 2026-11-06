@@ -445,7 +445,7 @@ mod tests {
             "peer-a",
             4,
             2,
-            ark_application::sync_storage::OutboundAck::DurableReceipt,
+            ark_domain::sync_storage::OutboundAck::DurableReceipt,
         )
         .expect("durable receipt advances");
         assert_eq!(received.receipt_through, 2);
@@ -455,7 +455,7 @@ mod tests {
             "peer-a",
             4,
             2,
-            ark_application::sync_storage::OutboundAck::Applied,
+            ark_domain::sync_storage::OutboundAck::Applied,
         )
         .expect("application acknowledgement advances");
         assert_eq!(applied.applied_through, 2);

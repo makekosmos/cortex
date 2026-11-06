@@ -1,4 +1,4 @@
-//! Listener bind choice at boot (KOS-269)
+//! Listener bind choice at boot
 //!
 //! Windows Defender Firewall prompts — per exe path — as soon as a process
 //! listens on a non-loopback address, and the Engine exe lives under a
@@ -115,7 +115,7 @@ pub async fn lan_bind_at_boot(ark: &ArkHost, self_device_id: &str) -> SyncBind {
 mod tests {
     use super::*;
 
-    /// KOS-269 regression: an Engine whose user never paired a device and
+    /// Regression: an Engine whose user never paired a device and
     /// has no privileged firewall rule must not ask the OS for a firewall
     /// exception at boot.
     #[test]

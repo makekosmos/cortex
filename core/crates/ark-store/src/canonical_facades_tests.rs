@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use crate::canonical_asset_sources::asset_sources;
-use ark_application::book_cover::LocalBookCoverWrite;
+use ark_domain::book_cover::LocalBookCoverWrite;
 use ark_domain::types::ArkObject;
 use rusqlite::Connection;
 use serde_json::json;

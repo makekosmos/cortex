@@ -1,7 +1,7 @@
 use super::{settle, Publish, WriterTask};
 use crate::db::command::CommandContext;
 use crate::db::DbError;
-use ark_application::task_merge::TaskMergeAppendResult;
+use ark_domain::task_merge::TaskMergeAppendResult;
 use ark_domain::task_merge::TaskMergeOperation;
 use ark_store::writer::SqliteWriter;
 use tokio::sync::oneshot;

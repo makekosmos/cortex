@@ -10,7 +10,7 @@ use crate::pending_objects::replay_pending_for_type;
 pub fn upsert_object_type(
     connection: &Connection,
     object_type: &ObjectType,
-) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, String> {
+) -> Result<Vec<ark_domain::sync_storage::ReplayNotice>, String> {
     if crate::object_types::legacy_alias_conflicts(connection, &object_type.id)? {
         return Err("alias collides with canonical type".into());
     }

@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DictationStateName {
@@ -14,24 +16,24 @@ pub enum DictationStateName {
 }
 
 #[derive(Debug, Clone)]
-struct HostState {
-    name: DictationStateName,
+pub(super) struct HostState {
+    pub(super) name: DictationStateName,
     /// HWND foreground'а, захваченный перед показом pill. Используется в
     /// inject phase для возврата фокуса.
-    prev_hwnd: Option<isize>,
+    pub(super) prev_hwnd: Option<isize>,
     /// Сообщение для UI (user-facing, локализованное).
-    last_error: Option<String>,
+    pub(super) last_error: Option<String>,
     /// UUID активного pending item (Transcribing/Pending/Error) для retry-кнопок.
-    active_uuid: Option<String>,
+    pub(super) active_uuid: Option<String>,
     /// Счётчик попыток для UI (Pending state).
-    attempts: u32,
+    pub(super) attempts: u32,
     /// Можно ли retry-ить текущую Error-сессию (true для Fatal от Groq,
     /// false для AudioDecode — там аудио бесполезно).
-    can_retry: bool,
+    pub(super) can_retry: bool,
 }
 
 impl HostState {
-    fn idle() -> Self {
+    pub(super) fn idle() -> Self {
         Self {
             name: DictationStateName::Idle,
             prev_hwnd: None,
@@ -44,23 +46,23 @@ impl HostState {
 }
 
 pub struct DictationHost {
-    state: Arc<Mutex<HostState>>,
-    config: Arc<Mutex<DictationConfig>>,
-    stats: Arc<Mutex<DictationStats>>,
-    events_tx: broadcast::Sender<Value>,
+    pub(super) state: Arc<Mutex<HostState>>,
+    pub(super) config: Arc<Mutex<DictationConfig>>,
+    pub(super) stats: Arc<Mutex<DictationStats>>,
+    pub(super) events_tx: broadcast::Sender<Value>,
     /// Корневая директория для config/stats/pending. `config::data_dir()` в
     /// проде; tempdir в тестах через `new_for_test`.
-    data_dir: std::path::PathBuf,
+    pub(super) data_dir: std::path::PathBuf,
     /// Endpoint Groq transcriptions API. По умолчанию `groq::GROQ_ENDPOINT`;
     /// override для тестов на httpmock.
-    groq_endpoint: String,
-    capture: std::sync::Mutex<Option<super::native_capture::Session>>,
-    contract_window_id: std::sync::Mutex<Option<String>>,
-    contract_events: std::sync::atomic::AtomicBool,
+    pub(super) groq_endpoint: String,
+    pub(super) capture: std::sync::Mutex<Option<crate::native_capture::Session>>,
+    pub(super) contract_window_id: std::sync::Mutex<Option<String>>,
+    pub(super) contract_events: std::sync::atomic::AtomicBool,
     /// In-flight `download_local_model` ops: model_id → last percent
     /// (`None` = indeterminate phase). Polled via `list_local_models` —
     /// Manager has no WS subscription.
-    downloads: Arc<std::sync::Mutex<local_models::ModelDownloads>>,
+    pub(super) downloads: Arc<std::sync::Mutex<local_models::ModelDownloads>>,
 }
 
 impl DictationHost {
@@ -78,7 +80,7 @@ impl DictationHost {
         }) {
             tracing::info!("removed obsolete local STT assets");
         }
-        // KOS-301: crash mid-download оставлял .download/.part/.extracting
+        // crash mid-download оставлял.download/.part/.extracting
         // навсегда; no download can be in flight this early in startup.
         model_sweep::sweep_stale_downloads(&data_dir);
         let mut cfg = config::load_from(&data_dir.join("dictation-config.json"));
@@ -156,10 +158,10 @@ impl DictationHost {
 
     /// На старте: GC pending по 7d/20 items. Если что-то осталось — emit
     /// `dictation_pending_changed` чтобы UI показал нотификацию.
-    fn bootstrap_pending(&self) {
+    pub(super) fn bootstrap_pending(&self) {
         // История диктовок живёт 30 дней, потолок — 200 записей.
-        let _ = super::pending::gc(&self.data_dir, 200, chrono::Duration::days(30));
-        if let Ok(items) = super::pending::list(&self.data_dir) {
+        let _ = crate::pending::gc(&self.data_dir, 200, chrono::Duration::days(30));
+        if let Ok(items) = crate::pending::list(&self.data_dir) {
             if !items.is_empty() {
                 let _ = self.events_tx.send(json!({
                     "event": "dictation_pending_changed",
@@ -173,7 +175,7 @@ impl DictationHost {
         self.events_tx.subscribe()
     }
 
-    async fn emit_state(&self, state: &HostState) {
+    pub(super) async fn emit_state(&self, state: &HostState) {
         let v = json!({
             "event": "dictation_state_changed",
             "state": state_name_str(state.name),
@@ -219,7 +221,7 @@ impl DictationHost {
 
     /// Helper для перехода в Error state с понятным user_msg.
     /// `can_retry` = true для retryable errors (UI покажет кнопку «Повторить»).
-    async fn fail_session(&self, uuid: &str, user_msg: &str, can_retry: bool) {
+    pub(super) async fn fail_session(&self, uuid: &str, user_msg: &str, can_retry: bool) {
         let mut s = self.state.lock().await;
         s.name = DictationStateName::Error;
         s.active_uuid = Some(uuid.to_string());
@@ -231,8 +233,8 @@ impl DictationHost {
         self.emit_state(&snap).await;
     }
 
-    fn emit_pending_changed(&self) {
-        let count = super::pending::list(&self.data_dir)
+    pub(super) fn emit_pending_changed(&self) {
+        let count = crate::pending::list(&self.data_dir)
             .map(|v| v.len())
             .unwrap_or(0);
         let _ = self.events_tx.send(json!({
@@ -241,7 +243,7 @@ impl DictationHost {
         }));
     }
 
-    fn emit_config_changed(&self) {
+    pub(super) fn emit_config_changed(&self) {
         let v = json!({ "event": "dictation_config_changed" });
         let _ = self.events_tx.send(v);
     }
@@ -260,11 +262,11 @@ impl DictationHost {
         })
     }
 
-    async fn snapshot_config(&self) -> DictationConfig {
+    pub(super) async fn snapshot_config(&self) -> DictationConfig {
         self.config.lock().await.clone()
     }
 
-    fn downloads_snapshot(&self) -> local_models::ModelDownloads {
+    pub(super) fn downloads_snapshot(&self) -> local_models::ModelDownloads {
         self.downloads
             .lock()
             .map(|downloads| downloads.clone())
@@ -273,12 +275,15 @@ impl DictationHost {
 
     /// `localModels` snapshot for op replies — config plus live download
     /// progress so poll-only clients (Manager) can render a progress bar.
-    fn local_models_snapshot(&self, cfg: &DictationConfig) -> local_models::LocalModelsSnapshot {
+    pub(super) fn local_models_snapshot(
+        &self,
+        cfg: &DictationConfig,
+    ) -> local_models::LocalModelsSnapshot {
         local_models::snapshot(&self.data_dir, cfg, &self.downloads_snapshot())
     }
 }
 
-fn state_name_str(n: DictationStateName) -> &'static str {
+pub(super) fn state_name_str(n: DictationStateName) -> &'static str {
     match n {
         DictationStateName::Idle => "idle",
         DictationStateName::Recording => "recording",
@@ -288,7 +293,7 @@ fn state_name_str(n: DictationStateName) -> &'static str {
     }
 }
 
-fn config_to_value(cfg: &DictationConfig) -> Value {
+pub(super) fn config_to_value(cfg: &DictationConfig) -> Value {
     json!({
         "hotkey": cfg.hotkey,
         "triggerMode": match cfg.trigger_mode {
@@ -317,7 +322,7 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
     })
 }
 
-fn stats_to_value(s: &DictationStats) -> Value {
+pub(super) fn stats_to_value(s: &DictationStats) -> Value {
     json!({
         "totalWords": s.total_words,
         "totalRecordSeconds": s.total_record_seconds,
@@ -327,7 +332,7 @@ fn stats_to_value(s: &DictationStats) -> Value {
     })
 }
 
-fn network_profile_to_value(profile: &NetworkProfile) -> Value {
+pub(super) fn network_profile_to_value(profile: &NetworkProfile) -> Value {
     match profile {
         NetworkProfile::System => json!({ "kind": "system" }),
         NetworkProfile::CloudflareDoh => json!({ "kind": "cloudflare_doh" }),
@@ -382,11 +387,11 @@ pub(crate) enum SubmitError {
     Inject(#[from] InjectError),
 }
 
-fn provider_uses_local_runtime(provider: &str) -> bool {
+pub(super) fn provider_uses_local_runtime(provider: &str) -> bool {
     provider == "local"
 }
 
-fn provider_needs_api_key(cfg: &DictationConfig) -> bool {
+pub(super) fn provider_needs_api_key(cfg: &DictationConfig) -> bool {
     if provider_uses_local_runtime(&cfg.provider) {
         return false;
     }
@@ -394,7 +399,7 @@ fn provider_needs_api_key(cfg: &DictationConfig) -> bool {
         .is_none()
 }
 
-fn effective_model_for_submit(cfg: &DictationConfig) -> String {
+pub(super) fn effective_model_for_submit(cfg: &DictationConfig) -> String {
     if provider_uses_local_runtime(&cfg.provider) {
         return cfg
             .local_model
@@ -405,13 +410,13 @@ fn effective_model_for_submit(cfg: &DictationConfig) -> String {
     cfg.model.clone()
 }
 
-const LOCAL_MODEL_NOT_READY_MSG: &str =
+pub(super) const LOCAL_MODEL_NOT_READY_MSG: &str =
     "Локальная модель не подготовлена. Скачайте модель заново в Settings -> AI.";
 
 /// Is the *selected* local model usable on disk — independent of
 /// `provider_enabled`. A disabled provider with a surviving selection is
 /// the user's own off-switch, not a broken config.
-fn local_selection_valid(cfg: &DictationConfig) -> bool {
+pub(super) fn local_selection_valid(cfg: &DictationConfig) -> bool {
     if !provider_uses_local_runtime(&cfg.provider) {
         return true;
     }
@@ -450,13 +455,13 @@ fn local_selection_valid(cfg: &DictationConfig) -> bool {
     model_ok && command_ok
 }
 
-fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
+pub(super) fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
     !cfg.provider_enabled
         || !provider_uses_local_runtime(&cfg.provider)
         || local_selection_valid(cfg)
 }
 
-fn clear_local_selection(cfg: &mut DictationConfig) {
+pub(super) fn clear_local_selection(cfg: &mut DictationConfig) {
     cfg.provider_enabled = false;
     cfg.local_model = None;
     cfg.local_model_path = None;
@@ -466,7 +471,7 @@ fn clear_local_selection(cfg: &mut DictationConfig) {
 /// Runtime reconcile for a broken local selection: prefer auto-selecting a
 /// downloaded model (a deleted file is recoverable when another model is
 /// on disk); only with nothing downloaded does the provider get disabled.
-async fn reconcile_unready_local_config(host: &DictationHost) -> bool {
+pub(super) async fn reconcile_unready_local_config(host: &DictationHost) -> bool {
     let mut cfg = host.config.lock().await;
     if local_config_is_ready(&host.data_dir, &cfg) {
         return false;

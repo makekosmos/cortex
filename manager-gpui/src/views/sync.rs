@@ -18,7 +18,7 @@ pub fn load(app: &mut ManagerApp) {
     // The pairing ticket is fetched by the explicit «Показать код для
     // подключения» button — on a loopback-bound Engine that request
     // escalates the bind, so the firewall prompt belongs to that click, not
-    // to opening this tab (KOS-269).
+    // to opening this tab.
     app.call("sync.snapshot", "get_sync_snapshot", json!({}));
     app.call("sync.registry", "device_registry.snapshot", json!({}));
     app.call("sync.privileged", "system.privileged.status", json!({}));

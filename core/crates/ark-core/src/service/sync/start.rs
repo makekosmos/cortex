@@ -151,9 +151,9 @@ pub(crate) async fn handle_start_sync(
                 auth_secret: auth_secret.clone(),
             }),
         );
-        let relay_sync = RelaySync::with_transport(
+        let sync_session = SyncSession::with_transport(
             storage.clone() as Arc<dyn SyncRuntimeStorage>,
-            RelaySyncConfig {
+            SyncSessionConfig {
                 relay_url,
                 relay_api_key: relay_api_key.clone(),
                 space_id: space_id.clone(),
@@ -163,9 +163,9 @@ pub(crate) async fn handle_start_sync(
             },
             transport,
         );
-        wire_relay_sync_events(&relay_sync).await;
-        relay_sync.start().await?;
-        Some(relay_sync)
+        wire_sync_session_events(&sync_session).await;
+        sync_session.start().await?;
+        Some(sync_session)
     } else if transport_choice == TransportChoice::Iroh {
         let secret_key = crate::iroh_transport::load_or_generate_secret_key_via_actor(&db_handle)
             .await
@@ -208,12 +208,12 @@ pub(crate) async fn handle_start_sync(
                 bind,
             },
         ));
-        // RelaySyncConfig.relay_url is unused by `with_transport` (only
-        // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
+        // SyncSessionConfig.relay_url is unused by `with_transport` (only
+        // `SyncSession::new` reads it to build a `RelayTransport`) — pass an
         // empty string rather than widening the struct for one unused field.
-        let relay_sync = RelaySync::with_iroh_transport(
+        let sync_session = SyncSession::with_iroh_transport(
             storage.clone() as Arc<dyn SyncRuntimeStorage>,
-            RelaySyncConfig {
+            SyncSessionConfig {
                 relay_url: String::new(),
                 relay_api_key: None,
                 space_id: space_id.clone(),
@@ -223,7 +223,7 @@ pub(crate) async fn handle_start_sync(
             },
             iroh_transport.clone(),
         )?;
-        wire_relay_sync_events(&relay_sync).await;
+        wire_sync_session_events(&sync_session).await;
         // Only a `connect_with_pairing_code` start is a pairing intent
         // (`pairing_connect`); boot restores replay the stored ticket for an
         // already-paired endpoint, whose Hello passes on the stored key —
@@ -232,10 +232,10 @@ pub(crate) async fn handle_start_sync(
         // would be parked as an unsolicited request.
         if pairing_connect {
             if let Some(endpoint) = peer_endpoint {
-                relay_sync.begin_outgoing_pairing(endpoint).await;
+                sync_session.begin_outgoing_pairing(endpoint).await;
             }
         }
-        relay_sync.start().await?;
+        sync_session.start().await?;
         // `start()` binds the endpoint, so `our_ticket()` can be computed.
         // It may wait on relay homing (network, up to its own timeout), so
         // it runs on a spawned task — the worker must stay free for local
@@ -262,7 +262,7 @@ pub(crate) async fn handle_start_sync(
             let ticket_tx = iroh_our_ticket_tx;
             // Tracked by the transport, not detached: this task holds the
             // transport, and the transport holds the ark.db connection, so
-            // `stop()` must abort and join it (KOS-369).
+            // `stop` must abort and join it.
             let ticket_task = crate::task_set::spawn(async move {
                 match ticket_transport.our_ticket().await {
                     Ok(ticket) => {
@@ -276,12 +276,12 @@ pub(crate) async fn handle_start_sync(
             });
             iroh_transport.track(ticket_task);
         }
-        Some(relay_sync)
+        Some(sync_session)
     } else {
         None
     };
-    if let Some(relay_sync) = relay.as_ref() {
-        wire_relay_registry_fanout(relay_sync, &server, &clients).await;
+    if let Some(sync_session) = relay.as_ref() {
+        wire_relay_registry_fanout(sync_session, &server, &clients).await;
     }
     wire_server_registry_fanout(&server, &clients, relay.as_ref()).await;
 

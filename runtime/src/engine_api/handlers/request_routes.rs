@@ -1,4 +1,6 @@
-async fn handle_rpc(
+use super::*;
+
+pub(super) async fn handle_rpc(
     request: Request<Incoming>,
     client: AuthenticatedClient,
     correlation_id: Arc<String>,
@@ -14,7 +16,7 @@ async fn handle_rpc(
             return json_response(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 json!({ "ok": false, "error": "request body exceeds 1 MiB" }),
-            )
+            );
         }
     };
     let value = match serde_json::from_slice::<Value>(&collected.to_bytes()) {
@@ -23,7 +25,7 @@ async fn handle_rpc(
             return json_response(
                 StatusCode::BAD_REQUEST,
                 json!({ "ok": false, "error": "malformed JSON body" }),
-            )
+            );
         }
     };
     if value.get("operation").and_then(Value::as_str).is_none() || !value.is_object() {
@@ -38,7 +40,7 @@ async fn handle_rpc(
             return json_response(
                 StatusCode::BAD_REQUEST,
                 json!({ "ok": false, "error": error.to_string() }),
-            )
+            );
         }
     };
     if request.request_id.is_none() {
@@ -50,7 +52,7 @@ async fn handle_rpc(
             return json_response(
                 StatusCode::SERVICE_UNAVAILABLE,
                 json!({ "ok": false, "error": error.to_string() }),
-            )
+            );
         }
     };
     let request = request.with_client(crate::engine_dispatch::DispatchClient {

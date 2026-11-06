@@ -1,9 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::canonical_game::{apply_upsert, get_game, list_games};
-use ark_application::canonical_game::{
-    GameLink, GameLocalState, GameQuarantine, GameUpsertCommand,
-};
+use ark_domain::canonical_game::{GameLink, GameLocalState, GameQuarantine, GameUpsertCommand};
 use ark_domain::types::{ArkObject, ObjectLink, TrackedApp, UsageSession};
 use rusqlite::Connection;
 use serde_json::json;

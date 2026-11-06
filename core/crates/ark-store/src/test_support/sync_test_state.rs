@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ark_application::sync_policy::SyncProfile;
+use ark_domain::sync_policy::SyncProfile;
 use ark_domain::types::VersionVector;
 
 pub struct SyncTestState;

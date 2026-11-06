@@ -1,16 +1,18 @@
-use super::{new_direct_client, pair_storages, pick_port, DirectClient, SyncServer};
-use ark_application::sync_policy::SyncProfileRule;
-use ark_application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
-};
+use super::fixtures::{pair_storages, pick_port};
 use ark_core::db::{
     CommandContext, DbHandle, DbOwner, ObjectReadQuery, SaveLocalSyncProfileCommand,
 };
+use ark_core::direct_client::{new_direct_client, DirectClient};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
+use ark_core::sync_server::SyncServer;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
 use ark_core::SqliteStorageBackend;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
+use ark_domain::sync_policy::SyncProfileRule;
+use ark_domain::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;

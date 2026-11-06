@@ -107,38 +107,35 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
 }
 
 pub(in crate::db::command) struct LocalObjectUpsertTask {
-    pub write: ark_application::object_mutation::LocalObjectUpsert,
+    pub write: ark_store::object_mutation::LocalObjectUpsert,
     pub principal: String,
     pub operation_id: Option<String>,
-    pub reply:
-        oneshot::Sender<Result<ark_application::object_mutation::ObjectUpsertOutcome, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::object_mutation::ObjectUpsertOutcome, DbError>>,
 }
 
 pub(in crate::db::command) struct LocalObjectDeleteTask {
-    pub write: ark_application::object_mutation::LocalObjectDelete,
+    pub write: ark_store::object_mutation::LocalObjectDelete,
     pub principal: String,
     pub operation_id: Option<String>,
-    pub reply: oneshot::Sender<
-        Result<(ark_application::object_mutation::ObjectDeleteCommit, bool), DbError>,
-    >,
+    pub reply:
+        oneshot::Sender<Result<(ark_store::object_mutation::ObjectDeleteCommit, bool), DbError>>,
 }
 
 pub(in crate::db::command) struct LocalBookCoverTask {
-    pub write: ark_application::book_cover::LocalBookCoverWrite,
+    pub write: ark_domain::book_cover::LocalBookCoverWrite,
     pub reply: oneshot::Sender<Result<bool, DbError>>,
 }
 
 pub(in crate::db::command) struct CanonicalGameUpsertTask {
-    pub command: ark_application::canonical_game::GameUpsertCommand,
+    pub command: ark_domain::canonical_game::GameUpsertCommand,
     pub fallback_device_id: String,
-    pub reply:
-        oneshot::Sender<Result<ark_application::canonical_game::GameMutationResult, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_domain::canonical_game::GameMutationResult, DbError>>,
 }
 
 pub(in crate::db::command) struct LocalUsageWriteTask {
     pub device_id: String,
-    pub write: ark_application::usage::LocalUsageWrite,
-    pub reply: oneshot::Sender<Result<Vec<ark_application::usage::UsageMutation>, DbError>>,
+    pub write: ark_store::usage::LocalUsageWrite,
+    pub reply: oneshot::Sender<Result<Vec<ark_store::usage::UsageMutation>, DbError>>,
 }
 
 pub(in crate::db::command) struct ClearAllTask {
@@ -148,20 +145,19 @@ pub(in crate::db::command) struct ClearAllTask {
 pub(in crate::db::command) struct UpsertObjectLinkTask {
     pub object_link: ark_domain::types::ObjectLink,
     pub device_id: Option<String>,
-    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::type_mutation::TypeMutationCommit, DbError>>,
 }
 
 pub(in crate::db::command) struct DeleteObjectLinkTask {
     pub id: String,
     pub device_id: Option<String>,
-    pub reply: oneshot::Sender<Result<ark_application::type_mutation::TypeMutationCommit, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::type_mutation::TypeMutationCommit, DbError>>,
 }
 
 pub(in crate::db::command) struct ReplaceObjectLinkTask {
     pub object_link: ark_domain::types::ObjectLink,
     pub device_id: Option<String>,
-    pub reply:
-        oneshot::Sender<Result<ark_application::type_mutation::ReplaceObjectLinkCommit, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_store::type_mutation::ReplaceObjectLinkCommit, DbError>>,
 }
 
 macro_rules! impl_object_link_task {

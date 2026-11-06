@@ -1,11 +1,16 @@
-const AUTO_RETRY_DELAYS_SEC: [u64; 5] = [1, 5, 10, 20, 40];
+use super::*;
 
-fn is_dictation_test_mode() -> bool {
+pub(super) const AUTO_RETRY_DELAYS_SEC: [u64; 5] = [1, 5, 10, 20, 40];
+
+pub(super) fn is_dictation_test_mode() -> bool {
     matches!(std::env::var("MUNDUS_TEST_MODE").as_deref(), Ok("1"))
         || matches!(std::env::var("MUNDUS_HEADLESS").as_deref(), Ok("1"))
 }
 
-fn mock_dictation_transcript_override(provider: &str, fallback: Option<&str>) -> Option<String> {
+pub(super) fn mock_dictation_transcript_override(
+    provider: &str,
+    fallback: Option<&str>,
+) -> Option<String> {
     if !is_dictation_test_mode() || provider != "mock" {
         return None;
     }
@@ -22,7 +27,10 @@ fn mock_dictation_transcript_override(provider: &str, fallback: Option<&str>) ->
     Some(transcript.to_string())
 }
 
-fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) -> InjectMode {
+pub(super) fn resolve_attempt_inject_mode(
+    raw_mode: &str,
+    mock_transcript: Option<&str>,
+) -> InjectMode {
     if mock_transcript.is_some() {
         return InjectMode::ClipboardOnly;
     }
@@ -32,7 +40,7 @@ fn resolve_attempt_inject_mode(raw_mode: &str, mock_transcript: Option<&str>) ->
     }
 }
 
-struct TextOnlyInjector;
+pub(super) struct TextOnlyInjector;
 
 impl inject::Injector for TextOnlyInjector {
     fn inject(
@@ -47,7 +55,7 @@ impl inject::Injector for TextOnlyInjector {
     }
 }
 
-fn emit_contract_transcription(host: &DictationHost, request_id: &str, text: &str) {
+pub(super) fn emit_contract_transcription(host: &DictationHost, request_id: &str, text: &str) {
     if !host
         .contract_events
         .load(std::sync::atomic::Ordering::Acquire)
@@ -63,7 +71,7 @@ fn emit_contract_transcription(host: &DictationHost, request_id: &str, text: &st
 
 /// Результат одной попытки `process_one_attempt`.
 #[derive(Debug, PartialEq)]
-enum AttemptOutcome {
+pub(super) enum AttemptOutcome {
     /// Транскрибировано + inject выполнен (или fallback'нут в clipboard).
     Success {
         text: String,
@@ -81,7 +89,7 @@ enum AttemptOutcome {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AttemptDelivery {
+pub(super) enum AttemptDelivery {
     Active,
     Background,
 }
@@ -90,7 +98,7 @@ enum AttemptDelivery {
 /// pending JSON, emit'ит state changes, но НЕ удаляет pending (это делает
 /// caller на Success). На Success возвращает Success И уже сделал
 /// inject + drop + emit transcript.
-async fn process_one_attempt(
+pub(super) async fn process_one_attempt(
     host: &Arc<DictationHost>,
     uuid: &str,
     api_key: &str,
@@ -108,7 +116,7 @@ async fn process_one_attempt(
     .await
 }
 
-async fn process_one_attempt_with_injector(
+pub(super) async fn process_one_attempt_with_injector(
     host: &Arc<DictationHost>,
     uuid: &str,
     api_key: &str,
@@ -118,7 +126,7 @@ async fn process_one_attempt_with_injector(
 ) -> AttemptOutcome {
     let start = std::time::Instant::now();
 
-    let wav = match super::pending::read_wav(&host.data_dir, uuid) {
+    let wav = match crate::pending::read_wav(&host.data_dir, uuid) {
         Ok(b) => b,
         Err(e) => {
             tracing::error!(%uuid, error = %e, "dictation: pending read failed");
@@ -128,7 +136,7 @@ async fn process_one_attempt_with_injector(
 
     // Восстанавливаем prev_hwnd из pending JSON, НЕ из state — за время
     // retry активная сессия в state могла быть перезаписана новой диктовкой.
-    let item = match super::pending::list(&host.data_dir)
+    let item = match crate::pending::list(&host.data_dir)
         .ok()
         .and_then(|v| v.into_iter().find(|i| i.uuid == uuid))
     {
@@ -157,7 +165,7 @@ async fn process_one_attempt_with_injector(
             delivery: inject::Delivery::ClipboardOnly,
         };
 
-        if let Err(error) = super::pending::drop_item(&host.data_dir, uuid) {
+        if let Err(error) = crate::pending::drop_item(&host.data_dir, uuid) {
             tracing::error!(%uuid, %error, "dictation: cleanup after mock delivery failed");
         }
 
@@ -216,7 +224,7 @@ async fn process_one_attempt_with_injector(
             cfg = host.snapshot_config().await;
             if !local_config_is_ready(&host.data_dir, &cfg) {
                 let _ =
-                    super::pending::bump_attempt(&host.data_dir, uuid, LOCAL_MODEL_NOT_READY_MSG);
+                    crate::pending::bump_attempt(&host.data_dir, uuid, LOCAL_MODEL_NOT_READY_MSG);
                 host.emit_pending_changed();
                 host.fail_session(uuid, LOCAL_MODEL_NOT_READY_MSG, false)
                     .await;
@@ -241,7 +249,7 @@ async fn process_one_attempt_with_injector(
             Ok(c) => c,
             Err(e) => {
                 tracing::error!(%uuid, error = %e, "dictation: build_client failed");
-                let _ = super::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
+                let _ = crate::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
                 return AttemptOutcome::Fatal; // конфиг сломан — retry не поможет
             }
         };
@@ -297,7 +305,7 @@ async fn process_one_attempt_with_injector(
                 Ok(Err(error)) => {
                     let reason = error.safe_reason();
                     tracing::warn!(%uuid, error = %error, "dictation: transcript delivery failed");
-                    let _ = super::pending::bump_attempt(&host.data_dir, uuid, reason);
+                    let _ = crate::pending::bump_attempt(&host.data_dir, uuid, reason);
                     host.emit_pending_changed();
                     if matches!(delivery, AttemptDelivery::Active) {
                         host.fail_session(
@@ -326,7 +334,7 @@ async fn process_one_attempt_with_injector(
                         error = %error,
                         "dictation: transcript delivery task failed",
                     );
-                    let _ = super::pending::bump_attempt(&host.data_dir, uuid, reason);
+                    let _ = crate::pending::bump_attempt(&host.data_dir, uuid, reason);
                     host.emit_pending_changed();
                     if matches!(delivery, AttemptDelivery::Active) {
                         host.fail_session(
@@ -351,7 +359,7 @@ async fn process_one_attempt_with_injector(
             };
 
             // Доставленное остаётся в очереди как история (WAV удаляется).
-            if let Err(error) = super::pending::mark_delivered(&host.data_dir, uuid, &text) {
+            if let Err(error) = crate::pending::mark_delivered(&host.data_dir, uuid, &text) {
                 tracing::error!(%uuid, %error, "dictation: mark_delivered failed");
             }
 
@@ -406,11 +414,11 @@ async fn process_one_attempt_with_injector(
                     return AttemptOutcome::Cancelled;
                 }
             }
-            let kind = super::retry::classify(&e);
-            let _ = super::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
+            let kind = crate::retry::classify(&e);
+            let _ = crate::pending::bump_attempt(&host.data_dir, uuid, &e.to_string());
             host.emit_pending_changed();
             match kind {
-                super::retry::FailureKind::Fatal { user_msg } => {
+                crate::retry::FailureKind::Fatal { user_msg } => {
                     tracing::warn!(%uuid, error = %e, "dictation: fatal — no retry");
                     let mut s = host.state.lock().await;
                     if s.active_uuid.as_deref() == Some(uuid) {
@@ -423,7 +431,7 @@ async fn process_one_attempt_with_injector(
                     }
                     AttemptOutcome::Fatal
                 }
-                super::retry::FailureKind::Retryable => {
+                crate::retry::FailureKind::Retryable => {
                     tracing::info!(
                         %uuid,
                         error = %e,
@@ -440,7 +448,7 @@ async fn process_one_attempt_with_injector(
 /// tokio-таски — не блокирует WS / pill. Останавливается на Success / Fatal
 /// / исчерпании расписания. На исчерпании pending остаётся на диске для
 /// ручного retry из Settings → Очередь.
-async fn auto_retry_loop(
+pub(super) async fn auto_retry_loop(
     host: Arc<DictationHost>,
     uuid: String,
     api_key: String,
@@ -453,7 +461,7 @@ async fn auto_retry_loop(
 
         // Pending item мог быть discard'нут юзером или уже доставлен —
         // проверяем, что он ещё в unresolved-очереди.
-        let exists = super::pending::list_unresolved(&host.data_dir)
+        let exists = crate::pending::list_unresolved(&host.data_dir)
             .ok()
             .map(|v| v.iter().any(|x| x.uuid == uuid))
             .unwrap_or(false);
@@ -485,8 +493,8 @@ async fn auto_retry_loop(
     );
 }
 
-async fn op_list_pending(host: &DictationHost) -> DictationResponse {
-    let items = match super::pending::list(&host.data_dir) {
+pub(super) async fn op_list_pending(host: &DictationHost) -> DictationResponse {
+    let items = match crate::pending::list(&host.data_dir) {
         Ok(v) => v,
         Err(e) => return DictationResponse::err(format!("list_pending: {e}")),
     };
@@ -509,12 +517,12 @@ async fn op_list_pending(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "items": arr }))
 }
 
-async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+pub(super) async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
     let uuid = match params.get("uuid").and_then(|v| v.as_str()) {
         Some(s) => s.to_string(),
         None => return DictationResponse::err("retry: missing 'uuid'"),
     };
-    let items = match super::pending::list_unresolved(&host.data_dir) {
+    let items = match crate::pending::list_unresolved(&host.data_dir) {
         Ok(v) => v,
         Err(e) => return DictationResponse::err(format!("retry: list failed: {e}")),
     };
@@ -564,12 +572,12 @@ async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse
     DictationResponse::ok(json!({ "uuid": uuid, "started": true }))
 }
 
-async fn op_discard(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_discard(params: Value, host: &DictationHost) -> DictationResponse {
     let uuid = match params.get("uuid").and_then(|v| v.as_str()) {
         Some(s) => s,
         None => return DictationResponse::err("discard: missing 'uuid'"),
     };
-    if let Err(e) = super::pending::drop_item(&host.data_dir, uuid) {
+    if let Err(e) = crate::pending::drop_item(&host.data_dir, uuid) {
         return DictationResponse::err(format!("discard: {e}"));
     }
     host.emit_pending_changed();
@@ -584,8 +592,8 @@ async fn op_discard(params: Value, host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "uuid": uuid, "discarded": true }))
 }
 
-async fn op_discard_all(host: &DictationHost) -> DictationResponse {
-    let items = match super::pending::list(&host.data_dir) {
+pub(super) async fn op_discard_all(host: &DictationHost) -> DictationResponse {
+    let items = match crate::pending::list(&host.data_dir) {
         Ok(v) => v,
         Err(e) => return DictationResponse::err(format!("discard_all: list: {e}")),
     };
@@ -597,7 +605,7 @@ async fn op_discard_all(host: &DictationHost) -> DictationResponse {
     let mut active_discarded = false;
 
     for item in items {
-        if let Err(e) = super::pending::drop_item(&host.data_dir, &item.uuid) {
+        if let Err(e) = crate::pending::drop_item(&host.data_dir, &item.uuid) {
             return DictationResponse::err(format!("discard_all: {}: {e}", item.uuid));
         }
         if active_uuid.as_deref() == Some(item.uuid.as_str()) {
@@ -617,8 +625,8 @@ async fn op_discard_all(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "discarded": discarded }))
 }
 
-async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
-    let items = match super::pending::list_unresolved(&host.data_dir) {
+pub(super) async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
+    let items = match crate::pending::list_unresolved(&host.data_dir) {
         Ok(v) => v,
         Err(e) => return DictationResponse::err(format!("retry_all: list: {e}")),
     };
@@ -656,12 +664,12 @@ async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
     DictationResponse::ok(json!({ "started": count }))
 }
 
-async fn op_get_stats(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_get_stats(host: &DictationHost) -> DictationResponse {
     let s = host.stats.lock().await;
     DictationResponse::ok(stats_to_value(&s))
 }
 
-async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
     let mut s = host.stats.lock().await;
     *s = DictationStats::default();
     if let Err(e) = save_stats_in(&host.data_dir, &s) {
@@ -675,7 +683,7 @@ async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(snap)
 }
 
-async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
     #[cfg(windows)]
     {
         hotkey_hook::set_capture_mode(true, Some(host.events_tx.clone()));
@@ -695,7 +703,7 @@ async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
     }
 }
 
-async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
     #[cfg(windows)]
     {
         let _ = host;
@@ -715,7 +723,7 @@ async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
     }
 }
 
-async fn op_local_status() -> DictationResponse {
+pub(super) async fn op_local_status() -> DictationResponse {
     match local::status().await {
         Ok(status) => DictationResponse::ok(json!({
             "warm": status.warm,
@@ -970,7 +978,7 @@ pub(crate) async fn verify_api_key_with(
     }
 }
 
-async fn op_verify_api_key(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_verify_api_key(params: Value, host: &DictationHost) -> DictationResponse {
     let key = match params.get("key").and_then(|v| v.as_str()) {
         Some(s) => s.to_owned(),
         None => return DictationResponse::err("verify_api_key: missing 'key'"),
@@ -986,7 +994,7 @@ async fn op_verify_api_key(params: Value, host: &DictationHost) -> DictationResp
     DictationResponse::ok(report)
 }
 
-async fn op_test_connectivity(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_test_connectivity(host: &DictationHost) -> DictationResponse {
     let cfg = host.snapshot_config().await;
     let report = probe_connectivity(
         &cfg.network_profile,

@@ -1,3 +1,8 @@
+use super::{EndpointAddr, RelayMode};
+use crate::sync_bind::SyncBind;
+use iroh_tickets::endpoint::EndpointTicket;
+use iroh_tickets::Ticket;
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -48,7 +53,7 @@ pub struct IrohConfig {
 /// Строит ticket-строку из `EndpointAddr` — обратная сторона `from_ticket`.
 /// Свободная функция (а не метод `IrohTransport`), чтобы unit-тест мог
 /// проверить round-trip без поднятия реального `Endpoint`.
-fn ticket_string(addr: &EndpointAddr) -> String {
+pub(super) fn ticket_string(addr: &EndpointAddr) -> String {
     EndpointTicket::new(addr.clone()).encode_string()
 }
 

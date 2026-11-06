@@ -32,7 +32,7 @@ impl SyncServer {
         // a db write. Ask the peers to close and drop the writers' senders,
         // then give the connection tasks a bounded chance to finish on their
         // own: aborting a reader mid-write would leave its blocking db call
-        // running past the join (KOS-270). Whatever is still alive after the
+        // running past the join. Whatever is still alive after the
         // bound is aborted.
         {
             let mut peers = self.peers.lock().await;

@@ -1,8 +1,8 @@
 use crate::outbound_snapshot::{acknowledge_snapshot, PendingSnapshotAck};
-use ark_application::sync_storage::{
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, CommittedFeedPort, OutboundAck, OutboundProgress,
 };
-use ark_domain::sync_policy::PolicyIdentity;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ impl CommittedFeedPort for Storage {
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_domain::sync_storage::FeedSnapshot, String> {
         Err("unexpected feed snapshot read".into())
     }
 
@@ -52,8 +52,8 @@ impl CommittedFeedPort for Storage {
         _: i64,
         _: usize,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundFeedPage,
-        ark_application::sync_storage::PolicyBoundFeedReadError,
+        ark_domain::sync_storage::PolicyBoundFeedPage,
+        ark_domain::sync_storage::PolicyBoundFeedReadError,
     > {
         Err("unexpected policy-bound feed read".into())
     }

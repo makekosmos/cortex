@@ -1,6 +1,6 @@
-//! KOS-369 wire compatibility: the `pairing_rejected` control message
+//! wire compatibility: the `pairing_rejected` control message
 //! round-trips, and frames an old peer can't parse drop cleanly.
-use ark_sync_contracts::wire::{deserialize_message, serialize_message, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{deserialize_message, serialize_message, LanSyncMessage};
 
 /// `pairing_rejected` is a real wire frame (old peers drop it and get their
 /// connection closed); an unknown frame type still fails to parse.
@@ -25,12 +25,12 @@ fn pairing_accepted_is_a_device_identified_control_frame() {
     let raw = serialize_message(&msg);
     assert_eq!(deserialize_message(&raw), Some(msg.clone()));
     assert_eq!(
-        ark_sync_contracts::wire::message_origin_device_id(&msg).as_deref(),
+        ark_domain::sync_contracts::wire::message_origin_device_id(&msg).as_deref(),
         Some("device-b")
     );
 }
 
-/// The exact ticket from the KOS-367 report must decode to the reported
+/// The exact ticket from the report must decode to the reported
 /// EndpointId — the wire format was never the problem.
 #[test]
 fn reported_ticket_decodes() {

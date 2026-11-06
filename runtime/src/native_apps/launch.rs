@@ -2,13 +2,14 @@
 // Windows it owns no foreground window, so a spawned GUI app inherits no
 // foreground rights: `SetForegroundWindow` calls it makes are swallowed
 // by the foreground lock and its window opens *behind* the Manager, while
-// the Manager keeps focus and appears to flicker/reopen (KOS-354). After
+// the Manager keeps focus and appears to flicker/reopen. After
 // spawn we hand the child explicit foreground permission via
 // `AllowSetForegroundWindow(pid)` — the child (or, on relaunch, the
 // already-running instance it forwards to) can then raise its own window.
 // The Engine never calls `SetForegroundWindow` itself and never
 // re-activates the Manager.
 
+use super::*;
 use std::ffi::OsStr;
 
 /// `CREATE_NO_WINDOW`: the Engine is console-less; without the flag a
@@ -21,7 +22,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// meaningless). `ASFW_ANY` is deliberately *not* used: it would let any
 /// process steal foreground until the next user input, not just the app we
 /// launched.
-fn foreground_grant_target(child_id: u32) -> Option<u32> {
+pub(super) fn foreground_grant_target(child_id: u32) -> Option<u32> {
     (child_id != 0).then_some(child_id)
 }
 

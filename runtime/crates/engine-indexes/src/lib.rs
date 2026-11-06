@@ -4,7 +4,7 @@
 // and in test builds, which carry platform-gated fixtures.
 #![cfg_attr(any(test, not(windows)), allow(dead_code))]
 // Same crate-level debt allows as `runtime/src/lib.rs` — this code moved
-// verbatim from engine; the allowlist moves with it (KOS-335).
+// verbatim from engine; the allowlist moves with it.
 #![allow(
     clippy::collapsible_if,
     clippy::derivable_impls,
@@ -28,7 +28,7 @@
 )]
 
 // Shim: engine-base paths keep resolving as `crate::<module>` exactly as they
-// did when this code lived inside the engine crate (KOS-335).
+// did when this code lived inside the engine crate.
 // `crate::brand` — engine_base::brand (privileged::brand is a separate
 // service-branding submodule); `crate::priority` — BackgroundThreadGuard.
 #[allow(unused_imports)]
@@ -49,7 +49,7 @@ pub mod install_layout;
 #[cfg(windows)]
 pub(crate) mod ntfs_common;
 
-/// Same-user process image query — lives in `engine-base` (KOS-342) so
+/// Same-user process image query — lives in `engine-base` so
 /// `engine_base::auth::process_image_path` can wrap it without a circular
 /// edge; `privileged::impersonate` keeps using it at `crate::process_image`.
 #[cfg(windows)]

@@ -112,7 +112,7 @@ impl ArkHost {
     /// Open (create if needed) the ARK database at `db_path` and start the
     /// service worker. Same semantics as the old `ArkHost::spawn` + `init`.
     pub async fn open(db_path: &str) -> ArkResult<Self> {
-        // Host config (KOS-287): the real %SystemRoot%, resolved once here via
+        // Host config: the real %SystemRoot%, resolved once here via
         // GetSystemWindowsDirectoryW. ark-core marks exes under it as system
         // apps; a request param would let clients lie about that, so it lives
         // in construction-time config. On failure we warn and pass None —
@@ -244,7 +244,7 @@ fn typed_response<T: for<'de> Deserialize<'de>>(
 
 /// Real %SystemRoot% via `GetSystemWindowsDirectoryW`, memoized. `None`
 /// (resolution failed, or non-Windows host) means usage analytics marks
-/// nothing as system — never a hard-coded `c:\windows` guess (KOS-287).
+/// nothing as system — never a hard-coded `c:\windows` guess.
 #[cfg(target_os = "windows")]
 fn system_windows_dir() -> Option<&'static str> {
     use std::sync::OnceLock;
@@ -340,7 +340,7 @@ mod tests {
         shutdown(host).await;
     }
 
-    /// KOS-287: the real %SystemRoot% is resolved at ArkHost::open and fed to
+    /// the real %SystemRoot% is resolved at ArkHost::open and fed to
     /// usage analytics as host config — no request param, no env guess.
     #[tokio::test]
     async fn analytics_marks_system_app_from_host_windows_dir() {

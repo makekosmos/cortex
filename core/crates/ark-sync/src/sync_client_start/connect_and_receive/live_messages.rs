@@ -1,4 +1,13 @@
-use super::*;
+use super::super::send_msg;
+use super::super::{
+    AuthenticatedTx, ClientFeedInFlight, ClientMessageSender, ClientOnChangeCallback, TAG,
+};
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::{OutboundAck, SyncRuntimeStorage};
+use ark_domain::types::SyncEntity;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub(super) async fn handle_task_merge_batch(
     storage: &Arc<dyn SyncRuntimeStorage>,
@@ -177,7 +186,7 @@ pub(super) async fn handle_feed_ack(
     tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
     change_id: &str,
-    ack: ark_application::sync_storage::OutboundAck,
+    ack: ark_domain::sync_storage::OutboundAck,
     receipt_ack: bool,
     policy_bound: bool,
     policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,

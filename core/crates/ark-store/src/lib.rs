@@ -26,11 +26,14 @@ pub mod schema;
 pub mod snapshot;
 pub mod sync_entities;
 pub mod sync_kv;
+pub mod sync_progress_write;
 pub mod sync_tombstones;
 pub mod sync_versions;
 pub mod task_merge;
 pub mod task_mutation;
-mod tracked_app_mutation;
+pub mod task_object_write;
+pub mod tracked_app_mutation;
+pub mod type_mutation;
 pub mod type_registry;
 pub mod usage;
 pub mod usage_history;
@@ -64,9 +67,9 @@ mod load_all_json_tests;
 #[cfg(test)]
 mod load_and_clear_tests;
 #[cfg(test)]
-mod pending_objects_and_integrity_tests;
+mod object_version_state_tests;
 #[cfg(test)]
-mod phase2_object_versions_tests;
+mod pending_objects_and_integrity_tests;
 #[cfg(test)]
 mod query_contract_tests;
 #[cfg(test)]
@@ -80,4 +83,4 @@ mod sync_transaction_contract_tests;
 #[cfg(test)]
 mod transactions_and_usage_tests;
 #[cfg(test)]
-mod type_registry_slice1_tests;
+mod type_registry_mutation_tests;

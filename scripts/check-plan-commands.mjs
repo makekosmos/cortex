@@ -24,13 +24,16 @@ const COMMANDS_BY_CHECK = {
   "runtime-staging": [process.execPath, ["--test", "desktop/scripts/runtime-staging.test.mjs"]],
   "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
   "test:static": ["pnpm", ["run", "test:static"]],
+  "doc-paths": ["pnpm", ["run", "check:doc-paths"]],
 };
 
 // The full gate, defined once: `pnpm run check` is `check-plan --full --run`,
 // and a fail-closed plan executes the same list — the two cannot drift.
 const FULL_GATE = ["fast", "clippy", "test:static", "test:rust", "manager-gpui", "runtime-staging"];
 
-const FULL_CONTRACT_CHECKS = [];
+// Docs go stale silently: every full gate run re-checks the file paths that
+// docs and AGENTS.md cite (scripts/check-doc-paths.mjs).
+const FULL_CONTRACT_CHECKS = ["doc-paths"];
 
 function commandFor(check) {
   const [command, args] = COMMANDS_BY_CHECK[check];

@@ -1,7 +1,7 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::session_io::SessionIoSender;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::{
     inbound_live_change::{
@@ -11,7 +11,7 @@ use crate::{
     inbound_snapshot::{InboundSnapshotBatch, SnapshotEntityResult},
     server_session::DirectServerSyncChanges,
 };
-use ark_application::sync_storage::entity_inbox_message_id;
+use ark_domain::sync_storage::entity_inbox_message_id;
 use ark_domain::types::{PeerRecord, SyncEntity};
 
 impl ConnectedServerSession {

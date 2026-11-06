@@ -183,7 +183,7 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<PendingItem>, PendingError> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
-    // KOS-301: crash между `File::create` и `rename` в atomic_write оставлял
+    // crash между `File::create` и `rename` в atomic_write оставлял
     // `{uuid}.wav.tmp`/`{uuid}.json.tmp` навсегда — чистим старше grace.
     temp_sweep::sweep(&dir, LEFTOVER_GRACE, |name, is_dir| {
         !is_dir && name.ends_with(".tmp")

@@ -1,3 +1,11 @@
+use std::sync::Arc;
+
+use crate::sync_server::{save_version_vector, SyncRuntimeStorage};
+use crate::types::VersionVector;
+use ark_domain::sync_storage::PeerProgressPort;
+
+use super::tests::MemBackend;
+
 #[tokio::test]
 async fn saving_a_stale_vector_cannot_erase_progress_committed_before_its_write() {
     let backend = Arc::new(MemBackend::new());

@@ -7,7 +7,7 @@ use super::DbHandle;
 mod adapter;
 mod core_task;
 #[cfg(test)]
-mod data_platform_phase7_tests;
+mod selective_sync_policy_tests;
 
 pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,

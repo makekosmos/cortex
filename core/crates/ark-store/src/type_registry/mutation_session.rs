@@ -1,10 +1,10 @@
-use ark_application::sync_storage::ReplayNotice;
-use ark_application::type_mutation::{TypeEntityKind, TypeMutationSession};
+use crate::type_mutation::TypeEntityKind;
 use ark_domain::canonical_type::TypeRegistration;
+use ark_domain::sync_storage::ReplayNotice;
 use ark_domain::types::ObjectType;
 use rusqlite::Transaction;
 
-pub(crate) struct SqliteTypeMutationSession<'tx, 'connection> {
+pub struct SqliteTypeMutationSession<'tx, 'connection> {
     transaction: &'tx Transaction<'connection>,
 }
 
@@ -14,23 +14,26 @@ impl<'tx, 'connection> SqliteTypeMutationSession<'tx, 'connection> {
     }
 }
 
-impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
-    fn register_application_type(
+impl SqliteTypeMutationSession<'_, '_> {
+    pub(crate) fn register_application_type(
         &self,
         registration: &TypeRegistration,
     ) -> Result<Vec<ReplayNotice>, String> {
         crate::type_registry::register_application_type(self.transaction, registration)
     }
 
-    fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String> {
+    pub(crate) fn upsert_object_type(
+        &self,
+        object_type: &ObjectType,
+    ) -> Result<Vec<ReplayNotice>, String> {
         crate::type_registry::upsert_object_type(self.transaction, object_type)
     }
 
-    fn delete_object_type(&self, id: &str) -> Result<(), String> {
+    pub(crate) fn delete_object_type(&self, id: &str) -> Result<(), String> {
         crate::type_registry::delete_object_type(self.transaction, id)
     }
 
-    fn record_local_revision(
+    pub(crate) fn record_local_revision(
         &self,
         kind: TypeEntityKind,
         id: &str,

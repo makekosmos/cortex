@@ -23,7 +23,7 @@ pub(crate) struct SyncStartParams {
     /// `RelayMode::Custom` — self-hosted relays and tests pointing the
     /// endpoint at an unreachable relay.
     pub(crate) iroh_relay_url: Option<String>,
-    /// KOS-369: this start is the user entering a pairing code — mark the
+    /// this start is the user entering a pairing code — mark the
     /// endpoint as an outgoing consent attempt. One-shot: the runtime's
     /// persisted `start_params` carry `false` so internal restarts and boot
     /// restores don't resurrect it.
@@ -41,12 +41,12 @@ pub(crate) struct SyncRuntime {
     pub(crate) server: Arc<SyncServer>,
     pub(crate) storage: Arc<SqliteStorageBackend>,
     pub(crate) clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
-    pub(crate) relay: Option<Arc<RelaySync>>,
+    pub(crate) relay: Option<Arc<SyncSession>>,
     pub(crate) transport_choice: Option<TransportChoice>,
     pub(crate) start_params: SyncStartParams,
     /// Step 4a: our iroh pairing ticket, resolved asynchronously after the
     /// iroh transport binds (`our_ticket()` needs the transport object
-    /// directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`, which
+    /// directly — `SyncSession` only exposes `Arc<dyn SyncTransport>`, which
     /// is not downcastable — so the ticket string is published through this
     /// watch channel instead of threading a concrete `IrohTransport` handle
     /// through `SyncRuntime`). With relay homing enabled `our_ticket()`
@@ -78,4 +78,6 @@ pub(crate) use ark_domain::object_write::ObjectWriteSnapshot;
 mod request;
 pub(crate) use request::{DataVolumeScope, Request, SyncPolicyRuleInput};
 
-include!("definitions/start_sync.rs");
+#[path = "definitions/start_sync.rs"]
+mod start_sync;
+pub(crate) use start_sync::StartSyncParams;

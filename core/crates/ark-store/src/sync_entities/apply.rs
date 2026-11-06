@@ -19,7 +19,7 @@ pub fn apply_inbound_object_snapshot(
     links: &[ObjectLink],
     source_hlc: &str,
     revision: InboundObjectRevision,
-) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
     let current = match revision {
         InboundObjectRevision::Canonical => {
             crate::sync_versions::object_revision(connection, &object.id)?
@@ -29,7 +29,7 @@ pub fn apply_inbound_object_snapshot(
         .as_deref()
         .is_some_and(|current| HLC::compare_str(source_hlc, current) != std::cmp::Ordering::Greater)
     {
-        return Ok(ark_application::sync_storage::InboundApplyOutcome::Stale);
+        return Ok(ark_domain::sync_storage::InboundApplyOutcome::Stale);
     }
 
     crate::objects::upsert_object_compat(connection, object)?;
@@ -45,7 +45,7 @@ pub fn apply_inbound_object_snapshot(
         )
         .map_err(|error| error.to_string())?;
     crate::sync_tombstones::delete(connection, &object.id)?;
-    Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+    Ok(ark_domain::sync_storage::InboundApplyOutcome::Applied)
 }
 
 #[cfg(test)]
@@ -136,7 +136,7 @@ mod tests {
         .expect("snapshot applies");
         assert_eq!(
             outcome,
-            ark_application::sync_storage::InboundApplyOutcome::Applied
+            ark_domain::sync_storage::InboundApplyOutcome::Applied
         );
         transaction.commit().expect("transaction commits");
 
@@ -193,7 +193,7 @@ mod tests {
         .expect("stale snapshot is ignored");
         assert_eq!(
             outcome,
-            ark_application::sync_storage::InboundApplyOutcome::Stale
+            ark_domain::sync_storage::InboundApplyOutcome::Stale
         );
         let title: String = connection
             .query_row("SELECT title FROM objects WHERE id='note-1'", [], |row| {

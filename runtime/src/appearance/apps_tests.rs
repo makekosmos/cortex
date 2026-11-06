@@ -1,3 +1,5 @@
+use super::*;
+
 #[tokio::test]
 async fn scoped_get_initializes_from_global_without_persisting() {
     let dir = tempfile::tempdir().unwrap();

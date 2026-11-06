@@ -97,5 +97,8 @@ export function manifestChecks(path, before, after) {
 // unnoticed. Any other .md/.mdx/.txt document selects no checks.
 export const DOC_CONTRACTS = {
   // package-manager-migration.test.mjs: command docs must not require Bun.
-  "README.md": ["package-manager"],
+  "README.md": ["package-manager", "doc-paths"],
+  // check-doc-paths.test.mjs: the doc scan covers AGENTS.md and README.md, so
+  // editing either has to re-run it.
+  "AGENTS.md": ["doc-paths"],
 };

@@ -1,12 +1,12 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::session_io::SessionIoSender;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::committed_feed_delivery::{
     acknowledge, FeedAck, FeedAckOutcome, FeedFlight, MAX_FEED_PAGE_SIZE,
 };
-use ark_application::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
+use ark_domain::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
 
 const FEED_CHANGE_PREFIX: &str = "ark-feed-v1:";
 
@@ -92,10 +92,10 @@ impl ConnectedServerSession {
                 .await
             {
                 Ok(page) => Ok(page.page),
-                Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
+                Err(ark_domain::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
                     return true;
                 }
-                Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
+                Err(ark_domain::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
                     Err(error)
                 }
             },

@@ -1,6 +1,6 @@
 //! Shared build-time helper that embeds an icon, a VERSIONINFO resource and
 //! (optionally) an application manifest into every Windows exe we ship
-//! (KOS-306).
+//!
 //!
 //! Defender's ML weighs the absence of version metadata heavily; a bare exe
 //! with empty CompanyName/FileDescription looks like a dropper. Both
@@ -34,7 +34,7 @@ pub enum Manifest {
     /// runtime behaviour.
     Background,
     /// [`Manifest::Background`] plus what gpui's own `gpui.manifest.xml`
-    /// carried before the imago pin dropped `windows-manifest` (KOS-347):
+    /// carried before the imago pin dropped `windows-manifest`:
     /// the Common-Controls v6 dependency, PerMonitorV2 DPI awareness and
     /// SegmentHeap. gpui's Windows backend imports `TaskDialogIndirect`,
     /// which only comctl32 v6 exports — without the dependency the loader
@@ -101,7 +101,7 @@ pub struct ExeInfo<'a> {
     /// Optional `.ico` embedded as the exe's icon.
     pub icon: Option<PathBuf>,
     /// The embedded application manifest. Both shipped exes carry one: the
-    /// imago gpui pin dropped the `windows-manifest` feature (KOS-347), so
+    /// imago gpui pin dropped the `windows-manifest` feature, so
     /// `Mundus Manager.exe` no longer gets a manifest from a dependency.
     pub manifest: Manifest,
 }

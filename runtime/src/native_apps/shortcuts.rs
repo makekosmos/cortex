@@ -1,4 +1,6 @@
-// Engine-owned Start-menu shortcuts for store-installed apps (KOS-265).
+use super::*;
+
+// Engine-owned Start-menu shortcuts for store-installed apps.
 //
 // Links live under `<Programs>\Mundus\<Name>.lnk` — inside a product
 // subfolder — so the installer's legacy cleanup of the flat bundled-era
@@ -24,7 +26,7 @@ pub fn start_menu_dir() -> Option<PathBuf> {
 
 /// `<Programs>\Mundus\<display name>.lnk` — the single location a store
 /// app's link may occupy. Descriptor names are unique per table.
-fn link_path(programs: &Path, desc: &NativeAppDescriptor) -> PathBuf {
+pub(super) fn link_path(programs: &Path, desc: &NativeAppDescriptor) -> PathBuf {
     programs
         .join(crate::brand::PRODUCT_NAME)
         .join(format!("{}.lnk", desc.name))
@@ -69,7 +71,7 @@ pub fn reconcile_shortcuts(store: &NativeAppStore, programs: &Path) {
 /// True when an existing link already resolves to `target` — avoids a
 /// rewrite on every Engine start. An unparseable link answers `false` and
 /// gets rewritten.
-fn link_points_at(link: &Path, target: &Path) -> bool {
+pub(super) fn link_points_at(link: &Path, target: &Path) -> bool {
     let Ok(shell_link) = lnk::ShellLink::open(link) else {
         return false;
     };
@@ -83,7 +85,7 @@ fn link_points_at(link: &Path, target: &Path) -> bool {
 /// Windows paths compare case-insensitively, and an existing path also
 /// compares equal to its `\\?\` / 8.3 spelling. `IShellLink::SetPath`
 /// stores the long path; the install record keeps the path we were given.
-fn same_path(left: &Path, right: &Path) -> bool {
+pub(super) fn same_path(left: &Path, right: &Path) -> bool {
     path_key(left) == path_key(right)
 }
 

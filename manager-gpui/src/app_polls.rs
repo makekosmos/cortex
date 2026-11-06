@@ -26,7 +26,7 @@ impl ManagerApp {
                 self.refresh_status("about.health", "health");
             }
         }
-        // App-wide (KOS-369): an incoming pairing request must raise the
+        // App-wide: an incoming pairing request must raise the
         // consent prompt even when the user isn't on the Sync page — the
         // snapshot carries `incoming_pairing_requests`/`outgoing_pairing`.
         if Instant::now() >= self.next_sync_poll {

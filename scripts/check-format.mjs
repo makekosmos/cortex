@@ -188,12 +188,6 @@ if (changedRs.length && existsSync("Cargo.toml")) {
     shell: process.platform === "win32",
   });
   if (fmt.status !== 0) failed = true;
-  const fragments = spawnSync(
-    process.execPath,
-    [join("scripts", "fmt-include-fragments.mjs"), "--check"],
-    { stdio: "inherit" },
-  );
-  if (fragments.status !== 0) failed = true;
 }
 
 if (files.length === 0) process.exit(failed ? 1 : 0);

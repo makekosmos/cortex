@@ -255,6 +255,7 @@ test("the full gate runs the same steps pnpm run check is made of", async () => 
     "test:rust",
     "manager-gpui",
     "runtime-staging",
+    "doc-paths",
   ]);
 });
 
@@ -276,6 +277,7 @@ test("the full gate aggregates failures instead of stopping at the first", async
     "test:rust",
     "manager-gpui",
     "runtime-staging",
+    "doc-paths",
   ]);
 });
 

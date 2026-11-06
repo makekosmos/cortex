@@ -5,7 +5,7 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
 
 ## Source docs (repo root `docs/`)
 
-- `docs/ark-core.md` — crate contract: ArkService threading/fault model,
+- `docs/ark-exocortex.md` — where this crate sits: ArkService threading/fault model,
   request dispatch, events.
 - `docs/sync.md` — sync protocol: HLC, version vectors, transports.
 - `docs/write-boundary.md` — allowed write paths into the user database.
@@ -15,7 +15,7 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
 
 - `core/crates/ark-core/` is the shared Rust + SQLite runtime; the Engine
   hosts it in-process via `ark_core::service::ArkService`
-  (`runtime/src/ark_host.rs`). The old `ark-core-rpc` sidecar is gone.
+  (`../../../runtime/src/ark_host.rs`). The old `ark-core-rpc` sidecar is gone.
 - Requests are dispatched to a dedicated worker thread in FIFO order under
   `catch_unwind`. A handler panic makes the active request outcome unknown,
   cancels queued requests, stops sync, and terminates the service worker. The
@@ -39,7 +39,7 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
   transaction. Usage sequence migration and backfill live in
   `ark_store::usage_sync_log`; entity classification lives in `ark-domain`.
 - Sync wire messages stay `snake_case`; do not weaken self-peer or
-  routable-address filtering (`src/sync_server_peers.rs`, `src/net.rs`).
+  routable-address filtering (`src/sync_server_peers.rs`, `src/sync_server_core.rs`).
 - The Engine-facing request surface (`{"op","params"}` →
   `{"ok","data","error"}`) is kept stable for the ~36 runtime callers and the
   package worker protocol.

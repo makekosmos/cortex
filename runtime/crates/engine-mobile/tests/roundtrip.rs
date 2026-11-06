@@ -1,4 +1,4 @@
-//! Host-side proof for KOS-370 unit 2 and KOS-397: open a temp data dir, upsert
+//! Host-side proof for unit 2 and open a temp data dir, upsert
 //! an agenda task object in the `core.task` 0.1.0 shape agenda writes, list it
 //! back, receive the `object_upserted` event through a `ChangeListener`, then
 //! drop and reopen and still see the task. Legacy `core.task` writes are

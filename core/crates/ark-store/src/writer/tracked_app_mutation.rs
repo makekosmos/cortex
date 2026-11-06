@@ -15,18 +15,18 @@ impl WriteCapabilities<'_, '_> {
 impl TrackedAppMutationWrites<'_, '_> {
     pub fn apply(
         &mut self,
-        mutation: ark_application::tracked_app_mutation::TrackedAppMutation,
+        mutation: crate::tracked_app_mutation::TrackedAppMutation,
     ) -> Result<ark_domain::types::SyncEntity, String> {
         let session =
             crate::tracked_app_mutation::SqliteTrackedAppMutationSession::new(self.transaction);
-        ark_application::tracked_app_mutation::apply_tracked_app_mutation(&session, mutation)
+        crate::tracked_app_mutation::apply_tracked_app_mutation(&session, mutation)
     }
 }
 
 impl SqliteWriter {
     pub fn apply_tracked_app_mutation(
         &mut self,
-        mutation: ark_application::tracked_app_mutation::TrackedAppMutation,
+        mutation: crate::tracked_app_mutation::TrackedAppMutation,
     ) -> Result<ark_domain::types::SyncEntity, StoreTransactionFailure<String>> {
         self.write_with_capabilities(|capabilities| {
             capabilities.tracked_app_mutation().apply(mutation)

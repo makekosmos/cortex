@@ -13,7 +13,7 @@ mod tests {
         read_committed_feed_delivery_page_for_peer, read_committed_feed_page,
         receive_inbox_payload, record_outbound_scan, set_inbox_state, InboxState,
     };
-    use ark_application::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
+    use ark_domain::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
     use rusqlite::Connection;
 
     fn db() -> Connection {
@@ -211,13 +211,13 @@ mod tests {
         let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
         crate::data_platform::ensure_schema(&conn).unwrap();
-        let rule = ark_application::sync_policy::SyncProfileRule {
+        let rule = ark_domain::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
             mode: ark_domain::selective_sync::SyncMode::Full,
             filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
-        let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
+        let digest = ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
         let first = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
@@ -231,12 +231,12 @@ mod tests {
         let pending = begin_outbound_policy_identity(&mut conn, "peer-a", &first).unwrap();
         assert!(!pending.initial_snapshot.is_complete());
 
-        let next_rule = ark_application::sync_policy::SyncProfileRule {
+        let next_rule = ark_domain::sync_policy::SyncProfileRule {
             resource_id: "tasks".into(),
             ..rule
         };
         let next_digest =
-            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
+            ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
         let next = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
@@ -265,13 +265,13 @@ mod tests {
     #[test]
     fn bound_feed_ack_rejects_digest_or_active_mismatch_at_same_revision() {
         let mut conn = db();
-        let rule = ark_application::sync_policy::SyncProfileRule {
+        let rule = ark_domain::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
             mode: ark_domain::selective_sync::SyncMode::Full,
             filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
-        let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
+        let digest = ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
         let current = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
@@ -330,7 +330,7 @@ mod tests {
         let mut conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
         crate::data_platform::ensure_schema(&conn).unwrap();
-        let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
+        let rule = |resource_id: &str| ark_domain::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: resource_id.into(),
             mode: ark_domain::selective_sync::SyncMode::Full,
@@ -338,7 +338,7 @@ mod tests {
         };
         let first_rule = rule("books");
         let first_digest =
-            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&first_rule));
+            ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&first_rule));
         let first = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
@@ -378,7 +378,7 @@ mod tests {
 
         let next_rule = rule("tasks");
         let next_digest =
-            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
+            ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
         crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",

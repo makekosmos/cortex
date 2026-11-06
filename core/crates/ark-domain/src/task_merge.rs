@@ -1,47 +1,19 @@
 use crate::types::{ArkObject, ObjectLink};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod delivery;
+mod operation;
 mod projection;
+pub use delivery::{
+    build_task_merge_batch, validate_task_merge_delivery_policy, TaskMergeAppendResult,
+    TaskMergeBatchBuildError, TaskMergeConflictRead, TaskMergeDeliveryPolicyError,
+    TaskMergeDeliveryPort, TaskMergeJournalPage, TaskMergePrepareError,
+};
+pub use operation::OperationId;
 pub use projection::{apply_unit_value, materialize_task, value_for_unit};
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OperationId(String);
-
-impl OperationId {
-    pub fn parse(value: impl Into<String>) -> Result<Self, MergeError> {
-        let value = value.into();
-        if value.len() != 32 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(MergeError::InvalidOperationId);
-        }
-        Ok(Self(value.to_ascii_lowercase()))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Serialize for OperationId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for OperationId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(value).map_err(de::Error::custom)
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

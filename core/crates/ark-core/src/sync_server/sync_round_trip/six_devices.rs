@@ -2,13 +2,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort};
-use ark_core::sync_server::{PeerIdentityBackend, SyncRuntimeStorage};
 use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
+use ark_domain::replication_storage::PeerIdentityBackend;
+use ark_domain::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncRuntimeStorage,
+};
 use tokio::sync::{watch, Notify};
 
-use super::{make_storage_with_identity, new_direct_client, pick_port, SyncServer};
+use super::fixtures::{make_storage_with_identity, pick_port};
+use super::selective_sync::selective_object_entity;
+use ark_core::direct_client::new_direct_client;
+use ark_core::sync_server::SyncServer;
 
 #[path = "six_devices/task_merge_port.rs"]
 mod task_merge_port;
@@ -62,7 +67,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         .unwrap();
     for row in 0..INITIAL_ROWS {
         source
-            .apply_entity(&super::selective_object_entity(
+            .apply_entity(&selective_object_entity(
                 &format!("initial-{row}"),
                 "core.task",
                 &format!("Initial {row}"),
@@ -171,7 +176,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         .expect("client authentication callback was dropped");
 
     let interactive =
-        super::selective_object_entity("interactive-b", "core.task", "Edited during import", 1000);
+        selective_object_entity("interactive-b", "core.task", "Edited during import", 1000);
     devices[0].1.apply_entity(&interactive).await.unwrap();
     // Deliberately drop the wake-up: the connected client's periodic durable
     // feed drain must recover this committed update without waiting for reconnect.

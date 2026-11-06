@@ -7,7 +7,7 @@ use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::RelayMode;
 use tokio::sync::mpsc;
 
@@ -133,7 +133,7 @@ async fn transport_blocks_outbound_and_inbound_data_until_peer_is_ready() {
         .expect("send");
     assert!(
         !receive_change(&mut b_events_rx, "inbound-pending", Duration::from_secs(1)).await,
-        "an unadmitted receiver must not forward user data to RelaySync"
+        "an unadmitted receiver must not forward user data to SyncSession"
     );
 
     transport_b

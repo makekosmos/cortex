@@ -1,14 +1,18 @@
 use super::*;
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncServer;
-use ark_application::sync_storage::{
-    PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort,
-};
+use ark_domain::sync_contracts::protocol_negotiation::*;
+use ark_domain::sync_contracts::wire::*;
+use ark_domain::sync_storage::{PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort};
+use ark_domain::types::*;
+use futures_util::{SinkExt, StreamExt};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::net::TcpListener;
+use tokio_tungstenite::tungstenite::Message;
 
-async fn registry_backend(
+pub(super) async fn registry_backend(
     device_id: &str,
 ) -> (
     Arc<crate::db::SqliteStorageBackend>,
@@ -35,7 +39,8 @@ async fn registry_backend(
     (backend, secret, database)
 }
 
-include!("registry_admission_tests/registry_exchange.rs");
+#[path = "registry_admission_tests/registry_exchange.rs"]
+mod registry_exchange;
 
 #[tokio::test]
 async fn direct_server_sends_no_data_or_ack_before_registry_admission() {

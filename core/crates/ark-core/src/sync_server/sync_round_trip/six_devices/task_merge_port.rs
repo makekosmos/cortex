@@ -1,7 +1,7 @@
 use super::BackfillBarrier;
-use ark_application::task_merge::TaskMergeDeliveryPort;
 use ark_core::sync_server::AuthenticatedEntityBackend;
 use ark_core::types::SyncEntity;
+use ark_domain::task_merge::TaskMergeDeliveryPort;
 use ark_domain::task_merge_sync::TaskMergeBatch;
 
 #[async_trait::async_trait]
@@ -51,7 +51,7 @@ impl AuthenticatedEntityBackend for BackfillBarrier {
         entity: &SyncEntity,
         peer: &str,
         message_id: &str,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         self.inner
             .apply_authenticated_entity_with_id(entity, peer, message_id)
             .await
@@ -64,7 +64,7 @@ impl AuthenticatedEntityBackend for BackfillBarrier {
         message_id: &str,
         local_device_id: &str,
         policy: Option<ark_domain::sync_policy::PolicyIdentity>,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         self.inner
             .apply_authenticated_entity_with_policy(
                 entity,
@@ -78,7 +78,7 @@ impl AuthenticatedEntityBackend for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl ark_application::sync_storage::PeerSyncPolicyPort for BackfillBarrier {
+impl ark_domain::sync_storage::PeerSyncPolicyPort for BackfillBarrier {
     async fn accepted_policy_identity_for_peer(
         &self,
         peer_device_id: &str,
@@ -96,7 +96,7 @@ impl TaskMergeDeliveryPort for BackfillBarrier {
         peer_device_id: &str,
         expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, ark_application::sync_storage::TaskMergePrepareError> {
+    ) -> Result<Option<TaskMergeBatch>, ark_domain::sync_storage::TaskMergePrepareError> {
         self.inner
             .prepare_task_merge_batch(peer_device_id, expected_identity, limit)
             .await

@@ -1,3 +1,5 @@
+use super::*;
+
 #[tokio::test]
 async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     let (client_storage, client_key, _client_database) = registry_backend("client-device").await;

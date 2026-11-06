@@ -43,16 +43,16 @@ use crate::db::{self, DbHandle, SqliteStorageBackend};
 use crate::direct_client::DirectClient;
 use crate::events::emit_event;
 use crate::hlc::HLC;
-use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{PeerEntry, SyncServer};
+use crate::sync_session::{SyncSession, SyncSessionConfig};
 use crate::types::*;
+use ark_domain::sync_contracts::wire::LAN_SYNC_PORT;
 use ark_net::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use ark_net::host::{get_host_device_name, get_own_addresses};
 use ark_net::net::is_address_routable;
 use ark_net::sync_bind::SyncBind;
 use ark_sync::transport_select::{select_transport, TransportChoice};
-use ark_sync_contracts::wire::LAN_SYNC_PORT;
 
 mod admission;
 mod definitions;
@@ -86,7 +86,7 @@ use self::sync::{
 /// Host-provided environment facts the service must not discover on its own
 /// — ark-core never guesses OS paths. `windows_dir` is the real %SystemRoot%
 /// the Engine resolved via `GetSystemWindowsDirectoryW`; usage analytics
-/// marks rows under it as system apps (KOS-287). `None` marks nothing.
+/// marks rows under it as system apps. `None` marks nothing.
 #[derive(Clone, Debug, Default)]
 pub struct ArkHostConfig {
     pub windows_dir: Option<String>,
@@ -101,12 +101,12 @@ pub(crate) struct ServiceState {
     /// read connection so it does not hold the DB mutex for the whole copy.
     db_path: StdMutex<Option<String>>,
     sync: TokioMutex<Option<Arc<SyncRuntime>>>,
-    /// KOS-51: serializes background `db_backup` copying and
+    /// serializes background `db_backup` copying and
     /// `db_backup_restore` — backup and restore never overlap. Always taken
     /// before the DB mutex (deadlock-safe: the backup thread works on its own
     /// read connection and never takes the DB mutex).
     backup_gate: TokioMutex<()>,
-    /// Host config resolved by the Engine at construction (KOS-287).
+    /// Host config resolved by the Engine at construction.
     windows_dir: Option<String>,
 }
 

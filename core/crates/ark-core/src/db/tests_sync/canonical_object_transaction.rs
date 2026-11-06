@@ -1,8 +1,13 @@
+use super::storage_backend_roundtrips::{make_backend, sync_object};
+use super::*;
 use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
-use ark_application::sync_storage::CommittedFeedPort;
+use ark_domain::sync_storage::CommittedFeedPort;
 use std::time::Instant;
 
-async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str) {
+pub(in crate::db::tests) async fn admit_test_registry_peer(
+    backend: &SqliteStorageBackend,
+    peer_id: &str,
+) {
     backend
         .enroll_paired_device(
             "device-local",
@@ -13,17 +18,15 @@ async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str)
         .unwrap();
 }
 
-fn expect_feed_deliveries(
-    page: ark_application::sync_storage::CommittedFeedDeliveryPage,
-) -> Vec<ark_application::sync_storage::CommittedFeedDelivery> {
+pub(super) fn expect_feed_deliveries(
+    page: ark_domain::sync_storage::CommittedFeedDeliveryPage,
+) -> Vec<ark_domain::sync_storage::CommittedFeedDelivery> {
     match page {
-        ark_application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
-            deliveries
-        }
-        ark_application::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
             panic!("test feed entity exceeded the bounded projection size")
         }
-        ark_application::sync_storage::CommittedFeedDeliveryPage::SkipTo { .. } => {
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::SkipTo { .. } => {
             panic!("test feed page unexpectedly contained only skipped entities")
         }
     }
@@ -34,14 +37,13 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let backend = make_backend().await;
     let entity = sync_object("snapshot-policy-page", "core.note", "Pinned selection");
     backend.apply_entity(&entity).await.unwrap();
-    let full_rule = ark_application::sync_policy::SyncProfileRule {
+    let full_rule = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.note".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let full_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&full_rule));
+    let full_digest = ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&full_rule));
     let selected = backend
         .accept_peer_sync_policy(
             "peer-a",
@@ -55,7 +57,7 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let page = backend
         .load_policy_bound_entities_page_for_peer(
             "peer-a",
-            ark_application::sync_storage::SyncReadClass::Backfill,
+            ark_domain::sync_storage::SyncReadClass::Backfill,
             &crate::types::VersionVector::default(),
             0,
             16,
@@ -65,12 +67,12 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         .unwrap();
     assert_eq!(page.identity, selected.identity());
 
-    let omitted_rule = ark_application::sync_policy::SyncProfileRule {
+    let omitted_rule = ark_domain::sync_policy::SyncProfileRule {
         resource_id: "different_type".into(),
         ..full_rule
     };
     let omitted_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&omitted_rule));
+        ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&omitted_rule));
     let updated = backend
         .accept_peer_sync_policy("peer-a", 2, &omitted_digest, true, &[omitted_rule])
         .await
@@ -79,7 +81,7 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let error = backend
         .load_policy_bound_entities_page_for_peer(
             "peer-a",
-            ark_application::sync_storage::SyncReadClass::Backfill,
+            ark_domain::sync_storage::SyncReadClass::Backfill,
             &crate::types::VersionVector::default(),
             0,
             16,
@@ -89,7 +91,7 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         .unwrap_err();
     assert_eq!(
         error,
-        ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
+        ark_domain::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
     );
     backend
         .backend
@@ -247,16 +249,22 @@ async fn authenticated_apply_rejects_removed_peer() {
         .unwrap();
 }
 
-include!("canonical_object_transaction/object_feed.rs");
-include!("canonical_object_transaction/object_feed_replay.rs");
-include!("canonical_object_transaction/pending_receipt.rs");
-include!("canonical_object_transaction/receipt_ack.rs");
+#[path = "canonical_object_transaction/object_feed.rs"]
+mod object_feed;
+#[path = "canonical_object_transaction/object_feed_replay.rs"]
+mod object_feed_replay;
+#[path = "canonical_object_transaction/pending_receipt.rs"]
+mod pending_receipt;
+#[path = "canonical_object_transaction/receipt_ack.rs"]
+mod receipt_ack;
 
-fn pop_feed_live_change_id(
-    rx: &mut tokio::sync::mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
+use object_feed::full_core_task_entity;
+
+pub(super) fn pop_feed_live_change_id(
+    rx: &mut tokio::sync::mpsc::Receiver<ark_domain::sync_contracts::wire::LanSyncMessage>,
 ) -> String {
     match rx.try_recv().unwrap() {
-        ark_sync_contracts::wire::LanSyncMessage::LiveChange { change_id, .. } => change_id,
+        ark_domain::sync_contracts::wire::LanSyncMessage::LiveChange { change_id, .. } => change_id,
         message => panic!("unexpected message: {message:?}"),
     }
 }

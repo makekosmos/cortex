@@ -1,4 +1,4 @@
-// KOS-376: `mundus-engine` ships inside `Mundus Manager.app/Contents/MacOS`,
+// `mundus-engine` ships inside `Mundus Manager.app/Contents/MacOS`,
 // so on macOS it inherits the bundle's identity and the default `Regular`
 // activation policy. Its first WindowServer connection (arboard's
 // NSPasteboard during dictation inject, spawned AppKit-linked helpers, AX

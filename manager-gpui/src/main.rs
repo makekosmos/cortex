@@ -52,7 +52,7 @@ fn manager_window_options(cx: &mut App) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(window_bounds(cx))),
         titlebar: Some(gpui::TitlebarOptions {
-            // KOS-368: no creation-time title. gpui's macOS backend routes
+            // no creation-time title. gpui's macOS backend routes
             // set_title through -[NSApplication changeWindowsItem:title:…],
             // which *adds* the window to the Dock/Window list when AppKit has
             // not tracked it yet; ordering the window in afterwards adds a

@@ -62,9 +62,9 @@ impl Worker {
 
 /// Engine failures reach the UI as `message()` text; the raw wire code in
 /// `detail` is what a support session needs, so it goes to the app log
-/// (KOS-298 — KOS-295 could not recover why a write was rejected).
+/// (could not recover why a write was rejected).
 ///
-/// KOS-353: Engine wire errors look like `area.op: <class>` — note the space
+/// Engine wire errors look like `area.op: <class>` — note the space
 /// after the colon. The kit's `from_engine_code` exact-matches the class
 /// segment, so the padded form lands in `Unknown` and the user saw only the
 /// generic "неизвестная ошибка" banner. Re-classify the trimmed tail first;
@@ -124,7 +124,7 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
         return Ok(snapshot);
     };
 
-    // KOS-287: one batched `app_index.exe_info` call enriches every row with
+    // one batched `app_index.exe_info` call enriches every row with
     // the exe version-info display name (fixes legacy rows whose displayName
     // is a stale window title, e.g. a browser's last tab) and an on-demand
     // extracted icon for apps the index never saw.
@@ -166,7 +166,7 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
         let info = exe_info.get(&normalize_path(&normalized_path));
 
         // Version-info name wins over the stored displayName — the stored one
-        // may be a window title persisted before KOS-287.
+        // may be a window title persisted before.
         if let Some(name) = info
             .and_then(|v| v.get("displayName"))
             .and_then(Value::as_str)

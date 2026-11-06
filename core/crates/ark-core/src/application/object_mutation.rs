@@ -1,1 +1,1 @@
-pub(crate) use ark_application::object_mutation::LocalObjectDelete;
+pub(crate) use ark_store::object_mutation::LocalObjectDelete;

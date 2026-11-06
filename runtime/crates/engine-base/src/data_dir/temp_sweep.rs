@@ -1,11 +1,11 @@
-//! Sweep of interrupted atomic-write leftovers (KOS-301).
+//! Sweep of interrupted atomic-write leftovers.
 //!
 //! Several modules write into the Engine data dir via the same temp+rename
 //! shape; a crash between `File::create` and `rename` leaves the temp file
 //! forever (e.g. `.protocol-usage.json.tmp.1234`). Every writer sweeps only
 //! its own directory, only names matching that writer's own temp convention,
 //! and only files older than [`LEFTOVER_GRACE`] — a live atomic write holds
-//! its temp for seconds, so the grace window (same reasoning as KOS-300's
+//! its temp for seconds, so the grace window (same reasoning as 's
 //! `RESTORE_TEMP_GRACE`) is what protects an in-flight write without any
 //! cross-process flag.
 //!

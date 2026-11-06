@@ -1,5 +1,5 @@
-use ark_application::sync_storage::{PolicyBoundReadError, PolicyBoundSnapshotPage};
 use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::{PolicyBoundReadError, PolicyBoundSnapshotPage};
 use ark_domain::types::{SyncEntity, VersionVector};
 use rusqlite::Connection;
 
@@ -44,7 +44,7 @@ fn read_page(
 ) -> Result<(PolicyIdentity, Vec<SyncEntity>), String> {
     let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
     let identity = policy.as_ref().map_or_else(
-        ark_application::sync_policy::default_sync_policy_identity,
+        ark_domain::sync_policy::default_sync_policy_identity,
         |policy| policy.identity(),
     );
     let entities = match policy.filter(|policy| policy.active) {

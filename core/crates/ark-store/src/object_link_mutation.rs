@@ -1,4 +1,3 @@
-use ark_application::type_mutation::ObjectLinkMutationSession;
 use ark_domain::types::ObjectLink;
 use rusqlite::Transaction;
 
@@ -12,16 +11,16 @@ impl<'tx, 'connection> SqliteObjectLinkMutationSession<'tx, 'connection> {
     }
 }
 
-impl ObjectLinkMutationSession for SqliteObjectLinkMutationSession<'_, '_> {
-    fn upsert_object_link(&self, object_link: &ObjectLink) -> Result<(), String> {
+impl SqliteObjectLinkMutationSession<'_, '_> {
+    pub(crate) fn upsert_object_link(&self, object_link: &ObjectLink) -> Result<(), String> {
         crate::objects::upsert_object_link(self.transaction, object_link)
     }
 
-    fn delete_object_link(&self, id: &str) -> Result<(), String> {
+    pub(crate) fn delete_object_link(&self, id: &str) -> Result<(), String> {
         crate::objects::delete_object_link(self.transaction, id)
     }
 
-    fn other_object_link_ids(
+    pub(crate) fn other_object_link_ids(
         &self,
         source_object_id: &str,
         link_type: &str,
@@ -35,7 +34,7 @@ impl ObjectLinkMutationSession for SqliteObjectLinkMutationSession<'_, '_> {
         )
     }
 
-    fn record_local_revision(
+    pub(crate) fn record_local_revision(
         &self,
         id: &str,
         device_id: Option<&str>,

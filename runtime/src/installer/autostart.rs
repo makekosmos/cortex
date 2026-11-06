@@ -1,6 +1,6 @@
 //! Autostart seeding and migration — the in-process port of
 //! `engine-post-install.ps1 -MigrateAutostart` and install-engine.ps1's
-//! `Update-EngineAutostart` (KOS-306). The opt-out contract is unchanged: a
+//! `Update-EngineAutostart` . The opt-out contract is unchanged: a
 //! disabled `StartupApproved\Run` marker under the current product name means
 //! the user turned autostart off and we keep it off.
 

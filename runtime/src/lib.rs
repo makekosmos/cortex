@@ -17,7 +17,7 @@
 // Оба binary запускают идентичный setup; UI binary добавляет tray + launcher
 // поверх; headless binary только ждёт Ctrl+C / parent kill.
 
-// KOS-331: foundation modules (brand, data_dir, file hashing, process tree,
+// foundation modules (brand, data_dir, file hashing, process tree,
 // lock file, handle-relative FS, package manifest, observability, …) live in
 // the `engine-base` crate; re-exported wholesale so `crate::<module>` paths
 // keep working unchanged.
@@ -38,7 +38,7 @@ pub mod desktop_authority;
 pub(crate) mod device_name;
 pub mod diagnostics;
 pub use engine_dictation as dictation;
-// KOS-335: file_index + app_index + privileged live in the
+// file_index + app_index + privileged live in the
 // `engine-indexes` crate (one crate keeps the file_index<->privileged NTFS
 // cycle internal); re-exported so `crate::<module>` paths keep working.
 pub use engine_indexes::{app_index, file_index, privileged};

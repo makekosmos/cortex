@@ -81,7 +81,7 @@ fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::W
     // iroh's relay actor warns on every reconnect attempt ("Failed to
     // connect to relay server") — that spam is redundant: ark-core logs one
     // warn per connectivity transition. `error` keeps real actor failures
-    // (task panic/cancel) visible (KOS-298).
+    // (task panic/cancel) visible.
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,iroh::socket::transports::relay=error"));
 
@@ -119,7 +119,7 @@ fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
 }
 
 fn main() -> ExitCode {
-    // KOS-376: inside `Mundus Manager.app` the Engine would otherwise claim a
+    // inside `Mundus Manager.app` the Engine would otherwise claim a
     // second Dock tile at its first WindowServer connection; transform it
     // before anything can touch AppKit.
     engine::macos_dock::suppress_dock_tile();
@@ -130,13 +130,13 @@ fn main() -> ExitCode {
         return code;
     }
     // `prune-versions` — one-shot version-dir cleanup kept for an Engine
-    // invoked directly (KOS-261); dedicated process, never starts the Engine
+    // invoked directly; dedicated process, never starts the Engine
     // runtime.
     if let Some(code) = engine::engine_versions::run_if_prune_versions(&args) {
         return code;
     }
     // `install` / `post-install` / `kill-product-processes` — the NSIS
-    // installer's one-shot modes (KOS-306); never starts the Engine runtime.
+    // installer's one-shot modes; never starts the Engine runtime.
     if let Some(code) = engine::installer::run_if_installer(&args) {
         return code;
     }
@@ -429,7 +429,7 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
-    // KOS-301: crash leftover temp files (`.<name>.tmp.<pid>`,
+    // crash leftover temp files (`.<name>.tmp.<pid>`,
     // `<name>.json.tmp`, …) of every atomic writer that targets the data-dir
     // root. Runs after the singleton acquire, so no other Engine can be
     // mid-write; the sweep's own grace window covers suspended processes.
@@ -442,7 +442,7 @@ async fn setup() -> Result<SetupState, DynError> {
         );
     }
 
-    // KOS-261: prune superseded `versions/<v>` dirs — current + one previous
+    // prune superseded `versions/<v>` dirs — current + one previous
     // are kept for rollback. Runs under the singleton, after the temp sweep;
     // a dev build launched from target/ never matches the install layout and
     // prunes nothing.
@@ -600,7 +600,7 @@ async fn setup() -> Result<SetupState, DynError> {
                 }
             };
             let device_name = sync::resolve_device_name();
-            // KOS-269: the bind choice decides whether Windows shows a
+            // the bind choice decides whether Windows shows a
             // firewall prompt for this exe path. Resolved before start_sync.
             let bind = sync::lan_bind_at_boot(&ark_for_sync, &device_id).await;
             match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name, bind)
@@ -678,7 +678,7 @@ async fn setup() -> Result<SetupState, DynError> {
         );
     }
 
-    // Storage maintenance (KOS-302): usage_sync_log compaction in ark.db +
+    // Storage maintenance: usage_sync_log compaction in ark.db +
     // file-index.db prune/VACUUM, at most once per 24h, off the hot path.
     storage_maintenance::spawn(ark.clone(), file_index.clone());
 
@@ -1191,7 +1191,7 @@ mod tests {
         ws_task.await.unwrap().unwrap();
         ws_shutdown.shutdown().await.unwrap();
         // Drain the HTTP server like the WS server above so neither task
-        // holds fixture files past the tempdir cleanup (KOS-270).
+        // holds fixture files past the tempdir cleanup.
         let _ = api_shutdown.shutdown().await;
         let _ = http_task.await;
         drop(ws_dispatcher);
@@ -1213,7 +1213,7 @@ mod tests {
         // The packaged build enables the windows-subsystem feature so the
         // shipped binary does not allocate a console.
         assert!(package_build.contains("\"windows-gui-subsystem\""));
-        // KOS-337: release ships the local dictation backend — the packaged
+        // release ships the local dictation backend — the packaged
         // build must keep enabling the feature dev builds skip.
         assert!(package_build.contains("\"local-dictation\""));
         // And it must never enable the test-only fixture feature — the

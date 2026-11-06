@@ -1,5 +1,15 @@
-use super::*;
+use super::super::{
+    load_version_vector, send_msg, AuthenticatedTx, ClientMessageSender, ClientOnChangeCallback,
+    TAG,
+};
+use super::sync_policy;
 use crate::protocol::{is_usage_entity, observe_non_usage_entity};
+use ark_domain::hlc::HLC;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
+use ark_domain::types::SyncEntity;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub(super) struct Context<'a> {
     pub storage: &'a Arc<dyn SyncRuntimeStorage>,
@@ -50,7 +60,7 @@ pub(super) async fn apply(
             .apply_authenticated_entity_with_policy(
                 entity,
                 peer_device_id,
-                &ark_application::sync_storage::entity_inbox_message_id(
+                &ark_domain::sync_storage::entity_inbox_message_id(
                     peer_device_id,
                     &entity.entity_type,
                     &entity.id,
@@ -61,15 +71,15 @@ pub(super) async fn apply(
             )
             .await
         {
-            Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
-            | Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
+            Ok(ark_domain::sync_storage::InboundApplyOutcome::Applied)
+            | Ok(ark_domain::sync_storage::InboundApplyOutcome::Stale) => {
                 vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                 accepted += 1;
                 if let Some(handler) = on_change.lock().await.as_ref() {
                     handler(entity.clone());
                 }
             }
-            Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
+            Ok(ark_domain::sync_storage::InboundApplyOutcome::Pending) => {}
             Err(error) => eprintln!(
                 "{TAG} Failed to apply sync entity {}:{}: {error}",
                 entity.entity_type, entity.id

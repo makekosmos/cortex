@@ -1,4 +1,4 @@
-//! Installer subcommands of `mundus-engine` (KOS-306).
+//! Installer subcommands of `mundus-engine`.
 //!
 //! The NSIS installer used to drive three PowerShell invocations
 //! (`install-engine.ps1`, `engine-post-install.ps1 -MigrateAutostart`,

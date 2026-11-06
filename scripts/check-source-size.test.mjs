@@ -29,6 +29,28 @@ async function runFixture(files) {
   }
 }
 
+test("rejects Rust include! source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs": 'mod sync { include!("sync/connection.rs"); }\n',
+    "src/dynamic.rs": 'include!(concat!("sync/", "connection.rs"));\n',
+    "src/sync/connection.rs": "pub fn connect() {}\n",
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /include! source-fragment check failed/);
+  assert.match(result.stderr, /lib\.rs: Rust source fragments must be ordinary modules/);
+  assert.match(result.stderr, /dynamic\.rs: Rust source fragments must be ordinary modules/);
+});
+
+test("does not mistake include_str! or include_bytes! for source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs":
+      'const _: &str = include_str!("message.txt");\nconst _: &[u8] = include_bytes!("asset.bin");\n',
+    "src/message.txt": "text",
+    "src/asset.bin": "bytes",
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("accepts exactly 500 lines and ignores generated dependencies", async () => {
   const result = await runFixture({
     "src/limit.rs": lines(500),

@@ -1,3 +1,9 @@
+use super::{dictionary_index, merge_usage_spans, payload_spans, payload_strings};
+use ark_domain::types::{UsageDay, UsageSpanWrite, UsageTitleTotal};
+use chrono::{Duration, Utc};
+use rusqlite::Connection;
+use serde_json::{json, Value};
+
 fn upsert_usage_day_fragment(
     conn: &Connection,
     write: &UsageSpanWrite,
@@ -125,7 +131,7 @@ pub fn get_usage_title_total(conn: &Connection, query: &str) -> Result<UsageTitl
     Ok(total)
 }
 
-fn clamp_positive_i64(value: i64, fallback: i64) -> i64 {
+pub(super) fn clamp_positive_i64(value: i64, fallback: i64) -> i64 {
     if value > 0 {
         value
     } else {
@@ -133,13 +139,13 @@ fn clamp_positive_i64(value: i64, fallback: i64) -> i64 {
     }
 }
 
-fn iso_date_days_ago(days_ago: i64) -> String {
+pub(super) fn iso_date_days_ago(days_ago: i64) -> String {
     (Utc::now().date_naive() - Duration::days(days_ago))
         .format("%Y-%m-%d")
         .to_string()
 }
 
-fn enumerate_dates(range_days: i64) -> Vec<String> {
+pub(super) fn enumerate_dates(range_days: i64) -> Vec<String> {
     (0..range_days)
         .map(|index| iso_date_days_ago(range_days - index - 1))
         .collect()

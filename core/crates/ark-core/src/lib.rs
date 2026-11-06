@@ -14,10 +14,10 @@ pub mod direct_client;
 pub mod events;
 pub mod hlc;
 pub mod iroh_transport;
-pub mod relay_sync;
 pub mod replication_storage;
 pub mod service;
 pub mod sync_server;
+pub mod sync_session;
 pub mod sync_transport;
 mod task_set;
 #[cfg(test)]
