@@ -115,7 +115,8 @@ pub(crate) enum Request {
         #[serde(default)]
         limit: Option<i64>,
     },
-    GetUsageSummary {
+    #[serde(rename = "usage.summary")]
+    UsageSummary {
         bindings: Vec<UsageTimeBinding>,
         #[serde(default)]
         range_start: Option<String>,

@@ -50,11 +50,11 @@ pub(crate) async fn handle_request(
             batch_limit,
             device_id,
         } => usage::compact_usage_sync_log(state, older_than_days, batch_limit, device_id).await,
-        Request::GetUsageSummary {
+        Request::UsageSummary {
             bindings,
             range_start,
             range_end,
-        } => usage::get_usage_usage_summary(state, bindings, range_start, range_end).await,
+        } => usage::get_usage_summary(state, bindings, range_start, range_end).await,
 
         Request::ListObjects => objects::list_objects(state).await,
         Request::ListObjectSummaries => objects::list_object_summaries(state).await,

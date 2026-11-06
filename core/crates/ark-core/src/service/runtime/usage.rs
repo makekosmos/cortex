@@ -224,7 +224,7 @@ pub(super) async fn search_usage_processes(
     .await
 }
 
-pub(super) async fn get_usage_usage_summary(
+pub(super) async fn get_usage_summary(
     state: &Arc<ServiceState>,
     bindings: Vec<UsageTimeBinding>,
     range_start: Option<String>,
