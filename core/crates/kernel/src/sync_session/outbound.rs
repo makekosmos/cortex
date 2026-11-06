@@ -298,6 +298,22 @@ impl SyncSession {
             .storage
             .apply_task_merge_batch(from_device_id, &self.config.device_id, &identity, &batch)
             .await?;
+        if !ack.replayed {
+            // A merged batch commits task writes; the objects it touched are
+            // named by the operations it carried, once each.
+            let mut changed = std::collections::BTreeSet::new();
+            for entry in &batch.entries {
+                if let Some((operation, _)) = entry.record.operation() {
+                    if changed.insert(operation.object_id.as_str()) {
+                        crate::events::emit_event(crate::events::objects_changed(
+                            &operation.object_id,
+                            Some("core.task"),
+                            "merge",
+                        ));
+                    }
+                }
+            }
+        }
         self.transport
             .session()
             .ok_or_else(|| "addressed transport is not supported".to_owned())?

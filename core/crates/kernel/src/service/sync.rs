@@ -10,6 +10,8 @@ mod events;
 mod pairing;
 mod start;
 pub(crate) use self::disconnect::handle_disconnect_peer;
+#[cfg(test)]
+pub(crate) use self::events::announce_inbound_change;
 use self::events::{
     wire_relay_registry_fanout, wire_server_registry_fanout, wire_sync_session_events,
 };

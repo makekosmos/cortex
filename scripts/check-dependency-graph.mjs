@@ -16,14 +16,23 @@ const GRAPH = {
 };
 const DESKTOP_ONLY_IROH_FEATURES = ["fast-apple-datapath", "metrics", "portmapper"];
 
+/** Core crates are the packages under `core/crates/`; the graph describes them. */
+function isCoreCrate(pkg) {
+  return (
+    typeof pkg.manifest_path === "string" &&
+    pkg.manifest_path.replaceAll("\\", "/").includes("/core/crates/")
+  );
+}
+
 export function validateDependencyGraph(metadata) {
   const packages = new Map(metadata.packages.map((pkg) => [pkg.name, pkg]));
   const errors = [];
-  const unclassifiedPackages = [...packages.keys()]
-    .filter((name) => name.startsWith("ark-") && !Object.hasOwn(GRAPH, name))
+  const unclassifiedPackages = [...packages.values()]
+    .filter((pkg) => isCoreCrate(pkg) && !Object.hasOwn(GRAPH, pkg.name))
+    .map((pkg) => pkg.name)
     .sort();
   for (const name of unclassifiedPackages) {
-    errors.push(`${name}: ARK workspace package is missing from the dependency graph`);
+    errors.push(`${name}: core workspace package is missing from the dependency graph`);
   }
   for (const [name, allowed] of Object.entries(GRAPH)) {
     const pkg = packages.get(name);
@@ -50,7 +59,6 @@ export function validateArkNetSourceBoundary(sources) {
     "SyncRuntimeStorage",
     "IntegrationReplicationBackend",
     "StorageBackedOutboundIntegrationFrameAuthorizer",
-    "store",
     "rusqlite",
   ];
   return sources.flatMap(({ path: sourcePath, source }) =>

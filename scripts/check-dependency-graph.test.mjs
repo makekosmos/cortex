@@ -19,6 +19,7 @@ function metadata(overrides = {}) {
   return {
     packages: Object.entries(graph).map(([name, dependencies]) => ({
       name,
+      manifest_path: `/repo/core/crates/${name}/Cargo.toml`,
       dependencies: dependencies.map((dependency) => ({ name: dependency, kind: null })),
     })),
   };
@@ -46,8 +47,20 @@ test("rejects an injected forbidden dependency edge", () => {
     "sync": ["kernel", "domain"],
   });
   assert.deepEqual(validateDependencyGraph(graph), [
-    "sync: internal normal dependencies are [kernel, domain], expected [domain]",
+    "sync: internal normal dependencies are [domain, kernel], expected [domain]",
   ]);
+});
+
+test("leaves a parameter named store alone", () => {
+  assert.deepEqual(
+    validateArkNetSourceBoundary([
+      {
+        path: "iroh.rs",
+        source: "fn send(store: &IrohStore) { let _ = store; }",
+      },
+    ]),
+    [],
+  );
 });
 
 test("rejects storage contracts and SQLite imports from net source", () => {
@@ -68,15 +81,28 @@ test("rejects storage contracts and SQLite imports from net source", () => {
   );
 });
 
-test("rejects ARK workspace crates missing from the dependency whitelist", () => {
+test("rejects core crates missing from the dependency whitelist", () => {
   const graph = metadata();
   graph.packages.push({
-    name: "ark-future-adapter",
+    name: "kernel-future",
+    manifest_path: "/repo/core/crates/kernel-future/Cargo.toml",
     dependencies: [{ name: "kernel", kind: null }],
   });
   assert.deepEqual(validateDependencyGraph(graph), [
-    "ark-future-adapter: ARK workspace package is missing from the dependency graph",
+    "kernel-future: core workspace package is missing from the dependency graph",
   ]);
+});
+
+test("ignores workspace packages outside core/crates", () => {
+  const graph = metadata();
+  for (const name of ["engine", "engine-mobile", "pe-version-info"]) {
+    graph.packages.push({
+      name,
+      manifest_path: `/repo/runtime/crates/${name}/Cargo.toml`,
+      dependencies: [{ name: "kernel", kind: null }],
+    });
+  }
+  assert.deepEqual(validateDependencyGraph(graph), []);
 });
 
 test("accepts desktop networking features and rejects them in the mobile graph", () => {

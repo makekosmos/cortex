@@ -102,7 +102,7 @@ pub(super) async fn upsert_object_link(
         .await
         .map_err(|error| error.to_string())?;
     for entity in &commit.entities {
-        emit_event(super::objects::links_changed(entity, "upsert"));
+        emit_event(crate::events::links_changed(entity, "upsert"));
     }
     maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
@@ -118,7 +118,7 @@ pub(super) async fn delete_object_link(
         .await
         .map_err(|error| error.to_string())?;
     for entity in &commit.entities {
-        emit_event(super::objects::links_changed(entity, "delete"));
+        emit_event(crate::events::links_changed(entity, "delete"));
     }
     maybe_broadcast_local_changes(state, commit.entities).await;
     Ok(json!(true))
@@ -139,7 +139,10 @@ pub(super) async fn replace_object_link(
         .await
         .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, commit.mutation.entities).await;
-    emit_event(super::objects::links_changed_from(
+    // One event for the link that survives: the deletes and the upsert are one
+    // command and one transaction, so a subscriber that refetches sees the
+    // replaced link, never an intermediate state.
+    emit_event(crate::events::links_changed_from(
         &commit.object_link,
         "replace",
     ));

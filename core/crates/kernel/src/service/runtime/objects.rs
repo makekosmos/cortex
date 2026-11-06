@@ -82,6 +82,7 @@ pub(super) async fn task_merge_append(
     operation: ::domain::task_merge::TaskMergeOperation,
     expected_conflict_digest: Option<String>,
 ) -> Result<Value, String> {
+    let object_id = operation.object_id.clone();
     let result = get_db_handle(state)?
         .append_task_merge_operation(
             db::CommandContext::engine(),
@@ -94,46 +95,14 @@ pub(super) async fn task_merge_append(
         if let Some(runtime) = runtime {
             runtime.server.broadcast_task_merge_batches().await;
         }
+        // The merge graph is task-only, so the type is known here.
+        emit_event(crate::events::objects_changed(
+            &object_id,
+            Some("core.task"),
+            "merge",
+        ));
     }
     serde_json::to_value(result).map_err(|error| error.to_string())
-}
-
-/// A link write names the link, its ends and how it changed. Links carry no
-/// type of their own, so this is a separate event rather than an
-/// `objects.changed` with an invented type id.
-pub(crate) fn links_changed_from(link: &ObjectLink, op: &str) -> Value {
-    json!({
-        "event": "links.changed",
-        "id": link.id,
-        "sourceId": link.source_object_id,
-        "targetId": link.target_object_id,
-        "linkType": link.link_type,
-        "op": op,
-    })
-}
-
-/// Same event, from a sync entity a link command returned.
-pub(crate) fn links_changed(entity: &SyncEntity, op: &str) -> Value {
-    json!({
-        "event": "links.changed",
-        "id": entity.id,
-        "sourceId": entity.data.get("sourceObjectId").cloned(),
-        "targetId": entity.data.get("targetObjectId").cloned(),
-        "linkType": entity.data.get("linkType").cloned(),
-        "op": op,
-    })
-}
-
-/// One event for a UI that only wants to know what changed and how: which
-/// object, of which type, touched how. `object_upserted`/`object_deleted` stay
-/// for the listeners that already read them (engine-mobile's `ChangeListener`).
-pub(crate) fn objects_changed(id: &str, type_id: Option<&str>, op: &str) -> Value {
-    json!({
-        "event": "objects.changed",
-        "id": id,
-        "typeId": type_id,
-        "op": op,
-    })
 }
 
 pub(super) async fn upsert_object(
@@ -189,7 +158,11 @@ pub(super) async fn upsert_object(
             "id": object_id,
             "type_id": object_type_id,
         }));
-        emit_event(objects_changed(&object_id, Some(&object_type_id), "upsert"));
+        emit_event(crate::events::objects_changed(
+            &object_id,
+            Some(&object_type_id),
+            "upsert",
+        ));
     }
     Ok(json!(true))
 }
@@ -221,7 +194,7 @@ pub(super) async fn delete_object(
             "event": "object_deleted",
             "id": object_id,
         }));
-        emit_event(objects_changed(
+        emit_event(crate::events::objects_changed(
             &object_id,
             type_id.as_ref().and_then(Value::as_str),
             "delete",

@@ -168,6 +168,7 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
         .unwrap()
         .to_owned();
     let base = ::domain::task_merge::OperationId::parse(base).unwrap();
+    let mut events = crate::events::subscribe();
     handle_request(
         &state,
         Request::TaskMergeAppend {
@@ -186,6 +187,18 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
     )
     .await
     .unwrap();
+
+    let merged = loop {
+        match events.try_recv() {
+            Ok(event) if event["event"] == "objects.changed" && event["id"] == id => {
+                break event;
+            }
+            Ok(_) => {}
+            Err(error) => panic!("no objects.changed for the merge: {error}"),
+        }
+    };
+    assert_eq!(merged["op"], "merge");
+    assert_eq!(merged["typeId"], "core.task");
 
     let new_snapshot = object_snapshot(&state, id).await;
     assert_ne!(old_snapshot.revision, new_snapshot.revision);

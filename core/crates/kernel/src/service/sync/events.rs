@@ -1,37 +1,61 @@
 use super::*;
 
+/// Entities carry their object in camelCase (`typeId`); older snapshots in the
+/// wild still hold `type_id`, so accept both.
+fn object_type_id(data: &serde_json::Map<String, Value>) -> Option<&str> {
+    data.get("typeId")
+        .or_else(|| data.get("type_id"))
+        .and_then(Value::as_str)
+}
+
 /// Wires the standard event-stream callbacks (`entity_changed`,
 /// `peer_connected`, `peer_disconnected`) onto a `SyncSession` instance.
 /// Shared between the relay and iroh branches of `handle_start_sync` — the
 /// orchestration layer (`SyncSession`) is transport-neutral, so the same
+/// One applied inbound entity, announced on the same bus the local write paths
+/// use. `entity_changed` stays the catch-all; renderer subscribers listen to
+/// the typed events, so an inbound peer write repaints without a reload.
+pub(crate) fn announce_inbound_change(entity: SyncEntity) {
+    emit_event(json!({
+        "event": "entity_changed",
+        "entity": entity,
+    }));
+    if entity.entity_type == "object" {
+        let op = if entity.deleted == Some(true) {
+            emit_event(json!({
+                "event": "object_deleted",
+                "id": entity.id,
+            }));
+            "delete"
+        } else {
+            emit_event(json!({
+                "event": "object_upserted",
+                "id": entity.id,
+                "type_id": object_type_id(&entity.data),
+            }));
+            "upsert"
+        };
+        emit_event(crate::events::objects_changed(
+            &entity.id,
+            object_type_id(&entity.data),
+            op,
+        ));
+    } else if entity.entity_type == "object_link" {
+        emit_event(crate::events::links_changed(
+            &entity,
+            if entity.deleted == Some(true) {
+                "delete"
+            } else {
+                "upsert"
+            },
+        ));
+    }
+}
+
 /// callback wiring applies regardless of which `SyncTransport` drives it.
 pub(super) async fn wire_sync_session_events(sync_session: &Arc<SyncSession>) {
     sync_session
-        .set_on_change(Arc::new(|entity| {
-            // Incoming peer-write notification. `entity_changed` — общее событие
-            // (raw consumers). Но renderer-подписчики (Eden) слушают типизированные
-            // `object_upserted`/`object_deleted` — те же, что эмитит локальная
-            // запись (`Request::UpsertObject`/`DeleteObject`). Без этого входящий
-            // sync долетает в БД, но UI не перерисовывается до перезагрузки.
-            emit_event(json!({
-                "event": "entity_changed",
-                "entity": entity,
-            }));
-            if entity.entity_type == "object" {
-                if entity.deleted == Some(true) {
-                    emit_event(json!({
-                        "event": "object_deleted",
-                        "id": entity.id,
-                    }));
-                } else {
-                    emit_event(json!({
-                        "event": "object_upserted",
-                        "id": entity.id,
-                        "type_id": entity.data.get("type_id").cloned().unwrap_or(Value::Null),
-                    }));
-                }
-            }
-        }))
+        .set_on_change(Arc::new(announce_inbound_change))
         .await;
     sync_session
         .set_on_peer_connect(Arc::new(|peer_device_id| {
