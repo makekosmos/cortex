@@ -7,16 +7,12 @@ use crate::app::ManagerApp;
 pub mod about;
 pub mod appearance;
 pub mod browser;
-pub mod connections;
-pub mod dev;
 pub mod engine_settings;
 pub mod models;
 pub mod secrets;
 pub mod settings;
 pub mod storage;
 pub mod storage_motion;
-pub mod store;
-pub mod store_apps;
 pub mod sync;
 pub mod updates;
 pub mod usage;
@@ -26,34 +22,20 @@ pub enum View {
     Storage,
     Usage,
     Sync,
-    Packages,
     Settings,
     Appearance,
     Browser,
-    Connections,
     Keys,
     Models,
     About,
-    Dev,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum StoreTab {
-    Catalog,
-    Installed,
 }
 
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::About, View::Appearance],
-    &[
-        View::Packages,
-        View::Connections,
-        View::Storage,
-        View::Usage,
-    ],
+    &[View::Storage, View::Usage],
     &[View::Sync, View::Browser],
     &[View::Keys, View::Models],
-    &[View::Settings, View::Dev],
+    &[View::Settings],
 ];
 
 impl View {
@@ -62,12 +44,9 @@ impl View {
             View::Storage => "Хранилище",
             View::Usage => "Активность",
             View::Sync => "Девайсы",
-            View::Packages => "Приложения",
             View::Settings => "Настройки",
             View::Appearance => "Внешний вид",
             View::Browser => "Браузер",
-            View::Dev => "Разработчикам",
-            View::Connections => "Интеграции",
             View::Keys => "Ключи",
             View::Models => "Модели",
             View::About => "О приложении",
@@ -80,15 +59,12 @@ impl View {
             View::Storage => "storage",
             View::Usage => "usage",
             View::Sync => "sync",
-            View::Packages => "packages",
             View::Settings => "settings",
             View::Appearance => "appearance",
             View::Browser => "browser",
-            View::Connections => "connections",
             View::Keys => "keys",
             View::Models => "models",
             View::About => "about",
-            View::Dev => "dev",
         }
     }
 
@@ -98,16 +74,13 @@ impl View {
             "storage" => View::Storage,
             "usage" => View::Usage,
             "sync" => View::Sync,
-            "packages" => View::Packages,
             "settings" => View::Settings,
             "appearance" => View::Appearance,
             "browser" => View::Browser,
-            "connections" => View::Connections,
             "keys" => View::Keys,
             "models" => View::Models,
             "about" => View::About,
             "updates" => View::About,
-            "dev" => View::Dev,
             _ => return None,
         })
     }
@@ -117,12 +90,9 @@ impl View {
             View::Storage => "icons/database.svg",
             View::Usage => "icons/cpu.svg",
             View::Sync => "icons/device-monitor.svg",
-            View::Packages => "icons/store.svg",
             View::Settings => "icons/settings.svg",
             View::Appearance => "icons/appearance.svg",
             View::Browser => "icons/globe.svg",
-            View::Dev => "icons/code.svg",
-            View::Connections => "icons/connections.svg",
             View::Keys => "icons/key.svg",
             View::Models => "icons/download.svg",
             View::About => "icons/help-circle.svg",
@@ -137,12 +107,9 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Storage => storage::load(app),
         View::Usage => usage::load(app),
         View::Sync => sync::load(app),
-        View::Packages => store::load(app),
         View::Settings => settings::load(app),
         View::Appearance => appearance::load(app),
         View::Browser => browser::load(app),
-        View::Dev => dev::load(app),
-        View::Connections => connections::load(app),
         View::Keys => secrets::load(app),
         View::Models => models::load(app),
         View::About => about::load(app),
@@ -159,12 +126,9 @@ pub fn render(
         View::Storage => storage::render(app, cx),
         View::Usage => usage::render(app, window, cx),
         View::Sync => sync::render(app, window, cx),
-        View::Packages => store::render(app, window, cx),
         View::Settings => settings::render(app, window, cx),
         View::Appearance => appearance::render(app, window, cx),
         View::Browser => browser::render(app, window, cx),
-        View::Dev => dev::render(app, window, cx),
-        View::Connections => connections::render(app, window, cx),
         View::Keys => secrets::render(app, window, cx),
         View::Models => models::render(app, window, cx),
         View::About => about::render(app, window, cx),

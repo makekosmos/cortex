@@ -23,12 +23,6 @@ use runtime::{actor_loop, panic_message};
 pub(in crate::db::command) use task_merge_progress::{
     AcknowledgeTaskMergeBatchTask, PrepareTaskMergeBatchTask,
 };
-#[path = "actor/task/signed_integration_frame.rs"]
-mod signed_integration_frame_task;
-pub(in crate::db::command) use signed_integration_frame_task::SignedIntegrationFrameTask;
-#[path = "actor/task/integration_admin.rs"]
-mod integration_admin_task;
-pub(in crate::db::command) use integration_admin_task::IntegrationAdminTask;
 #[path = "actor/task/task_merge_batch.rs"]
 mod task_merge_batch_task;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
@@ -39,12 +33,11 @@ pub(in crate::db::command) use task::TypedCommand;
 pub(in crate::db::command) use task::{
     AuthenticatedCoreTaskWriteTask, AuthenticatedInboundEntityTask, CanonicalGameUpsertTask,
     ClearAllTask, CommittedFeedProgressTask, DeleteObjectLinkTask, DeleteObjectTypeTask,
-    ExternalRefUpsertTask, IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask,
-    LocalObjectDeleteTask, LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask,
-    Publish, RegisterApplicationTypeTask, RegisterPackageTypesTask, ReplaceObjectLinkTask,
-    SyncPolicyWriteTask, SyncProgressWriteTask, TrackedAppMutationTask, TypedMaintenance,
-    UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask,
-    WriterTask,
+    IrohIdentityKeyTask, LocalBookCoverTask, LocalCoreTaskWriteTask, LocalObjectDeleteTask,
+    LocalObjectUpsertTask, LocalSyncKeyValueWriteTask, LocalUsageWriteTask, Publish,
+    RegisterApplicationTypeTask, ReplaceObjectLinkTask, SyncPolicyWriteTask, SyncProgressWriteTask,
+    TrackedAppMutationTask, TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask,
+    UsageCompactionTask, UsageSequenceMigrationTask, WriterTask,
 };
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 

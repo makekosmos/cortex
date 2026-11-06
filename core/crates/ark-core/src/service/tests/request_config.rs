@@ -21,8 +21,10 @@ fn request_deserialization_accepts_iroh_config() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "use_iroh": true,
-        "iroh_peer_ticket": "endpointsometicketvalue"
+        "iroh_peer_ticket": "endpointsometicketvalue",
+        "bind": "loopback"
     }))
     .expect("iroh config should be accepted by the request schema");
 
@@ -41,33 +43,32 @@ fn request_deserialization_accepts_iroh_config() {
 fn request_deserialization_accepts_code_alias_for_pairing() {
     let request = serde_json::from_value::<Request>(json!({
         "operation": "connect_with_pairing_code",
-        "code": "endpointdemo123"
+        "code": "endpointdemo123",
+        "bind": "loopback"
     }))
     .expect("code alias should deserialize for pairing requests");
 
-    let Request::ConnectWithPairingCode { pairing_code } = request else {
+    let Request::ConnectWithPairingCode { pairing_code, bind } = request else {
         panic!("expected connect_with_pairing_code, got {request:?}");
     };
     assert_eq!(pairing_code, "endpointdemo123");
+    assert_eq!(bind, SyncBind::Loopback);
 }
 
 #[test]
-fn request_deserialization_accepts_signed_sync_send() {
-    let request = serde_json::from_value::<Request>(json!({
-        "operation": "integration.send_signed_sync",
-        "frame": {
-            "space_id": "space-a",
-            "origin_node_id": "node-a",
-            "recipient_node_id": "node-b",
-            "key_epoch": 1,
-            "message_id": "message-1",
-            "payload": [],
-            "signature": "00"
-        }
-    }))
-    .expect("signed sync send should deserialize");
-
-    assert!(matches!(request, Request::IntegrationSendSignedSync { .. }));
+fn pairing_requests_require_an_explicit_bind() {
+    let missing_bind = json!({
+        "operation": "connect_with_pairing_code",
+        "pairing_code": "endpointdemo123"
+    });
+    assert!(
+        serde_json::from_value::<Request>(missing_bind).is_err(),
+        "connect_with_pairing_code must not default to all-interfaces"
+    );
+    assert!(
+        serde_json::from_value::<Request>(json!({"operation": "show_pairing_code"})).is_err(),
+        "show_pairing_code must not default to all-interfaces"
+    );
 }
 
 async fn test_storage(
@@ -123,7 +124,8 @@ async fn pairing_restart_params_force_iroh_and_replace_ticket() {
         own_addresses: Arc::new(TokioMutex::new(Vec::new())),
     };
 
-    let params = build_pairing_restart_params(&runtime, "  endpointdemo123  ");
+    let params =
+        build_pairing_restart_params(&runtime, "  endpointdemo123  ", SyncBind::AllInterfaces);
     assert!(params.use_iroh);
     assert_eq!(params.iroh_peer_ticket.as_deref(), Some("endpointdemo123"));
     assert_eq!(params.relay_url.as_deref(), Some("ws://relay.example"));
@@ -185,9 +187,14 @@ async fn loopback_runtime_fixture() -> (SyncRuntime, ark_store::test_support::Te
 #[tokio::test]
 async fn show_pairing_code_errors_when_sync_is_not_running() {
     let state = test_state();
-    let err = handle_request(&state, Request::ShowPairingCode)
-        .await
-        .expect_err("show_pairing_code must fail without a running sync");
+    let err = handle_request(
+        &state,
+        Request::ShowPairingCode {
+            bind: SyncBind::Loopback,
+        },
+    )
+    .await
+    .expect_err("show_pairing_code must fail without a running sync");
     assert!(err.contains("Sync not running"), "unexpected error: {err}");
 }
 
@@ -318,7 +325,8 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     let request = serde_json::from_value::<Request>(json!({
         "operation": "start_sync",
         "space_id": "space",
-        "device_id": "device"
+        "device_id": "device",
+        "bind": "loopback"
     }))
     .expect("start_sync without iroh fields should still deserialize");
 
@@ -328,7 +336,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     assert!(!params.use_iroh);
     assert_eq!(params.iroh_peer_ticket, None);
     assert!(params.discovery_enabled);
-    assert_eq!(params.bind, SyncBind::AllInterfaces);
+    assert_eq!(params.bind, SyncBind::Loopback);
 }
 
 #[test]
@@ -337,6 +345,7 @@ fn request_deserialization_accepts_discovery_opt_out() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "discovery_enabled": false
     }))
     .expect("discovery opt-out should deserialize");
@@ -353,6 +362,7 @@ fn request_deserialization_accepts_relay_and_auth_config() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "relay_url": "ws://127.0.0.1:8765",
         "relay_api_key": "key",
         "auth_secret": "secret"
@@ -375,6 +385,7 @@ fn params_struct_variants_keep_their_wire_format() {
         "operation": "start_sync",
         "space_id": "space",
         "device_id": "device",
+        "bind": "loopback",
         "device_name": "Laptop",
         "port": 21531,
         "seed_addresses": ["10.0.0.1:21531"],
@@ -405,53 +416,6 @@ fn params_struct_variants_keep_their_wire_format() {
     assert_eq!(params.iroh_peer_ticket.as_deref(), Some("ticket"));
     assert!(!params.discovery_enabled);
     assert_eq!(params.bind, SyncBind::Loopback);
-
-    let request = serde_json::from_value::<Request>(json!({
-        "operation": "external_refs.upsert",
-        "connectorId": "connector",
-        "accountId": "account",
-        "externalType": "issue",
-        "externalId": "ext-1",
-        "objectId": "obj-1",
-        "revision": "rev-1",
-        "hash": "hash-1",
-        "state": "linked"
-    }))
-    .expect("external_refs.upsert params must deserialize through the newtype variant");
-    let Request::ExternalRefsUpsert(params) = request else {
-        panic!("expected external_refs.upsert, got {request:?}");
-    };
-    assert_eq!(params.connector_id, "connector");
-    assert_eq!(params.account_id, "account");
-    assert_eq!(params.external_type, "issue");
-    assert_eq!(params.external_id, "ext-1");
-    assert_eq!(params.object_id, "obj-1");
-    assert_eq!(params.revision.as_deref(), Some("rev-1"));
-    assert_eq!(params.hash.as_deref(), Some("hash-1"));
-    assert_eq!(params.state, "linked");
-
-    let request = serde_json::from_value::<Request>(json!({
-        "operation": "integration.acquire_refresh_lease",
-        "integration_id": "integration",
-        "holder_node_id": "node",
-        "credential_generation": 3,
-        "now_ms": 1000,
-        "ttl_ms": 100,
-        "expected_fencing_token": 2,
-        "device_id": "node"
-    }))
-    .expect("acquire_refresh_lease params must deserialize through the newtype variant");
-    let Request::IntegrationAcquireRefreshLease(params) = request else {
-        panic!("expected integration.acquire_refresh_lease, got {request:?}");
-    };
-    assert_eq!(params.integration_id, "integration");
-    assert_eq!(params.holder_node_id, "node");
-    assert_eq!(params.credential_generation, 3);
-    assert_eq!(params.now_ms, 1000);
-    assert_eq!(params.ttl_ms, 100);
-    assert_eq!(params.expected_fencing_token, 2);
-    assert_eq!(params.device_id, "node");
 }
-
 #[path = "request_config/pairing_shutdown.rs"]
 mod pairing_shutdown;

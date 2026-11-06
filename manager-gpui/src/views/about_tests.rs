@@ -9,7 +9,6 @@ fn static_about_fields_exist_before_engine_values_arrive(cx: &mut TestAppContext
     manager.update(cx, |app, cx| {
         app.view = View::About;
         app.slots.insert("about.health".into(), Slot::Loading);
-        app.slots.insert("about.catalog".into(), Slot::Loading);
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
@@ -24,10 +23,6 @@ fn static_about_fields_exist_before_engine_values_arrive(cx: &mut TestAppContext
         app.slots.insert(
             "about.health".into(),
             Slot::Ready(json!({"status":"ready"})),
-        );
-        app.slots.insert(
-            "about.catalog".into(),
-            Slot::Ready(json!({"catalog":{"sequence":1}})),
         );
         cx.notify();
     });
@@ -45,7 +40,6 @@ fn opening_about_never_fetches_diagnostic_snapshot_or_logs(cx: &mut TestAppConte
         about::load(app);
         assert!(app.slots.contains_key("upd.mundus"));
         assert!(app.slots.contains_key("about.health"));
-        assert!(app.slots.contains_key("about.catalog"));
         assert!(!app.slots.contains_key("about.diag"));
         assert!(!app.slots.contains_key("about.logs"));
         assert!(!app.slots.contains_key("@bundle"));

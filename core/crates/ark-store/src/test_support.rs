@@ -57,11 +57,8 @@ mod book_cover_rollback;
 mod canonical_task_idempotency;
 mod data_volume;
 mod device_registry;
-mod external_ref;
 mod foreign_schema;
 mod inbox;
-mod integration_replication;
-mod integration_replication_snapshot;
 mod object_mutation_replay;
 mod object_revision;
 mod object_validation;
@@ -85,15 +82,8 @@ pub use canonical_task_idempotency::{
 };
 pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
-pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
 pub use foreign_schema::ForeignSchemaFixture;
 pub use inbox::has_inbox_receipt;
-pub use integration_replication::{
-    acquire_refresh_lease, load_credential_envelope, load_latest_credential_envelope,
-    load_refresh_lease, load_version_vector, persist_node_authorization,
-    publish_credential_envelope, IntegrationReplicationTestFixture, RefreshLeaseAcquireFixture,
-};
-pub use integration_replication_snapshot::IntegrationReplicationReadSnapshot;
 pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationReplayState};
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,

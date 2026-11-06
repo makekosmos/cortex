@@ -61,7 +61,6 @@ impl SyncTransport for IrohTransport {
             let accept_registry = self.registry.clone();
             let accept_connections = self.connections.clone();
             let accept_connection_generation = self.connection_generation.clone();
-            let accept_outbound_authorizer = self.outbound_authorizer.clone();
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -82,7 +81,6 @@ impl SyncTransport for IrohTransport {
                             let registry = accept_registry.clone();
                             let connections = accept_connections.clone();
                             let connection_generation = accept_connection_generation.clone();
-                            let outbound_authorizer = accept_outbound_authorizer.clone();
                             let out_rx = out_tx.subscribe();
                             let stop_rx = accept_stop.clone();
                             let hello = hello.clone();
@@ -109,7 +107,6 @@ impl SyncTransport for IrohTransport {
                                     registry,
                                     connections,
                                     connection_generation,
-                                    outbound_authorizer,
                                 })
                                 .await;
                             });
@@ -140,7 +137,6 @@ impl SyncTransport for IrohTransport {
             let dial_connections = self.connections.clone();
             let dial_connection_generation = self.connection_generation.clone();
             let dial_suppressed = self.suppressed_endpoints.clone();
-            let dial_outbound_authorizer = self.outbound_authorizer.clone();
             let mut dial_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -199,7 +195,6 @@ impl SyncTransport for IrohTransport {
                                 registry: dial_registry.clone(),
                                 connections: dial_connections.clone(),
                                 connection_generation: dial_connection_generation.clone(),
-                                outbound_authorizer: dial_outbound_authorizer.clone(),
                             })
                             .await;
 
@@ -229,13 +224,6 @@ impl SyncTransport for IrohTransport {
     /// не установлено), сообщение молча дропается: pre-connect live-changes
     /// будут скомпенсированы VersionVector обменом при (ре)коннекте.
     fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
-        if matches!(
-            &msg,
-            LanSyncMessage::SignedIntegrationFrame { .. }
-                | LanSyncMessage::SignedIntegrationAck { .. }
-        ) {
-            return Err("iroh broadcast cannot carry addressed integration messages".into());
-        }
         let _ = self.out_tx.send(OutgoingMessage {
             target: None,
             msg,
@@ -278,7 +266,6 @@ impl SyncTransport for IrohTransport {
                 let _ = task.await;
             }
         }
-        *self.outbound_authorizer.write().await = None;
     }
 }
 
@@ -289,30 +276,11 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
             .registry
             .data_ready_endpoint(device_id)
             .ok_or_else(|| "iroh addressed peer is not data-ready".to_string())?;
-        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
-            if frame.recipient_node_id != device_id {
-                return Err("iroh frame recipient does not match addressed peer".into());
-            }
-        }
         if !matches!(
             &msg,
-            LanSyncMessage::SignedIntegrationFrame { .. }
-                | LanSyncMessage::SignedIntegrationAck { .. }
-                | LanSyncMessage::TaskMergeBatch { .. }
-                | LanSyncMessage::TaskMergeBatchAck { .. }
+            LanSyncMessage::TaskMergeBatch { .. } | LanSyncMessage::TaskMergeBatchAck { .. }
         ) {
             return Err("iroh send_to only supports addressed messages".into());
-        }
-        if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
-            let authorizer = self
-                .outbound_authorizer
-                .read()
-                .await
-                .clone()
-                .ok_or_else(|| {
-                    "iroh outbound integration authorization is unavailable".to_string()
-                })?;
-            authorizer.authorize(frame, &target.to_string()).await?;
         }
         let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
         self.out_tx
@@ -326,18 +294,6 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
             .await
             .map_err(|_| "iroh addressed writer timed out".to_string())?
             .map_err(|_| "iroh addressed writer stopped".to_string())?
-    }
-
-    fn set_outbound_authorizer(
-        &self,
-        authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String> {
-        if let Ok(mut guard) = self.outbound_authorizer.try_write() {
-            *guard = Some(authorizer);
-        } else {
-            return Err("iroh outbound authorization context is busy".into());
-        }
-        Ok(())
     }
 
     fn bind_peer_for_control(

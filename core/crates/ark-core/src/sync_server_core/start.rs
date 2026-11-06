@@ -1,7 +1,7 @@
 use super::super::current_ready_peer;
 use super::server_session_cleanup::finish_rejected_session;
 use super::server_session_host::ServerSessionHostAdapter;
-use super::{signed_integration_write_is_authorized, *};
+use super::*;
 use ark_sync::server_session::{ConnectedServerSessionDriver, ConnectedServerSessionHost};
 use tokio::sync::oneshot;
 
@@ -9,8 +9,6 @@ struct ServerPeerOutboundGuard {
     storage: Arc<dyn SyncRuntimeStorage>,
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     peer_id: usize,
-    space_id: Arc<RwLock<String>>,
-    device_id: Arc<RwLock<String>>,
 }
 
 #[async_trait::async_trait]
@@ -24,39 +22,7 @@ impl ark_sync_contracts::session_io::SessionOutboundGuard for ServerPeerOutbound
         if ark_sync_contracts::wire::requires_registry_admission(message) && ready_peer.is_none() {
             return false;
         }
-
-        let LanSyncMessage::SignedIntegrationFrame { frame } = message else {
-            return true;
-        };
-        let peer_is_current = self
-            .peers
-            .lock()
-            .await
-            .get(&self.peer_id)
-            .is_some_and(|peer| {
-                ready_peer
-                    .as_ref()
-                    .is_some_and(|ready| ready.matches(self.peer_id, peer))
-                    && peer.session.projection().device_id.as_deref()
-                        == Some(frame.recipient_node_id.as_str())
-            });
-        let expected_space_id = self.space_id.read().await.clone();
-        let expected_device_id = self.device_id.read().await.clone();
-        if !peer_is_current
-            || !signed_integration_write_is_authorized(
-                &self.storage,
-                frame,
-                &expected_space_id,
-                &expected_device_id,
-            )
-            .await
-        {
-            return false;
-        }
-        current_ready_peer(self.storage.as_ref(), &self.peers, self.peer_id)
-            .await
-            .as_ref()
-            == ready_peer.as_ref()
+        true
     }
 }
 
@@ -65,15 +31,11 @@ impl ServerPeerOutboundGuard {
         storage: Arc<dyn SyncRuntimeStorage>,
         peers: Arc<Mutex<HashMap<usize, PeerState>>>,
         peer_id: usize,
-        space_id: Arc<RwLock<String>>,
-        device_id: Arc<RwLock<String>>,
     ) -> Self {
         Self {
             storage,
             peers,
             peer_id,
-            space_id,
-            device_id,
         }
     }
 }
@@ -186,8 +148,6 @@ impl SyncServer {
                                     storage.clone(),
                                     peers.clone(),
                                     peer_id,
-                                    space_id.clone(),
-                                    device_id.clone(),
                                 ));
                                 let mut session_io =
                                     match ark_net::websocket::session_io_with_guard(

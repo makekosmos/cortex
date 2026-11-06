@@ -39,8 +39,6 @@ pub enum DirectClientMessage {
         batch_id: String,
         policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
     },
-    SignedIntegrationFrame(ark_domain::integration_replication::SignedSyncEnvelope),
-    SignedIntegrationAck,
     LiveChange {
         change_id: String,
         entity: ark_domain::types::SyncEntity,
@@ -131,12 +129,6 @@ impl DirectClientSession {
                 batch_id,
                 policy_identity,
             },
-            LanSyncMessage::SignedIntegrationFrame { frame } => {
-                DirectClientMessage::SignedIntegrationFrame(frame)
-            }
-            LanSyncMessage::SignedIntegrationAck { .. } => {
-                DirectClientMessage::SignedIntegrationAck
-            }
             LanSyncMessage::LiveChange {
                 change_id,
                 entity,

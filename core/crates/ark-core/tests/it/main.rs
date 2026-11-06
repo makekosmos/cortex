@@ -13,6 +13,7 @@ mod iroh_data_admission;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_ticket_pairing;
+mod old_db_compat;
 mod phase3_agenda_contract;
 mod phase3_game_rpc;
 mod phase3_registry_definition_authority;

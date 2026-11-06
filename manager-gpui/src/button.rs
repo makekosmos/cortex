@@ -120,16 +120,6 @@ pub fn btn<T: 'static>(
     }))
 }
 
-pub fn btn_id(
-    id: &str,
-    label: &'static str,
-    listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> Button {
-    ghost(SharedString::from(id.to_owned()))
-        .label(label)
-        .on_click(listener)
-}
-
 #[cfg(test)]
 #[path = "button_tests.rs"]
 mod tests;

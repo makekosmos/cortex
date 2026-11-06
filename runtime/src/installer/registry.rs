@@ -37,9 +37,9 @@ mod imp {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW,
-        RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE,
-        REG_OPEN_CREATE_OPTIONS, REG_SAM_FLAGS, REG_SZ, REG_VALUE_TYPE, RRF_RT_ANY,
+        RegCloseKey, RegCreateKeyExW, RegGetValueW, RegOpenKeyExW, RegSetValueExW, HKEY,
+        HKEY_CURRENT_USER, KEY_WRITE, REG_OPEN_CREATE_OPTIONS, REG_SAM_FLAGS, REG_SZ,
+        REG_VALUE_TYPE, RRF_RT_ANY,
     };
 
     pub(super) fn wide(value: &str) -> Vec<u16> {
@@ -73,10 +73,6 @@ mod imp {
         }
     }
 
-    pub fn key_exists(subkey: &str) -> Result<bool, String> {
-        Ok(open(subkey, KEY_READ)?.is_some())
-    }
-
     pub fn create_key(subkey: &str) -> Result<(), String> {
         let wide_key = wide(subkey);
         let mut handle = HKEY::default();
@@ -99,14 +95,6 @@ mod imp {
             }
         }
         win32(status, &format!("RegCreateKeyExW {subkey}"))
-    }
-
-    pub fn delete_tree(subkey: &str) -> Result<(), String> {
-        let wide_key = wide(subkey);
-        win32(
-            unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(wide_key.as_ptr())) },
-            &format!("RegDeleteTreeW {subkey}"),
-        )
     }
 
     pub fn read(subkey: &str, name: &str) -> Result<Option<RegValue>, String> {
@@ -206,11 +194,12 @@ mod imp {
         )
     }
 
+    #[cfg(test)]
     pub fn delete_value(subkey: &str, name: &str) {
         let wide_key = wide(subkey);
         let wide_name = wide(name);
         unsafe {
-            let _ = RegDeleteKeyValueW(
+            let _ = windows::Win32::System::Registry::RegDeleteKeyValueW(
                 HKEY_CURRENT_USER,
                 PCWSTR(wide_key.as_ptr()),
                 PCWSTR(wide_name.as_ptr()),

@@ -1,27 +1,19 @@
 use super::*;
 
-fn replication_requires_authority(rest: &str) -> bool {
-    rest.starts_with("replication_")
-}
-
+#[allow(
+    clippy::too_many_arguments,
+    reason = "dispatch wiring shares the server's host handles"
+)]
 pub(super) async fn dispatch_standard(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
     command_bus: Arc<CommandBus>,
-    pomodoro_host: Arc<PomodoroHost>,
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
-    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    agents_data_dir: Arc<std::path::PathBuf>,
-    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
-    package_service: Arc<PackageService>,
-    _snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
-    _desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     manager_state: ManagerState,
     correlation_id: Arc<String>,
     client_id: ClientId,
@@ -39,9 +31,8 @@ pub(super) async fn dispatch_standard(
                 &usage_diagnostics,
                 &app_index,
                 &protocol_usage,
-                &package_service,
                 &correlation_id,
-                &agents_data_dir,
+                manager_state.data_dir(),
             )
             .await,
         )
@@ -57,34 +48,8 @@ pub(super) async fn dispatch_standard(
         result
             .map(LocalResponse::ok)
             .unwrap_or_else(LocalResponse::err)
-    } else if let Some(rest) = operation.strip_prefix("agents.") {
-        match agents
-            .get_or_try_init(|| async {
-                AgentsService::new_with_events(&agents_data_dir, agent_events.clone())
-            })
-            .await
-        {
-            Ok(service) => service
-                .handle(rest, params, client)
-                .await
-                .map(LocalResponse::ok)
-                .unwrap_or_else(LocalResponse::err),
-            Err(error) => LocalResponse::err(error.to_string()),
-        }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
-            if rest == "trigger" {
-                return match package_service
-                    .invoke_worker_operation("dictation.trigger", params)
-                    .await
-                {
-                    Ok(value) => LocalResponse::ok(value),
-                    Err(error) => LocalResponse::err(format!(
-                        "dictation.trigger: {}",
-                        package_error_code(&error)
-                    )),
-                };
-            }
             let result = if rest == "lifecycle.set_autostart" {
                 manager_state
                     .set_autostart(
@@ -110,21 +75,6 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
-    } else if let Some(rest) = operation.strip_prefix("pomodoro.") {
-        {
-            let result = handle_pomodoro_op(rest, params, &pomodoro_host).await;
-            LocalResponse {
-                ok: result.ok,
-                data: result.data,
-                error: result.error,
-            }
-        }
-    } else if let Some(rest) = operation.strip_prefix("filesystem.") {
-        handle_filesystem_op(rest, params, &client, &grants).await
-    } else if let Some(rest) = operation.strip_prefix("arrancador.") {
-        handle_games_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("games.") {
-        handle_games_op(rest, params, &package_service).await
     } else if let Some(rest) = operation.strip_prefix("focus.") {
         {
             let result = handle_focus_op(rest, params, &ark_host).await;
@@ -144,28 +94,12 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("app_index.") {
         handle_app_index_op(rest, params, &app_index).await
-    } else if crate::app_network::is_app_network_op(&operation) {
-        handle_app_network_op(&operation, &params).await
-    } else if let Some(rest) = operation.strip_prefix("integrations.") {
-        if replication_requires_authority(rest) && !client.desktop_authorized {
-            return LocalResponse::err("integration replication authority denied");
-        }
-        integrations::handle_operation(rest, params, &ark_host, &agents_data_dir, &package_service)
-            .await
-            .map(LocalResponse::ok)
-            .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("file_index.") {
         handle_file_index_op(rest, params, &file_index).await
     } else if let Some(rest) = operation.strip_prefix("system.") {
         handle_system_op(rest, params, &client).await
     } else if let Some(rest) = operation.strip_prefix("commands.") {
         handle_command_op(rest, params, &command_bus, connection_id).await
-    } else if let Some(rest) = operation.strip_prefix("store.") {
-        handle_store_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("packages.") {
-        handle_package_op_with_ark(rest, params, &package_service, Some(&ark_host)).await
-    } else if let Some(rest) = operation.strip_prefix("apps.") {
-        handle_apps_op(rest, params, &package_service).await
     } else if matches!(
         operation.as_str(),
         "engine.settings.get"
@@ -210,7 +144,7 @@ pub(super) async fn dispatch_standard(
                 .await
                 .map(LocalResponse::ok),
             "data.storage" => manager_state
-                .data_storage(package_service.storage_root())
+                .data_storage(manager_state.data_dir())
                 .await
                 .map(LocalResponse::ok),
             "data.quarantine.clear" => manager_state
@@ -231,12 +165,7 @@ pub(super) async fn dispatch_standard(
                 .map(LocalResponse::ok),
             "diagnostics.snapshot" => Ok(LocalResponse::ok(
                 manager_state
-                    .diagnostics_snapshot(
-                        &rpc_diagnostics,
-                        &usage_diagnostics,
-                        &protocol_usage,
-                        &package_service,
-                    )
+                    .diagnostics_snapshot(&rpc_diagnostics, &usage_diagnostics, &protocol_usage)
                     .await,
             )),
             "diagnostics.log_tail" => Ok(LocalResponse::ok(
@@ -245,12 +174,7 @@ pub(super) async fn dispatch_standard(
             "diagnostics.support_bundle.create" => manager_state
                 .create_bundle(
                     manager_state
-                        .diagnostics_snapshot(
-                            &rpc_diagnostics,
-                            &usage_diagnostics,
-                            &protocol_usage,
-                            &package_service,
-                        )
+                        .diagnostics_snapshot(&rpc_diagnostics, &usage_diagnostics, &protocol_usage)
                         .await,
                     manager_state.log_tail(&rpc_diagnostics).await,
                 )
@@ -298,7 +222,3 @@ pub(super) async fn dispatch_standard(
     };
     response
 }
-
-#[cfg(test)]
-#[path = "dispatch_standard_tests.rs"]
-mod tests;

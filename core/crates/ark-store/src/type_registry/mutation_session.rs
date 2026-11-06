@@ -15,10 +15,6 @@ impl<'tx, 'connection> SqliteTypeMutationSession<'tx, 'connection> {
 }
 
 impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
-    fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String> {
-        crate::type_registry::register_type(self.transaction, registration)
-    }
-
     fn register_application_type(
         &self,
         registration: &TypeRegistration,

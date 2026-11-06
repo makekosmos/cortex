@@ -1,5 +1,3 @@
-#[cfg(debug_assertions)]
-use super::Connection;
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, RegistryCommand, RegistryEvent,
@@ -381,25 +379,6 @@ fn registry_error(
 }
 
 impl SqliteWriter {
-    #[cfg(debug_assertions)]
-    pub fn sign_registry_handshake_on_connection(
-        connection: &mut Connection,
-        signer_device_id: &str,
-        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
-        candidate_secret_key_hex: &str,
-    ) -> Result<
-        ark_domain::device_registry::RegistryHandshakeProof,
-        StoreTransactionFailure<RegistryLocalMutationError>,
-    > {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
-            capabilities.registry_local_mutation().sign_handshake(
-                signer_device_id,
-                transcript,
-                candidate_secret_key_hex,
-            )
-        })
-    }
-
     pub fn sign_registry_handshake(
         &mut self,
         signer_device_id: &str,
@@ -442,42 +421,6 @@ impl SqliteWriter {
         candidate_secret_key_hex: &str,
     ) -> Result<DeviceEnrollmentOutcome, StoreTransactionFailure<RegistryLocalMutationError>> {
         self.write_with_capabilities(|capabilities| {
-            capabilities.registry_local_mutation().enroll_paired_device(
-                local_device_id,
-                target_device_id,
-                target_signing_key,
-                transport_public_key,
-                candidate_secret_key_hex,
-            )
-        })
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn append_local_registry_event_on_connection(
-        connection: &mut Connection,
-        actor_device_id: &str,
-        command: RegistryCommand,
-        candidate_secret_key_hex: &str,
-    ) -> Result<Option<RegistryEvent>, StoreTransactionFailure<RegistryLocalMutationError>> {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
-            capabilities.registry_local_mutation().append_event(
-                actor_device_id,
-                command,
-                candidate_secret_key_hex,
-            )
-        })
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn enroll_paired_device_on_connection(
-        connection: &mut Connection,
-        local_device_id: &str,
-        target_device_id: &str,
-        target_signing_key: &SigningPublicKey,
-        transport_public_key: &str,
-        candidate_secret_key_hex: &str,
-    ) -> Result<DeviceEnrollmentOutcome, StoreTransactionFailure<RegistryLocalMutationError>> {
-        Self::write_with_capabilities_on_connection(connection, |capabilities| {
             capabilities.registry_local_mutation().enroll_paired_device(
                 local_device_id,
                 target_device_id,

@@ -5,8 +5,6 @@ use std::sync::Arc;
 use ark_domain::device_registry::RegistryEvent;
 use tokio::sync::{mpsc, watch};
 
-use crate::SignedSyncEnvelope;
-
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 const PENDING: u8 = 0;
@@ -18,8 +16,7 @@ const CLOSE_NOW: u8 = 3;
 pub enum ServerSessionIntent {
     WakeCommittedFeed,
     WakeTaskMerge,
-    BroadcastRegistryEvent(RegistryEvent),
-    SendSignedFrame(SignedSyncEnvelope),
+    BroadcastRegistryEvent(Box<RegistryEvent>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -32,7 +32,11 @@ pub(super) fn render(
                         app.sync_pairing_open = !app.sync_pairing_open;
                         app.sync_code_copied = false;
                         if app.sync_pairing_open {
-                            app.refresh("sync.ticket", "show_pairing_code", json!({}));
+                            app.refresh(
+                                "sync.ticket",
+                                "show_pairing_code",
+                                json!({"bind": "all_interfaces"}),
+                            );
                         }
                         cx.notify();
                     },
@@ -102,7 +106,11 @@ pub(super) fn render(
                                     if !code.is_empty() {
                                         app.action(
                                             "connect_with_pairing_code",
-                                            json!({"ticket": code, "pairing_code": code}),
+                                            json!({
+                                                "ticket": code,
+                                                "pairing_code": code,
+                                                "bind": "all_interfaces"
+                                            }),
                                         );
                                         cx.notify();
                                     }

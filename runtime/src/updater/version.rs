@@ -1,7 +1,5 @@
 //! Version parsing/compare for the self-updater, built on the `semver` crate
-//! already used elsewhere in this crate for version matching (see
-//! `package_manifest.rs`, `runtime_grants.rs`, `engine_api/handlers/
-//! authorization.rs`) rather than a hand-rolled comparator.
+//! rather than a hand-rolled comparator.
 use semver::Version;
 
 /// Running Engine version, compared against the update feed to decide

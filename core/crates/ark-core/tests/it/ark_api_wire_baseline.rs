@@ -1,10 +1,5 @@
 use std::collections::HashSet;
-use std::fs;
 
-use ark_core::integration_replication::{
-    encode_hex, IntegrationConfiguration, IntegrationReplicationChange,
-    IntegrationReplicationEntity, SignedSyncEnvelope,
-};
 use ark_sync_contracts::wire::{deserialize_message, serialize_message};
 use serde::Deserialize;
 
@@ -39,44 +34,5 @@ fn lan_wire_v1_fixtures_decode_and_preserve_exact_current_bytes() {
         );
         assert!(seen.insert(fixture.name), "duplicate LAN fixture");
     }
-    assert_eq!(seen.len(), 8, "LAN golden corpus is incomplete");
-}
-
-#[test]
-fn signed_sync_v1_canonical_signing_bytes_match_fixture() {
-    let envelope = SignedSyncEnvelope::new(
-        "space-a",
-        "node-a",
-        "node-b",
-        7,
-        "message-a",
-        vec![IntegrationReplicationChange {
-            entity: IntegrationReplicationEntity::IntegrationConfiguration(
-                IntegrationConfiguration {
-                    integration_id: "integration-a".into(),
-                    provider: "fatsecret".into(),
-                    account_subject: "account-a".into(),
-                    public_scopes: vec!["diary.read".into()],
-                    public_settings: serde_json::json!({"region":"us"}),
-                    enabled: true,
-                    sync_cursor: None,
-                    revision: 2,
-                    hlc: "2026-08-30T00:00:00.000Z:000002:node-a".into(),
-                },
-            ),
-            vector_hlc: "2026-08-30T00:00:00.000Z:000002:node-a".into(),
-        }],
-        "",
-    );
-    let actual = encode_hex(
-        &envelope
-            .canonical_signing_bytes()
-            .expect("fixture envelope should have canonical signing bytes"),
-    );
-    let expected = fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/ark-api-wire-v1/signed-canonical.hex"
-    ))
-    .expect("signed canonical-byte fixture should be readable");
-    assert_eq!(actual, expected.trim());
+    assert_eq!(seen.len(), 6, "LAN golden corpus is incomplete");
 }

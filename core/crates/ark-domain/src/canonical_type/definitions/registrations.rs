@@ -161,3 +161,32 @@ fn registration_from_literal(raw: &str) -> Result<TypeRegistration, String> {
         created_at: string("createdAt")?,
     })
 }
+
+#[cfg(test)]
+mod hash_guard_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn every_registered_type_version_has_a_frozen_schema_hash() {
+        let expected: BTreeMap<String, String> = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/canonical_type_hashes.json"
+        ))
+        .expect("canonical hash fixture is valid JSON");
+        let actual: BTreeMap<String, String> = canonical_type_registrations()
+            .expect("canonical definitions load")
+            .into_iter()
+            .map(|registration| {
+                (
+                    format!("{}@{}", registration.type_id, registration.version),
+                    registration.schema_hash,
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            actual, expected,
+            "a registered canonical schema changed; ship a new type version and add its hash to the fixture instead of editing an existing version"
+        );
+    }
+}

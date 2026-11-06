@@ -190,7 +190,6 @@ pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEnt
 // ---------------------------------------------------------------------------
 
 mod dispatch;
-mod integration;
 mod objects;
 mod system;
 mod types;

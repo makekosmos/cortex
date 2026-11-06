@@ -19,8 +19,6 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::PeerList { .. } => "PeerList",
         LanSyncMessage::Ping { .. } => "Ping",
         LanSyncMessage::Pong { .. } => "Pong",
-        LanSyncMessage::SignedIntegrationFrame { .. } => "SignedIntegrationFrame",
-        LanSyncMessage::SignedIntegrationAck { .. } => "SignedIntegrationAck",
         LanSyncMessage::PairingRejected { .. } => "PairingRejected",
         LanSyncMessage::PairingAccepted { .. } => "PairingAccepted",
         LanSyncMessage::RegistryAdmissionStart { .. } => "RegistryAdmissionStart",

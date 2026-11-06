@@ -127,6 +127,7 @@ async fn pending_pairing() -> (ServiceFixture, ServiceFixture, String) {
         &fixture_b.state,
         Request::ConnectWithPairingCode {
             pairing_code: ticket.clone(),
+            bind: SyncBind::Loopback,
         },
     )
     .await
@@ -165,6 +166,7 @@ async fn connect_with_pairing_code_returns_pending_awaiting_consent() {
         &fixture_b.state,
         Request::ConnectWithPairingCode {
             pairing_code: ticket,
+            bind: SyncBind::Loopback,
         },
     )
     .await

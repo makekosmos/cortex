@@ -17,19 +17,21 @@ use super::*;
 pub(crate) fn lan_opt_in_params(
     runtime: &SyncRuntime,
     peer_ticket: Option<String>,
+    bind: SyncBind,
 ) -> SyncStartParams {
     let mut params = runtime.start_params.clone();
     params.use_iroh = true;
     params.iroh_peer_ticket = peer_ticket;
-    params.bind = SyncBind::AllInterfaces;
+    params.bind = bind;
     params
 }
 
 pub(crate) fn build_pairing_restart_params(
     runtime: &SyncRuntime,
     pairing_code: &str,
+    bind: SyncBind,
 ) -> SyncStartParams {
-    let mut params = lan_opt_in_params(runtime, Some(pairing_code.trim().to_string()));
+    let mut params = lan_opt_in_params(runtime, Some(pairing_code.trim().to_string()), bind);
     params.pairing_connect = true;
     params
 }
@@ -65,6 +67,7 @@ async fn restart_sync_with_restore(
 pub(crate) async fn handle_connect_with_pairing_code(
     state: &Arc<ServiceState>,
     pairing_code: String,
+    bind: SyncBind,
 ) -> Result<Value, String> {
     let code = pairing_code.trim();
     if code.is_empty() {
@@ -85,7 +88,7 @@ pub(crate) async fn handle_connect_with_pairing_code(
         }
     };
 
-    let restart_params = build_pairing_restart_params(&runtime, code);
+    let restart_params = build_pairing_restart_params(&runtime, code, bind);
     let restore_params = runtime.start_params.clone();
 
     // `handle_start_sync` marks the dialed endpoint as the outgoing pairing
@@ -196,7 +199,10 @@ pub(super) async fn snapshot(relay: &RelaySync) -> (Vec<Value>, Value) {
 /// here first. Kept separate from `get_own_iroh_ticket`, which stays a
 /// passive read for callers that only inspect the running runtime: only an
 /// explicit user action may escalate the bind.
-pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Result<Value, String> {
+pub(crate) async fn handle_show_pairing_code(
+    state: &Arc<ServiceState>,
+    bind: SyncBind,
+) -> Result<Value, String> {
     let runtime = {
         let guard = state.sync.lock().await;
         match guard.as_ref() {
@@ -215,7 +221,7 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
         let restore_params = runtime.start_params.clone();
         restart_sync_with_restore(
             state,
-            lan_opt_in_params(&runtime, None),
+            lan_opt_in_params(&runtime, None, bind),
             restore_params,
             "show_pairing_code",
         )

@@ -3,18 +3,6 @@
 // Windows callers reach is dead elsewhere, so the lint is silenced off-Windows
 // and in test builds, which carry platform-gated fixtures.
 #![cfg_attr(any(test, not(windows)), allow(dead_code))]
-// Remaining debt: these signatures need context structs / boxed errors.
-#![allow(clippy::too_many_arguments, clippy::result_large_err)]
-
-// `package-worker-fixture` relaxes the broker's HTTPS-only origin check to
-// allow loopback http origins and exposes worker test hooks — none of that
-// may ever ship. debug_assertions are off in every release profile, so this
-// compile_error is the hard gate between the test feature and a shipped
-// binary (KOS-270).
-#[cfg(all(feature = "package-worker-fixture", not(debug_assertions)))]
-compile_error!(
-    "feature package-worker-fixture is test-only and cannot be enabled in a release build"
-);
 
 // Mundus backend — headless ARK host runtime.
 //
@@ -35,23 +23,12 @@ compile_error!(
 // keep working unchanged.
 pub use engine_base::*;
 
-// KOS-336: package runtime (store, worker process/broker/supervisor/protocol,
-// runtime grants, grant authority, worker secrets) plus the in-process ARK
-// host live in the `engine-packages` crate; re-exported per-module so
-// `crate::<module>` paths keep working unchanged.
-// KOS-338: the dispatch hub (`engine_dispatch`) and `auth` moved to
-// `engine-base` (re-exported by the glob above); package_service plus its
-// support modules (catalog, package_launch, package_registration,
-// background_task, native_apps) moved to `engine-packages`.
-pub use engine_packages::{
-    ark_host, background_task, catalog, grant_authority, native_apps, package_launch,
-    package_registration, package_service, package_store, package_worker_broker,
-    package_worker_process, package_worker_protocol, package_worker_secrets,
-    package_worker_supervisor, runtime_grants,
-};
+// Package runtime removed: the Engine no longer hosts legacy packages,
+// worker processes, grants or the package store. The in-process ARK host and
+// the native-app registry stay in the Engine.
+pub mod ark_host;
+pub mod native_apps;
 
-pub mod agents;
-pub(crate) mod app_network;
 pub mod appearance;
 pub mod backend_tray;
 pub mod command_bus;
@@ -72,12 +49,9 @@ pub mod engine_supervisor;
 pub mod engine_versions;
 pub mod focus;
 pub mod installer;
-pub mod integrations;
 pub mod macos_dock;
 pub mod manager_api;
 pub mod markdown_vault;
-pub mod pomodoro;
-pub mod pomodoro_host;
 pub mod protocol_usage;
 pub mod storage_maintenance;
 pub mod sync;

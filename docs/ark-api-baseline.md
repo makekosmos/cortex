@@ -10,7 +10,6 @@ The gate was run against base `ba8a9dfa977e8b0af80046bb4124bc8decb3070a` and the
 | LAN exact bytes, including signed frame and ack | `cargo nextest run -p ark-core --test it lan_wire_v1_fixtures_decode_and_preserve_exact_current_bytes` | 1/1 passed |
 | Signed canonical bytes | `cargo nextest run -p ark-core --test it signed_sync_v1_canonical_signing_bytes_match_fixture` | 1/1 passed |
 | Six-device import/edit interaction | `cargo nextest run -p ark-core --test it six_devices_converge_during_initial_import_and_local_edit` | 1/1 passed |
-| Real ArkHost response envelope bytes | `cargo nextest run -p engine-packages request_response_bytes_match_ark_api_v1_fixtures` | 1/1 passed |
 
 The request corpus covers `load_all`, legacy todo upsert, canonical object upsert/delete with expected snapshots, the pairing-code alias, and signed integration send. The response corpus covers one success and one malformed-request error. The LAN corpus checks old incoming bytes against the current serialized form and semantic decode/re-encode equality for hello, sync changes, live change, acknowledgements, and signed integration frame/ack. Signed canonical bytes are pinned separately as hex.
 
@@ -30,4 +29,4 @@ The resulting trees had 2,594, 3,739, and 2,272 lines. After normalizing each wo
 
 The complete scoped writer inventory and known boundaries are in [ark-writes.md](ark-writes.md). In particular, outermost SQLite savepoint `RELEASE` commits when there is no enclosing transaction; a nested release remains inside its caller's transaction. Pull cursor persistence follows entity apply and is a separate write boundary. `clear_all` resets a subset of content/progress rows without per-entity deletion metadata; it preserves system-locked type definitions, integration/auth records, and `usage_sync_heads`.
 
-Current compile checks passed for ark-core, engine-packages, engine, and host-target engine-mobile (`cargo check -p <package> --all-targets --locked`). Android engine-mobile cross-check remains unavailable because the installed environment has no `aarch64-linux-android-clang`; see `.audit/kos413/receipts.md` for the exact attempt and result.
+Current compile checks passed for ark-core, engine, and host-target engine-mobile (`cargo check -p <package> --all-targets --locked`). Android engine-mobile cross-check remains unavailable because the installed environment has no `aarch64-linux-android-clang`; see `.audit/kos413/receipts.md` for the exact attempt and result.

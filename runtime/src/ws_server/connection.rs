@@ -37,21 +37,21 @@ impl Drop for WsConnectionOwnerGuard {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "connection wiring shares the server's host handles"
+)]
 pub(super) async fn handle_connection(
     stream: tokio::net::TcpStream,
     ark_host: Arc<ArkHost>,
     expected_token: Arc<String>,
     command_bus: Arc<CommandBus>,
-    pomodoro_host: Arc<PomodoroHost>,
     dictation_host: Arc<DictationHost>,
-    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     protocol_usage: Arc<ProtocolUsageStore>,
     correlation_id: Arc<String>,
     dispatcher: crate::engine_dispatch::EngineDispatcher,
     owner_lease: crate::engine_dispatch::OwnerLease,
     desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
     shutdown: WsShutdownHandle,
 ) -> Result<(), WsServerError> {
     let owner_guard = WsConnectionOwnerGuard::new(dispatcher.clone(), owner_lease);
@@ -129,15 +129,11 @@ pub(super) async fn handle_connection(
         sink,
         stream,
         command_bus,
-        pomodoro_host,
         dictation_host,
         ark_host,
-        agent_events,
         correlation_id,
         client_id,
         desktop_authority,
-        snapshots,
-        grants,
         shutdown,
         dispatcher,
         hello,

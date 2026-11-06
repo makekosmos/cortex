@@ -203,37 +203,29 @@ fn list_running_time_entries_filter_by_source() {
     .unwrap();
     crate::objects::upsert_object_compat(
         &conn,
-        &make_time_entry("te-pomo", "2026-05-20T11:00:00.000Z", None, "pomodoro"),
+        &make_time_entry("te-imported", "2026-05-20T11:00:00.000Z", None, "imported"),
     )
     .unwrap();
     crate::objects::upsert_object_compat(
         &conn,
-        &make_time_entry(
-            "te-break",
-            "2026-05-20T12:00:00.000Z",
-            None,
-            "pomodoro_break",
-        ),
+        &make_time_entry("te-manual-b", "2026-05-20T12:00:00.000Z", None, "manual"),
     )
     .unwrap();
 
     let manual = list_running_time_entries(&conn, Some("manual")).unwrap();
-    assert_eq!(manual.len(), 1);
-    assert_eq!(manual[0].id, "te-manual");
+    assert_eq!(manual.len(), 2);
+    assert_eq!(manual[0].id, "te-manual-b");
+    assert_eq!(manual[1].id, "te-manual");
 
-    let pomo = list_running_time_entries(&conn, Some("pomodoro")).unwrap();
-    assert_eq!(pomo.len(), 1);
-    assert_eq!(pomo[0].id, "te-pomo");
+    let imported = list_running_time_entries(&conn, Some("imported")).unwrap();
+    assert_eq!(imported.len(), 1);
+    assert_eq!(imported[0].id, "te-imported");
 
-    let breaks = list_running_time_entries(&conn, Some("pomodoro_break")).unwrap();
-    assert_eq!(breaks.len(), 1);
-    assert_eq!(breaks[0].id, "te-break");
-
-    // Р‘РµР· С„РёР»СЊС‚СЂР° вЂ” РІСЃРµ С‚СЂРё, РѕС‚СЃРѕСЂС‚РёСЂРѕРІР°РЅС‹ DESC РїРѕ startedAt.
+    // Without a filter all three, sorted DESC by startedAt.
     let all = list_running_time_entries(&conn, None).unwrap();
     assert_eq!(all.len(), 3);
-    assert_eq!(all[0].id, "te-break");
-    assert_eq!(all[1].id, "te-pomo");
+    assert_eq!(all[0].id, "te-manual-b");
+    assert_eq!(all[1].id, "te-imported");
     assert_eq!(all[2].id, "te-manual");
 }
 

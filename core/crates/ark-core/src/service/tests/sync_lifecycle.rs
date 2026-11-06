@@ -61,7 +61,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
             iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
-            bind: SyncBind::AllInterfaces,
+            bind: SyncBind::Loopback,
             app_version: None,
         },
         iroh_our_ticket: watch::channel(None).1,

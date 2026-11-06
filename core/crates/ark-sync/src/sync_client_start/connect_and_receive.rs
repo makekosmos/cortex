@@ -30,13 +30,8 @@
                         app_version: app_version.clone(),
                     },
                 );
-                let tx = ClientMessageSender::new(
-                    session_io.sender(),
-                    storage.clone(),
-                    peer.clone(),
-                    space_id.clone(),
-                    device_id.clone(),
-                );
+                let tx =
+                    ClientMessageSender::new(session_io.sender(), storage.clone(), peer.clone());
                 if tx.send(client_hello.message).await.is_err() {
                     let _ = session_io.finish().await;
                     continue;
@@ -305,21 +300,6 @@
                                             break;
                                         }
                                     }
-
-                                    ClientMessage::SignedIntegrationFrame(frame) => {
-                                        live_messages::handle_signed_integration_message(
-                                            client_session.is_ready(),
-                                            &storage,
-                                            client_session.peer_device_id(),
-                                            &device_id,
-                                            &space_id,
-                                            &tx,
-                                            frame,
-                                        )
-                                        .await;
-                                    }
-
-                                    ClientMessage::SignedIntegrationAck => {}
 
                                     ClientMessage::LiveChange {
                                         change_id,

@@ -128,9 +128,6 @@ pub(crate) async fn handle_request(
         } => objects::delete_object(state, id, expected_snapshot, operation_id, device_id).await,
 
         Request::TypesList => types::types_list(state).await,
-        Request::TypesRegisterPackageDefinitions { registrations } => {
-            types::types_register_package_definitions(state, registrations).await
-        }
         Request::TypesRegister {
             type_id,
             version,
@@ -165,7 +162,6 @@ pub(crate) async fn handle_request(
 
         Request::GetSyncKv { key } => system::get_sync_kv(state, key).await,
         Request::SetSyncKv { key, value } => system::set_sync_kv(state, key, value).await,
-        Request::ExternalRefsUpsert(params) => system::external_refs_upsert(state, params).await,
         Request::ClearAll => system::clear_all(state).await,
         Request::DbBackup { dest_path } => system::db_backup(state, dest_path).await,
         Request::DbBackupList => system::db_backup_list(state).await,
@@ -197,8 +193,8 @@ pub(crate) async fn handle_request(
             system::device_registry_disable(state, target_device_id).await
         }
         Request::DisconnectPeer { device_id } => system::disconnect_peer(state, device_id).await,
-        Request::ConnectWithPairingCode { pairing_code } => {
-            system::connect_with_pairing_code(state, pairing_code).await
+        Request::ConnectWithPairingCode { pairing_code, bind } => {
+            system::connect_with_pairing_code(state, pairing_code, bind).await
         }
         Request::AcceptPairing { device_id } => system::accept_pairing(state, device_id).await,
         Request::DeclinePairing { device_id } => system::decline_pairing(state, device_id).await,
@@ -208,153 +204,7 @@ pub(crate) async fn handle_request(
         Request::GetOwnAddresses { port } => system::own_addresses(state, port).await,
         Request::GetHostDeviceName => system::host_device_name(state).await,
         Request::GetOwnIrohTicket => system::get_own_iroh_ticket(state).await,
-        Request::ShowPairingCode => system::show_pairing_code(state).await,
-
-        Request::IntegrationPersistNodeAuthorization {
-            authorization_operation,
-            node,
-            grant,
-            device_id,
-        } => {
-            integration::integration_persist_node_authorization(
-                state,
-                authorization_operation,
-                node,
-                grant,
-                device_id,
-            )
-            .await
-        }
-        Request::IntegrationPersistIntegrationGrant { grant, device_id } => {
-            integration::integration_persist_integration_grant(state, grant, device_id).await
-        }
-        Request::IntegrationPrepareSignedSync {
-            space_id,
-            origin_node_id,
-            integration_id,
-            recipient_node_id,
-            message_id,
-        } => {
-            integration::integration_prepare_signed_sync(
-                state,
-                space_id,
-                origin_node_id,
-                integration_id,
-                recipient_node_id,
-                message_id,
-            )
-            .await
-        }
-        Request::IntegrationValidateOutboundSignedSync {
-            space_id,
-            origin_node_id,
-            frame,
-        } => {
-            integration::integration_validate_outbound_signed_sync(
-                state,
-                space_id,
-                origin_node_id,
-                frame,
-            )
-            .await
-        }
-        Request::IntegrationSendSignedSync { frame } => {
-            integration::integration_send_signed_sync(state, frame).await
-        }
-        Request::IntegrationAcquireRefreshLease(params) => {
-            integration::integration_acquire_refresh_lease(state, params).await
-        }
-        Request::IntegrationPublishCredentialEnvelope {
-            envelope,
-            device_id,
-            now_ms,
-        } => {
-            integration::integration_publish_credential_envelope(state, envelope, device_id, now_ms)
-                .await
-        }
-        Request::IntegrationLoadLatestCredentialEnvelope {
-            integration_id,
-            recipient_node_id,
-        } => {
-            integration::integration_load_latest_credential_envelope(
-                state,
-                integration_id,
-                recipient_node_id,
-            )
-            .await
-        }
-        Request::IntegrationLookupIssuerEncryptionKey {
-            space_id,
-            integration_id,
-            recipient_node_id,
-            issuer_node_id,
-            credential_generation,
-            expected_issuer_key_id,
-        } => {
-            integration::integration_lookup_issuer_encryption_key(
-                state,
-                space_id,
-                integration_id,
-                recipient_node_id,
-                issuer_node_id,
-                credential_generation,
-                expected_issuer_key_id,
-            )
-            .await
-        }
-        Request::IntegrationCheckCredentialFence {
-            space_id,
-            integration_id,
-            recipient_node_id,
-            issuer_node_id,
-            credential_generation,
-            refresh_fencing_token,
-            expected_issuer_key_id,
-        } => {
-            integration::integration_check_credential_fence(
-                state,
-                crate::db::CredentialFenceExpectation {
-                    space_id: &space_id,
-                    integration_id: &integration_id,
-                    recipient_node_id: &recipient_node_id,
-                    issuer_node_id: &issuer_node_id,
-                    credential_generation,
-                    refresh_fencing_token,
-                    expected_issuer_key_id: &expected_issuer_key_id,
-                },
-            )
-            .await
-        }
-        Request::IntegrationLookupIssuerEncryptionKeyForPublish {
-            space_id,
-            integration_id,
-            recipient_node_id,
-            issuer_node_id,
-            expected_issuer_key_id,
-        } => {
-            integration::integration_lookup_issuer_encryption_key_for_publish(
-                state,
-                space_id,
-                integration_id,
-                recipient_node_id,
-                issuer_node_id,
-                expected_issuer_key_id,
-            )
-            .await
-        }
-        Request::IntegrationVerificationStatus {
-            integration_id,
-            local_node_id,
-            now_ms,
-        } => {
-            integration::integration_verification_status(
-                state,
-                integration_id,
-                local_node_id,
-                now_ms,
-            )
-            .await
-        }
+        Request::ShowPairingCode { bind } => system::show_pairing_code(state, bind).await,
 
         // Test-only fault injection: proves the worker recovers from a
         // panicking request instead of dying silently.

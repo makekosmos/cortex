@@ -99,6 +99,7 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
         &state_b,
         Request::ConnectWithPairingCode {
             pairing_code: ticket_of(&state_a).await,
+            bind: SyncBind::Loopback,
         },
     )
     .await

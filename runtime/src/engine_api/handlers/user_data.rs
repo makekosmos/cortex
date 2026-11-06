@@ -30,6 +30,10 @@ fn user_data_ok(data: Value) -> HttpResponse {
     json_response(StatusCode::OK, json!({ "ok": true, "data": data }))
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
 fn user_data_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, HttpResponse> {
     value.filter(|value| !value.is_empty()).ok_or_else(|| {
         json_response(
@@ -39,6 +43,10 @@ fn user_data_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, H
     })
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
 fn user_data_header<'a>(
     request: &'a Request<Incoming>,
     name: &str,

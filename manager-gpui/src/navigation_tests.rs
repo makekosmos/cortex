@@ -1,5 +1,5 @@
 use crate::app::Slot;
-use crate::views::{self, StoreTab, View, NAV_GROUPS};
+use crate::views::{self, View, NAV_GROUPS};
 use gpui::{px, size, TestAppContext};
 
 #[test]
@@ -13,8 +13,6 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
         vec![
             View::About,
             View::Appearance,
-            View::Packages,
-            View::Connections,
             View::Storage,
             View::Usage,
             View::Sync,
@@ -22,7 +20,6 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
             View::Keys,
             View::Models,
             View::Settings,
-            View::Dev
         ]
     );
 }
@@ -31,7 +28,6 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
 fn relocated_controls_load_their_data_on_their_own_pages(cx: &mut TestAppContext) {
     let (manager, cx) = crate::a11y_tests::launch(cx);
     manager.update(cx, |app, _| {
-        assert!(app.store_tab == StoreTab::Installed);
         app.slots.clear();
         views::settings::load(app);
         for slot in ["engine.autostart", "engine.settings"] {
@@ -39,15 +35,10 @@ fn relocated_controls_load_their_data_on_their_own_pages(cx: &mut TestAppContext
         }
         assert!(!app.slots.contains_key("browser.persist"));
         assert!(!app.slots.contains_key("backups.list"));
-        assert!(!app.slots.contains_key("dev.packages"));
         views::browser::load(app);
         assert!(app.slots.contains_key("browser.persist"));
-        views::dev::load(app);
-        assert!(app.slots.contains_key("dev.packages"));
         views::storage::load(app);
         assert!(app.slots.contains_key("data.storage"));
-        views::connections::load(app);
-        assert!(app.slots.contains_key("conn.list"));
         assert!(!app.slots.contains_key("secrets.config"));
         views::secrets::load(app);
         assert!(app.slots.contains_key("secrets.config"));

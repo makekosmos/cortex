@@ -15,10 +15,7 @@ export const ENGINE_FILES = [ENGINE_BINARY, "tray.ico"];
 // verifies it on install like any other engine file.
 export const OPTIONAL_ENGINE_FILES = ["onnxruntime.dll"];
 
-// MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
-// roots written by 0.9.x installers; the Engine's `install` subcommand
-// accepts both until cleanup.
-const ENGINE_MANIFEST_PRODUCTS = new Set([ENGINE_MANIFEST_PRODUCT, "kosmos-engine"]);
+const ENGINE_MANIFEST_PRODUCTS = new Set([ENGINE_MANIFEST_PRODUCT]);
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const ENGINE_VERSION = /^\d+\.\d+\.\d+$/;

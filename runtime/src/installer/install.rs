@@ -15,15 +15,11 @@ use std::path::{Path, PathBuf};
 use semver::Version;
 use serde_json::{json, Value};
 
-use super::{autostart, legacy, manifest, processes, swap};
+use super::{autostart, manifest, processes, swap};
 
 pub struct Options {
     pub manifest: PathBuf,
     pub target_root: PathBuf,
-    /// MIGRATION(KOS-267): test seams only — the installer always passes the
-    /// real defaults.
-    pub legacy_registry_key: String,
-    pub legacy_shortcut: Option<PathBuf>,
 }
 
 /// Installed+verified version at `root`, or None — `Test-InstalledEngine`.
@@ -118,14 +114,6 @@ pub fn install(options: &Options) -> Result<Value, String> {
             );
             report["action"] = json!("kept");
             report["installed_version"] = json!(installed.to_string());
-            // MIGRATION(KOS-267): the standalone-registration takeover runs
-            // on every install, kept or not — same as the script's tail.
-            if legacy::migrate_standalone_registration(
-                &options.legacy_registry_key,
-                options.legacy_shortcut.clone(),
-            )? {
-                report["legacy_registration_removed"] = json!(true);
-            }
             return Ok(report);
         }
     }
@@ -148,16 +136,6 @@ pub fn install(options: &Options) -> Result<Value, String> {
     }
     if version_root.is_dir() {
         engine_was_running |= stop_engines_in(&version_root)?;
-    }
-    // Pre-in-process Engines spawned an ark-core-rpc sidecar that survives a
-    // backend kill and still holds the DB open.
-    // MIGRATION(KOS-267): remove after 2026-11-01.
-    let rpc_kill = processes::kill_by_names(&["ark-core-rpc.exe"])?;
-    if !processes::report_ok(&rpc_kill) {
-        return Err(format!(
-            "ark-core-rpc.exe still running: survived={:?} failed={:?}",
-            rpc_kill.survived, rpc_kill.failed
-        ));
     }
 
     if temp.exists() {
@@ -225,17 +203,6 @@ pub fn install(options: &Options) -> Result<Value, String> {
         Err(error) => {
             report["prune_warning"] = json!(format!("engine versions prune failed: {error}"))
         }
-    }
-
-    // MIGRATION(KOS-267): remove after 2026-11-01 — the standalone
-    // "Kosmos Engine" Apps & Features takeover runs last, after the new
-    // Engine is installed and verified.
-    let migrated = legacy::migrate_standalone_registration(
-        &options.legacy_registry_key,
-        options.legacy_shortcut.clone(),
-    )?;
-    if migrated {
-        report["legacy_registration_removed"] = json!(true);
     }
 
     Ok(report)

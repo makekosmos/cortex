@@ -41,14 +41,6 @@ impl RelaySync {
             + ark_sync_contracts::peer_control::PeerSessionControl
             + 'static,
     {
-        transport.set_outbound_authorizer(Arc::new(
-            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
-                storage.clone()
-                    as Arc<dyn ark_application::replication_storage::IntegrationReplicationBackend>,
-                config.space_id.clone(),
-                config.device_id.clone(),
-            ),
-        ))?;
         let session: Arc<dyn ark_sync_contracts::transport::IrohSessionTransport> =
             transport.clone();
         let peer_control: Arc<dyn ark_sync_contracts::peer_control::PeerSessionControl> = transport;

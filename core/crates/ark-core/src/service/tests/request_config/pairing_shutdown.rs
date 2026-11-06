@@ -5,7 +5,7 @@ async fn show_pairing_code_params_escalate_loopback_to_lan() {
     // The loopback fixture cannot safely exercise an all-interfaces bind, so
     // verify the parameters selected for explicit LAN pairing directly.
     let (runtime, _database) = loopback_runtime_fixture().await;
-    let params = crate::service::sync::lan_opt_in_params(&runtime, None);
+    let params = crate::service::sync::lan_opt_in_params(&runtime, None, SyncBind::AllInterfaces);
     assert_eq!(params.bind, SyncBind::AllInterfaces);
     assert!(params.use_iroh);
     assert!(params.iroh_peer_ticket.is_none());
@@ -30,9 +30,14 @@ async fn show_pairing_code_returns_existing_ticket_without_restart() {
     runtime.iroh_our_ticket = watch::channel(Some("endpoint-our-ticket".to_string())).1;
     *state.sync.lock().await = Some(Arc::new(runtime));
 
-    let result = handle_request(&state, Request::ShowPairingCode)
-        .await
-        .expect("show_pairing_code should return the running ticket");
+    let result = handle_request(
+        &state,
+        Request::ShowPairingCode {
+            bind: SyncBind::AllInterfaces,
+        },
+    )
+    .await
+    .expect("show_pairing_code should return the running ticket");
     assert_eq!(result.as_str(), Some("endpoint-our-ticket"));
     // Bind untouched — still the all-interfaces runtime we installed.
     let after = state.sync.lock().await;

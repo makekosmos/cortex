@@ -396,28 +396,6 @@ pub(crate) mod tests {
         }
     }
 
-    #[async_trait::async_trait]
-    impl IntegrationReplicationBackend for MemBackend {
-        async fn validate_outbound_signed_integration_frame(
-            &self,
-            _frame: &SignedSyncEnvelope,
-            _expected_space_id: &str,
-            _expected_origin_node_id: &str,
-        ) -> Result<(), String> {
-            Ok(())
-        }
-
-        async fn apply_signed_integration_frame(
-            &self,
-            _frame: &SignedSyncEnvelope,
-            _expected_space_id: &str,
-            _authenticated_peer_id: &str,
-            _expected_recipient_node_id: &str,
-        ) -> Result<(), String> {
-            Err("signed integration replication unsupported in test backend".into())
-        }
-    }
-
     include!("sync_server_tests/peer_identity_backend.rs");
 
     include!("sync_server_tests/version_vector_merge.rs");

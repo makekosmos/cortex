@@ -18,11 +18,6 @@ with focus only through Engine ops and manifest grants.
 - `focus.ensure_presets` — seeds the preset blocklists on first use. Runs on
   every `focus.*` op, not just the first.
 
-## Pomodoro (`runtime/src/pomodoro*`, `pomodoro_host.rs`)
-
-`pomodoro.start|pause|resume|skip|stop|get_state` — timer ops exposed to
-clients the same way.
-
 ## Rules
 
 - State changes go through the write boundary: blocklists via ARK object

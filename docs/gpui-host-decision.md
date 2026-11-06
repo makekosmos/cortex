@@ -30,7 +30,7 @@ The three KOS-131 blockers are resolved or rescoped:
    imago's `mundus-gpui-kit` crate carries the shared theme/widgets/Engine client
    (including the WS subscriber that was the last dictation blocker).
 3. **«Risk profile differs by layer»** — the Electron surface has already
-   been cut down: Launcher, Vue Dashboard, Vue Manager, Focus/Pomodoro UI
+   been cut down: Launcher, Vue Dashboard, Vue Manager, Focus UI
    and the `.kext` extension runtime are deleted (ledger in
    `docs/repo-split-decisions.md`). What remains is inventoried below.
 
@@ -46,8 +46,7 @@ The three KOS-131 blockers are resolved or rescoped:
   Releases (KOS-265) and launched
   through the shell command «Открыть Memoria (GPUI)», the Start Menu
   «Memoria» shortcut, or the GPUI Manager About view; the Vue
-  Memoria package (`com.kosmos.memoria` .kspkg) stays installable as
-  fallback (KOS-156).
+  Memoria fallback stays installable (KOS-156).
 - `dictation-gpui` — standalone GPUI app owning the pill overlay and
   session orchestration; singleton via mutex; driven by Engine WS
   `dictation_toggle_trigger` / `dictation_ptt_trigger` events.
@@ -80,7 +79,7 @@ from memory. «Window» means a real `BrowserWindow` creation site.
 | Global shell hotkey | `main-app-ready.ts`, `settings-window.ts`, `settings-store.ts` | `globalShortcut` `Alt+Space` (prod) / `Alt+\`` (dev) → `openHostedApp("com.kosmos.shell")`; 80 ms anti-repeat; re-register on settings change; persisted in `mundus-settings.json`; F12 DevTools in dev. |
 | Auto-updater | `autoupdater-host.ts`, `main-data-ipc-settings.ts`, `release-bom-identity.ts` | `electron-updater` state machine (checking → available → downloading → downloaded/error), broadcast to all windows + persisted `<dataDir>/update-state.json` (consumed by `manager-gpui` via `MUNDUS_UPDATE_STATE_FILE`), native MessageBox fallback after 5 min, `quitAndInstall`; triggers: once per start, second-instance flags, settings IPC. GitHub-release feeds `makekosmos/desktop` / `desktop-mac`; embeds `release-bom.json` digest. |
 | Native dialogs | `main-data-ipc.ts`, `autoupdater-host.ts`, `full-access-consent-ipc.ts`, `main-backend-bootstrap.ts`, `host/electron/main.ts` | `showOpenDialog` (export dir, file-index root, hosted-app directory grants), `showMessageBox` (update install prompt, full-access consent warning), `showErrorBox` (boot failures, hosted-app launch failure). |
-| OS notifications | `system-notifications.ts` | `Notification` toast wrapper. **Orphaned** — last callers left with the Focus/Pomodoro UI removal; no in-tree importer remains. |
+| OS notifications | `system-notifications.ts` | `Notification` toast wrapper. **Orphaned** — last callers left with the Focus UI removal; no in-tree importer remains. |
 | Shell integration | `main-shell-ipc.ts`, `host-app.ts` | `shell.openExternal`; `shell.openPath` on Start-Menu `.lnk` fallback. |
 | Window chrome helpers | `mac-window.ts`, `window-effects.ts` | macOS vibrancy + centered traffic lights; Win32 acrylic/mica/`backgroundMaterial` env resolution. |
 | Tray | — | **Not Electron.** Owned by `runtime/src/backend_tray` (contract test asserts `new Tray(` never appears in `main.ts`); Electron only seeds `tray.ico` via `MUNDUS_TRAY_ICON`. |
@@ -109,18 +108,12 @@ from memory. «Window» means a real `BrowserWindow` creation site.
 
 | Capability | Files | Notes |
 |---|---|---|
-| `.kext` → `.kspkg` migrator | `legacy-migration-journal.ts`, `legacy-migration-state.ts`, `legacy-migration-runtime.ts`, `legacy-migration-recovery.ts`, `extension-data-migration.ts`, `test-migration-*` | Journaled (prepared → finalizing → committed) id + extension-data merge, boot-time run after Ark ready, crash recovery. Allowlist: arcadia/eden/delphi → canonical ids. One-shot by design. |
+| Legacy package migrator | `legacy-migration-journal.ts`, `legacy-migration-state.ts`, `legacy-migration-runtime.ts`, `legacy-migration-recovery.ts`, `extension-data-migration.ts`, `test-migration-*` | Journaled (prepared → finalizing → committed) id + extension-data merge, boot-time run after Ark ready, crash recovery. Allowlist: arcadia/eden/delphi → canonical ids. One-shot by design. |
 
-### F. Package Host (`host/electron/` — `Mundus Package Host.exe`)
+### F. Legacy Package Host (removed)
 
-| Capability | Files | Notes |
-|---|---|---|
-| Entry & routing | `host/electron/main.ts`, `app-navigation.ts` | `--open-app=<id>` argv, single-instance lock, second-instance open routing, dev `--dev-url`. |
-| Hosted-package windows | `main.ts` (`openApp`) | One BrowserWindow per launched `.kspkg` app at `manifest.launch_url`; title/icon pinning; per-app window registry. This is the «BrowserWindow for hosted packages / `openHostedPackage`» item — the public entry point is `openHostedApp` in `host-app.ts`. |
-| Launch leases | `launch-ownership.ts`, `main.ts` | `LaunchOwnership` claims per app id; v2 `broker_token` + TTL renewal loop (`scheduleLaunchRenewal`); revoke on last-window close, on navigation leaving the launch origin (`will-navigate`/`did-start-navigation`), and bounded drain on quit; replaced-claim adoption by surviving aux windows. The lease protocol itself is Engine-defined and shell-agnostic. |
-| Auxiliary windows («stickers») | `app-windows.ts`, `main.ts` (`openAuxWindow`) | Renderer-keyed secondary windows, ≤8 per app, persisted bounds + `alwaysOnTop` under `userData/window-states/`, pin IPC. |
-| Permission brokers | `main.ts` IPC + `brokers/*`, `host-api.ts` | `host:ark-request` (v2 launch-scoped broker token / v1 capability scopes), `host:ark-subscribe` event fan-out (read-permission filtered; `db_restored` → window reload), `host:launcher-request` allowlist (`app_index.*`, `file_index.*`, `commands.*`), `host:user-data` legacy FS store + `extension-user-data-ipc.ts` (Engine user-data roots), `host:dialogs:pick-directory-grant`, `host:app-open`, `host:window:{open,always-on-top}` + minimize/close. |
-| Host lifecycle & glue | `lifecycle.ts`, `shortcuts.ts`, `mundus-app-branding.ts`, `preload.ts` | Warm-exit timer (Engine `getWarmTimeout`, 0\|300 s), `Ctrl+Shift+K` globalShortcut → `com.kosmos.shell`, Start-Menu `.lnk` reconcile for installed apps, per-app icon/name branding, `window.mundusApp` preload. |
+The Electron package host was deleted with the legacy package runtime; native
+apps install from their own GitHub Releases instead.
 
 ## Ordered migration plan
 
@@ -157,7 +150,7 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
    (minidump handler in Rust or keep the existing `crashes/` dir contract),
    diagnostics bundle (pure fs/zip logic — ports directly).
 9. **Hosted packages → off the Electron Package Host.** The hard block.
-   Two compatible tracks: (a) each active `.kspkg` app gets a native GPUI
+   Two compatible tracks: (a) each active legacy packaged app gets a native GPUI
    port (agenda done; memoria packaged/launchable as of KOS-156;
    arcadia/ordo pending), and (b) if a
    transitional web-rendered host is needed, it must not be Electron —
@@ -197,7 +190,7 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
     `Mundus Helper.exe` and the focus service — the trigger belongs behind
     `focus.set_active_state` in the Engine path, not behind
     `mundus:ark:request` in a shell.
-11. **Legacy migrator → Engine or sunset.** The `.kext`→`.kspkg` journaled
+11. **Legacy migrator → Engine or sunset.** The legacy package migration is
     migration is ArkClient + fs work; run it as an Engine-side startup
     task (or accept it as finished and delete) so the Electron entry point
     stops owning it.

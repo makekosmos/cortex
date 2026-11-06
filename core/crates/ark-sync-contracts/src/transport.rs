@@ -1,5 +1,4 @@
 use crate::wire::LanSyncMessage;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
@@ -36,15 +35,6 @@ pub enum PeerDisconnectOutcome {
 }
 
 #[async_trait::async_trait]
-pub trait OutboundIntegrationFrameAuthorizer: Send + Sync {
-    async fn authorize(
-        &self,
-        frame: &ark_domain::integration_replication::SignedSyncEnvelope,
-        transport_public_key: &str,
-    ) -> Result<(), String>;
-}
-
-#[async_trait::async_trait]
 pub trait SyncTransport: Send + Sync {
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String>;
     fn send(&self, msg: LanSyncMessage) -> Result<(), String>;
@@ -54,10 +44,6 @@ pub trait SyncTransport: Send + Sync {
 #[async_trait::async_trait]
 pub trait IrohSessionTransport: SyncTransport {
     async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String>;
-    fn set_outbound_authorizer(
-        &self,
-        authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String>;
     fn bind_peer_for_control(
         &self,
         device_id: &str,

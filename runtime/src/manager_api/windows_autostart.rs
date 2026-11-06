@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::System::Registry::{
-    RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_BINARY, REG_SZ,
-    RRF_RT_ANY, RRF_RT_REG_BINARY,
+    RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_BINARY, REG_SZ, RRF_RT_ANY,
+    RRF_RT_REG_BINARY,
 };
 
 // Shared with the installer's post-install subcommand (KOS-306).
@@ -132,18 +132,6 @@ fn write_sz(subkey: &str, name: &str, value: &str) -> Result<(), String> {
     })
 }
 
-fn delete_value(subkey: &str, name: &str) {
-    let subkey = wide(subkey);
-    let name = wide(name);
-    unsafe {
-        let _ = RegDeleteKeyValueW(
-            HKEY_CURRENT_USER,
-            PCWSTR(subkey.as_ptr()),
-            PCWSTR(name.as_ptr()),
-        );
-    }
-}
-
 /// Enabled = Run value present AND no disabled StartupApproved marker —
 /// an item the user disabled in Task Manager keeps its Run value but is
 /// off.
@@ -171,13 +159,6 @@ pub(super) fn set(enabled: bool) -> Result<(), String> {
         write_binary(APPROVED_SUBKEY, name, &approved_marker(true))?;
         // The Run value stays: this is exactly Task Manager's Disable,
         // so the entry remains visible (and re-enableable) in the OS UI.
-    }
-    // MIGRATION(KOS-267): remove after 2026-11-01. A stale legacy Run
-    // value would resurrect the old engine binary; drop the known old
-    // names whenever the autostart preference is touched.
-    for legacy in ["Kosmos Engine", "Kosmos"] {
-        // MIGRATION(KOS-267)
-        delete_value(RUN_SUBKEY, legacy);
     }
     Ok(())
 }

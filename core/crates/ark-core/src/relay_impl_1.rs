@@ -383,11 +383,6 @@ impl RelaySync {
                 .await;
             }
 
-            LanSyncMessage::SignedIntegrationFrame { frame } => {
-                self.handle_signed_integration_frame(from_device_id, frame, transport_public_key)
-                    .await;
-            }
-
             LanSyncMessage::ProtocolRejected {
                 origin_device_id,
                 target_device_id,

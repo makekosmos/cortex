@@ -50,6 +50,7 @@ async fn connect_with_pairing_code_to_dead_peer_stays_pending() {
         &state,
         Request::ConnectWithPairingCode {
             pairing_code: dead_ticket,
+            bind: SyncBind::Loopback,
         },
     )
     .await

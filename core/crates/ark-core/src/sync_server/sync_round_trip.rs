@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 include!("sync_round_trip/fixtures.rs");
 include!("sync_round_trip/server_round_trip.rs");
 include!("sync_round_trip/authenticated_and_usage.rs");

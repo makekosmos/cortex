@@ -355,7 +355,6 @@ fn is_bulk_message(message: &LanSyncMessage) -> bool {
         LanSyncMessage::SyncChanges { .. }
             | LanSyncMessage::LiveChange { .. }
             | LanSyncMessage::TaskMergeBatch { .. }
-            | LanSyncMessage::SignedIntegrationFrame { .. }
     )
 }
 

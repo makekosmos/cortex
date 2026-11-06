@@ -44,12 +44,6 @@ impl IrohSessionTransport for StubTransport {
     async fn send_to(&self, _: &str, _: LanSyncMessage) -> Result<(), String> {
         Ok(())
     }
-    fn set_outbound_authorizer(
-        &self,
-        _: Arc<dyn crate::sync_transport::OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String> {
-        Ok(())
-    }
     fn bind_peer_for_control(&self, _: &str, _: &str) -> Result<(), String> {
         Ok(())
     }

@@ -8,22 +8,6 @@ mod server_session_host;
 mod start;
 use crate::task_set::track_task;
 
-async fn signed_integration_write_is_authorized(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    frame: &SignedSyncEnvelope,
-    expected_space_id: &str,
-    expected_origin_node_id: &str,
-) -> bool {
-    storage
-        .validate_outbound_signed_integration_frame(
-            frame,
-            expected_space_id,
-            expected_origin_node_id,
-        )
-        .await
-        .is_ok()
-}
-
 impl SyncServer {
     pub async fn broadcast_registry_event(
         &self,
@@ -47,7 +31,7 @@ impl SyncServer {
                 .session
                 .try_send(
                     ark_sync::server_session::ServerSessionIntent::BroadcastRegistryEvent(
-                        event.clone(),
+                        Box::new(event.clone()),
                     ),
                 )
                 .is_err()
@@ -77,43 +61,6 @@ impl SyncServer {
         revoked.len()
     }
 
-    pub async fn send_signed_integration_frame(
-        &self,
-        recipient_device_id: &str,
-        frame: crate::integration_replication::SignedSyncEnvelope,
-    ) -> Result<(), String> {
-        let expected_space_id = self.space_id.read().await.clone();
-        let expected_origin_node_id = self.device_id.read().await.clone();
-        if frame.space_id != expected_space_id {
-            return Err("signed integration frame has the wrong space".into());
-        }
-        if frame.origin_node_id != expected_origin_node_id {
-            return Err("signed integration frame origin is not this node".into());
-        }
-        if frame.recipient_node_id != recipient_device_id {
-            return Err("signed integration frame is addressed to another peer".into());
-        }
-        self.storage
-            .validate_outbound_signed_integration_frame(
-                &frame,
-                &expected_space_id,
-                &expected_origin_node_id,
-            )
-            .await?;
-        let session = {
-            let peers = self.peers.lock().await;
-            let Some(peer) = peers.values().find(|peer| {
-                peer.is_ready()
-                    && peer.session.projection().device_id.as_deref() == Some(recipient_device_id)
-            }) else {
-                return Err("target LAN peer is not authenticated".into());
-            };
-            peer.session.clone()
-        };
-        session
-            .try_send(ark_sync::server_session::ServerSessionIntent::SendSignedFrame(frame))
-            .map_err(|_| "LAN peer connection is closed".into())
-    }
     pub fn new(storage: Arc<dyn SyncRuntimeStorage>) -> Self {
         Self {
             storage,
@@ -350,6 +297,3 @@ impl SyncServer {
         self.device_name.read().await.clone()
     }
 }
-
-#[cfg(test)]
-include!("sync_server_core/writer_tests_module.rs");

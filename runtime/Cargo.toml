@@ -11,16 +11,6 @@ default-run = "mundus-engine"
 default = ["handle-relative-fs-serde"]
 handle-relative-fs-serde = ["engine-base/handle-relative-fs-serde"]
 windows-gui-subsystem = []
-# Test-only: relaxes the broker's HTTPS-only origin check to allow loopback
-# http origins and exposes worker failure hooks. A release build refuses to
-# compile with it (see the compile_error in src/lib.rs).
-package-worker-fixture = [
-  "engine-base/package-worker-fixture",
-  "engine-packages/package-worker-fixture",
-]
-# Test-only feature: builds the ark-markdown-bridge integration-test
-# fixture bin. Plain `cargo build`/`cargo test --lib` skip it.
-markdown-bridge-fixture = []
 # KOS-337: local dictation backend (whisper.cpp + Parakeet ONNX via
 # transcribe-rs/ort). Off by default — dev/agent builds skip the ONNX stack;
 # the full gate (test-lib GATE_FEATURES) and release builds enable it.
@@ -37,23 +27,11 @@ doctest = false
 name = "mundus-engine"
 path = "src/main.rs"
 
-[[bin]]
-name = "package-worker-fixture"
-path = "src/bin/package-worker-fixture.rs"
-required-features = ["package-worker-fixture"]
-
-[[bin]]
-name = "ark-markdown-bridge"
-path = "src/bin/ark-markdown-bridge.rs"
-required-features = ["markdown-bridge-fixture"]
-
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
 ark-domain = { path = "../core/crates/ark-domain" }
-package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }
-engine-packages = { path = "crates/engine-packages" }
 engine-indexes = { path = "crates/engine-indexes" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
@@ -74,10 +52,8 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
-regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rand.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
@@ -88,13 +64,9 @@ reqwest.workspace = true
 async-trait.workspace = true
 zip.workspace = true
 image.workspace = true
-# Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
-# enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
-# keyring stays: package_service/integrations/secret_store.rs also uses it —
-#   без backend-feature для платформы keyring молча использует mock store —
-#   запись «успешна», но ключ не персистит.
-# base64 — encode/decode WAV bytes между renderer и backend (shared).
-keyring.workspace = true
+tar.workspace = true
+flate2.workspace = true
+lnk.workspace = true
 base64.workspace = true
 semver.workspace = true
 # Phase 4 bug-detection: structured logging.
@@ -105,9 +77,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-# File identity by volume serial + file index — the /v1/rpc Manager check
-# must not rely on path spelling (KOS-269 round 4).
-same-file.workspace = true
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -143,14 +112,8 @@ pe-version-info = { path = "crates/pe-version-info" }
 # dev-dep features do not leak into normal builds.
 engine-base = { path = "crates/engine-base", features = ["test-support"] }
 engine-dictation = { path = "crates/engine-dictation", features = ["test-support"] }
-engine-packages = { path = "crates/engine-packages", features = ["test-support"] }
 tempfile.workspace = true
 httpmock.workspace = true
-# Test-only: the replication fixtures sign their own documents; the package
-# catalog path carries no Ed25519 code. Pinned to the same release as
-# ark-core so tests do not pull a second ed25519/curve25519 stack.
-ed25519-dalek.workspace = true
-ark-store = { path = "../core/crates/ark-store", features = ["test-support"] }
 
 [lints]
 workspace = true

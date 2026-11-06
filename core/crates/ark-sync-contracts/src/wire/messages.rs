@@ -152,14 +152,6 @@ pub enum LanSyncMessage {
         offered_protocol_versions: Vec<u32>,
     },
 
-    #[serde(rename = "signed_integration_frame")]
-    SignedIntegrationFrame {
-        frame: ark_domain::integration_replication::SignedSyncEnvelope,
-    },
-
-    #[serde(rename = "signed_integration_ack")]
-    SignedIntegrationAck { message_id: String, accepted: bool },
-
     /// KOS-369: the responder declined the consent prompt. Protocol-level
     /// rejection so the initiator shows «Подключение отклонено» instead of
     /// hanging; peers built before this variant can't parse it and simply

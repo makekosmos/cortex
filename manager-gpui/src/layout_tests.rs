@@ -11,14 +11,11 @@ fn all_pages_share_centered_width_with_sidebar_open_or_closed(cx: &mut TestAppCo
                 View::Storage,
                 View::Usage,
                 View::Sync,
-                View::Packages,
                 View::Settings,
                 View::Appearance,
                 View::Browser,
-                View::Connections,
                 View::Keys,
                 View::About,
-                View::Dev,
             ] {
                 manager.update(cx, |app, cx| {
                     app.view = view;

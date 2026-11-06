@@ -2,7 +2,7 @@
 name = "ark-core"
 version = "0.1.0"
 edition.workspace = true
-description = "Unified DB + sync engine for Mundus/Delphi"
+description = "Unified DB + sync engine for Mundus"
 # No binaries ship from this crate; keep Cargo from auto-discovering any
 # src/bin leftovers so test-target counts stay explicit.
 autobins = false
@@ -37,15 +37,9 @@ serde_json.workspace = true
 sha2.workspace = true
 futures-util.workspace = true
 ed25519-dalek.workspace = true
-semver.workspace = true
 chrono.workspace = true
-rand.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
-# Structured logging facade — host process (the Engine) installs the
-# subscriber; without one the calls are no-ops. Used for relay connectivity
-# transitions so the log keeps one warn per up/down flap (KOS-298).
-tracing.workspace = true
 
 # DB backup runs на отдельном потоке с пониженным CPU+I/O приоритетом
 # (THREAD_MODE_BACKGROUND_BEGIN), чтобы тяжёлое копирование не насыщало диск.
@@ -63,19 +57,11 @@ iroh = { version = "1.4.1", default-features = false, features = ["tls-ring"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 tokio-tungstenite.workspace = true
 tempfile.workspace = true
-criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
-proptest = "1.12"
 
 [features]
 default = ["desktop-net"]
 # Forward desktop networking features to ark-net; engine-mobile opts out.
 desktop-net = ["ark-net/desktop-net"]
-bench-fixtures = []
-
-[[bench]]
-name = "delphi_filters"
-harness = false
-required-features = ["bench-fixtures"]
 
 [[test]]
 name = "it"

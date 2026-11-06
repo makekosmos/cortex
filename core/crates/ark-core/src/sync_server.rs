@@ -8,15 +8,13 @@ use tokio::time::interval;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
-use crate::integration_replication::SignedSyncEnvelope;
 use crate::types::*;
 use ark_sync::protocol::merge_peer_records;
 use ark_sync_contracts::protocol_negotiation::normalize_auth_secret;
 use ark_sync_contracts::wire::*;
 
 pub use crate::replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
-    SyncRuntimeStorage,
+    AuthenticatedEntityBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
 pub use ark_application::sync_storage::SyncReadClass;
 
@@ -30,9 +28,6 @@ mod sync_server_peers;
 #[cfg(test)]
 #[path = "sync_server_reject_tests.rs"]
 mod sync_server_reject_tests;
-#[cfg(test)]
-#[path = "sync_server_route_tests.rs"]
-mod sync_server_route_tests;
 #[cfg(test)]
 #[path = "sync_server_tests.rs"]
 pub(crate) mod sync_server_tests;

@@ -93,60 +93,6 @@ pub(super) async fn handle_feed_ack_message(
     }
 }
 
-pub(super) async fn handle_signed_integration_frame(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    peer_device_id: &str,
-    local_device_id: &str,
-    space_id: &str,
-    tx: &ClientMessageSender,
-    frame: SignedSyncEnvelope,
-) {
-    let accepted = if frame.space_id != space_id
-        || frame.origin_node_id != peer_device_id
-        || frame.recipient_node_id != local_device_id
-    {
-        false
-    } else {
-        storage
-            .apply_signed_integration_frame(&frame, space_id, peer_device_id, local_device_id)
-            .await
-            .is_ok()
-    };
-    if let Err(error) = send_msg(
-        tx,
-        LanSyncMessage::SignedIntegrationAck {
-            message_id: frame.message_id,
-            accepted,
-        },
-    )
-    .await
-    {
-        eprintln!("{TAG} signed integration ACK send failed: {error}");
-    }
-}
-
-pub(super) async fn handle_signed_integration_message(
-    authenticated: bool,
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    peer_device_id: &str,
-    local_device_id: &str,
-    space_id: &str,
-    tx: &ClientMessageSender,
-    frame: SignedSyncEnvelope,
-) {
-    if authenticated {
-        handle_signed_integration_frame(
-            storage,
-            peer_device_id,
-            local_device_id,
-            space_id,
-            tx,
-            frame,
-        )
-        .await;
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_live_change(
     storage: &Arc<dyn SyncRuntimeStorage>,

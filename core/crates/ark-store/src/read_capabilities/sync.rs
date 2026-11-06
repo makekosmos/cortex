@@ -115,10 +115,16 @@ impl SyncReadCapabilities<'_> {
     }
 
     pub fn authorized_transport_key(&self, device_id: &str) -> Result<Option<String>, String> {
-        Ok(
-            crate::integration_replication::load_authorized_node(self.connection, device_id)?
-                .and_then(|node| node.transport_public_key),
-        )
+        let raw = crate::sync_kv::get_sync_kv(
+            self.connection,
+            crate::device_registry::PEER_TRANSPORT_KEYS_KEY,
+        )?;
+        let keys: std::collections::HashMap<String, String> = raw
+            .map(|raw| serde_json::from_str(&raw))
+            .transpose()
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
+        Ok(keys.get(device_id).cloned())
     }
 
     pub fn policy_bound_entities_page(

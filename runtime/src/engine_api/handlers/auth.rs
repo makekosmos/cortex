@@ -5,6 +5,10 @@ struct AuthenticatedClient {
     version: String,
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the Engine wire error is the response body"
+)]
 fn authenticate(
     headers: &HeaderMap,
     expected_token: &str,

@@ -228,19 +228,6 @@ fn note_rule(mode: SyncMode) -> SyncProfileRule {
     }
 }
 
-async fn register_note_type(peer: &ActorPeer) {
-    let registrations = crate::canonical_types::definitions::canonical_type_registrations()
-        .expect("load canonical type definitions");
-    let registration = registrations
-        .into_iter()
-        .find(|registration| registration.type_id == "core.note")
-        .expect("canonical note type is defined");
-    peer.db
-        .submit_register_package_types(CommandContext::engine(), vec![registration])
-        .await
-        .expect("register note type before sync");
-}
-
 async fn set_note_policy(peer: &ActorPeer, mode: SyncMode, expected_revision: Option<i64>) {
     peer.db
         .save_local_sync_profile(
@@ -347,8 +334,6 @@ async fn actor_backed_iroh_note_policy_excludes_expands_and_shrinks_without_dele
     let path_b = directory.path().join("note-policy-device-b.sqlite");
     let mut peer_a = open_peer(&path_a, "device-A").await;
     let mut peer_b = open_peer(&path_b, "device-B").await;
-    register_note_type(&peer_a).await;
-    register_note_type(&peer_b).await;
     set_note_policy(&peer_a, SyncMode::Full, None).await;
     set_note_policy(&peer_b, SyncMode::None, None).await;
     write_note(&peer_a, "note-A", "A original note").await;

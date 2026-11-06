@@ -129,6 +129,10 @@ fn valid_color(color: &str) -> bool {
 
 // Shared by the global and per-app settings shapes (the latter omits
 // `follow_apps`, which stays global/Manager-only — see `appearance/apps.rs`).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one field-set validator shared by two settings shapes"
+)]
 fn validate_fields(
     mode: &str,
     light_theme: &str,
