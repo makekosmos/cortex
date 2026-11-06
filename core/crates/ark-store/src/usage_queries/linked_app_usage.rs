@@ -1,3 +1,7 @@
+use super::process_projection::canonical_app_key;
+use rusqlite::{params_from_iter, Connection};
+use std::collections::{HashMap, HashSet};
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LinkedAppUsageSummary {
     pub seconds: i64,

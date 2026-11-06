@@ -338,7 +338,8 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-include!("service_download.rs");
+#[path = "service_download.rs"]
+mod service_download;
 
 #[cfg(test)]
 #[path = "service_tests.rs"]

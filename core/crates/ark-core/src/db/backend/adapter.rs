@@ -70,7 +70,9 @@ impl SqliteStorageBackend {
             .unwrap_or_else(|error| error.into_inner()) = profile;
     }
 
-    fn selective_sync_profile(&self) -> Option<ark_domain::selective_sync::SelectiveSyncProfile> {
+    pub(super) fn selective_sync_profile(
+        &self,
+    ) -> Option<ark_domain::selective_sync::SelectiveSyncProfile> {
         self.selective_profile
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -236,7 +238,8 @@ impl SyncEntityReadPort for SqliteStorageBackend {
     }
 }
 
-include!("adapter/committed_feed.rs");
+#[path = "adapter/committed_feed.rs"]
+mod committed_feed;
 
 #[async_trait::async_trait]
 impl SyncEntityMutationPort for SqliteStorageBackend {

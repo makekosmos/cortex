@@ -1,3 +1,7 @@
+use ark_sync_contracts::wire::LanSyncMessage;
+
+use super::transport::IrohTransport;
+
 #[async_trait::async_trait]
 impl ark_sync_contracts::peer_control::PeerSessionControl for IrohTransport {
     async fn send_control_to_endpoint(

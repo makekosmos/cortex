@@ -16,15 +16,10 @@ const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", 
 const GRANDFATHERED = new Set([
   // Files above FAIL_LIMIT that predate it. Additions here require an
   // intentional review; drop an entry once its file is back under the limit.
-  "desktop/scripts/verify-release-channel.mjs",
   "runtime/src/agents/app_server.rs",
   "runtime/src/agents/definitions.rs",
   "runtime/src/agents/tests.rs",
-  "runtime/crates/engine-indexes/src/app_index/icons.rs",
-  "runtime/crates/engine-indexes/src/app_index/mod.rs",
   "runtime/src/bin/ark-markdown-bridge.rs",
-  "runtime/crates/engine-dictation/src/config.rs",
-  "runtime/crates/engine-dictation/src/groq.rs",
   "runtime/crates/engine-dictation/src/host_capture.rs",
   "runtime/crates/engine-dictation/src/host_models.rs",
   "runtime/crates/engine-dictation/src/host_queue.rs",
@@ -32,24 +27,16 @@ const GRANDFATHERED = new Set([
   "runtime/crates/engine-dictation/src/hotkey_hook.rs",
   "runtime/crates/engine-dictation/src/local/backend.rs",
   "runtime/crates/engine-dictation/src/local/tests.rs",
-  "runtime/crates/engine-dictation/src/local_sidecar.rs",
   "runtime/crates/engine-dictation/src/local_whisper_dll.rs",
   "runtime/crates/engine-dictation/src/macos_native.rs",
   "runtime/crates/engine-dictation/src/network.rs",
-  "runtime/src/engine_api/tests_core.rs",
-  "runtime/src/engine_api/tests_http.rs",
   "runtime/src/engine_control.rs",
-  "runtime/crates/engine-base/src/engine_dispatch.rs",
-  "runtime/src/export/note_md.rs",
-  "runtime/crates/engine-indexes/src/file_index/scanner.rs",
-  "runtime/crates/engine-indexes/src/file_index/store.rs",
   "runtime/src/focus.rs",
   "runtime/src/main.rs",
-  "runtime/crates/engine-dictation/src/config.rs",
+  "runtime/src/pomodoro_host.rs",
   "runtime/src/usage_tracker/mod.rs",
   "runtime/src/usage_tracker/windows_capture.rs",
   "runtime/tests/it/ark_markdown_bridge_worker.rs",
-  "runtime/tests/it/package_worker_windows.rs",
 ]);
 const IGNORED = new Set([
   ".git",
@@ -90,9 +77,16 @@ const violations = [];
 const warnings = [];
 const debt = [];
 const partViolations = [];
+const includeViolations = [];
 for (const file of await collect(ROOT)) {
-  const lines = lineCount(await readFile(file, "utf8"));
+  const source = await readFile(file, "utf8");
+  const lines = lineCount(source);
   const relative = path.relative(ROOT, file).replaceAll("\\", "/");
+  if (path.extname(file) === ".rs" && /\binclude!\s*\(/.test(source)) {
+    includeViolations.push(
+      `${relative}: Rust source fragments must be ordinary modules, not include!()`,
+    );
+  }
   if (partNumberedName(relative)) {
     partViolations.push(
       `${relative}: mechanical part-numbered source filename; move it into a semantic module (for example, db/load.rs or db/load/records.rs)`,
@@ -106,9 +100,13 @@ for (const file of await collect(ROOT)) {
   }
 }
 
-if (violations.length || partViolations.length) {
+if (violations.length || partViolations.length || includeViolations.length) {
   if (violations.length) console.error(`source size check failed (${violations.length} file(s))`);
   if (violations.length) console.error(violations.sort().join("\n"));
+  if (includeViolations.length) {
+    console.error(`include! source-fragment check failed (${includeViolations.length} file(s))`);
+    console.error(includeViolations.sort().join("\n"));
+  }
   if (partViolations.length) {
     console.error(`part-numbered source check failed (${partViolations.length} file(s))`);
     console.error(partViolations.sort().join("\n"));

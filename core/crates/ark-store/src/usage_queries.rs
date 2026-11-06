@@ -1,18 +1,21 @@
-use chrono::{Duration, Utc};
-use rusqlite::{params, params_from_iter, Connection, Row};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use serde_json::Value;
 
-use ark_domain::types::*;
+mod analytics;
+mod game_playtime_queries;
+mod game_playtime_summary;
+mod linked_app_usage;
+mod process_projection;
+mod process_queries;
+mod spans_and_title_totals;
 
-include!("usage_queries/spans_and_title_totals.rs");
-include!("usage_queries/analytics.rs");
-include!("usage_queries/process_queries.rs");
-include!("usage_queries/process_projection.rs");
-include!("usage_queries/game_playtime_queries.rs");
-include!("usage_queries/game_playtime_summary.rs");
+pub use analytics::load_usage_analytics;
+pub use game_playtime_summary::load_usage_game_playtime_summary;
+pub use linked_app_usage::{summarize_linked_app_usage, LinkedAppUsageSummary};
+pub use process_projection::{canonical_app_key, is_system_path, merge_top_apps};
+pub use process_queries::{list_recent_usage_processes, search_usage_processes};
+pub use spans_and_title_totals::{get_usage_title_total, upsert_usage_span};
 
-fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
+pub(super) fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
     payload
         .get(key)
         .and_then(Value::as_array)
@@ -26,7 +29,7 @@ fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn payload_spans(payload: &Value) -> Vec<Vec<i64>> {
+pub(super) fn payload_spans(payload: &Value) -> Vec<Vec<i64>> {
     payload
         .get("s")
         .and_then(Value::as_array)
@@ -41,7 +44,7 @@ fn payload_spans(payload: &Value) -> Vec<Vec<i64>> {
         .unwrap_or_default()
 }
 
-fn dictionary_index(values: &mut Vec<String>, value: &str) -> i64 {
+pub(super) fn dictionary_index(values: &mut Vec<String>, value: &str) -> i64 {
     if let Some(index) = values.iter().position(|item| item == value) {
         index as i64
     } else {
@@ -50,7 +53,7 @@ fn dictionary_index(values: &mut Vec<String>, value: &str) -> i64 {
     }
 }
 
-fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
+pub(super) fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
     spans.sort_by_key(|span| span[0]);
     let mut merged: Vec<Vec<i64>> = Vec::with_capacity(spans.len());
     for span in spans {
@@ -66,5 +69,3 @@ fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
     }
     merged
 }
-
-include!("usage_queries/linked_app_usage.rs");

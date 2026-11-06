@@ -1,21 +1,23 @@
-type WallpaperFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
-type WallpaperSampler = Arc<dyn Fn() -> WallpaperFuture + Send + Sync>;
+use super::*;
+
+pub(super) type WallpaperFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
+pub(super) type WallpaperSampler = Arc<dyn Fn() -> WallpaperFuture + Send + Sync>;
 
 #[derive(Default)]
-struct WallpaperCacheState {
+pub(super) struct WallpaperCacheState {
     result: Option<Result<String, String>>,
-    updated_at: Option<Instant>,
-    refreshing: bool,
+    pub(super) updated_at: Option<Instant>,
+    pub(super) refreshing: bool,
 }
 
-struct WallpaperCache {
-    state: Mutex<WallpaperCacheState>,
-    sampler: WallpaperSampler,
-    ttl: Duration,
+pub(super) struct WallpaperCache {
+    pub(super) state: Mutex<WallpaperCacheState>,
+    pub(super) sampler: WallpaperSampler,
+    pub(super) ttl: Duration,
 }
 
 impl WallpaperCache {
-    async fn snapshot(self: &Arc<Self>) -> Result<String, String> {
+    pub(super) async fn snapshot(self: &Arc<Self>) -> Result<String, String> {
         let mut state = self.state.lock().await;
         let stale = state
             .updated_at
@@ -39,12 +41,12 @@ impl WallpaperCache {
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn desktop_wallpaper_accent() -> Result<String, String> {
+pub(super) async fn desktop_wallpaper_accent() -> Result<String, String> {
     Err("desktop wallpaper accent is unsupported on this platform".into())
 }
 
 #[cfg(target_os = "macos")]
-async fn desktop_wallpaper_accent() -> Result<String, String> {
+pub(super) async fn desktop_wallpaper_accent() -> Result<String, String> {
     use tokio::{process::Command, time::timeout};
     const SCRIPT: &str = concat!(
         "tell application \"System Events\" to get POSIX path of ",
@@ -71,7 +73,7 @@ async fn desktop_wallpaper_accent() -> Result<String, String> {
 }
 
 #[cfg(target_os = "macos")]
-async fn extract_image(path: &Path) -> Result<String, String> {
+pub(super) async fn extract_image(path: &Path) -> Result<String, String> {
     use tokio::{process::Command, time::timeout};
     let metadata = tokio::fs::metadata(path)
         .await

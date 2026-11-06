@@ -1,8 +1,12 @@
+use super::process_projection::dedup_usage_process_candidates;
+use ark_domain::types::UsageProcessCandidate;
+use rusqlite::{params, Connection, Row};
+
 fn clamp_usage_process_limit(limit: i64) -> i64 {
     limit.clamp(1, 25)
 }
 
-fn normalize_usage_binding_value(match_type: &str, value: &str) -> String {
+pub(super) fn normalize_usage_binding_value(match_type: &str, value: &str) -> String {
     let trimmed = value.trim();
     if match_type == "exe_path" {
         trimmed.replace('/', "\\").to_lowercase()

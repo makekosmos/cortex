@@ -1,3 +1,10 @@
+use super::{
+    OutgoingPairing, PendingPairingRequest, RelaySync, PAIRING_DECISION_TIMEOUT,
+    PAIRING_DECLINE_SUPPRESS, TAG,
+};
+use crate::sync_server::PeerEntry;
+use ark_sync_contracts::wire::LanSyncMessage;
+use std::time::{Duration, Instant};
 // RelaySync pairing consent (KOS-369): unknown endpoints park their Hello
 // here until a human presses «Принять»/«Отклонить», and the initiator's own
 // attempt resolves through `outgoing_pairing` in the snapshot.
@@ -15,7 +22,7 @@ impl RelaySync {
     }
 
     /// The responder accepted the pairing request on the endpoint we dialed.
-    async fn mark_outgoing_accepted(&self, transport_public_key: &str) {
+    pub(super) async fn mark_outgoing_accepted(&self, transport_public_key: &str) {
         let mut guard = self.outgoing_pairing.lock().await;
         match guard.as_mut() {
             Some(o) if o.endpoint == transport_public_key && !o.accepted => {
@@ -31,7 +38,7 @@ impl RelaySync {
     /// code was entered (in-memory peer state, the persisted endpoint key,
     /// the peer record — none of it outlives a «Отклонить»), then close the
     /// connection and stop the dial loop from resurrecting it.
-    async fn handle_pairing_rejected(&self, responder_device_id: &str, endpoint: &str) {
+    pub(super) async fn handle_pairing_rejected(&self, responder_device_id: &str, endpoint: &str) {
         if let Some(outgoing) = self.outgoing_pairing.lock().await.as_mut() {
             outgoing.declined = true;
         }
@@ -77,7 +84,7 @@ impl RelaySync {
     /// Park an unknown endpoint's Hello for explicit consent. A device id
     /// declined recently is dropped silently so a retrying old-version peer
     /// cannot resurrect the prompt on every backoff tick.
-    async fn record_pairing_request(
+    pub(super) async fn record_pairing_request(
         &self,
         from_device_id: String,
         transport_public_key: String,
@@ -121,7 +128,7 @@ impl RelaySync {
 
     /// Bind an endpoint for control traffic, validate its Hello, and persist
     /// enrollment before promoting the transport to data-ready.
-    async fn admit_transport_hello(
+    pub(super) async fn admit_transport_hello(
         &self,
         from_device_id: String,
         transport_public_key: String,
@@ -208,7 +215,7 @@ impl RelaySync {
         }
     }
 
-    async fn is_pinned_revoked_peer(
+    pub(super) async fn is_pinned_revoked_peer(
         &self,
         peer_device_id: &str,
         transport_public_key: &str,
@@ -234,7 +241,7 @@ impl RelaySync {
             .is_some_and(|key| key == transport_public_key))
     }
 
-    async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
+    pub(super) async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
         if let Some(registry) = &self.registry {
             registry.disconnect_peer(device_id).await;
         }

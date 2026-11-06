@@ -1,30 +1,19 @@
-async fn wait_for_entities(
-    storage: &SqliteStorageBackend,
-    condition: impl Fn(&[SyncEntity]) -> bool,
-) -> Vec<SyncEntity> {
-    let mut observed_ids = Vec::new();
-    let result = tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let entities = storage.load_entities(&HashMap::new()).await.unwrap();
-            if condition(&entities) {
-                return entities;
-            }
-            observed_ids = entities
-                .iter()
-                .map(|entity| format!("{}:{}", entity.entity_type, entity.id))
-                .collect();
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await;
-    let timeout_message = format!(
-        "selected sync entities should arrive before the timeout; observed: {}",
-        observed_ids.join(", ")
-    );
-    result.expect(&timeout_message)
-}
+use super::fixtures::*;
+use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+use ark_core::direct_client::new_direct_client;
+use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
+use ark_core::types::{PeerRecord, SyncEntity};
+use serde_json::json;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
-fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -> SyncEntity {
+pub(super) fn selective_object_entity(
+    id: &str,
+    type_id: &str,
+    title: &str,
+    counter: u64,
+) -> SyncEntity {
     SyncEntity {
         entity_type: "object".into(),
         id: id.into(),

@@ -1,3 +1,6 @@
 #![allow(clippy::unwrap_used)]
-include!("phase3_validation/contracts.rs");
-include!("phase3_validation/field_constraints.rs");
+
+#[path = "phase3_validation/contracts.rs"]
+mod contracts;
+#[path = "phase3_validation/field_constraints.rs"]
+mod field_constraints;

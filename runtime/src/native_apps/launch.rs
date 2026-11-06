@@ -9,6 +9,7 @@
 // The Engine never calls `SetForegroundWindow` itself and never
 // re-activates the Manager.
 
+use super::*;
 use std::ffi::OsStr;
 
 /// `CREATE_NO_WINDOW`: the Engine is console-less; without the flag a
@@ -21,7 +22,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// meaningless). `ASFW_ANY` is deliberately *not* used: it would let any
 /// process steal foreground until the next user input, not just the app we
 /// launched.
-fn foreground_grant_target(child_id: u32) -> Option<u32> {
+pub(super) fn foreground_grant_target(child_id: u32) -> Option<u32> {
     (child_id != 0).then_some(child_id)
 }
 

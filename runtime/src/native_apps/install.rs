@@ -1,3 +1,5 @@
+use super::*;
+
 /// Gzip magic — a unix release asset is a `.tar.gz`; anything else falls
 /// through to the zip extractor (which rejects non-zip inputs itself).
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
@@ -96,7 +98,7 @@ impl NativeAppStore {
     /// download/install keeps its young temps). Superseded version dirs are
     /// *not* swept here — they need the exe-in-use check and are handled by
     /// the post-install `cleanup_stale`.
-    fn sweep_stale_leftovers(&self) {
+    pub(super) fn sweep_stale_leftovers(&self) {
         let Ok(entries) = fs::read_dir(&self.root) else {
             return;
         };

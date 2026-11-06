@@ -1,3 +1,6 @@
+use super::storage_backend_roundtrips::{make_backend, sync_object};
+use super::*;
+
 #[tokio::test]
 async fn storage_backend_delete_removes_entity() {
     let backend = make_backend().await;

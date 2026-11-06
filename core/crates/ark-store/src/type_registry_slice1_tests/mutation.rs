@@ -1,5 +1,13 @@
-#[test]
+use super::migration_and_hash::version;
+use crate::type_registry::{
+    insert_type_version, list_type_versions, register_alias, register_type, resolve_alias,
+    set_current_version,
+};
+use ark_domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeRegistration};
+use rusqlite::{Connection, OptionalExtension};
+use serde_json::json;
 
+#[test]
 fn registry_mutation_rolls_back_version_alias_and_pointer_together() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(concat!(

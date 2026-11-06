@@ -1,3 +1,14 @@
+use super::game_playtime_queries::{
+    append_usage_binding_where_clause, build_usage_game_binding_index,
+    find_usage_game_for_tracked_row, map_usage_tracked_aggregate_row, map_usage_tracked_daily_row,
+};
+use ark_domain::types::{
+    UsageGameDailyTotal, UsageGamePlaytimeAggregate, UsageGamePlaytimeBinding,
+    UsageGamePlaytimeSummary, UsageGameRangeTotal,
+};
+use rusqlite::{params_from_iter, Connection};
+use std::collections::HashMap;
+
 pub fn load_usage_game_playtime_summary(
     conn: &Connection,
     bindings: &[UsageGamePlaytimeBinding],

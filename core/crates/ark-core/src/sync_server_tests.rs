@@ -396,9 +396,33 @@ pub(crate) mod tests {
         }
     }
 
-    include!("sync_server_tests/peer_identity_backend.rs");
+    #[async_trait::async_trait]
+    impl IntegrationReplicationBackend for MemBackend {
+        async fn validate_outbound_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _expected_origin_node_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
 
-    include!("sync_server_tests/version_vector_merge.rs");
+        async fn apply_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _authenticated_peer_id: &str,
+            _expected_recipient_node_id: &str,
+        ) -> Result<(), String> {
+            Err("signed integration replication unsupported in test backend".into())
+        }
+    }
+
+    #[path = "../sync_server_tests/peer_identity_backend.rs"]
+    mod peer_identity_backend;
+
+    #[path = "../sync_server_tests/version_vector_merge.rs"]
+    mod version_vector_merge;
 
     #[async_trait::async_trait]
     impl AuthenticatedEntityBackend for MemBackend {
@@ -460,5 +484,6 @@ pub(crate) mod tests {
         }
     }
 
-    include!("sync_server_tests/peer_management.rs");
+    #[path = "../sync_server_tests/peer_management.rs"]
+    mod peer_management;
 }

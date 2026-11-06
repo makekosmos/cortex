@@ -1,13 +1,15 @@
-struct HttpConnectionLifecycle {
-    admission: Mutex<()>,
-    closed: AtomicBool,
-    shutdown: Notify,
-    capacity: Arc<tokio::sync::Semaphore>,
-    tasks: Mutex<HashMap<u64, HttpConnectionSlot>>,
-    next_task: std::sync::atomic::AtomicU64,
+use super::*;
+
+pub(super) struct HttpConnectionLifecycle {
+    pub(super) admission: Mutex<()>,
+    pub(super) closed: AtomicBool,
+    pub(super) shutdown: Notify,
+    pub(super) capacity: Arc<tokio::sync::Semaphore>,
+    pub(super) tasks: Mutex<HashMap<u64, HttpConnectionSlot>>,
+    pub(super) next_task: std::sync::atomic::AtomicU64,
 }
 
-enum HttpConnectionSlot {
+pub(super) enum HttpConnectionSlot {
     Reserved { start: oneshot::Sender<()> },
     Installed(tokio::task::JoinHandle<()>),
 }
@@ -26,14 +28,14 @@ impl Default for HttpConnectionLifecycle {
 }
 
 impl HttpConnectionLifecycle {
-    async fn begin_shutdown(&self) {
+    pub(super) async fn begin_shutdown(&self) {
         let _admission = self.admission.lock().unwrap_or_else(|p| p.into_inner());
         if !self.closed.swap(true, Ordering::AcqRel) {
             self.shutdown.notify_waiters();
         }
     }
 
-    async fn cancelled(&self) {
+    pub(super) async fn cancelled(&self) {
         let notified = self.shutdown.notified();
         tokio::pin!(notified);
         notified.as_mut().enable();
@@ -43,7 +45,7 @@ impl HttpConnectionLifecycle {
         notified.await;
     }
 
-    async fn reap(&self) {
+    pub(super) async fn reap(&self) {
         let finished = {
             let mut tasks = self.tasks.lock().unwrap_or_else(|p| p.into_inner());
             let ids = tasks
@@ -64,11 +66,11 @@ impl HttpConnectionLifecycle {
         }
     }
 
-    fn task_count(&self) -> usize {
+    pub(super) fn task_count(&self) -> usize {
         self.tasks.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
-    async fn drain(&self, deadline: Duration) -> Result<(), &'static str> {
+    pub(super) async fn drain(&self, deadline: Duration) -> Result<(), &'static str> {
         self.begin_shutdown().await;
         let started = Instant::now();
         let tasks = {
@@ -104,23 +106,23 @@ impl HttpConnectionLifecycle {
     }
 }
 
-struct OwnedHttpOperation {
-    task: tokio::task::JoinHandle<()>,
-    cleanup: Arc<HttpOperationCleanup>,
-    cancel: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+pub(super) struct OwnedHttpOperation {
+    pub(super) task: tokio::task::JoinHandle<()>,
+    pub(super) cleanup: Arc<HttpOperationCleanup>,
+    pub(super) cancel: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
-enum HttpOperationSlot {
+pub(super) enum HttpOperationSlot {
     Reserved,
     Installed(OwnedHttpOperation),
 }
 
-struct ResponseWaitGuard {
-    abandon: Option<oneshot::Sender<()>>,
+pub(super) struct ResponseWaitGuard {
+    pub(super) abandon: Option<oneshot::Sender<()>>,
 }
 
 impl ResponseWaitGuard {
-    fn disarm(&mut self) {
+    pub(super) fn disarm(&mut self) {
         self.abandon.take();
     }
 }
@@ -133,14 +135,14 @@ impl Drop for ResponseWaitGuard {
     }
 }
 
-struct HttpOperationCleanup {
-    dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
-    owner: crate::engine_dispatch::OwnerLease,
-    completed: AtomicBool,
+pub(super) struct HttpOperationCleanup {
+    pub(super) dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
+    pub(super) owner: crate::engine_dispatch::OwnerLease,
+    pub(super) completed: AtomicBool,
 }
 
 impl HttpOperationCleanup {
-    fn run(&self) {
+    pub(super) fn run(&self) {
         if !self.completed.swap(true, Ordering::AcqRel) {
             self.dispatcher.cleanup_connection_sync(&self.owner);
         }
@@ -154,14 +156,14 @@ impl Drop for HttpOperationCleanup {
 }
 
 #[derive(Clone)]
-struct HttpOperationRegistry {
-    permits: Arc<tokio::sync::Semaphore>,
-    continuations: Arc<Mutex<HashMap<u64, HttpOperationSlot>>>,
-    next_id: Arc<std::sync::atomic::AtomicU64>,
-    admission: Arc<Mutex<()>>,
-    closed: Arc<AtomicBool>,
-    serve_shutdown: Arc<Notify>,
-    continuation_deadline: Duration,
+pub(super) struct HttpOperationRegistry {
+    pub(super) permits: Arc<tokio::sync::Semaphore>,
+    pub(super) continuations: Arc<Mutex<HashMap<u64, HttpOperationSlot>>>,
+    pub(super) next_id: Arc<std::sync::atomic::AtomicU64>,
+    pub(super) admission: Arc<Mutex<()>>,
+    pub(super) closed: Arc<AtomicBool>,
+    pub(super) serve_shutdown: Arc<Notify>,
+    pub(super) continuation_deadline: Duration,
 }
 
 impl Default for HttpOperationRegistry {
@@ -179,7 +181,7 @@ impl Default for HttpOperationRegistry {
 }
 
 impl HttpOperationRegistry {
-    async fn start(
+    pub(super) async fn start(
         &self,
         request: crate::engine_dispatch::DispatchRequest,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
@@ -258,7 +260,7 @@ impl HttpOperationRegistry {
         ))
     }
 
-    async fn reap(&self) {
+    pub(super) async fn reap(&self) {
         let finished = {
             let mut guard = self.continuations.lock().unwrap_or_else(|p| p.into_inner());
             let ids = guard
@@ -281,7 +283,7 @@ impl HttpOperationRegistry {
         }
     }
 
-    async fn begin_shutdown(&self) {
+    pub(super) async fn begin_shutdown(&self) {
         let _admission = self.admission.lock().unwrap_or_else(|p| p.into_inner());
         if !self.closed.swap(true, Ordering::AcqRel) {
             // Retain the signal if the accept loop is between select polls.
@@ -294,7 +296,10 @@ impl HttpOperationRegistry {
         self.shutdown_with_deadline(SHUTDOWN_DEADLINE).await
     }
 
-    async fn shutdown_with_deadline(&self, deadline: Duration) -> Result<(), &'static str> {
+    pub(super) async fn shutdown_with_deadline(
+        &self,
+        deadline: Duration,
+    ) -> Result<(), &'static str> {
         let started = Instant::now();
         let operations = {
             let mut guard = self.continuations.lock().unwrap_or_else(|p| p.into_inner());

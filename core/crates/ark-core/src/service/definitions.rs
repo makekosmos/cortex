@@ -78,4 +78,6 @@ pub(crate) use ark_domain::object_write::ObjectWriteSnapshot;
 mod request;
 pub(crate) use request::{DataVolumeScope, Request, SyncPolicyRuleInput};
 
-include!("definitions/start_sync.rs");
+#[path = "definitions/start_sync.rs"]
+mod start_sync;
+pub(crate) use start_sync::StartSyncParams;

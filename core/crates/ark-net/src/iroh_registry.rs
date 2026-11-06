@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use super::EndpointId;
+
 /// Bidirectional mapping between CRDT device IDs and Iroh endpoint IDs.
 #[derive(Default)]
 pub struct DeviceRegistry {

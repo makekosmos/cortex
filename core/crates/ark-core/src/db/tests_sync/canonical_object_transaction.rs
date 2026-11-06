@@ -1,8 +1,13 @@
+use super::storage_backend_roundtrips::{make_backend, sync_object};
+use super::*;
 use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
 use ark_application::sync_storage::CommittedFeedPort;
 use std::time::Instant;
 
-async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str) {
+pub(in crate::db::tests) async fn admit_test_registry_peer(
+    backend: &SqliteStorageBackend,
+    peer_id: &str,
+) {
     backend
         .enroll_paired_device(
             "device-local",
@@ -13,7 +18,7 @@ async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str)
         .unwrap();
 }
 
-fn expect_feed_deliveries(
+pub(super) fn expect_feed_deliveries(
     page: ark_application::sync_storage::CommittedFeedDeliveryPage,
 ) -> Vec<ark_application::sync_storage::CommittedFeedDelivery> {
     match page {
@@ -247,12 +252,18 @@ async fn authenticated_apply_rejects_removed_peer() {
         .unwrap();
 }
 
-include!("canonical_object_transaction/object_feed.rs");
-include!("canonical_object_transaction/object_feed_replay.rs");
-include!("canonical_object_transaction/pending_receipt.rs");
-include!("canonical_object_transaction/receipt_ack.rs");
+#[path = "canonical_object_transaction/object_feed.rs"]
+mod object_feed;
+#[path = "canonical_object_transaction/object_feed_replay.rs"]
+mod object_feed_replay;
+#[path = "canonical_object_transaction/pending_receipt.rs"]
+mod pending_receipt;
+#[path = "canonical_object_transaction/receipt_ack.rs"]
+mod receipt_ack;
 
-fn pop_feed_live_change_id(
+use object_feed::full_core_task_entity;
+
+pub(super) fn pop_feed_live_change_id(
     rx: &mut tokio::sync::mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
 ) -> String {
     match rx.try_recv().unwrap() {

@@ -1,3 +1,5 @@
+use super::*;
+
 impl BroadcastDiscovery {
     pub fn new() -> Self {
         Self {
@@ -89,7 +91,7 @@ impl BroadcastDiscovery {
         let cutoff = now_ms().saturating_sub(PEER_TTL_MS);
         self.sweep_stale_at(cutoff).await
     }
-    async fn sweep_stale_at(&self, cutoff_ms: u64) -> usize {
+    pub(super) async fn sweep_stale_at(&self, cutoff_ms: u64) -> usize {
         let mut seen = self.seen_peers.lock().await;
         let before = seen.len();
         seen.retain(|_, peer| peer.last_seen_ms >= cutoff_ms);
@@ -160,14 +162,18 @@ impl BroadcastDiscovery {
         });
         let options_for_send = options_arc.clone();
         let send_handle = tokio::spawn(async move {
-            if let Err(e) = send_beacon_once(&socket_for_send, &options_for_send).await {
+            if let Err(e) =
+                super::transport::send_beacon_once(&socket_for_send, &options_for_send).await
+            {
                 eprintln!("{TAG} initial send error: {e}");
             }
             let mut ticker = interval(Duration::from_millis(BEACON_INTERVAL_MS));
             ticker.tick().await; // skip immediate first tick
             loop {
                 ticker.tick().await;
-                if let Err(e) = send_beacon_once(&socket_for_send, &options_for_send).await {
+                if let Err(e) =
+                    super::transport::send_beacon_once(&socket_for_send, &options_for_send).await
+                {
                     eprintln!("{TAG} send error: {e}");
                 }
             }

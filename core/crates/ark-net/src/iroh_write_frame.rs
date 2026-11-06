@@ -6,4 +6,4 @@
 /// то есть hostile/corrupted префикс (`u32::MAX`) выделяет до ~4 GiB за один
 /// `read_frame`. Реальные CRDT JSON-сообщения (`LanSyncMessage`) на порядки
 /// меньше; 16 MiB — щедрый запас, не специфичная для протокола константа.
-const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;
+pub(super) const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;

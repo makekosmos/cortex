@@ -1,3 +1,7 @@
+use crate::type_registry::register_type;
+use ark_domain::canonical_type::{AliasRecord, TypeRegistration};
+use rusqlite::{Connection, OptionalExtension};
+
 type ObjectTypeRow = (
     String,
     String,

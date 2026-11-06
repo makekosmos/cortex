@@ -1,4 +1,6 @@
-fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
+use super::*;
+
+pub(in crate::db::tests) fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
     let mut entity = sync_object(id, "core.task", title);
     entity.hlc = hlc.into();
     entity.data.insert("typeVersion".into(), json!("0.1.0"));

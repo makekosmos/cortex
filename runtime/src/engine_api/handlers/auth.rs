@@ -1,15 +1,13 @@
+use super::*;
+
 #[derive(Debug)]
-struct AuthenticatedClient {
-    pid: u32,
-    class: String,
-    version: String,
+pub(in crate::engine_api) struct AuthenticatedClient {
+    pub(super) pid: u32,
+    pub(super) class: String,
+    pub(super) version: String,
 }
 
-#[allow(
-    clippy::result_large_err,
-    reason = "the Engine wire error is the response body"
-)]
-fn authenticate(
+pub(in crate::engine_api) fn authenticate(
     headers: &HeaderMap,
     expected_token: &str,
 ) -> Result<AuthenticatedClient, HttpResponse> {
@@ -17,7 +15,7 @@ fn authenticate(
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "));
-    if !bearer.is_some_and(|token| auth::validate_token(token, expected_token)) {
+    if !bearer.is_some_and(|token| crate::auth::validate_token(token, expected_token)) {
         return Err(json_response(
             StatusCode::UNAUTHORIZED,
             json!({ "ok": false, "error": "invalid bearer token" }),
@@ -28,7 +26,7 @@ fn authenticate(
         .get(CLIENT_PID_HEADER)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u32>().ok());
-    if pid.is_none_or(|pid| auth::validate_pid_belongs_to_current_user(pid).is_err()) {
+    if pid.is_none_or(|pid| crate::auth::validate_pid_belongs_to_current_user(pid).is_err()) {
         return Err(json_response(
             StatusCode::FORBIDDEN,
             json!({ "ok": false, "error": "invalid client PID" }),
@@ -61,18 +59,18 @@ fn authenticate(
     })
 }
 
-fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
+pub(super) fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(name)
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned)
 }
 
-fn request_id() -> String {
+pub(super) fn request_id() -> String {
     format!("engine-http-{}", uuid::Uuid::new_v4())
 }
 
-fn json_response(status: StatusCode, value: Value) -> HttpResponse {
+pub(super) fn json_response(status: StatusCode, value: Value) -> HttpResponse {
     Response::builder()
         .status(status)
         .header(CONTENT_TYPE, "application/json")

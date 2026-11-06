@@ -1,3 +1,7 @@
+use super::default_discovery_enabled;
+use super::SyncBind;
+use serde::Deserialize;
+
 /// Params of `start_sync`. The variant is a newtype over this struct so the
 /// handler receives the request params object directly.
 #[derive(Debug, Deserialize)]

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-async fn registry_backend(
+pub(super) async fn registry_backend(
     device_id: &str,
 ) -> (
     Arc<crate::db::SqliteStorageBackend>,
@@ -35,7 +35,8 @@ async fn registry_backend(
     (backend, secret, database)
 }
 
-include!("registry_admission_tests/registry_exchange.rs");
+#[path = "registry_admission_tests/registry_exchange.rs"]
+mod registry_exchange;
 
 #[tokio::test]
 async fn direct_server_sends_no_data_or_ack_before_registry_admission() {

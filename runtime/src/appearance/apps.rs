@@ -1,3 +1,5 @@
+use super::*;
+
 // Per-app appearance overrides. Engine-owned, stored under the same Engine
 // data dir as the global settings file — never in an app's own config. The
 // global `follow_apps` flag stays global and Manager-only: when it is true,
@@ -5,7 +7,7 @@
 // rejected, but any previously stored per-app file is left untouched and
 // comes back into effect once `follow_apps` is turned off.
 
-const APPS_DIR: &str = "appearance-apps";
+pub(super) const APPS_DIR: &str = "appearance-apps";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -87,7 +89,7 @@ struct AppearancePolicy {
 }
 
 impl AppearanceStore {
-    fn app_path(&self, app_id: &str) -> PathBuf {
+    pub(super) fn app_path(&self, app_id: &str) -> PathBuf {
         self.path
             .parent()
             .expect("appearance path has a parent")
@@ -95,7 +97,11 @@ impl AppearanceStore {
             .join(format!("{app_id}.json"))
     }
 
-    async fn get_scoped(&self, app_id: &str, client: &DispatchClient) -> Result<Value, String> {
+    pub(super) async fn get_scoped(
+        &self,
+        app_id: &str,
+        client: &DispatchClient,
+    ) -> Result<Value, String> {
         if !is_safe_app_id(app_id) {
             return Err("invalid app_id".into());
         }
@@ -124,7 +130,7 @@ impl AppearanceStore {
         Ok(self.app_response(app_id, settings, policy).await)
     }
 
-    async fn set_scoped(
+    pub(super) async fn set_scoped(
         &self,
         app_id: &str,
         patch: &serde_json::Map<String, Value>,

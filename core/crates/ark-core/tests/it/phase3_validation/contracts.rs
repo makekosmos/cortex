@@ -2,7 +2,7 @@ use ark_core::canonical_types::definitions::canonical_type_registrations;
 use ark_core::canonical_types::validation::{validate_canonical, CanonicalValidationCode};
 use serde_json::{json, Value};
 
-fn registration(type_id: &str) -> ark_core::type_registry::TypeRegistration {
+pub(super) fn registration(type_id: &str) -> ark_core::type_registry::TypeRegistration {
     canonical_type_registrations()
         .unwrap()
         .into_iter()
@@ -10,7 +10,7 @@ fn registration(type_id: &str) -> ark_core::type_registry::TypeRegistration {
         .unwrap()
 }
 
-fn valid_task_props() -> Value {
+pub(super) fn valid_task_props() -> Value {
     json!({
         "state": {"kind":"open", "at":null},
         "planning": {"kind":"inbox", "period":"any", "date":null},
@@ -20,7 +20,7 @@ fn valid_task_props() -> Value {
     })
 }
 
-fn valid_doc() -> Value {
+pub(super) fn valid_doc() -> Value {
     json!(
         {"type":"doc",
         "content":[{"type":"paragraph",
@@ -29,7 +29,7 @@ fn valid_doc() -> Value {
         "marks":[{"type":"bold"}]}]}]})
 }
 
-fn error(
+pub(super) fn error(
     type_id: &str,
     props: Value,
     content: Value,

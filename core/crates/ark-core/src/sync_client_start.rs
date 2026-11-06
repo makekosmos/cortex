@@ -11,13 +11,11 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio_tungstenite::{accept_async, tungstenite::Message};
 
-    mod registry_admission_tests {
-        include!("sync_client_start/registry_admission_tests.rs");
-    }
+    #[path = "../sync_client_start/registry_admission_tests.rs"]
+    mod registry_admission_tests;
 
-    mod task_merge_tests {
-        include!("sync_client_start/task_merge_tests.rs");
-    }
+    #[path = "../sync_client_start/task_merge_tests.rs"]
+    mod task_merge_tests;
 
     #[tokio::test]
     async fn client_refuses_legacy_peer_before_registry_admission() {

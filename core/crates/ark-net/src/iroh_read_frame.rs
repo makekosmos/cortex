@@ -1,4 +1,9 @@
-async fn write_frame(send: &mut iroh::endpoint::SendStream, payload: &[u8]) -> Result<(), String> {
+use super::frame_limits::MAX_FRAME_LEN;
+
+pub(super) async fn write_frame(
+    send: &mut iroh::endpoint::SendStream,
+    payload: &[u8],
+) -> Result<(), String> {
     let len = u32::try_from(payload.len())
         .map_err(|_| "iroh transport: frame payload too large".to_string())?;
     send.write_all(&len.to_be_bytes())
@@ -10,7 +15,7 @@ async fn write_frame(send: &mut iroh::endpoint::SendStream, payload: &[u8]) -> R
     Ok(())
 }
 
-async fn read_frame(recv: &mut iroh::endpoint::RecvStream) -> Result<String, String> {
+pub(super) async fn read_frame(recv: &mut iroh::endpoint::RecvStream) -> Result<String, String> {
     let mut len_buf = [0u8; 4];
     recv.read_exact(&mut len_buf)
         .await

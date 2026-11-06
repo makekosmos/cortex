@@ -1,5 +1,25 @@
+use super::{
+    apply_relay_entity, load_version_vector, trim_process_heap, IncomingSyncState, RelaySync,
+    SYNC_LOAD_PAGE_SIZE, TAG,
+};
+use crate::hlc::HLC;
+use crate::integration_replication::SignedSyncEnvelope;
+use crate::sync_server::PeerEntry;
+use crate::types::{SyncEntity, VersionVector};
+use ark_sync::protocol::{
+    is_usage_entity, merge_usage_cursors, observe_non_usage_entity, should_send_entity,
+    split_into_batches,
+};
+use ark_sync_contracts::protocol_negotiation::{
+    compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
+    ProtocolCapability, ProtocolOffer,
+};
+use ark_sync_contracts::wire::{generate_id, LanSyncMessage, PROTOCOL_VERSION};
+use std::collections::HashMap;
+use std::time::Instant;
+
 impl RelaySync {
-    fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
+    pub(super) fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
         if self.transport.session().is_none() {
             return Err("transport does not support per-device registry admission".into());
         }
@@ -43,7 +63,63 @@ impl RelaySync {
         })
     }
 
-    fn make_hello(&self) -> LanSyncMessage {
+    /// Route an addressed integration frame through the configured transport.
+    /// Broadcast transports reject this message class; addressed transports
+    /// such as Iroh enforce authenticated recipient and writer-time authority.
+    pub async fn send_signed_integration_frame(
+        &self,
+        frame: SignedSyncEnvelope,
+    ) -> Result<(), String> {
+        self.storage
+            .validate_outbound_signed_integration_frame(
+                &frame,
+                &self.config.space_id,
+                &self.config.device_id,
+            )
+            .await?;
+        let recipient = frame.recipient_node_id.clone();
+        self.transport
+            .session()
+            .ok_or_else(|| "addressed transport is not supported".to_owned())?
+            .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
+            .await
+    }
+
+    pub(super) async fn handle_signed_integration_frame(
+        &self,
+        from_device_id: String,
+        frame: SignedSyncEnvelope,
+        transport_public_key: Option<String>,
+    ) {
+        let accepted = frame.space_id == self.config.space_id
+            && frame.origin_node_id == from_device_id
+            && frame.recipient_node_id == self.config.device_id
+            && self.is_authenticated_peer(&from_device_id).await
+            && self
+                .storage
+                .apply_signed_integration_frame_with_transport(
+                    &frame,
+                    &self.config.space_id,
+                    &from_device_id,
+                    &self.config.device_id,
+                    transport_public_key.as_deref(),
+                )
+                .await
+                .is_ok();
+        if let Some(session) = self.transport.session() {
+            let _ = session
+                .send_to(
+                    &from_device_id,
+                    LanSyncMessage::SignedIntegrationAck {
+                        message_id: frame.message_id,
+                        accepted,
+                    },
+                )
+                .await;
+        }
+    }
+
+    pub(super) fn make_hello(&self) -> LanSyncMessage {
         let (auth_nonce, auth_hmac) = match self.auth_secret.as_ref() {
             Some(secret) => {
                 let nonce = generate_auth_nonce();
@@ -93,7 +169,11 @@ impl RelaySync {
         }
     }
 
-    async fn send_missing_entities(&self, peer_device_id: &str, remote_vector: &VersionVector) {
+    pub(super) async fn send_missing_entities(
+        &self,
+        peer_device_id: &str,
+        remote_vector: &VersionVector,
+    ) {
         let mut load_vector = match load_version_vector(&self.storage).await {
             Ok(vector) => vector,
             Err(error) => {
@@ -339,7 +419,7 @@ impl RelaySync {
         Ok(())
     }
 
-    async fn apply_entities(
+    pub(super) async fn apply_entities(
         &self,
         entities: &[SyncEntity],
         is_last: bool,

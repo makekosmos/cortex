@@ -1,12 +1,14 @@
+use super::*;
+
 // Persisted wire contract with pinned components — see
 // docs/brand-legacy-identifiers.md.
-const USER_DATA_ROOT_HEADER: &str = "x-kosmos-user-data-root";
-const USER_DATA_APP_HEADER: &str = "x-kosmos-user-data-app";
-const USER_DATA_KEY_HEADER: &str = "x-kosmos-user-data-key";
+pub(super) const USER_DATA_ROOT_HEADER: &str = "x-kosmos-user-data-root";
+pub(super) const USER_DATA_APP_HEADER: &str = "x-kosmos-user-data-app";
+pub(super) const USER_DATA_KEY_HEADER: &str = "x-kosmos-user-data-key";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct UserDataOperationRequest {
+pub(super) struct UserDataOperationRequest {
     operation: String,
     root: Option<String>,
     root_id: Option<String>,
@@ -14,7 +16,7 @@ struct UserDataOperationRequest {
     key: Option<String>,
 }
 
-fn user_data_failure(error: crate::user_data::UserDataError) -> HttpResponse {
+pub(super) fn user_data_failure(error: crate::user_data::UserDataError) -> HttpResponse {
     use crate::user_data::UserDataError::*;
     let status = match error {
         NotFound | UnknownRoot => StatusCode::NOT_FOUND,
@@ -26,15 +28,14 @@ fn user_data_failure(error: crate::user_data::UserDataError) -> HttpResponse {
     json_response(status, json!({ "ok": false, "error": error.code() }))
 }
 
-fn user_data_ok(data: Value) -> HttpResponse {
+pub(super) fn user_data_ok(data: Value) -> HttpResponse {
     json_response(StatusCode::OK, json!({ "ok": true, "data": data }))
 }
 
-#[allow(
-    clippy::result_large_err,
-    reason = "the Engine wire error is the response body"
-)]
-fn user_data_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, HttpResponse> {
+pub(super) fn user_data_field<'a>(
+    value: Option<&'a str>,
+    field: &str,
+) -> Result<&'a str, HttpResponse> {
     value.filter(|value| !value.is_empty()).ok_or_else(|| {
         json_response(
             StatusCode::BAD_REQUEST,
@@ -43,11 +44,7 @@ fn user_data_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, H
     })
 }
 
-#[allow(
-    clippy::result_large_err,
-    reason = "the Engine wire error is the response body"
-)]
-fn user_data_header<'a>(
+pub(super) fn user_data_header<'a>(
     request: &'a Request<Incoming>,
     name: &str,
 ) -> Result<&'a str, HttpResponse> {
@@ -67,7 +64,7 @@ fn user_data_header<'a>(
 /// `POST /v1/user-data` — app-scoped binary user data operations. Every
 /// operation resolves inside a directory handle the Host pinned once, so no
 /// pathname is ever re-validated and re-opened separately.
-async fn handle_user_data(
+pub(super) async fn handle_user_data(
     request: Request<Incoming>,
     client: AuthenticatedClient,
     user_data: Arc<crate::user_data::UserDataRoots>,
@@ -85,7 +82,7 @@ async fn handle_user_data(
             return json_response(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 json!({ "ok": false, "error": "request body exceeds 1 MiB" }),
-            )
+            );
         }
     };
     let parsed = match serde_json::from_slice::<UserDataOperationRequest>(&collected.to_bytes()) {
@@ -94,7 +91,7 @@ async fn handle_user_data(
             return json_response(
                 StatusCode::BAD_REQUEST,
                 json!({ "ok": false, "error": "malformed user data request" }),
-            )
+            );
         }
     };
     match parsed.operation.as_str() {
@@ -159,7 +156,7 @@ async fn handle_user_data(
 /// `PUT /v1/user-data` — binary write. The payload is the raw file body; the
 /// root handle id, app id, and key travel in headers so the body never needs
 /// to cross a JSON or WebSocket size ceiling.
-async fn handle_user_data_write(
+pub(super) async fn handle_user_data_write(
     request: Request<Incoming>,
     client: AuthenticatedClient,
     user_data: Arc<crate::user_data::UserDataRoots>,

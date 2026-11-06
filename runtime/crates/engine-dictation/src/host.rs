@@ -29,7 +29,11 @@ use super::model_sweep;
 use super::network;
 use super::stats::{self, DictationStats};
 
-include!("host_state.rs");
+#[path = "host_state.rs"]
+mod state;
+pub(crate) use state::SubmitError;
+use state::*;
+pub use state::{DictationHost, DictationResponse, DictationStateName};
 fn save_config_in(data_dir: &std::path::Path, cfg: &DictationConfig) -> std::io::Result<()> {
     config::save_to(&data_dir.join("dictation-config.json"), cfg)
 }
@@ -83,10 +87,21 @@ pub async fn handle_dictation_op(
     }
 }
 
-include!("host_models.rs");
-include!("host_capture.rs");
-include!("host_queue.rs");
+#[path = "host_models.rs"]
+mod models;
 #[cfg(test)]
-mod tests {
-    include!("host_tests.rs");
-}
+pub(crate) use models::validate_config_patch;
+use models::*;
+#[path = "host_capture.rs"]
+mod capture;
+use capture::*;
+pub use capture::{handle_engine_trigger, route_trigger_event};
+#[path = "host_queue.rs"]
+mod queue;
+use queue::*;
+#[cfg(test)]
+pub(crate) use queue::{probe_connectivity, verify_api_key_with};
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod tests;

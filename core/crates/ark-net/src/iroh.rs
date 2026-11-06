@@ -90,15 +90,34 @@ mod identity_tests {
     }
 }
 
-include!("iroh_imports.rs");
-include!("iroh_config.rs");
-include!("iroh_registry.rs");
-include!("iroh_transport_impl.rs");
-include!("iroh_connections.rs");
-include!("iroh_relay_watch.rs");
-include!("iroh_sync_impl.rs");
-include!("iroh_peer_session_control.rs");
-include!("iroh_message_helpers.rs");
-include!("iroh_write_frame.rs");
-include!("iroh_read_frame.rs");
-include!("iroh_tail.rs");
+#[path = "iroh_config.rs"]
+mod config;
+#[path = "iroh_connections.rs"]
+mod connections;
+#[path = "iroh_write_frame.rs"]
+mod frame_limits;
+#[path = "iroh_read_frame.rs"]
+mod framing;
+#[path = "iroh_message_helpers.rs"]
+mod message_helpers;
+#[path = "iroh_peer_session_control.rs"]
+mod peer_session_control;
+#[path = "iroh_registry.rs"]
+mod registry;
+#[path = "iroh_relay_watch.rs"]
+mod relay_watch;
+#[path = "iroh_sync_impl.rs"]
+mod sync_impl;
+#[path = "iroh_transport_impl.rs"]
+mod transport;
+#[path = "iroh_imports.rs"]
+mod transport_types;
+
+#[cfg(test)]
+#[path = "iroh_tail.rs"]
+mod tests;
+
+pub use config::{from_ticket, IrohConfig};
+pub use registry::DeviceRegistry;
+pub use transport::IrohTransport;
+pub use transport_types::ARK_SYNC_ALPN;

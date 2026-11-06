@@ -1,3 +1,5 @@
+use super::*;
+
 #[tokio::test]
 async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse() {
     let test_backend = make_backend().await;

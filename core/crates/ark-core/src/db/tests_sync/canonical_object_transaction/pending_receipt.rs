@@ -1,3 +1,4 @@
+use super::*;
 use ark_application::sync_storage::PeerProgressPort;
 
 #[tokio::test]

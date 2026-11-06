@@ -1,3 +1,12 @@
+use super::process_projection::merge_top_apps;
+use super::spans_and_title_totals::{clamp_positive_i64, enumerate_dates, iso_date_days_ago};
+use ark_domain::types::{
+    DailyTrendPoint, HourlyHeatmapCell, RecentSessionEntry, TopAppEntry, UsageAnalyticsSnapshot,
+    UsageSummary,
+};
+use chrono::Utc;
+use rusqlite::{params, Connection};
+
 /// `windows_dir` is the real OS system dir (resolved engine-side via
 /// `GetSystemWindowsDirectoryW`); `None` marks nothing as system — ark-core
 /// must not guess host paths from the environment.

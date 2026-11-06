@@ -293,12 +293,39 @@ fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
     )))
 }
 
-include!("local/sidecar.rs");
-include!("local/backend.rs");
-// KOS-337: локальные backend-тесты смысленны только когда backend собран —
-// без фичи они скипаются (не компилируются), а контракт ошибки покрывает
-// tests_disabled.rs.
+#[path = "local/sidecar.rs"]
+mod sidecar;
+use sidecar::*;
+#[cfg(test)]
+pub(crate) use sidecar::{
+    clear_test_sidecar_mock_for_host, has_test_sidecar_mock_for_host,
+    install_test_sidecar_mock_for_host, recorded_test_sidecar_ops_for_host, TEST_SIDECAR_TEST_LOCK,
+};
 #[cfg(all(test, feature = "local-dictation"))]
-include!("local/tests.rs");
+pub(crate) use sidecar::{
+    clear_test_sidecar_pool_for_host, install_test_sidecar_unavailable_for_host,
+};
+
+#[path = "local/backend.rs"]
+mod backend;
+#[cfg(test)]
+pub(crate) use backend::transcribe_with_whisper_backend;
+#[cfg(all(test, feature = "local-dictation"))]
+pub(crate) use backend::PartialTranscript;
+pub use backend::{cancel_sidecar, preload_server, status, transcribe, unload_sidecar};
+pub(crate) use backend::{
+    clean_whisper_transcript, local_whisper_threads, preload_with_whisper_backend_model,
+    transcribe_with_whisper_backend_model, unload_whisper_backend, whisper_language_arg,
+};
+#[cfg(feature = "local-dictation")]
+pub(crate) use backend::{discard_parakeet_partial, finish_parakeet_stream, start_parakeet_stream};
+#[cfg(all(test, feature = "local-dictation"))]
+pub(crate) use backend::{preload_with_whisper_backend, strip_whisper_timestamps};
+
+// KOS-337: local backend tests are compiled only with the local backend.
 #[cfg(all(test, not(feature = "local-dictation")))]
-include!("local/tests_disabled.rs");
+#[path = "local/tests_disabled.rs"]
+mod tests_disabled_source;
+#[cfg(all(test, feature = "local-dictation"))]
+#[path = "local/tests.rs"]
+mod tests_enabled_source;

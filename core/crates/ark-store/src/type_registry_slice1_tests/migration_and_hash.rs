@@ -71,7 +71,7 @@ fn has_table(conn: &Connection, name: &str) -> bool {
         != 0
 }
 
-fn version(type_id: &str, version: &str, schema: &str) -> TypeVersion {
+pub(super) fn version(type_id: &str, version: &str, schema: &str) -> TypeVersion {
     TypeVersion {
         type_id: type_id.into(),
         version: version.into(),

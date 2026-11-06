@@ -55,6 +55,28 @@ test("rejects a new source file above 500 lines", async () => {
   assert.match(result.stderr, /new-module\.mjs: 501 lines \(max 500\)/);
 });
 
+test("rejects Rust include! source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs": 'mod sync { include!("sync/connection.rs"); }\n',
+    "src/dynamic.rs": 'include!(concat!("sync/", "connection.rs"));\n',
+    "src/sync/connection.rs": "pub fn connect() {}\n",
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /include! source-fragment check failed/);
+  assert.match(result.stderr, /lib\.rs: Rust source fragments must be ordinary modules/);
+  assert.match(result.stderr, /dynamic\.rs: Rust source fragments must be ordinary modules/);
+});
+
+test("does not mistake include_str! or include_bytes! for source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs":
+      'const _: &str = include_str!("message.txt");\nconst _: &[u8] = include_bytes!("asset.bin");\n',
+    "src/message.txt": "text",
+    "src/asset.bin": "bytes",
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("rejects part-numbered paths even when a legacy baseline lists them", async () => {
   const result = await runFixture({
     "scripts/source-part-baseline.json": JSON.stringify(["src/part01.rs"]),
@@ -107,7 +129,7 @@ test("core/ is first-party and checked like everything else", async () => {
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(501),
-    "runtime/crates/engine-dictation/src/config.rs": lines(501),
+    "runtime/crates/engine-dictation/src/host_capture.rs": lines(501),
     "runtime/src/focus.rs": lines(501),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -124,6 +146,21 @@ test("pruned baseline entries under 500 lines are no longer exempt", async () =>
     "runtime/src/grant_authority.rs",
     "runtime/src/handle_relative_fs.rs",
     "runtime/src/runtime_grants.rs",
+    "desktop/scripts/verify-release-channel.mjs",
+    "runtime/crates/engine-indexes/src/app_index/mod.rs",
+    "runtime/crates/engine-indexes/src/app_index/icons.rs",
+    "runtime/crates/engine-dictation/src/config.rs",
+    "runtime/crates/engine-dictation/src/groq.rs",
+    "runtime/crates/engine-dictation/src/local_sidecar.rs",
+    "runtime/crates/engine-base/src/engine_dispatch.rs",
+    "runtime/crates/engine-packages/src/package_registration.rs",
+    "runtime/crates/engine-base/src/package_manifest.rs",
+    "runtime/crates/engine-packages/src/package_worker_protocol.rs",
+    "runtime/crates/engine-indexes/src/file_index/scanner.rs",
+    "runtime/crates/engine-indexes/src/file_index/store.rs",
+    "runtime/src/engine_api/tests_core.rs",
+    "runtime/src/engine_api/tests_http.rs",
+    "runtime/tests/it/package_worker_windows.rs",
   ];
   const result = await runFixture(Object.fromEntries(pruned.map((file) => [file, lines(501)])));
   assert.equal(result.status, 1);

@@ -1,5 +1,18 @@
+#[cfg(test)]
+use super::{RelayPeerState, RelaySync, RelaySyncConfig};
+use crate::replication_storage::SyncRuntimeStorage;
+use crate::types::{SyncEntity, VersionVector};
+use std::sync::Arc;
+
+#[cfg(test)]
+use ark_sync_contracts::wire::LanSyncMessage;
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
+use tokio::sync::mpsc;
+
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
-pub fn trim_process_heap() {
+pub(super) fn trim_process_heap() {
     unsafe extern "C" {
         fn malloc_trim(pad: usize) -> i32;
     }
@@ -8,14 +21,14 @@ pub fn trim_process_heap() {
     }
 }
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
-pub fn trim_process_heap() {}
-async fn load_version_vector(
+pub(super) fn trim_process_heap() {}
+pub(super) async fn load_version_vector(
     storage: &Arc<dyn SyncRuntimeStorage>,
 ) -> Result<VersionVector, String> {
     storage.load_version_vector().await
 }
 
-async fn apply_relay_entity(
+pub(super) async fn apply_relay_entity(
     storage: &Arc<dyn SyncRuntimeStorage>,
     entity: &SyncEntity,
     authenticated_peer_id: Option<&str>,

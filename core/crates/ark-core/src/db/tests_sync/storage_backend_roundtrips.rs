@@ -1,10 +1,15 @@
 // -----------------------------------------------------------------------
+use super::super::test_fixtures::{
+    make_object, make_tracked_app, make_usage_event, make_usage_session,
+};
+use super::*;
+
 // SqliteStorageBackend roundtrip tests (AC3)
 // -----------------------------------------------------------------------
 
-struct TestBackend {
-    backend: SqliteStorageBackend,
-    _database: ark_store::test_support::TestDatabase,
+pub(super) struct TestBackend {
+    pub(super) backend: SqliteStorageBackend,
+    pub(super) _database: ark_store::test_support::TestDatabase,
 }
 
 impl std::ops::Deref for TestBackend {
@@ -16,12 +21,12 @@ impl std::ops::Deref for TestBackend {
 }
 
 impl TestBackend {
-    fn database(&self) -> &ark_store::test_support::TestDatabase {
+    pub(super) fn database(&self) -> &ark_store::test_support::TestDatabase {
         &self._database
     }
 }
 
-async fn make_backend() -> TestBackend {
+pub(super) async fn make_backend() -> TestBackend {
     let database =
         ark_store::test_support::TestDatabase::create().expect("test database initializes");
     let backend = SqliteStorageBackend::open_for_test(
@@ -37,7 +42,7 @@ async fn make_backend() -> TestBackend {
     }
 }
 
-fn sync_tracked_app(id: &str) -> SyncEntity {
+pub(in crate::db::tests) fn sync_tracked_app(id: &str) -> SyncEntity {
     let tracked_app = make_tracked_app(id);
     let value = serde_json::to_value(&tracked_app).unwrap();
     let Value::Object(mut map) = value else {
@@ -55,7 +60,7 @@ fn sync_tracked_app(id: &str) -> SyncEntity {
     }
 }
 
-fn sync_usage_session(id: &str, tracked_app_id: &str) -> SyncEntity {
+pub(in crate::db::tests) fn sync_usage_session(id: &str, tracked_app_id: &str) -> SyncEntity {
     let session = make_usage_session(id, tracked_app_id);
     let value = serde_json::to_value(&session).unwrap();
     let Value::Object(mut map) = value else {
@@ -73,7 +78,11 @@ fn sync_usage_session(id: &str, tracked_app_id: &str) -> SyncEntity {
     }
 }
 
-fn sync_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) -> SyncEntity {
+pub(in crate::db::tests) fn sync_usage_event(
+    id: &str,
+    tracked_app_id: &str,
+    session_id: Option<&str>,
+) -> SyncEntity {
     let event = make_usage_event(id, tracked_app_id, session_id);
     let value = serde_json::to_value(&event).unwrap();
     let Value::Object(mut map) = value else {
@@ -91,7 +100,7 @@ fn sync_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) ->
     }
 }
 
-fn sync_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
+pub(super) fn sync_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
     let object = make_object(id, type_id, title);
     let value = serde_json::to_value(&object).unwrap();
     let Value::Object(mut map) = value else {

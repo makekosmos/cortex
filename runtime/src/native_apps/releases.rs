@@ -171,7 +171,10 @@ fn url_path(base: &reqwest::Url, path: &str) -> reqwest::Url {
     base.join(path).unwrap_or_else(|_| base.clone())
 }
 
-include!("releases/parse.rs");
+mod parse;
+pub use parse::{
+    info_from_sums, parse_sums, select_asset, tag_from_location, AssetMatch, SumsEntry,
+};
 
 enum SumsGet {
     NotModified,

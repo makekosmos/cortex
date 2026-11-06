@@ -1,4 +1,8 @@
-use super::*;
+use super::super::{pump_client_committed_feed, TAG};
+use super::super::{AuthenticatedPeerSession, ClientFeedInFlight, ClientMessageSender};
+use ark_application::sync_storage::SyncRuntimeStorage;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub(super) async fn was_sent(
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
@@ -86,7 +90,7 @@ async fn apply(
         &ark_sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
     );
     drop(session_guard);
-    super::pump_client_committed_feed(
+    pump_client_committed_feed(
         storage,
         peer_device_id,
         tx,

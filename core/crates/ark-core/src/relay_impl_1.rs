@@ -1,5 +1,13 @@
+use super::{load_version_vector, task_merge, RelayPeerState, RelaySync, TAG};
+use crate::types::PeerRecord;
+use ark_sync::protocol::merge_peer_records;
+use ark_sync_contracts::protocol_negotiation::{
+    negotiate_protocol, verify_hello_auth_hmac, ProtocolCapability, ProtocolNegotiationError,
+    ProtocolOffer, MAX_PROTOCOL_OFFER_VERSIONS, SUPPORTED_PROTOCOL_VERSIONS,
+};
+use ark_sync_contracts::wire::LanSyncMessage;
 impl RelaySync {
-    async fn handle_message(
+    pub(super) async fn handle_message(
         &self,
         from_device_id: String,
         msg: LanSyncMessage,
@@ -408,7 +416,7 @@ impl RelaySync {
         }
     }
 
-    async fn send_local_version_vector(&self) {
+    pub(super) async fn send_local_version_vector(&self) {
         let vector = match load_version_vector(&self.storage).await {
             Ok(vector) => vector,
             Err(error) => {
@@ -422,7 +430,7 @@ impl RelaySync {
         });
     }
 
-    async fn reject_protocol_offer(
+    pub(super) async fn reject_protocol_offer(
         &self,
         target_device_id: &str,
         error: ProtocolNegotiationError,
@@ -446,7 +454,7 @@ impl RelaySync {
         }
     }
 
-    async fn is_authenticated_peer(&self, device_id: &str) -> bool {
+    pub(super) async fn is_authenticated_peer(&self, device_id: &str) -> bool {
         self.peers
             .lock()
             .await

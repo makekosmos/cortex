@@ -8,7 +8,7 @@
 /// segments, case or 8.3 short names (round 4). Deny-closed: a missing or
 /// unresolvable Manager install means `false`.
 #[cfg(windows)]
-fn is_manager_process(pid: u32) -> bool {
+pub(super) fn is_manager_process(pid: u32) -> bool {
     let Ok(image) = crate::auth::process_image_path(pid) else {
         return false;
     };
@@ -20,7 +20,7 @@ fn is_manager_process(pid: u32) -> bool {
 
 /// The gpui Manager ships only on Windows.
 #[cfg(not(windows))]
-fn is_manager_process(_pid: u32) -> bool {
+pub(super) fn is_manager_process(_pid: u32) -> bool {
     false
 }
 

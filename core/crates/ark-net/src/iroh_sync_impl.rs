@@ -1,3 +1,21 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use ark_sync_contracts::transport::{
+    OutboundIntegrationFrameAuthorizer, SyncTransport, TransportEvent,
+};
+use ark_sync_contracts::wire::LanSyncMessage;
+use iroh::endpoint::{presets, BindOpts};
+use iroh::{Endpoint, RelayMode};
+use tokio::sync::mpsc;
+
+use super::connections::{handle_connection, ConnectionParams};
+use super::relay_watch::spawn_relay_connectivity_watch;
+use super::transport::IrohTransport;
+use super::transport_types::{OutgoingMessage, ARK_SYNC_ALPN};
+use super::EndpointId;
+use crate::sync_bind::SyncBind;
+
 #[async_trait::async_trait]
 impl SyncTransport for IrohTransport {
     /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для

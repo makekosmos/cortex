@@ -1,5 +1,6 @@
 pub use ark_domain::app_identity::canonical_app_key;
-use std::collections::HashSet;
+use ark_domain::types::{TopAppEntry, UsageProcessCandidate};
+use std::collections::{HashMap, HashSet};
 
 // Canonical app identity + top-apps merge (KOS-287).
 //
@@ -35,7 +36,7 @@ pub fn is_system_path(normalized_exe_path: &str, windows_dir: &str) -> bool {
 /// game across version dirs produced duplicate picker rows. Collapse to one
 /// candidate per canonical exe identity; callers order by last_seen_at DESC,
 /// so the first row per key is the freshest.
-fn dedup_usage_process_candidates(
+pub(super) fn dedup_usage_process_candidates(
     candidates: Vec<UsageProcessCandidate>,
 ) -> Vec<UsageProcessCandidate> {
     let mut seen = HashSet::new();

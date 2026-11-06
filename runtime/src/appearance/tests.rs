@@ -1,4 +1,8 @@
 use super::*;
+
+#[path = "apps_tests.rs"]
+mod apps_tests;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn manager_client() -> DispatchClient {

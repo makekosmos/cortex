@@ -1,11 +1,12 @@
+use super::RelaySync;
 impl RelaySync {
-    fn disconnect_iroh_transport_endpoint(&self, endpoint: &str) {
+    pub(super) fn disconnect_iroh_transport_endpoint(&self, endpoint: &str) {
         if let Some(session) = self.transport.session() {
             let _ = session.disconnect_transport_peer(endpoint);
         }
     }
 
-    fn disconnect_iroh_peer(&self, device_id: &str) {
+    pub(super) fn disconnect_iroh_peer(&self, device_id: &str) {
         if let Some(session) = self.transport.session() {
             let _ = session.disconnect_peer(device_id);
         }

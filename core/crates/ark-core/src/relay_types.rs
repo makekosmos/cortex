@@ -2,25 +2,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 
-use crate::hlc::HLC;
 use crate::replication_storage::SyncRuntimeStorage;
-use crate::sync_server::{
-    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
-};
-use crate::sync_transport::{SyncTransport, SyncTransportHandle, TransportEvent};
-use crate::types::{PeerRecord, SyncEntity, VersionVector};
-use ark_net::relay::{RelayConfig, RelayTransport};
-use ark_sync::protocol::{
-    is_usage_entity, merge_peer_records, merge_usage_cursors, observe_non_usage_entity,
-    should_send_entity, split_into_batches,
-};
-use ark_sync_contracts::protocol_negotiation::*;
-use ark_sync_contracts::wire::*;
+use crate::sync_server::{OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback};
+use crate::sync_transport::SyncTransportHandle;
+use crate::types::VersionVector;
+use ark_sync_contracts::wire::LanSyncMessage;
 
-const TAG: &str = "[RelaySync]";
-const SYNC_LOAD_PAGE_SIZE: usize = 100;
+pub(super) const TAG: &str = "[RelaySync]";
+pub(super) const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct RelaySyncConfig {
@@ -33,81 +24,83 @@ pub struct RelaySyncConfig {
 }
 
 #[derive(Debug, Clone)]
-struct RelayPeerState {
-    device_name: String,
+pub(super) struct RelayPeerState {
+    pub(super) device_name: String,
     /// OS / product version the peer advertised in its Hello.
-    platform: Option<String>,
-    app_version: Option<String>,
-    authenticated: bool,
-    negotiated_protocol: Option<ark_sync_contracts::protocol_negotiation::NegotiatedProtocol>,
+    pub(super) platform: Option<String>,
+    pub(super) app_version: Option<String>,
+    pub(super) authenticated: bool,
+    pub(super) negotiated_protocol:
+        Option<ark_sync_contracts::protocol_negotiation::NegotiatedProtocol>,
 }
 
-struct IncomingSyncState {
-    vector: VersionVector,
-    changed: bool,
-    last_update: Instant,
+pub(super) struct IncomingSyncState {
+    pub(super) vector: VersionVector,
+    pub(super) changed: bool,
+    pub(super) last_update: Instant,
 }
 
 /// A first-contact Hello parked for explicit user consent (KOS-369). The
 /// stored Hello is replayed through `handle_message` on «Принять», so
 /// acceptance applies exactly the same checks and persistence as a live
 /// Hello; «Отклонить» answers `PairingRejected` and closes the connection.
-struct PendingPairingRequest {
-    device_name: String,
-    platform: Option<String>,
-    app_version: Option<String>,
-    transport_public_key: String,
-    hello: LanSyncMessage,
+pub(super) struct PendingPairingRequest {
+    pub(super) device_name: String,
+    pub(super) platform: Option<String>,
+    pub(super) app_version: Option<String>,
+    pub(super) transport_public_key: String,
+    pub(super) hello: LanSyncMessage,
 }
 
 #[derive(Clone)]
-struct OutgoingPairing {
-    endpoint: String,
-    started_at: Instant,
-    declined: bool,
-    accepted: bool,
+pub(super) struct OutgoingPairing {
+    pub(super) endpoint: String,
+    pub(super) started_at: Instant,
+    pub(super) declined: bool,
+    pub(super) accepted: bool,
 }
 
 /// How long the initiator's snapshot keeps reporting `pending` before the
 /// Manager calls it a timeout. The dial itself keeps retrying — a late
 /// «Принять» still completes the pairing; the bound is purely for the UI.
-const PAIRING_DECISION_TIMEOUT: Duration = Duration::from_secs(120);
+pub(super) const PAIRING_DECISION_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// After «Отклонить» the same device id's Hellos are dropped without a new
 /// prompt for this long — old-version initiators keep redialing and would
 /// otherwise resurrect the dialog every backoff tick.
-const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
+pub(super) const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
 
 pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
 pub type OnRegistryEventsCallback =
     Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 pub struct RelaySync {
-    storage: Arc<dyn SyncRuntimeStorage>,
-    transport: SyncTransportHandle,
-    registry: Option<ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>>,
-    config: RelaySyncConfig,
-    auth_secret: Option<String>,
-    peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
-    transport_keys: Arc<Mutex<HashMap<String, String>>>,
+    pub(super) storage: Arc<dyn SyncRuntimeStorage>,
+    pub(super) transport: SyncTransportHandle,
+    pub(super) registry:
+        Option<ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>>,
+    pub(super) config: RelaySyncConfig,
+    pub(super) auth_secret: Option<String>,
+    pub(super) peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
+    pub(super) transport_keys: Arc<Mutex<HashMap<String, String>>>,
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.
-    pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,
-    pending_responder_hellos: Mutex<HashMap<String, LanSyncMessage>>,
+    pub(super) pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,
+    pub(super) pending_responder_hellos: Mutex<HashMap<String, LanSyncMessage>>,
     /// Recently declined device ids — their Hellos are dropped without
     /// re-prompting until the suppression lapses.
-    declined_pairing: Mutex<HashMap<String, Instant>>,
+    pub(super) declined_pairing: Mutex<HashMap<String, Instant>>,
     /// Our outbound attempt after «Подключить» — consents the ticketed
     /// endpoint's Hello and reports the outcome to the snapshot.
-    outgoing_pairing: Mutex<Option<OutgoingPairing>>,
-    incoming_sync: Arc<Mutex<Option<IncomingSyncState>>>,
-    on_change: Arc<Mutex<Option<OnChangeCallback>>>,
-    on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
-    on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
-    on_pairing_changed: Arc<Mutex<Option<OnPairingChangedCallback>>>,
-    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
+    pub(super) outgoing_pairing: Mutex<Option<OutgoingPairing>>,
+    pub(super) incoming_sync: Arc<Mutex<Option<IncomingSyncState>>>,
+    pub(super) on_change: Arc<Mutex<Option<OnChangeCallback>>>,
+    pub(super) on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
+    pub(super) on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
+    pub(super) on_pairing_changed: Arc<Mutex<Option<OnPairingChangedCallback>>>,
+    pub(super) on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     /// Background tasks spawned by `start()` — aborted and joined by
     /// `stop()` so a task holding `storage` (the shared db connection)
     /// cannot outlive teardown (KOS-270).
-    tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    pub(super) tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
