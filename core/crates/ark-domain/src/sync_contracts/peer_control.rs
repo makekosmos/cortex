@@ -1,5 +1,5 @@
-use crate::transport::PeerDisconnectOutcome;
-use crate::wire::LanSyncMessage;
+use crate::sync_contracts::transport::PeerDisconnectOutcome;
+use crate::sync_contracts::wire::LanSyncMessage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerControlSendOutcome {

@@ -1,4 +1,4 @@
-use ark_sync_contracts::wire::{LanSyncMessage, SyncPolicyRuleWire};
+use ark_domain::sync_contracts::wire::{LanSyncMessage, SyncPolicyRuleWire};
 
 fn policy_rule_wire(rule: &ark_application::sync_policy::SyncProfileRule) -> SyncPolicyRuleWire {
     SyncPolicyRuleWire {

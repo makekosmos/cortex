@@ -1,6 +1,6 @@
 use super::*;
+use ark_domain::sync_contracts::wire::MAX_BATCH_BYTES;
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
-use ark_sync_contracts::wire::MAX_BATCH_BYTES;
 use serde_json::json;
 
 #[test]

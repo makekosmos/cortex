@@ -5,7 +5,7 @@ use crate::types::{SyncEntity, VersionVector};
 use std::sync::Arc;
 
 #[cfg(test)]
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 #[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]

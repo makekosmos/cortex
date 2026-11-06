@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use crate::wire::LanSyncMessage;
+use crate::sync_contracts::wire::LanSyncMessage;
 
 #[async_trait::async_trait]
 pub trait SessionOutboundGuard: Send + Sync {

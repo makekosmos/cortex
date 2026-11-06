@@ -6,10 +6,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
-use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use tokio::sync::Mutex;
 
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use state::{Admission, RelayRegistryPeer};
 
 #[derive(Debug, Clone)]

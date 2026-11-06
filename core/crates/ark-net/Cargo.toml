@@ -6,8 +6,6 @@ description = "Networking transports and host discovery for ARK"
 
 [dependencies]
 ark-domain = { path = "../ark-domain" }
-ark-net-policy = { path = "../ark-net-policy" }
-ark-sync-contracts = { path = "../ark-sync-contracts" }
 async-trait.workspace = true
 futures-util.workspace = true
 if-addrs = "0.13"

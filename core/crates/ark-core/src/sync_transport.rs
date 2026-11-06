@@ -1,6 +1,6 @@
-pub use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
-pub use ark_sync_contracts::transport::*;
-pub use ark_sync_contracts::wire::LanSyncMessage;
+pub use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+pub use ark_domain::sync_contracts::transport::*;
+pub use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use std::sync::Arc;
 

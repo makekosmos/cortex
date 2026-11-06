@@ -3,11 +3,11 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ark_sync_contracts::protocol_negotiation::{
+use ark_domain::sync_contracts::protocol_negotiation::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret,
 };
-use ark_sync_contracts::transport::OutboundIntegrationFrameAuthorizer;
-use ark_sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
+use ark_domain::sync_contracts::transport::OutboundIntegrationFrameAuthorizer;
+use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
 use iroh::{Endpoint, RelayMode};
 use tokio::sync::{broadcast, watch};
 
@@ -184,23 +184,21 @@ impl IrohTransport {
             None => (None, None),
         };
         let offer =
-            ark_sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
+            ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
                 true,
             )
             .with_task_merge_bootstrap_v2();
-        let negotiation_hmac =
-            auth_secret
-                .as_deref()
-                .zip(auth_nonce.as_deref())
-                .map(|(secret, nonce)| {
-                    ark_sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(
-                        secret,
-                        &self.config.space_id,
-                        &self.config.device_id,
-                        nonce,
-                        &offer,
-                    )
-                });
+        let negotiation_hmac = auth_secret.as_deref().zip(auth_nonce.as_deref()).map(
+            |(secret, nonce)| {
+                ark_domain::sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(
+                    secret,
+                    &self.config.space_id,
+                    &self.config.device_id,
+                    nonce,
+                    &offer,
+                )
+            },
+        );
         LanSyncMessage::Hello {
             protocol_version: PROTOCOL_VERSION,
             device_id: self.config.device_id.clone(),

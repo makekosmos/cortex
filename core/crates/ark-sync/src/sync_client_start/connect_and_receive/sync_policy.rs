@@ -1,8 +1,8 @@
 use super::super::send_msg;
 use super::super::AuthenticatedPeerSession;
 use ark_application::sync_storage::SyncRuntimeStorage;
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -47,7 +47,7 @@ pub(super) async fn accept(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<ark_sync_contracts::wire::SyncPolicyRuleWire>,
+    rules: Vec<ark_domain::sync_contracts::wire::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     if !authenticated {
         return Err("sync policy arrived before authentication".into());
@@ -79,7 +79,7 @@ pub(super) async fn accept_and_start(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<ark_sync_contracts::wire::SyncPolicyRuleWire>,
+    rules: Vec<ark_domain::sync_contracts::wire::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     accept(
         storage,

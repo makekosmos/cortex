@@ -3,9 +3,9 @@ use super::super::{
     ClientMessageSender, ClientOnConnectedCallback, ClientOnRegistryEventsCallback, TAG,
 };
 use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_contracts::protocol_negotiation::NegotiatedProtocol;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::types::PeerRecord;
-use ark_sync_contracts::protocol_negotiation::NegotiatedProtocol;
-use ark_sync_contracts::wire::LanSyncMessage;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -107,7 +107,7 @@ impl PendingRegistryAdmission {
             send_msg(tx, policy_message).await?;
         }
         let policy_bound_delivery = ready.protocol().capabilities.contains(
-            &ark_sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
+            &ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
         );
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: ready.peer_device_id().to_owned(),

@@ -6,15 +6,15 @@ use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::sync_server::PeerEntry;
 use crate::types::{SyncEntity, VersionVector};
+use ark_domain::sync_contracts::protocol_negotiation::{
+    compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
+    ProtocolCapability, ProtocolOffer,
+};
+use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage, PROTOCOL_VERSION};
 use ark_sync::protocol::{
     is_usage_entity, merge_usage_cursors, observe_non_usage_entity, should_send_entity,
     split_into_batches,
 };
-use ark_sync_contracts::protocol_negotiation::{
-    compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
-    ProtocolCapability, ProtocolOffer,
-};
-use ark_sync_contracts::wire::{generate_id, LanSyncMessage, PROTOCOL_VERSION};
 use std::collections::HashMap;
 use std::time::Instant;
 

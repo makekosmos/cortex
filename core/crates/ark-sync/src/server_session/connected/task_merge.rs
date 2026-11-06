@@ -1,7 +1,7 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::session_io::SessionIoSender;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::task_merge_delivery::prepare_outbound_batch;
 

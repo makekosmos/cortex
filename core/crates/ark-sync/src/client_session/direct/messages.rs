@@ -1,4 +1,4 @@
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use super::{DirectClientSession, DirectClientSessionRejection, Phase};
 
@@ -88,7 +88,9 @@ impl DirectClientSession {
             };
         }
 
-        if !self.is_ready() && ark_sync_contracts::wire::requires_registry_admission(&message) {
+        if !self.is_ready()
+            && ark_domain::sync_contracts::wire::requires_registry_admission(&message)
+        {
             return DirectClientSessionEffect::Ignore;
         }
 

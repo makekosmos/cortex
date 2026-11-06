@@ -1,11 +1,11 @@
 use super::{load_version_vector, task_merge, RelayPeerState, RelaySync, TAG};
 use crate::types::PeerRecord;
-use ark_sync::protocol::merge_peer_records;
-use ark_sync_contracts::protocol_negotiation::{
+use ark_domain::sync_contracts::protocol_negotiation::{
     negotiate_protocol, verify_hello_auth_hmac, ProtocolCapability, ProtocolNegotiationError,
     ProtocolOffer, MAX_PROTOCOL_OFFER_VERSIONS, SUPPORTED_PROTOCOL_VERSIONS,
 };
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_sync::protocol::merge_peer_records;
 impl RelaySync {
     pub(super) async fn handle_message(
         &self,
@@ -14,7 +14,7 @@ impl RelaySync {
         transport_public_key: Option<String>,
         defer_initial_sync: bool,
     ) {
-        if ark_sync_contracts::wire::requires_registry_admission(&msg)
+        if ark_domain::sync_contracts::wire::requires_registry_admission(&msg)
             && !self
                 .registry_ready_for_peer(&from_device_id, transport_public_key.as_deref())
                 .await
@@ -103,7 +103,7 @@ impl RelaySync {
                     negotiation_hmac.as_deref(),
                 ) {
                     (Some(secret), Some(nonce), Some(proof)) => {
-                        ark_sync_contracts::protocol_negotiation::verify_negotiation_offer_hmac(
+                        ark_domain::sync_contracts::protocol_negotiation::verify_negotiation_offer_hmac(
                             secret,
                             &space_id,
                             &device_id,

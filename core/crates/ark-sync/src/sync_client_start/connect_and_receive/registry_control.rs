@@ -4,8 +4,8 @@ use super::super::{
 };
 use super::registry_admission;
 use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::types::PeerRecord;
-use ark_sync_contracts::wire::LanSyncMessage;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 

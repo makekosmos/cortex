@@ -1,7 +1,7 @@
 use super::{
     accept_client_hello, AcceptedClientHello, ClientHelloRejection, ResponderHelloRequest,
 };
-use ark_sync_contracts::wire::{requires_registry_admission, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{requires_registry_admission, LanSyncMessage};
 
 pub enum DirectServerMessage {
     SyncPolicy(crate::client_session::SyncPolicyUpdate),

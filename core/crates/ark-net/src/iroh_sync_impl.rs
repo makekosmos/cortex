@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_sync_contracts::transport::{
+use ark_domain::sync_contracts::transport::{
     OutboundIntegrationFrameAuthorizer, SyncTransport, TransportEvent,
 };
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::endpoint::{presets, BindOpts};
 use iroh::{Endpoint, RelayMode};
 use tokio::sync::mpsc;
@@ -288,7 +288,7 @@ impl SyncTransport for IrohTransport {
 }
 
 #[async_trait::async_trait]
-impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
+impl ark_domain::sync_contracts::transport::IrohSessionTransport for IrohTransport {
     async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String> {
         let target = self
             .registry
@@ -348,7 +348,7 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
         &self,
         transport_public_key: &str,
         msg: LanSyncMessage,
-    ) -> Result<ark_sync_contracts::transport::AddressedSendOutcome, String> {
+    ) -> Result<ark_domain::sync_contracts::transport::AddressedSendOutcome, String> {
         if !matches!(
             msg,
             LanSyncMessage::PairingRejected { .. }
@@ -377,13 +377,13 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
             })
             .is_err()
         {
-            return Ok(ark_sync_contracts::transport::AddressedSendOutcome::PeerOffline);
+            return Ok(ark_domain::sync_contracts::transport::AddressedSendOutcome::PeerOffline);
         }
         tokio::time::timeout(Duration::from_secs(5), completion_rx)
             .await
             .map_err(|_| "iroh addressed writer timed out".to_string())?
             .map_err(|_| "iroh addressed writer stopped".to_string())?
-            .map(|()| ark_sync_contracts::transport::AddressedSendOutcome::Sent)
+            .map(|()| ark_domain::sync_contracts::transport::AddressedSendOutcome::Sent)
     }
 
     fn unbind_peer(&self, device_id: &str) -> Result<(), String> {
@@ -394,9 +394,11 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
     fn disconnect_peer(
         &self,
         device_id: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
         let Some(endpoint) = self.registry.endpoint_id_for(device_id) else {
-            return Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::AlreadyOffline);
+            return Ok(
+                ark_domain::sync_contracts::transport::PeerDisconnectOutcome::AlreadyOffline,
+            );
         };
         self.disconnect_transport_peer(&endpoint.to_string())
     }
@@ -404,7 +406,7 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
     fn disconnect_transport_peer(
         &self,
         transport_public_key: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
         let endpoint_id: EndpointId = transport_public_key
             .parse()
             .map_err(|_| "iroh transport key is not an endpoint id".to_string())?;
@@ -424,11 +426,11 @@ impl ark_sync_contracts::transport::IrohSessionTransport for IrohTransport {
             Some(conn) => {
                 conn.close(0u32.into(), b"peer removed");
                 self.registry.remove_endpoint(&endpoint_id);
-                Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+                Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
             }
             None => {
                 self.registry.remove_endpoint(&endpoint_id);
-                Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::AlreadyOffline)
+                Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::AlreadyOffline)
             }
         }
     }

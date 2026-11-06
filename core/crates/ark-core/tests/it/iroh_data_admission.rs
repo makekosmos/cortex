@@ -7,7 +7,7 @@ use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use iroh::RelayMode;
 use tokio::sync::mpsc;
 

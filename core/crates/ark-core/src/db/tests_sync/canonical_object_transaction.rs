@@ -264,10 +264,10 @@ mod receipt_ack;
 use object_feed::full_core_task_entity;
 
 pub(super) fn pop_feed_live_change_id(
-    rx: &mut tokio::sync::mpsc::Receiver<ark_sync_contracts::wire::LanSyncMessage>,
+    rx: &mut tokio::sync::mpsc::Receiver<ark_domain::sync_contracts::wire::LanSyncMessage>,
 ) -> String {
     match rx.try_recv().unwrap() {
-        ark_sync_contracts::wire::LanSyncMessage::LiveChange { change_id, .. } => change_id,
+        ark_domain::sync_contracts::wire::LanSyncMessage::LiveChange { change_id, .. } => change_id,
         message => panic!("unexpected message: {message:?}"),
     }
 }

@@ -5,9 +5,9 @@ use tokio::sync::{Mutex, RwLock};
 use crate::task_set::{abort_and_join, join_all, track_task};
 use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::integration_replication::SignedSyncEnvelope;
-use ark_sync_contracts::client_transport::DirectClientConnector;
-use ark_sync_contracts::protocol_negotiation::*;
-use ark_sync_contracts::wire::*;
+use ark_domain::sync_contracts::client_transport::DirectClientConnector;
+use ark_domain::sync_contracts::protocol_negotiation::*;
+use ark_domain::sync_contracts::wire::*;
 
 #[path = "sync_client/config.rs"]
 mod config;
@@ -45,7 +45,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) tx: ClientMessageSender,
     pub(crate) sync_started: bool,
     pub(crate) outbound_snapshot: crate::outbound_snapshot::OutboundSnapshotProgress,
-    pub(crate) protocol: ark_sync_contracts::protocol_negotiation::NegotiatedProtocol,
+    pub(crate) protocol: ark_domain::sync_contracts::protocol_negotiation::NegotiatedProtocol,
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;

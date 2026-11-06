@@ -3,7 +3,7 @@ use super::{
     PAIRING_DECLINE_SUPPRESS, TAG,
 };
 use crate::sync_server::PeerEntry;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use std::time::{Duration, Instant};
 // RelaySync pairing consent (KOS-369): unknown endpoints park their Hello
 // here until a human presses «Принять»/«Отклонить», and the initiator's own

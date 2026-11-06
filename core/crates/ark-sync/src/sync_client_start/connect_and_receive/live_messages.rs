@@ -4,9 +4,9 @@ use super::super::{
 };
 use ark_application::sync_storage::{OutboundAck, SyncRuntimeStorage};
 use ark_domain::integration_replication::SignedSyncEnvelope;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::types::SyncEntity;
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::wire::LanSyncMessage;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

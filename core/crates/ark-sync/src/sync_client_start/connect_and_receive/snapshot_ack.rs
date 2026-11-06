@@ -84,10 +84,10 @@ async fn apply(
         return Ok(());
     }
     let receipt_ack = session.protocol.capabilities.contains(
-        &ark_sync_contracts::protocol_negotiation::ProtocolCapability::DurableReceiptAckV1,
+        &ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability::DurableReceiptAckV1,
     );
     let policy_bound = session.protocol.capabilities.contains(
-        &ark_sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
+        &ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
     );
     drop(session_guard);
     pump_client_committed_feed(

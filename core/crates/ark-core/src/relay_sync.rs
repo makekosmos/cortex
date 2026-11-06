@@ -9,9 +9,9 @@ use crate::sync_server::{
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::SyncEntity;
+use ark_domain::sync_contracts::protocol_negotiation::*;
+use ark_domain::sync_contracts::wire::*;
 use ark_net::relay::{RelayConfig, RelayTransport};
-use ark_sync_contracts::protocol_negotiation::*;
-use ark_sync_contracts::wire::*;
 // Shared with lifecycle's existing parent-scope imports.
 pub(super) use std::time::Duration;
 

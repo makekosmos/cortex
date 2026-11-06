@@ -217,8 +217,8 @@ impl RelaySync {
             .send_control_to_endpoint(endpoint, message)
             .await?
         {
-            ark_sync_contracts::peer_control::PeerControlSendOutcome::Sent => Ok(()),
-            ark_sync_contracts::peer_control::PeerControlSendOutcome::PeerOffline => {
+            ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::Sent => Ok(()),
+            ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::PeerOffline => {
                 Err("transport peer is offline".into())
             }
         }

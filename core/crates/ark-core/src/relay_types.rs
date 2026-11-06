@@ -8,7 +8,7 @@ use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback};
 use crate::sync_transport::SyncTransportHandle;
 use crate::types::VersionVector;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 pub(super) const TAG: &str = "[RelaySync]";
 pub(super) const SYNC_LOAD_PAGE_SIZE: usize = 100;
@@ -31,7 +31,7 @@ pub(super) struct RelayPeerState {
     pub(super) app_version: Option<String>,
     pub(super) authenticated: bool,
     pub(super) negotiated_protocol:
-        Option<ark_sync_contracts::protocol_negotiation::NegotiatedProtocol>,
+        Option<ark_domain::sync_contracts::protocol_negotiation::NegotiatedProtocol>,
 }
 
 pub(super) struct IncomingSyncState {

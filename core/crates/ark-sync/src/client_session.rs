@@ -5,11 +5,11 @@ use ark_application::{
 use ark_domain::types::VersionVector;
 
 use crate::registry_admission::AdmissionUpdate;
-use ark_sync_contracts::protocol_negotiation::{
+use ark_domain::sync_contracts::protocol_negotiation::{
     compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
     NegotiatedProtocol, ProtocolCapability, ProtocolOffer,
 };
-use ark_sync_contracts::wire::{LanSyncMessage, SyncPolicyRuleWire, PROTOCOL_VERSION};
+use ark_domain::sync_contracts::wire::{LanSyncMessage, SyncPolicyRuleWire, PROTOCOL_VERSION};
 
 mod direct;
 mod hello;

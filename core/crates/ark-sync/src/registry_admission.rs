@@ -7,10 +7,10 @@ use ark_domain::device_registry::RegistryEvent;
 use ark_domain::device_registry::{
     DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
 };
-use ark_sync_contracts::protocol_negotiation::{
+use ark_domain::sync_contracts::protocol_negotiation::{
     generate_auth_nonce, NegotiatedProtocol, ProtocolCapability,
 };
-use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage};
 
 pub const REGISTRY_EVENT_PAGE_SIZE: usize = 32;
 pub const MAX_REGISTRY_EVENT_PAGE_COUNT: u32 = 4096;

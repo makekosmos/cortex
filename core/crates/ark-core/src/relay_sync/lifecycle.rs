@@ -37,13 +37,22 @@ impl RelaySync {
         transport: Arc<T>,
     ) -> Result<Arc<Self>, String>
     where
-        T: ark_sync_contracts::transport::IrohSessionTransport
-            + ark_sync_contracts::peer_control::PeerSessionControl
+        T: ark_domain::sync_contracts::transport::IrohSessionTransport
+            + ark_domain::sync_contracts::peer_control::PeerSessionControl
             + 'static,
     {
-        let session: Arc<dyn ark_sync_contracts::transport::IrohSessionTransport> =
+        transport.set_outbound_authorizer(Arc::new(
+            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
+                storage.clone()
+                    as Arc<dyn ark_application::replication_storage::IntegrationReplicationBackend>,
+                config.space_id.clone(),
+                config.device_id.clone(),
+            ),
+        ))?;
+        let session: Arc<dyn ark_domain::sync_contracts::transport::IrohSessionTransport> =
             transport.clone();
-        let peer_control: Arc<dyn ark_sync_contracts::peer_control::PeerSessionControl> = transport;
+        let peer_control: Arc<dyn ark_domain::sync_contracts::peer_control::PeerSessionControl> =
+            transport;
         let handle = crate::sync_transport::SyncTransportHandle::iroh_with_peer_control(
             session,
             peer_control,

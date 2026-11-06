@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
 use ark_application::sync_storage::SyncRuntimeStorage;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::sync_client::{ClientFeedInFlight, ClientMessageSender};
 

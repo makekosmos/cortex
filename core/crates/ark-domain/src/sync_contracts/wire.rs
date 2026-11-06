@@ -10,7 +10,7 @@ pub const fn default_sync_policy_active() -> bool {
 pub struct SyncPolicyRuleWire {
     pub resource_kind: String,
     pub resource_id: String,
-    pub mode: ark_domain::selective_sync::SyncMode,
+    pub mode: crate::selective_sync::SyncMode,
     pub filter: serde_json::Value,
 }
 

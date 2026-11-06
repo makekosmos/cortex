@@ -17,8 +17,8 @@ use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncRuntimeStorage;
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
-use ark_sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
-use ark_sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
+use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
+use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
 
 struct StubTransport {
     event_tx: StdMutex<Option<mpsc::UnboundedSender<TransportEvent>>>,
@@ -63,14 +63,14 @@ impl IrohSessionTransport for StubTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -92,14 +92,14 @@ impl PeerSessionControl for StubTransport {
     fn disconnect_peer(
         &self,
         _: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
     fn disconnect_transport_endpoint(
         &self,
         _: &str,
-    ) -> Result<ark_sync_contracts::transport::PeerDisconnectOutcome, String> {
-        Ok(ark_sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
+    ) -> Result<ark_domain::sync_contracts::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_domain::sync_contracts::transport::PeerDisconnectOutcome::PeerClosed)
     }
 }
 
@@ -176,7 +176,7 @@ async fn wait_for_no_peers(relay: &RelaySync) {
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
     let offer =
-        ark_sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
+        ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
             true,
         );
     tx.send(TransportEvent::MessageReceivedFromTransport {

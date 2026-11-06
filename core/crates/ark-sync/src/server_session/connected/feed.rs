@@ -1,7 +1,7 @@
 use super::{ConnectedServerSession, ServerSessionActor};
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
-use ark_sync_contracts::session_io::SessionIoSender;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::committed_feed_delivery::{
     acknowledge, FeedAck, FeedAckOutcome, FeedFlight, MAX_FEED_PAGE_SIZE,

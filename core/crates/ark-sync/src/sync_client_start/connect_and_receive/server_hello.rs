@@ -1,8 +1,8 @@
 use super::super::{send_msg, ClientMessageSender, TAG};
 use super::registry_admission::PendingRegistryAdmission;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::types::PeerRecord;
-use ark_sync_contracts::protocol_negotiation::ProtocolOffer;
-use ark_sync_contracts::wire::LanSyncMessage;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::sync::RwLock;
 

@@ -11,7 +11,7 @@ use ark_domain::types::{SyncEntity, VersionVector};
 use crate::protocol::{
     is_usage_entity, merge_usage_cursors, should_send_entity, split_into_batches,
 };
-use ark_sync_contracts::wire::{generate_id, LanSyncMessage};
+use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage};
 
 const SNAPSHOT_PAGE_SIZE: usize = 100;
 

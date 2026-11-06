@@ -6,6 +6,7 @@ pub mod device_registry;
 pub mod hlc;
 pub mod object_write;
 pub mod selective_sync;
+pub mod sync_contracts;
 pub mod sync_policy;
 pub mod task_merge;
 pub mod task_merge_sync;

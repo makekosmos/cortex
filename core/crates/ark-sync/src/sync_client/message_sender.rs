@@ -4,8 +4,8 @@ use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
-use ark_sync_contracts::session_io::SessionIoSender;
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::session_io::SessionIoSender;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 #[doc(hidden)]
 pub type ClientFeedInFlight =
@@ -67,7 +67,7 @@ impl ClientMessageSender {
                 storage,
                 peer,
             } => {
-                if ark_sync_contracts::wire::requires_registry_admission(&message) {
+                if ark_domain::sync_contracts::wire::requires_registry_admission(&message) {
                     let authenticated_peer_id = self.authenticated_peer_id.read().await.clone();
                     let peer_device_id = match authenticated_peer_id {
                         Some(peer_device_id) => peer_device_id,
@@ -86,7 +86,7 @@ impl ClientMessageSender {
                     sender.send(message).await
                 };
                 result.map_err(|error| match error {
-                    ark_sync_contracts::session_io::SessionIoError::OutboundFull => {
+                    ark_domain::sync_contracts::session_io::SessionIoError::OutboundFull => {
                         "LAN peer outbound queue is full".to_owned()
                     }
                     _ => "LAN peer connection is closed".to_owned(),

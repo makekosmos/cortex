@@ -5,8 +5,8 @@ use super::super::{
 };
 use super::connect_and_receive;
 use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_contracts::client_transport::DirectClientConnector;
 use ark_domain::types::PeerRecord;
-use ark_sync_contracts::client_transport::DirectClientConnector;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,

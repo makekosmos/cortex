@@ -11,7 +11,7 @@ use super::{
     apply_live_change, prepare_live_change, IncomingLiveChange, LiveChangeDisposition,
     VersionVectorWriteMode,
 };
-use ark_sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
+use ark_domain::sync_contracts::protocol_negotiation::{NegotiatedProtocol, ProtocolCapability};
 
 struct FakeStorage {
     trace: Mutex<Vec<&'static str>>,

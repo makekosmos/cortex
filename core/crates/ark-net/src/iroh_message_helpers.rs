@@ -1,4 +1,4 @@
-use ark_sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 // ---------------------------------------------------------------------------
 // Diagnostics helpers

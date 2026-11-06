@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ark_domain::integration_replication::SignedSyncEnvelope;
-use ark_sync_contracts::transport::{OutboundIntegrationFrameAuthorizer, TransportEvent};
-use ark_sync_contracts::wire::{
+use ark_domain::sync_contracts::transport::{OutboundIntegrationFrameAuthorizer, TransportEvent};
+use ark_domain::sync_contracts::wire::{
     deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
 };
 use tokio::sync::{broadcast, mpsc, watch, Notify};

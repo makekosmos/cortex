@@ -1,9 +1,9 @@
 use super::*;
-use ark_domain::types::{PeerRecord, SyncEntity};
-use ark_sync_contracts::wire::LanSyncMessage;
-use ark_sync_contracts::wire::{
+use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_contracts::wire::{
     deserialize_message, generate_id, requires_registry_admission, serialize_message,
 };
+use ark_domain::types::{PeerRecord, SyncEntity};
 use serde_json::json;
 
 #[test]

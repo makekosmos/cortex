@@ -8,9 +8,9 @@ use super::{
     snapshot_drive, sync_changes, sync_policy,
 };
 use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_contracts::client_transport::ConnectedClientTransport;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_domain::types::PeerRecord;
-use ark_sync_contracts::client_transport::ConnectedClientTransport;
-use ark_sync_contracts::wire::LanSyncMessage;
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
@@ -46,7 +46,7 @@ pub(super) enum Disposition {
 pub(super) async fn run<'a>(
     result: Result<
         Option<ConnectedClientTransport>,
-        ark_sync_contracts::session_io::SessionIoError,
+        ark_domain::sync_contracts::session_io::SessionIoError,
     >,
     context: Context<'a>,
     reconnect_delay: &'a mut u64,
@@ -74,7 +74,7 @@ pub(super) async fn run<'a>(
     } = context;
     match result {
         Ok(Some(transport)) => {
-            let ark_sync_contracts::client_transport::ConnectedClientTransport {
+            let ark_domain::sync_contracts::client_transport::ConnectedClientTransport {
                 io: mut session_io,
                 selected_address: winning_addr,
             } = transport;

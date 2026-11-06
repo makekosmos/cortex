@@ -5,8 +5,8 @@ use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::SyncEntity;
 
 use crate::protocol::{is_usage_entity, merge_usage_cursors, observe_non_usage_entity};
-use ark_sync_contracts::protocol_negotiation::NegotiatedProtocol;
-use ark_sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_contracts::protocol_negotiation::NegotiatedProtocol;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
 
 /// An inbound change that has passed policy validation and, when supported,
 /// has had its durable receipt recorded. The caller must send a receipt ACK
