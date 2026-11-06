@@ -16,7 +16,6 @@ doctest = false
 
 
 [dependencies]
-ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
 ark-sync = { path = "../ark-sync" }
 ark-net = { path = "../ark-net", default-features = false }

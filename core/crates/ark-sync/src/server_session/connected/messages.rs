@@ -4,7 +4,7 @@ use ark_domain::sync_contracts::session_io::SessionIoSender;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 use crate::server_session::DirectServerMessage;
-use ark_application::sync_storage::OutboundAck;
+use ark_domain::sync_storage::OutboundAck;
 
 impl ConnectedServerSession {
     pub(in crate::server_session) async fn handle_message(

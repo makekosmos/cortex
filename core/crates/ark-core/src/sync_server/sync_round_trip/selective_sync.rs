@@ -1,8 +1,8 @@
 use super::fixtures::*;
-use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use ark_core::direct_client::new_direct_client;
 use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
 use ark_core::types::{PeerRecord, SyncEntity};
+use ark_domain::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;

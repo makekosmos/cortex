@@ -1,9 +1,8 @@
-use ark_application::tracked_app_mutation::{TrackedAppMutation, TrackedAppMutationSession};
 use ark_domain::types::{SyncEntity, TrackedApp};
 use rusqlite::Transaction;
 use serde_json::{Map, Value};
 
-pub(crate) struct SqliteTrackedAppMutationSession<'tx, 'connection> {
+pub struct SqliteTrackedAppMutationSession<'tx, 'connection> {
     transaction: &'tx Transaction<'connection>,
 }
 
@@ -61,11 +60,37 @@ impl<'tx, 'connection> SqliteTrackedAppMutationSession<'tx, 'connection> {
     }
 }
 
-impl TrackedAppMutationSession for SqliteTrackedAppMutationSession<'_, '_> {
-    fn apply(&self, mutation: TrackedAppMutation) -> Result<SyncEntity, String> {
+impl SqliteTrackedAppMutationSession<'_, '_> {
+    pub(crate) fn apply(&self, mutation: TrackedAppMutation) -> Result<SyncEntity, String> {
         match mutation {
             TrackedAppMutation::Upsert(write) => self.upsert(write.tracked_app, &write.device_id),
             TrackedAppMutation::Delete(write) => self.delete(write.id, &write.device_id),
         }
     }
+}
+
+use serde::Serialize;
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackedAppUpsert {
+    pub tracked_app: TrackedApp,
+    pub device_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackedAppDelete {
+    pub id: String,
+    pub device_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum TrackedAppMutation {
+    Upsert(Box<TrackedAppUpsert>),
+    Delete(TrackedAppDelete),
+}
+
+pub fn apply_tracked_app_mutation(
+    session: &SqliteTrackedAppMutationSession<'_, '_>,
+    mutation: TrackedAppMutation,
+) -> Result<SyncEntity, String> {
+    session.apply(mutation)
 }

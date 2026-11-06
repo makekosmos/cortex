@@ -1,10 +1,11 @@
 use super::{
     apply_remote_core_task_write, decode_remote_core_task_write, RemoteCoreTaskWriteDecodeError,
 };
-use crate::object_write::ObjectWriteSession;
-use crate::sync_policy::{sync_profile_identity, SyncProfile};
-use crate::task_mutation::TaskMutationSession;
+use crate::object_write::SqliteObjectWriteSession;
+use crate::task_mutation::SqliteTaskMutationSession;
+use crate::writer::SqliteAuthenticatedCoreTaskWriteSession;
 use ark_domain::hlc::HLC;
+use ark_domain::sync_policy::sync_profile_identity;
 use ark_domain::sync_policy::PolicyIdentity;
 use serde_json::{Map, Value};
 
@@ -64,21 +65,6 @@ pub enum InboxReceiptState {
     Rejected,
 }
 
-pub trait AuthenticatedCoreTaskWriteSession {
-    fn load_sync_profile_for_sync(
-        &self,
-        local_device_id: &str,
-    ) -> Result<Option<SyncProfile>, String>;
-    fn is_peer_admitted(&self, peer_id: &str) -> Result<bool, String>;
-    fn receive_inbox_payload(
-        &self,
-        peer_id: &str,
-        message_id: &str,
-        payload_json: &str,
-    ) -> Result<InboxReceiptState, String>;
-    fn mark_inbox_applied(&self, peer_id: &str, message_id: &str) -> Result<(), String>;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteCoreTaskOutcome {
     Applied,
@@ -99,9 +85,9 @@ pub enum AuthenticatedCoreTaskWriteError {
 }
 
 pub fn apply_authenticated_core_task_write(
-    object_session: &dyn ObjectWriteSession,
-    task_session: &dyn TaskMutationSession,
-    auth_session: &dyn AuthenticatedCoreTaskWriteSession,
+    object_session: &SqliteObjectWriteSession<'_>,
+    task_session: &SqliteTaskMutationSession<'_>,
+    auth_session: &SqliteAuthenticatedCoreTaskWriteSession<'_>,
     peer_id: &str,
     write: AuthenticatedCoreTaskWrite,
 ) -> Result<RemoteCoreTaskOutcome, AuthenticatedCoreTaskWriteError> {

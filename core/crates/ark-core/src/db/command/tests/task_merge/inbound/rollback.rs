@@ -12,7 +12,7 @@ async fn inbound_batch_rolls_back_earlier_entries_when_a_later_entry_fails() {
         )
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let batch = ark_domain::task_merge_sync::TaskMergeBatch {
         batch_id: "d1".repeat(16),
         identity: identity.clone(),

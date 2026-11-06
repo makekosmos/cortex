@@ -1,5 +1,4 @@
-use crate::sync_policy::{sync_profile_identity, SyncProfile};
-use ark_domain::hlc::HLC;
+use ark_domain::sync_policy::sync_profile_identity;
 use ark_domain::sync_policy::PolicyIdentity;
 use ark_domain::types::VersionVector;
 
@@ -48,15 +47,6 @@ impl SyncProgressWrite {
     }
 }
 
-pub trait SyncProgressWriteSession {
-    fn load_sync_profile_for_sync(
-        &self,
-        local_device_id: &str,
-    ) -> Result<Option<SyncProfile>, String>;
-    fn set_sync_value(&self, key: &str, value: &str) -> Result<(), String>;
-    fn merge_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum SyncProgressWriteError {
     MissingLocalDevice,
@@ -65,8 +55,9 @@ pub enum SyncProgressWriteError {
     SyncValueStorage(String),
 }
 
+/// Applies one progress write inside the caller's transaction.
 pub fn apply_sync_progress_write(
-    session: &dyn SyncProgressWriteSession,
+    transaction: &rusqlite::Transaction<'_>,
     write: SyncProgressWrite,
 ) -> Result<(), SyncProgressWriteError> {
     if let Some(expected) = write.policy_identity.as_ref() {
@@ -74,46 +65,33 @@ pub fn apply_sync_progress_write(
             .local_device_id
             .as_deref()
             .ok_or(SyncProgressWriteError::MissingLocalDevice)?;
-        let profile = session
-            .load_sync_profile_for_sync(local_device_id)
-            .map_err(SyncProgressWriteError::PolicyStorage)?;
+        let profile =
+            crate::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
+                .map_err(SyncProgressWriteError::PolicyStorage)?;
         if &sync_profile_identity(profile.as_ref()) != expected {
             return Err(SyncProgressWriteError::StalePolicy);
         }
     }
     match write.mutation {
-        SyncProgressMutation::Replace { key, value } => session
-            .set_sync_value(&key, &value)
-            .map_err(SyncProgressWriteError::SyncValueStorage),
-        SyncProgressMutation::MergeVersionVector(vector) => session
-            .merge_version_vector(&vector)
-            .map_err(SyncProgressWriteError::SyncValueStorage),
-    }
-}
-
-pub fn merge_version_vector_entries(target: &mut VersionVector, source: &VersionVector) {
-    for (key, value) in source {
-        if key.starts_with("@usage:") {
-            let regresses = value
-                .parse::<u64>()
-                .ok()
-                .zip(
-                    target
-                        .get(key)
-                        .and_then(|current| current.parse::<u64>().ok()),
-                )
-                .is_some_and(|(incoming, current)| incoming < current);
-            if !regresses {
-                target.insert(key.clone(), value.clone());
-            }
-            continue;
+        SyncProgressMutation::Replace { key, value } => {
+            crate::sync_kv::set_sync_kv(transaction, &key, &value)
+                .map_err(SyncProgressWriteError::SyncValueStorage)
         }
-
-        let outdated = target
-            .get(key)
-            .is_some_and(|current| !HLC::is_newer(value, current));
-        if !outdated {
-            target.insert(key.clone(), value.clone());
+        SyncProgressMutation::MergeVersionVector(vector) => {
+            let mut current = crate::sync_kv::get_sync_kv(transaction, crate::VERSION_VECTOR_KEY)
+                .map_err(SyncProgressWriteError::SyncValueStorage)?
+                .map(|raw| {
+                    serde_json::from_str(&raw).map_err(|error| {
+                        SyncProgressWriteError::SyncValueStorage(error.to_string())
+                    })
+                })
+                .transpose()?
+                .unwrap_or_default();
+            ark_domain::sync_storage::merge_version_vector_entries(&mut current, &vector);
+            let encoded = serde_json::to_string(&current)
+                .map_err(|error| SyncProgressWriteError::SyncValueStorage(error.to_string()))?;
+            crate::sync_kv::set_sync_kv(transaction, crate::VERSION_VECTOR_KEY, &encoded)
+                .map_err(SyncProgressWriteError::SyncValueStorage)
         }
     }
 }

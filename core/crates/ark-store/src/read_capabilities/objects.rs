@@ -1,6 +1,6 @@
 use super::ObjectReadCapabilities;
-use ark_application::data_volume::{DataVolumeEstimate, DataVolumeQuery, DataVolumeReadPort};
-use ark_application::object_read::SearchResult;
+use crate::data_volume::{DataVolumeEstimate, DataVolumeQuery};
+use ark_domain::object_read::SearchResult;
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectSummary};
 

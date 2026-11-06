@@ -44,7 +44,7 @@ impl RelaySync {
         transport.set_outbound_authorizer(Arc::new(
             ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
                 storage.clone()
-                    as Arc<dyn ark_application::replication_storage::IntegrationReplicationBackend>,
+                    as Arc<dyn ark_domain::replication_storage::IntegrationReplicationBackend>,
                 config.space_id.clone(),
                 config.device_id.clone(),
             ),

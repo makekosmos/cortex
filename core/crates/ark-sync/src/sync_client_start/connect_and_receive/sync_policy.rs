@@ -1,8 +1,8 @@
 use super::super::send_msg;
 use super::super::AuthenticatedPeerSession;
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

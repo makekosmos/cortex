@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 
 use crate::sync_client::{ClientFeedInFlight, ClientMessageSender};
 
@@ -73,10 +73,10 @@ pub async fn pump_client_committed_feed(
                 .await;
             match page {
                 Ok(page) => page.page,
-                Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
+                Err(ark_domain::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
                     return Ok(());
                 }
-                Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
+                Err(ark_domain::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
                     return Err(error);
                 }
             }
@@ -92,10 +92,8 @@ pub async fn pump_client_committed_feed(
         }
     };
     let deliveries = match page {
-        ark_application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
-            deliveries
-        }
-        ark_application::sync_storage::CommittedFeedDeliveryPage::SkipTo { through_position } => {
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::SkipTo { through_position } => {
             match &policy_identity {
                 Some(identity) => {
                     storage
@@ -106,7 +104,7 @@ pub async fn pump_client_committed_feed(
                             peer_device_id,
                             identity,
                             through_position,
-                            ark_application::sync_storage::OutboundAck::Applied,
+                            ark_domain::sync_storage::OutboundAck::Applied,
                         )
                         .await?;
                 }
@@ -119,14 +117,14 @@ pub async fn pump_client_committed_feed(
                             peer_device_id,
                             generation,
                             through_position,
-                            ark_application::sync_storage::OutboundAck::Applied,
+                            ark_domain::sync_storage::OutboundAck::Applied,
                         )
                         .await?;
                 }
             }
             return Ok(());
         }
-        ark_application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
+        ark_domain::sync_storage::CommittedFeedDeliveryPage::TooLarge {
             position,
             entity_id,
             serialized_bytes,
@@ -168,7 +166,7 @@ pub async fn pump_client_committed_feed(
                             peer_device_id,
                             identity,
                             position,
-                            ark_application::sync_storage::OutboundAck::Applied,
+                            ark_domain::sync_storage::OutboundAck::Applied,
                         )
                         .await?
                 }
@@ -178,7 +176,7 @@ pub async fn pump_client_committed_feed(
                             peer_device_id,
                             generation,
                             position,
-                            ark_application::sync_storage::OutboundAck::Applied,
+                            ark_domain::sync_storage::OutboundAck::Applied,
                         )
                         .await?
                 }
@@ -236,7 +234,7 @@ pub async fn acknowledge_client_feed(
     change_id: &str,
     tx: &ClientMessageSender,
     flight: &ClientFeedInFlight,
-    ack: ark_application::sync_storage::OutboundAck,
+    ack: ark_domain::sync_storage::OutboundAck,
     receipt_ack: bool,
     policy_bound: bool,
     policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,

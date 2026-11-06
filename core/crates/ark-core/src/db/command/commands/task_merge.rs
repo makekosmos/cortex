@@ -122,7 +122,7 @@ impl TaskConflictSetQuery {
 impl sealed::Sealed for TaskConflictSetQuery {}
 
 impl StoreReadQuery for TaskConflictSetQuery {
-    type Output = ark_application::task_merge::TaskMergeConflictRead;
+    type Output = ark_domain::task_merge::TaskMergeConflictRead;
 
     fn class(&self) -> CommandClass {
         CommandClass::Interactive

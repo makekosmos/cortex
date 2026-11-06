@@ -10,10 +10,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_application::replication_storage::PeerIdentityBackend;
-use ark_application::sync_storage::SyncEntityReadPort;
 use ark_core::db::SqliteStorageBackend;
 use ark_core::types::{SyncEntity, TrackedApp, UsageEvent, UsageSession};
+use ark_domain::replication_storage::PeerIdentityBackend;
+use ark_domain::sync_storage::SyncEntityReadPort;
 use serde_json::{json, Value};
 
 pub(super) struct TestStorage {

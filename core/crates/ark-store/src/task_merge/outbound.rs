@@ -96,7 +96,7 @@ pub(crate) fn prepare_task_merge_outbound_batch(
         return Ok(None);
     }
     let batch_id = format!("{:032x}", rand::random::<u128>());
-    let batch = ark_application::task_merge::build_task_merge_batch(
+    let batch = ark_domain::task_merge::build_task_merge_batch(
         batch_id.clone(),
         identity,
         acknowledged_through,
@@ -135,13 +135,9 @@ fn load_in_flight_batch(
             "task_merge_in_flight_batch_missing_entries".into(),
         ));
     }
-    let batch = ark_application::task_merge::build_task_merge_batch(
-        batch_id,
-        identity,
-        after,
-        page.entries,
-    )
-    .map_err(|error| TaskMergeOutboundError::Invalid(error.to_string()))?;
+    let batch =
+        ark_domain::task_merge::build_task_merge_batch(batch_id, identity, after, page.entries)
+            .map_err(|error| TaskMergeOutboundError::Invalid(error.to_string()))?;
     if batch.through_position != through {
         return Err(TaskMergeOutboundError::Storage(
             "task_merge_in_flight_batch_size_changed".into(),
@@ -202,22 +198,19 @@ fn require_delivery_policy(
 ) -> Result<(), TaskMergeOutboundError> {
     let policy = crate::data_platform::load_accepted_peer_sync_policy(transaction, peer_device_id)
         .map_err(TaskMergeOutboundError::Storage)?;
-    ark_application::task_merge::validate_task_merge_delivery_policy(
-        policy.as_ref(),
-        expected_identity,
-    )
-    .map_err(|error| {
-        let message = match error {
-            ark_application::task_merge::TaskMergeDeliveryPolicyError::StaleOrUnnegotiated => {
-                "stale_or_unnegotiated_sync_policy"
-            }
-            ark_application::task_merge::TaskMergeDeliveryPolicyError::FullTypeRequired => {
-                "task_merge_policy_requires_full_type_sync"
-            }
-            ark_application::task_merge::TaskMergeDeliveryPolicyError::FilterUnsupported => {
-                "task_merge_policy_filter_unsupported"
-            }
-        };
-        TaskMergeOutboundError::Permission(message.into())
-    })
+    ark_domain::task_merge::validate_task_merge_delivery_policy(policy.as_ref(), expected_identity)
+        .map_err(|error| {
+            let message = match error {
+                ark_domain::task_merge::TaskMergeDeliveryPolicyError::StaleOrUnnegotiated => {
+                    "stale_or_unnegotiated_sync_policy"
+                }
+                ark_domain::task_merge::TaskMergeDeliveryPolicyError::FullTypeRequired => {
+                    "task_merge_policy_requires_full_type_sync"
+                }
+                ark_domain::task_merge::TaskMergeDeliveryPolicyError::FilterUnsupported => {
+                    "task_merge_policy_filter_unsupported"
+                }
+            };
+            TaskMergeOutboundError::Permission(message.into())
+        })
 }

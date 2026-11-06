@@ -1,4 +1,4 @@
-use ark_application::book_cover::{
+use ark_domain::book_cover::{
     plan_local_book_cover, BookCoverError, LocalBookCoverDecision, LocalBookCoverFacts,
     LocalBookCoverWrite, BOOK_COVER_LINK_TYPE,
 };

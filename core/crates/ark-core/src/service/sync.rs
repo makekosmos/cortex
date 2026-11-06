@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 use super::*;
-use ark_application::sync_storage::SyncEntityMutationPort;
+use ark_domain::sync_storage::SyncEntityMutationPort;
 
 mod disconnect;
 mod events;

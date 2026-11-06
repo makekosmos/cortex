@@ -1,17 +1,10 @@
 use std::collections::HashMap;
 
-use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
+use crate::types::{PeerRecord, SyncEntity, VersionVector};
 use sha2::{Digest, Sha256};
 
-#[path = "sync_storage_progress.rs"]
-mod sync_progress_write;
-pub use sync_progress_write::{
-    apply_sync_progress_write, merge_version_vector_entries, SyncProgressWrite,
-    SyncProgressWriteError, SyncProgressWriteSession,
-};
-
 pub use crate::task_merge::{TaskMergeDeliveryPort, TaskMergePrepareError};
-use ark_domain::PolicyIdentity;
+use crate::PolicyIdentity;
 
 #[derive(Clone, Debug)]
 pub struct InboxReceiptPolicy {
@@ -345,27 +338,11 @@ pub trait SyncEntityMutationPort: Send + Sync {
 
 /// Transaction-scoped capability used by the inbound sync application operation.
 /// The adapter owns the transaction and exposes only this synchronous operation.
-pub trait SyncEntityMutationSession {
-    fn apply_entity(
-        &mut self,
-        entity: &SyncEntity,
-        authenticated_peer_id: Option<&str>,
-    ) -> Result<(InboundApplyOutcome, Vec<ReplayNotice>), String>;
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InboundApplyOutcome {
     Applied,
     Stale,
     Pending,
-}
-
-pub fn apply_inbound_sync_entity(
-    session: &mut dyn SyncEntityMutationSession,
-    entity: &SyncEntity,
-    authenticated_peer_id: Option<&str>,
-) -> Result<(InboundApplyOutcome, Vec<ReplayNotice>), String> {
-    session.apply_entity(entity, authenticated_peer_id)
 }
 
 /// Persists peer vectors and peer-list progress consumed by sync workflows.
@@ -481,4 +458,35 @@ pub trait CommittedFeedPort: Send + Sync {
         position: i64,
         ack: OutboundAck,
     ) -> Result<OutboundProgress, String>;
+}
+
+/// Merges one peer vector into `target`, keeping the newer value per key.
+///
+/// Usage cursors are plain counters and never regress; every other key is an
+/// HLC stamp and only a strictly newer stamp wins.
+pub fn merge_version_vector_entries(target: &mut VersionVector, source: &VersionVector) {
+    for (key, value) in source {
+        if key.starts_with("@usage:") {
+            let regresses = value
+                .parse::<u64>()
+                .ok()
+                .zip(
+                    target
+                        .get(key)
+                        .and_then(|current| current.parse::<u64>().ok()),
+                )
+                .is_some_and(|(incoming, current)| incoming < current);
+            if !regresses {
+                target.insert(key.clone(), value.clone());
+            }
+            continue;
+        }
+
+        let outdated = target
+            .get(key)
+            .is_some_and(|current| !crate::hlc::HLC::is_newer(value, current));
+        if !outdated {
+            target.insert(key.clone(), value.clone());
+        }
+    }
 }

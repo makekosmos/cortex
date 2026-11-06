@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use tokio::sync::{mpsc, Mutex, RwLock};
 

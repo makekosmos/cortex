@@ -2,7 +2,7 @@ use ark_domain::sync_policy::PolicyIdentity;
 use std::collections::HashMap;
 use std::future::Future;
 
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort, PolicyBoundSnapshotReadError,
     SyncEntityReadPort, SyncReadClass,
 };

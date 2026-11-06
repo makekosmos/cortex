@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::device_registry::RegistryEvent;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::{PeerRecord, SyncEntity};
 
 #[path = "connected/feed.rs"]

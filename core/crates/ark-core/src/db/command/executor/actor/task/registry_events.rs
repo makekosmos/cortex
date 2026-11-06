@@ -6,8 +6,7 @@ use tokio::sync::oneshot;
 
 pub(in crate::db::command) struct ApplyRegistryEventsTask {
     pub command: ApplyRegistryEventsCommand,
-    pub reply:
-        oneshot::Sender<Result<ark_application::replication_storage::RegistryPageApply, DbError>>,
+    pub reply: oneshot::Sender<Result<ark_domain::replication_storage::RegistryPageApply, DbError>>,
 }
 
 impl WriterTask for ApplyRegistryEventsTask {

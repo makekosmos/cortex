@@ -161,7 +161,7 @@ async fn storage_backend_delete_usage_entity_removes_entity() {
 
 #[tokio::test]
 async fn storage_backend_persists_version_vector_progress() {
-    use ark_application::sync_storage::PeerProgressPort;
+    use ark_domain::sync_storage::PeerProgressPort;
     let backend = make_backend().await;
     let mut vector = VersionVector::new();
     vector.insert(

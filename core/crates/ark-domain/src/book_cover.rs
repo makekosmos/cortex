@@ -1,4 +1,4 @@
-use ark_domain::types::{ArkObject, ObjectLink};
+use crate::types::{ArkObject, ObjectLink};
 use serde::Serialize;
 use std::fmt;
 
@@ -140,14 +140,14 @@ fn validate_object(
     if object.type_version != CANONICAL_VERSION {
         return Err(BookCoverError::new("wrong_version"));
     }
-    let registration = ark_domain::canonical_type::definitions::canonical_type_registrations()
+    let registration = crate::canonical_type::definitions::canonical_type_registrations()
         .map_err(|_| BookCoverError::new("definition_invariant"))?
         .into_iter()
         .find(|registration| {
             registration.type_id == expected_type && registration.version == CANONICAL_VERSION
         })
         .ok_or_else(|| BookCoverError::new("wrong_type"))?;
-    ark_domain::canonical_type::validation::validate_canonical(
+    crate::canonical_type::validation::validate_canonical(
         &registration,
         &object.props_json,
         &object.content_json,

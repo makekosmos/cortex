@@ -1,7 +1,7 @@
-use ark_application::replication_storage::AuthenticatedEntityBackend;
-use ark_application::sync_policy::SyncProfile;
-use ark_application::sync_storage::{InboundApplyOutcome, PeerProgressPort};
+use ark_domain::replication_storage::AuthenticatedEntityBackend;
 use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_policy::SyncProfile;
+use ark_domain::sync_storage::{InboundApplyOutcome, PeerProgressPort};
 use ark_domain::types::SyncEntity;
 
 use crate::protocol::{is_usage_entity, merge_usage_cursors, observe_non_usage_entity};

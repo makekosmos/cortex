@@ -1,4 +1,4 @@
-use ark_domain::canonical_type::{TypeSummary, TypeVersion};
+use crate::canonical_type::{TypeSummary, TypeVersion};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -22,7 +22,6 @@ const CRATE_MAP = [
   { prefix: "runtime/crates/engine-indexes/", packages: ["engine-indexes", "engine"] },
   { prefix: "runtime/crates/pe-version-info/", packages: ["pe-version-info"] },
   { prefix: "core/crates/ark-domain/", packages: ["ark-domain"] },
-  { prefix: "core/crates/ark-application/", packages: ["ark-application"] },
   { prefix: "core/crates/ark-store/", packages: ["ark-store"] },
   { prefix: "core/crates/ark-sync/", packages: ["ark-sync"] },
   { prefix: "core/crates/ark-net/", packages: ["ark-net"] },

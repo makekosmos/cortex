@@ -1,8 +1,9 @@
 use super::{load_version_vector, task_merge, RelayPeerState, RelaySync, TAG};
 use crate::types::PeerRecord;
 use ark_domain::sync_contracts::protocol_negotiation::{
-    negotiate_protocol, verify_hello_auth_hmac, ProtocolCapability, ProtocolNegotiationError,
-    ProtocolOffer, MAX_PROTOCOL_OFFER_VERSIONS, SUPPORTED_PROTOCOL_VERSIONS,
+    negotiate_protocol, verify_hello_auth_hmac, verify_negotiation_offer_hmac, ProtocolCapability,
+    ProtocolNegotiationError, ProtocolOffer, MAX_PROTOCOL_OFFER_VERSIONS,
+    SUPPORTED_PROTOCOL_VERSIONS,
 };
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 use ark_sync::protocol::merge_peer_records;
@@ -102,16 +103,14 @@ impl RelaySync {
                     auth_nonce.as_deref(),
                     negotiation_hmac.as_deref(),
                 ) {
-                    (Some(secret), Some(nonce), Some(proof)) => {
-                        ark_domain::sync_contracts::protocol_negotiation::verify_negotiation_offer_hmac(
-                            secret,
-                            &space_id,
-                            &device_id,
-                            nonce,
-                            &remote_offer,
-                            proof,
-                        )
-                    }
+                    (Some(secret), Some(nonce), Some(proof)) => verify_negotiation_offer_hmac(
+                        secret,
+                        &space_id,
+                        &device_id,
+                        nonce,
+                        &remote_offer,
+                        proof,
+                    ),
                     (_, _, Some(_)) => false,
                     _ => false,
                 };

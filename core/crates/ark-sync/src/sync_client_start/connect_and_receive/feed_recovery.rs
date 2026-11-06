@@ -1,7 +1,7 @@
 use super::super::pump_client_committed_feed;
 use super::super::{AuthenticatedTx, ClientFeedInFlight};
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use std::sync::Arc;
 
 pub(super) async fn pump(

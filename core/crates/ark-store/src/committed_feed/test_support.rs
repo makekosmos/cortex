@@ -1,10 +1,10 @@
 use super::*;
 use crate::writer::SqliteWriter;
-use ark_application::sync_storage::{
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::{
     OutboundAck, OutboundProgress, OutboundProgressMutation, OutboundProgressPolicy,
     OutboundProgressWrite,
 };
-use ark_domain::sync_policy::PolicyIdentity;
 
 pub(super) const MAX_FEED_DELIVERY_BYTES: usize = ark_domain::types::MAX_SYNC_BATCH_BYTES - 512;
 

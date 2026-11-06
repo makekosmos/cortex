@@ -1,6 +1,6 @@
 use super::CanonicalReadCapabilities;
 use crate::canonical_asset_sources::{AssetSource, AssetSourceError};
-use ark_application::canonical_game::GameRecord;
+use ark_domain::canonical_game::GameRecord;
 
 impl CanonicalReadCapabilities<'_> {
     pub fn games(&self, device_id: &str) -> Result<Vec<GameRecord>, String> {

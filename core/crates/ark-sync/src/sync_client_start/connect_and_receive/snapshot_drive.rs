@@ -1,6 +1,6 @@
 use super::super::{AuthenticatedTx, ClientMessageSender};
 use crate::outbound_snapshot::SnapshotEmission;
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 

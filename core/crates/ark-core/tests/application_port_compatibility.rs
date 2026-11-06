@@ -38,7 +38,7 @@ impl RootAuthenticatedEntityBackend for Backend {
         _: &ark_core::types::SyncEntity,
         _: &str,
         _: &str,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         Err("unused compatibility test backend".into())
     }
 
@@ -49,7 +49,7 @@ impl RootAuthenticatedEntityBackend for Backend {
         _: &str,
         _: &str,
         _: Option<ark_domain::sync_policy::PolicyIdentity>,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         Err("unused compatibility test backend".into())
     }
 }
@@ -68,7 +68,7 @@ impl ark_core::PeerIdentityBackend for PeerBackend {
     async fn load_local_sync_profile(
         &self,
         _local_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         Ok(None)
     }
     async fn accept_peer_sync_policy(
@@ -77,14 +77,14 @@ impl ark_core::PeerIdentityBackend for PeerBackend {
         _revision: i64,
         _digest: &str,
         _active: bool,
-        _rules: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        _rules: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         Err("unused compatibility test backend".into())
     }
     async fn load_accepted_peer_sync_policy(
         &self,
         _peer_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         Ok(None)
     }
     async fn sync_session_is_admitted(&self, _peer_device_id: &str) -> Result<bool, String> {
@@ -165,13 +165,13 @@ fn peer_identity_port_keeps_both_public_paths() {
 
 #[test]
 fn application_read_model_and_domain_type_registry_keep_ark_core_paths() {
-    let _: fn(ark_application::load_all_data::LoadAllData) -> ark_core::types::LoadAllData =
+    let _: fn(ark_domain::load_all_data::LoadAllData) -> ark_core::types::LoadAllData =
         |value| value;
     let _: fn(ark_domain::canonical_type::TypeSummary) -> ark_core::type_registry::TypeSummary =
         |value| value;
     let _: fn(ark_domain::canonical_type::TypeVersion) -> ark_core::type_registry::TypeVersion =
         |value| value;
     let _: fn(
-        ark_application::type_registry::TypeGetResponse,
+        ark_domain::type_registry::TypeGetResponse,
     ) -> ark_core::type_registry::TypeGetResponse = |value| value;
 }

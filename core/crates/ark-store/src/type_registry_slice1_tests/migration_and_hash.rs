@@ -1,11 +1,9 @@
 use crate::type_registry::{
-    insert_type_version, list_type_versions, register_alias, register_type, resolve_alias,
-    set_base_type, set_current_version, set_status,
+    insert_type_version, list_type_versions, register_alias, resolve_alias, set_base_type,
+    set_current_version, set_status,
 };
-use ark_domain::canonical_type::{
-    canonical_schema_hash, AliasRecord, TypeRegistration, TypeVersion,
-};
-use rusqlite::{params, Connection, OptionalExtension};
+use ark_domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeVersion};
+use rusqlite::{params, Connection};
 use serde_json::json;
 
 fn legacy_db() -> Connection {

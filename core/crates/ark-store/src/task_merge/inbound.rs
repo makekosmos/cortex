@@ -48,7 +48,7 @@ pub(crate) fn apply_inbound_task_merge_batch(
 ) -> Result<TaskMergeBatchAck, TaskMergeInboundError> {
     let profile = crate::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
         .map_err(TaskMergeInboundError::Storage)?;
-    let actual_identity = ark_application::sync_policy::sync_profile_identity(profile.as_ref());
+    let actual_identity = ark_domain::sync_policy::sync_profile_identity(profile.as_ref());
     if actual_identity != *identity {
         return Err(TaskMergeInboundError::Permission(
             "stale_or_unnegotiated_sync_policy".into(),
@@ -56,7 +56,7 @@ pub(crate) fn apply_inbound_task_merge_batch(
     }
     if let Some(profile) = profile.filter(|profile| profile.active) {
         let selected = profile.selective_profile();
-        if ark_application::sync_policy::validate_task_merge_sync_policy(&selected).is_err() {
+        if ark_domain::sync_policy::validate_task_merge_sync_policy(&selected).is_err() {
             return Err(TaskMergeInboundError::Permission(
                 "task_merge_policy_requires_full_type_sync".into(),
             ));

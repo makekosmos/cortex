@@ -1,6 +1,6 @@
 use super::{SqliteWriter, StoreTransactionFailure};
 use crate::committed_feed::InboxState;
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     InboxReceiptWrite, InboxReceiptWriteError, OutboundProgressMutation, OutboundProgressPolicy,
     OutboundProgressWrite, OutboundProgressWriteError,
 };
@@ -31,7 +31,7 @@ impl SqliteWriter {
         &mut self,
         write: OutboundProgressWrite,
     ) -> Result<
-        ark_application::sync_storage::OutboundProgress,
+        ark_domain::sync_storage::OutboundProgress,
         StoreTransactionFailure<OutboundProgressWriteError>,
     > {
         self.write_with_capabilities(|capabilities| {
@@ -44,7 +44,7 @@ impl SqliteWriter {
         connection: &mut super::Connection,
         write: OutboundProgressWrite,
     ) -> Result<
-        ark_application::sync_storage::OutboundProgress,
+        ark_domain::sync_storage::OutboundProgress,
         super::TransactionFailure<OutboundProgressWriteError>,
     > {
         Self::immediate_on_connection(connection, |transaction| {
@@ -67,7 +67,7 @@ fn receive_inbox_receipt(
         let profile =
             crate::data_platform::load_sync_profile_for_sync(transaction, &policy.local_device_id)
                 .map_err(InboxReceiptWriteError::PolicyStorage)?;
-        if ark_application::sync_policy::sync_profile_identity(profile.as_ref())
+        if ark_domain::sync_policy::sync_profile_identity(profile.as_ref())
             != policy.expected_identity
         {
             return Err(InboxReceiptWriteError::PolicyChanged);
@@ -103,7 +103,7 @@ fn receive_inbox_receipt(
 fn apply_outbound_progress_write(
     transaction: &super::Transaction<'_>,
     write: OutboundProgressWrite,
-) -> Result<ark_application::sync_storage::OutboundProgress, OutboundProgressWriteError> {
+) -> Result<ark_domain::sync_storage::OutboundProgress, OutboundProgressWriteError> {
     let generation = match &write.policy {
         OutboundProgressPolicy::Generation(generation) => *generation,
         OutboundProgressPolicy::Identity(expected) => {
@@ -113,7 +113,7 @@ fn apply_outbound_progress_write(
             )
             .map_err(OutboundProgressWriteError::PolicyStorage)?
             .map_or_else(
-                ark_application::sync_policy::default_sync_policy_identity,
+                ark_domain::sync_policy::default_sync_policy_identity,
                 |policy| policy.identity(),
             );
             if current != *expected {
@@ -155,7 +155,7 @@ fn apply_outbound_progress_write(
 #[cfg(test)]
 mod tests {
     use crate::writer::{SqliteWriter, TransactionFailure};
-    use ark_application::sync_storage::{
+    use ark_domain::sync_storage::{
         OutboundAck, OutboundProgressMutation as Mutation, OutboundProgressPolicy as Policy,
         OutboundProgressWrite,
     };
@@ -168,7 +168,7 @@ mod tests {
             .execute_batch(crate::schema::CREATE_TABLES)
             .expect("store schema initializes");
         let mut connection = connection;
-        let write = || ark_application::sync_storage::InboxReceiptWrite {
+        let write = || ark_domain::sync_storage::InboxReceiptWrite {
             peer_device_id: "peer-a".into(),
             message_id: "message-1".into(),
             payload_json: "{\"x\":1}".into(),
@@ -180,7 +180,7 @@ mod tests {
         assert!(matches!(
             denied,
             TransactionFailure::Operation(
-                ark_application::sync_storage::InboxReceiptWriteError::PeerNotAdmitted
+                ark_domain::sync_storage::InboxReceiptWriteError::PeerNotAdmitted
             )
         ));
         let count: i64 = connection
@@ -211,7 +211,7 @@ mod tests {
             .expect("removed peer list persists");
         let removed = SqliteWriter::receive_inbox_receipt_on_connection(
             &mut connection,
-            ark_application::sync_storage::InboxReceiptWrite {
+            ark_domain::sync_storage::InboxReceiptWrite {
                 message_id: "message-2".into(),
                 ..write()
             },
@@ -220,13 +220,13 @@ mod tests {
         assert!(matches!(
             removed,
             TransactionFailure::Operation(
-                ark_application::sync_storage::InboxReceiptWriteError::PeerRemoved
+                ark_domain::sync_storage::InboxReceiptWriteError::PeerRemoved
             )
         ));
 
         let oversized = SqliteWriter::receive_inbox_receipt_on_connection(
             &mut connection,
-            ark_application::sync_storage::InboxReceiptWrite {
+            ark_domain::sync_storage::InboxReceiptWrite {
                 message_id: "oversized".into(),
                 payload_json: "x".repeat(ark_domain::types::MAX_SYNC_BATCH_BYTES + 1),
                 ..write()
@@ -236,7 +236,7 @@ mod tests {
         assert!(matches!(
             oversized,
             TransactionFailure::Operation(
-                ark_application::sync_storage::InboxReceiptWriteError::Inbox(ref message)
+                ark_domain::sync_storage::InboxReceiptWriteError::Inbox(ref message)
             ) if message == "sync_inbox_payload_limit_exceeded"
         ));
     }

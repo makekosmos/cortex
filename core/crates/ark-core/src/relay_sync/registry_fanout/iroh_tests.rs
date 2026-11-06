@@ -19,7 +19,7 @@ async fn storage_for(
 async fn storage_for_with_policy(
     database: &ark_store::test_support::TestDatabase,
     device_id: &str,
-    rules: Vec<ark_application::sync_policy::SyncProfileRule>,
+    rules: Vec<ark_domain::sync_policy::SyncProfileRule>,
 ) -> super::sqlite_test_support::ActorPeer {
     use crate::db::{CommandContext, SaveLocalSyncProfileCommand};
 
@@ -398,7 +398,7 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
     let mut peer_a = storage_for_with_policy(
         &database_a,
         "policy-A",
-        vec![ark_application::sync_policy::SyncProfileRule {
+        vec![ark_domain::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.note".into(),
             mode: ark_domain::selective_sync::SyncMode::Metadata,
@@ -461,7 +461,7 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
             assert_eq!(accepted.rules[0].resource_id, "com.example.note");
             assert_eq!(
                 accepted.digest,
-                ark_application::sync_policy::SyncProfile {
+                ark_domain::sync_policy::SyncProfile {
                     profile_id: "phone".into(),
                     device_id: "policy-A".into(),
                     revision: 1,

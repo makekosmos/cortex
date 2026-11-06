@@ -1,6 +1,7 @@
 use super::super::{pump_client_committed_feed, TAG};
 use super::super::{AuthenticatedPeerSession, ClientFeedInFlight, ClientMessageSender};
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -83,12 +84,14 @@ async fn apply(
     if !session.outbound_snapshot.record_acknowledged(&pending) {
         return Ok(());
     }
-    let receipt_ack = session.protocol.capabilities.contains(
-        &ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability::DurableReceiptAckV1,
-    );
-    let policy_bound = session.protocol.capabilities.contains(
-        &ark_domain::sync_contracts::protocol_negotiation::ProtocolCapability::PolicyBoundDeliveryV1,
-    );
+    let receipt_ack = session
+        .protocol
+        .capabilities
+        .contains(&ProtocolCapability::DurableReceiptAckV1);
+    let policy_bound = session
+        .protocol
+        .capabilities
+        .contains(&ProtocolCapability::PolicyBoundDeliveryV1);
     drop(session_guard);
     pump_client_committed_feed(
         storage,

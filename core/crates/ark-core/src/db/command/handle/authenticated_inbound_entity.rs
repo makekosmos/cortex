@@ -1,6 +1,6 @@
 use super::super::executor::actor::{AuthenticatedInboundEntityTask, WriterTask};
 use super::*;
-use ark_application::sync_storage::InboxReceiptWrite;
+use ark_domain::sync_storage::InboxReceiptWrite;
 
 impl DbHandle {
     pub(crate) async fn submit_authenticated_inbound_entity(

@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 use std::cmp::Ordering;
 
-pub use ark_application::sync_storage::ReplayNotice;
+pub use ark_domain::sync_storage::ReplayNotice;
 
 pub fn insert_pending_object(
     connection: &Connection,
@@ -171,7 +171,7 @@ mod tests {
 
         assert_eq!(
             replay_pending_for_type(&connection, "future", "1.0.0").expect("replay pending object"),
-            vec![ark_application::sync_storage::ReplayNotice {
+            vec![ark_domain::sync_storage::ReplayNotice {
                 entity_id: "future-object".into(),
                 type_id: "future".into(),
             }]

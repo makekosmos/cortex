@@ -1,4 +1,5 @@
 use super::*;
+use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 #[cfg(test)]
 mod listener_tests {
@@ -84,10 +85,10 @@ mod listener_tests {
         assert!(matches!(
             session.receive().await,
             Some(SessionIoEvent::Message(message))
-                if matches!(*message, ark_domain::sync_contracts::wire::LanSyncMessage::Ping { ts: 42 })
+                if matches!(*message, LanSyncMessage::Ping { ts: 42 })
         ));
         session
-            .send(ark_domain::sync_contracts::wire::LanSyncMessage::Pong { ts: 42 })
+            .send(LanSyncMessage::Pong { ts: 42 })
             .await
             .expect("session sends protocol message");
         assert!(matches!(

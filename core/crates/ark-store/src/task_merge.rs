@@ -1,5 +1,5 @@
-use ark_application::task_merge::TaskMergeConflictRead;
-use ark_application::task_merge::TaskMergeJournalPage;
+use ark_domain::task_merge::TaskMergeConflictRead;
+use ark_domain::task_merge::TaskMergeJournalPage;
 use ark_domain::task_merge::{TaskMergeBootstrap, TaskMergeOperation};
 use ark_domain::task_merge_sync::TaskMergeJournalEntry;
 use ark_domain::task_merge_sync::TaskMergeJournalRecord;

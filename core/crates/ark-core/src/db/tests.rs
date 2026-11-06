@@ -4,8 +4,8 @@ use super::*;
 use crate::hlc::HLC;
 use crate::integration_replication::*;
 use crate::types::*;
-use ark_application::integration_export::export_integration_replication;
-use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+use ark_domain::integration_export::export_integration_replication;
+use ark_domain::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use serde_json::{json, Value};
 
 #[path = "test_fixtures.rs"]

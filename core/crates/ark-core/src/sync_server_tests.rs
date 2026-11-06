@@ -1,5 +1,5 @@
 use super::*;
-use ark_application::sync_storage::{
+use ark_domain::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
 
@@ -67,7 +67,7 @@ pub(crate) mod tests {
         async fn load_entities_page_for_peer(
             &self,
             _peer_device_id: &str,
-            _class: ark_application::sync_storage::SyncReadClass,
+            _class: ark_domain::sync_storage::SyncReadClass,
             vector: &VersionVector,
             offset: usize,
             limit: usize,
@@ -77,26 +77,24 @@ pub(crate) mod tests {
         async fn load_policy_bound_entities_page_for_peer(
             &self,
             peer_device_id: &str,
-            class: ark_application::sync_storage::SyncReadClass,
+            class: ark_domain::sync_storage::SyncReadClass,
             vector: &VersionVector,
             offset: usize,
             limit: usize,
             expected_identity: &ark_domain::sync_policy::PolicyIdentity,
         ) -> Result<
-            ark_application::sync_storage::PolicyBoundSnapshotPage,
-            ark_application::sync_storage::PolicyBoundSnapshotReadError,
+            ark_domain::sync_storage::PolicyBoundSnapshotPage,
+            ark_domain::sync_storage::PolicyBoundSnapshotReadError,
         > {
-            let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
+            let accepted_identity = ark_domain::sync_policy::default_sync_policy_identity();
             if expected_identity != &accepted_identity {
-                return Err(
-                    ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy,
-                );
+                return Err(ark_domain::sync_storage::PolicyBoundSnapshotReadError::StalePolicy);
             }
             let entities = self
                 .load_entities_page_for_peer(peer_device_id, class, vector, offset, limit)
                 .await
-                .map_err(ark_application::sync_storage::PolicyBoundSnapshotReadError::Storage)?;
-            Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
+                .map_err(ark_domain::sync_storage::PolicyBoundSnapshotReadError::Storage)?;
+            Ok(ark_domain::sync_storage::PolicyBoundSnapshotPage {
                 identity: accepted_identity,
                 entities,
             })
@@ -107,7 +105,7 @@ pub(crate) mod tests {
         async fn usage_complete_through_for_peer(
             &self,
             _: &str,
-            _: ark_application::sync_storage::SyncReadClass,
+            _: ark_domain::sync_storage::SyncReadClass,
         ) -> Result<HashMap<String, u64>, String> {
             Ok(HashMap::new())
         }
@@ -138,14 +136,12 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
-    impl ark_application::sync_storage::PeerSyncPolicyPort for MemBackend {
+    impl ark_domain::sync_storage::PeerSyncPolicyPort for MemBackend {
         async fn accepted_policy_identity_for_peer(
             &self,
             _peer_device_id: &str,
         ) -> Result<Option<ark_domain::sync_policy::PolicyIdentity>, String> {
-            Ok(Some(
-                ark_application::sync_policy::default_sync_policy_identity(),
-            ))
+            Ok(Some(ark_domain::sync_policy::default_sync_policy_identity()))
         }
     }
 
@@ -158,7 +154,7 @@ pub(crate) mod tests {
             _limit: usize,
         ) -> Result<
             Option<ark_domain::task_merge_sync::TaskMergeBatch>,
-            ark_application::task_merge::TaskMergePrepareError,
+            ark_domain::task_merge::TaskMergePrepareError,
         > {
             Ok(None)
         }
@@ -222,7 +218,7 @@ pub(crate) mod tests {
                 );
             }
             let mut current = self.load_version_vector().await?;
-            ark_application::sync_storage::merge_version_vector_entries(&mut current, vector);
+            ark_domain::sync_storage::merge_version_vector_entries(&mut current, vector);
             self.kv.lock().unwrap().insert(
                 crate::db::VERSION_VECTOR_KEY.into(),
                 serde_json::to_string(&current).unwrap(),
@@ -272,7 +268,7 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
-    impl ark_application::sync_storage::CommittedFeedPort for MemBackend {
+    impl ark_domain::sync_storage::CommittedFeedPort for MemBackend {
         fn selective_sync_policy_generation(&self) -> i64 {
             0
         }
@@ -283,7 +279,7 @@ pub(crate) mod tests {
 
         async fn committed_feed_snapshot(
             &self,
-        ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+        ) -> Result<ark_domain::sync_storage::FeedSnapshot, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -292,7 +288,7 @@ pub(crate) mod tests {
             _: i64,
             _: i64,
             _: usize,
-        ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
+        ) -> Result<Vec<ark_domain::sync_storage::CommittedFeedEntry>, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -301,7 +297,7 @@ pub(crate) mod tests {
             _: i64,
             _: i64,
             _: usize,
-        ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
+        ) -> Result<ark_domain::sync_storage::CommittedFeedDeliveryPage, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -313,8 +309,8 @@ pub(crate) mod tests {
             _: i64,
             _: usize,
         ) -> Result<
-            ark_application::sync_storage::PolicyBoundFeedPage,
-            ark_application::sync_storage::PolicyBoundFeedReadError,
+            ark_domain::sync_storage::PolicyBoundFeedPage,
+            ark_domain::sync_storage::PolicyBoundFeedReadError,
         > {
             Err("test_feed_unsupported".into())
         }
@@ -323,9 +319,9 @@ pub(crate) mod tests {
             &self,
             _: &str,
             _: i64,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
-            Ok(ark_application::sync_storage::OutboundProgress {
-                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
+            Ok(ark_domain::sync_storage::OutboundProgress {
+                initial_snapshot: ark_domain::sync_storage::InitialSnapshot::Complete {
                     through: 0,
                 },
                 ..Default::default()
@@ -336,16 +332,16 @@ pub(crate) mod tests {
             &self,
             _: &str,
             _: &ark_domain::sync_policy::PolicyIdentity,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
         async fn complete_outbound_snapshot(
             &self,
             _: &str,
             _: i64,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
-            Ok(ark_application::sync_storage::OutboundProgress {
-                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
+            Ok(ark_domain::sync_storage::OutboundProgress {
+                initial_snapshot: ark_domain::sync_storage::InitialSnapshot::Complete {
                     through: 0,
                 },
                 ..Default::default()
@@ -355,7 +351,7 @@ pub(crate) mod tests {
             &self,
             _: &str,
             _: &ark_domain::sync_policy::PolicyIdentity,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_policy_identity_completion_observed".into())
         }
         async fn record_outbound_scan(
@@ -363,7 +359,7 @@ pub(crate) mod tests {
             _: &str,
             _: i64,
             _: i64,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -372,7 +368,7 @@ pub(crate) mod tests {
             _: &str,
             _: &ark_domain::sync_policy::PolicyIdentity,
             _: i64,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
         async fn acknowledge_outbound(
@@ -380,8 +376,8 @@ pub(crate) mod tests {
             _: &str,
             _: i64,
             _: i64,
-            _: ark_application::sync_storage::OutboundAck,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            _: ark_domain::sync_storage::OutboundAck,
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -390,8 +386,8 @@ pub(crate) mod tests {
             _: &str,
             _: &ark_domain::sync_policy::PolicyIdentity,
             _: i64,
-            _: ark_application::sync_storage::OutboundAck,
-        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            _: ark_domain::sync_storage::OutboundAck,
+        ) -> Result<ark_domain::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
     }
@@ -462,10 +458,10 @@ pub(crate) mod tests {
             entity: &SyncEntity,
             peer: &str,
             _: &str,
-        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
             let _ = peer;
             self.apply_entity(entity).await?;
-            Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+            Ok(ark_domain::sync_storage::InboundApplyOutcome::Applied)
         }
 
         async fn apply_authenticated_entity_with_policy(
@@ -475,7 +471,7 @@ pub(crate) mod tests {
             message_id: &str,
             _: &str,
             policy: Option<ark_domain::sync_policy::PolicyIdentity>,
-        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
             if policy.is_some() {
                 return Err("policy_bound_apply_unsupported".into());
             }

@@ -3,8 +3,8 @@ use crate::db::{
     AcknowledgeTaskMergeBatchCommand, ApplyTaskMergeBatchCommand, CommandClass, CommandContext,
     PrepareTaskMergeBatchCommand,
 };
-use ark_application::sync_storage::TaskMergeDeliveryPort;
 use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::TaskMergeDeliveryPort;
 use ark_domain::task_merge_sync::TaskMergeBatch;
 use ark_domain::task_merge_sync::TaskMergeBatchAck;
 
@@ -15,7 +15,7 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, ark_application::task_merge::TaskMergePrepareError> {
+    ) -> Result<Option<TaskMergeBatch>, ark_domain::task_merge::TaskMergePrepareError> {
         self.db
             .prepare_task_merge_batch(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
@@ -28,11 +28,9 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
             .await
             .map_err(|error| match error {
                 crate::db::DbError::Permission(_) => {
-                    ark_application::task_merge::TaskMergePrepareError::PolicyRejected
+                    ark_domain::task_merge::TaskMergePrepareError::PolicyRejected
                 }
-                error => {
-                    ark_application::task_merge::TaskMergePrepareError::Failure(error.to_string())
-                }
+                error => ark_domain::task_merge::TaskMergePrepareError::Failure(error.to_string()),
             })
     }
 

@@ -16,7 +16,7 @@ use ark_sync::protocol::merge_peer_records;
 pub use crate::replication_storage::{
     AuthenticatedEntityBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
-pub use ark_application::sync_storage::SyncReadClass;
+pub use ark_domain::sync_storage::SyncReadClass;
 
 #[cfg(test)]
 #[path = "sync_server/sync_round_trip.rs"]

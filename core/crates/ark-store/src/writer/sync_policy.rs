@@ -1,6 +1,6 @@
 use super::{SqliteWriter, StoreTransactionFailure};
 use crate::data_platform::SyncProfileWriteError;
-use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
+use ark_domain::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
 
 impl SqliteWriter {
     pub fn save_local_sync_profile(

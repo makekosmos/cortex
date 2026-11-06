@@ -3,8 +3,8 @@ use super::super::{
     ClientOnRegistryEventsCallback, TAG,
 };
 use super::registry_admission;
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};

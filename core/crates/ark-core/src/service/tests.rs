@@ -4,7 +4,7 @@
 
 use super::runtime::get_db_handle;
 use super::*;
-use ark_application::sync_storage::SyncEntityMutationPort;
+use ark_domain::sync_storage::SyncEntityMutationPort;
 
 /// Fresh per-test service state — replaces the old global `DB`/`SYNC`
 /// statics and the `TEST_DB_MUTEX` serialization they forced.

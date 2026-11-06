@@ -4,8 +4,8 @@ mod state;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
+use ark_domain::registry_admission::RegistryAdmissionStorage;
 use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
 use tokio::sync::Mutex;
 
@@ -141,9 +141,7 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
 }
 
 impl RegistryOutcome {
-    pub(super) fn applied(
-        applied: &ark_application::replication_storage::RegistryPageApply,
-    ) -> Self {
+    pub(super) fn applied(applied: &ark_domain::replication_storage::RegistryPageApply) -> Self {
         Self {
             applied_events: applied.applied_events.clone(),
             disabled_device_ids: applied.disabled_device_ids.clone(),

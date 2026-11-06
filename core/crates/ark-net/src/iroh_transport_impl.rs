@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ark_domain::sync_contracts::protocol_negotiation::{
-    compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret,
+    compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, ProtocolOffer,
 };
 use ark_domain::sync_contracts::transport::OutboundIntegrationFrameAuthorizer;
 use ark_domain::sync_contracts::wire::{LanSyncMessage, PROTOCOL_VERSION};
@@ -184,10 +184,7 @@ impl IrohTransport {
             None => (None, None),
         };
         let offer =
-            ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
-                true,
-            )
-            .with_task_merge_bootstrap_v2();
+            ProtocolOffer::current_with_registry_history(true).with_task_merge_bootstrap_v2();
         let negotiation_hmac = auth_secret.as_deref().zip(auth_nonce.as_deref()).map(
             |(secret, nonce)| {
                 ark_domain::sync_contracts::protocol_negotiation::compute_negotiation_offer_hmac(

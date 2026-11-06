@@ -1,5 +1,5 @@
 use super::*;
-use ark_application::sync_storage::InboxReceiptWrite;
+use ark_domain::sync_storage::InboxReceiptWrite;
 
 #[async_trait::async_trait]
 impl AuthenticatedEntityBackend for SqliteStorageBackend {
@@ -59,7 +59,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         entity: &SyncEntity,
         authenticated_peer_id: &str,
     ) -> Result<(), String> {
-        let inbox_message_id = ark_application::sync_storage::entity_inbox_message_id(
+        let inbox_message_id = ark_domain::sync_storage::entity_inbox_message_id(
             authenticated_peer_id,
             &entity.entity_type,
             &entity.id,
@@ -75,7 +75,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         entity: &SyncEntity,
         authenticated_peer_id: &str,
         inbox_message_id: &str,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         self.apply_authenticated_entity_with_policy(
             entity,
             authenticated_peer_id,
@@ -93,7 +93,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         inbox_message_id: &str,
         local_device_id: &str,
         policy_identity: Option<ark_domain::sync_policy::PolicyIdentity>,
-    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+    ) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
         let inbox_payload_json =
             serde_json::to_string(entity).map_err(|error| error.to_string())?;
         let context = CommandContext::authenticated_peer(authenticated_peer_id.to_owned());
@@ -111,10 +111,10 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
                 .await
                 .map_err(|error| error.to_string())?;
             if inbox_state == crate::db::InboxState::Applied {
-                return Ok(ark_application::sync_storage::InboundApplyOutcome::Applied);
+                return Ok(ark_domain::sync_storage::InboundApplyOutcome::Applied);
             }
             if inbox_state == crate::db::InboxState::Pending {
-                return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
+                return Ok(ark_domain::sync_storage::InboundApplyOutcome::Pending);
             }
             let mut command = AuthenticatedCoreTaskWrite::new(
                 entity.id.clone(),
@@ -137,10 +137,10 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
                 .map(|outcome| match outcome {
                     crate::db::RemoteCoreTaskOutcome::Applied
                     | crate::db::RemoteCoreTaskOutcome::Duplicate => {
-                        ark_application::sync_storage::InboundApplyOutcome::Applied
+                        ark_domain::sync_storage::InboundApplyOutcome::Applied
                     }
                     crate::db::RemoteCoreTaskOutcome::Stale => {
-                        ark_application::sync_storage::InboundApplyOutcome::Stale
+                        ark_domain::sync_storage::InboundApplyOutcome::Stale
                     }
                 })
                 .map_err(|error| error.to_string());

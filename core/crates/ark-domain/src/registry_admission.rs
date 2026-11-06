@@ -1,7 +1,5 @@
+use crate::device_registry::{RegistryEvent, RegistryHandshakeProof, RegistryHandshakeTranscript};
 use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
-use ark_domain::device_registry::{
-    RegistryEvent, RegistryHandshakeProof, RegistryHandshakeTranscript,
-};
 
 /// Narrow storage port used by the direct sync admission state machine.
 #[async_trait::async_trait]

@@ -1,5 +1,5 @@
 use super::types::*;
-use ark_domain::types::ArkObjectWrite;
+use crate::types::ArkObjectWrite;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
@@ -30,12 +30,12 @@ pub fn object_write(command: &GameUpsertCommand) -> ArkObjectWrite {
 }
 
 pub fn validate_game_command(command: &GameUpsertCommand) -> Result<(), GameUpsertError> {
-    use ark_domain::canonical_type::validation::{validate_canonical, CanonicalValidationCode};
+    use crate::canonical_type::validation::{validate_canonical, CanonicalValidationCode};
 
     if !command.user_rating.map(f64::is_finite).unwrap_or(true) {
         return Err(GameUpsertError::InvalidRating);
     }
-    let registration = ark_domain::canonical_type::definitions::canonical_type_registrations()
+    let registration = crate::canonical_type::definitions::canonical_type_registrations()
         .map_err(|_| GameUpsertError::DefinitionUnavailable)?
         .into_iter()
         .find(|registration| {

@@ -1,4 +1,5 @@
 use super::*;
+use ark_domain::external_ref::ExternalRefUpsert;
 
 async fn publish_registry_event(
     state: &Arc<ServiceState>,
@@ -59,7 +60,7 @@ pub(super) async fn sync_policy_set(
         .map(|rule| {
             let filter_json =
                 serde_json::to_string(&rule.filter).map_err(|error| error.to_string())?;
-            Ok(ark_application::sync_policy::SyncProfileRule {
+            Ok(ark_domain::sync_policy::SyncProfileRule {
                 resource_kind: rule.resource_kind,
                 resource_id: rule.resource_id,
                 mode: rule.mode,
@@ -85,7 +86,7 @@ pub(super) async fn sync_policy_set(
     sync_profile_json(profile)
 }
 
-fn sync_profile_json(profile: ark_application::sync_policy::SyncProfile) -> Result<Value, String> {
+fn sync_profile_json(profile: ark_domain::sync_policy::SyncProfile) -> Result<Value, String> {
     let digest = profile.digest();
     let rules = profile
         .rules
@@ -182,6 +183,17 @@ pub(super) async fn set_sync_kv(
 ) -> Result<Value, String> {
     get_db_handle(state)?
         .set_local_sync_key_value(db::CommandContext::engine(), key, value)
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
+}
+
+pub(super) async fn external_refs_upsert(
+    state: &Arc<ServiceState>,
+    params: ExternalRefUpsert,
+) -> Result<Value, String> {
+    get_db_handle(state)?
+        .submit_external_ref_upsert(db::CommandContext::engine(), params)
         .await
         .map(|()| json!(true))
         .map_err(|error| error.to_string())
@@ -376,9 +388,8 @@ pub(super) async fn disconnect_peer(
 pub(super) async fn connect_with_pairing_code(
     state: &Arc<ServiceState>,
     pairing_code: String,
-    bind: SyncBind,
 ) -> Result<Value, String> {
-    handle_connect_with_pairing_code(state, pairing_code, bind).await
+    handle_connect_with_pairing_code(state, pairing_code).await
 }
 
 pub(super) async fn accept_pairing(
@@ -438,9 +449,6 @@ pub(super) async fn get_own_iroh_ticket(state: &Arc<ServiceState>) -> Result<Val
     handle_get_own_iroh_ticket(state).await
 }
 
-pub(super) async fn show_pairing_code(
-    state: &Arc<ServiceState>,
-    bind: SyncBind,
-) -> Result<Value, String> {
-    handle_show_pairing_code(state, bind).await
+pub(super) async fn show_pairing_code(state: &Arc<ServiceState>) -> Result<Value, String> {
+    handle_show_pairing_code(state).await
 }

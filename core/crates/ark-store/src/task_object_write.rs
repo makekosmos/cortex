@@ -1,7 +1,7 @@
-use crate::object_write::{
-    NewObjectReceipt, ObjectWriteOrigin, ObjectWriteResult, ObjectWriteSession, ReceiptOutcome,
-};
-use crate::task_mutation::{self, TaskMutationSession};
+use crate::object_write::SqliteObjectWriteSession;
+use crate::object_write::{NewObjectReceipt, ObjectWriteOrigin, ObjectWriteResult, ReceiptOutcome};
+use crate::task_mutation::SqliteTaskMutationSession;
+use crate::task_mutation::{self};
 use ark_domain::hlc::HLC;
 use ark_domain::object_write::RemoteObjectWrite;
 use ark_domain::types::{ArkObjectWrite, ObjectLink};
@@ -12,8 +12,7 @@ mod decoder;
 mod local;
 pub use authenticated::{
     apply_authenticated_core_task_write, AuthenticatedCoreTaskWrite,
-    AuthenticatedCoreTaskWriteError, AuthenticatedCoreTaskWriteSession, InboxReceiptState,
-    RemoteCoreTaskOutcome,
+    AuthenticatedCoreTaskWriteError, InboxReceiptState, RemoteCoreTaskOutcome,
 };
 pub use decoder::{decode_remote_core_task_write, RemoteCoreTaskWriteDecodeError};
 pub use local::{LocalCoreTaskWrite, LocalCoreTaskWriteCommit, TaskWriteOperationResult};
@@ -29,8 +28,8 @@ enum Input {
 }
 
 fn apply_core_task_write(
-    object_session: &dyn ObjectWriteSession,
-    task_session: &dyn TaskMutationSession,
+    object_session: &SqliteObjectWriteSession<'_>,
+    task_session: &SqliteTaskMutationSession<'_>,
     origin: ObjectWriteOrigin,
     input: Input,
 ) -> Result<ObjectWriteResult, String> {
@@ -214,8 +213,8 @@ fn apply_core_task_write(
 }
 
 pub fn apply_local_core_task_write(
-    object_session: &dyn ObjectWriteSession,
-    task_session: &dyn TaskMutationSession,
+    object_session: &SqliteObjectWriteSession<'_>,
+    task_session: &SqliteTaskMutationSession<'_>,
     write: LocalCoreTaskWrite,
 ) -> Result<ObjectWriteResult, String> {
     let (object, expected_snapshot, device_id) = write.into_parts();
@@ -234,8 +233,8 @@ pub fn apply_local_core_task_write(
 }
 
 pub fn apply_remote_core_task_write(
-    object_session: &dyn ObjectWriteSession,
-    task_session: &dyn TaskMutationSession,
+    object_session: &SqliteObjectWriteSession<'_>,
+    task_session: &SqliteTaskMutationSession<'_>,
     remote: RemoteObjectWrite,
     authenticated_peer_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {

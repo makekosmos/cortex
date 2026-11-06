@@ -1,9 +1,7 @@
 use super::*;
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncServer;
-use ark_application::sync_storage::{
-    PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort,
-};
+use ark_domain::sync_storage::{PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

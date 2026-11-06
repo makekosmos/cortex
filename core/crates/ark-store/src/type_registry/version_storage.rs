@@ -86,7 +86,7 @@ pub fn insert_type_version(
     conn: &Connection,
     input: &TypeVersion,
     created_at: &str,
-) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, String> {
+) -> Result<Vec<ark_domain::sync_storage::ReplayNotice>, String> {
     persist_type_version(conn, input, created_at)?;
     crate::pending_objects::replay_pending_for_type(conn, &input.type_id, &input.version)
 }

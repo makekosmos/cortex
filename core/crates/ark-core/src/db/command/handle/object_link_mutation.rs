@@ -9,7 +9,7 @@ impl DbHandle {
         context: CommandContext,
         object_link: ark_domain::types::ObjectLink,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
+    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "object_link.upsert.v1", &object_link, &device_id)?;
         {
             let actor = &self.backend;
@@ -29,7 +29,7 @@ impl DbHandle {
         context: CommandContext,
         id: String,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, DbError> {
+    ) -> Result<ark_store::type_mutation::TypeMutationCommit, DbError> {
         let weight = validate(&context, "object_link.delete.v1", &id, &device_id)?;
         {
             let actor = &self.backend;
@@ -49,7 +49,7 @@ impl DbHandle {
         context: CommandContext,
         object_link: ark_domain::types::ObjectLink,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::ReplaceObjectLinkCommit, DbError> {
+    ) -> Result<ark_store::type_mutation::ReplaceObjectLinkCommit, DbError> {
         let weight = validate(&context, "object_link.replace.v1", &object_link, &device_id)?;
         {
             let actor = &self.backend;

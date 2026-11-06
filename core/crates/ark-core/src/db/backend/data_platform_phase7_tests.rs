@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::SqliteStorageBackend;
-use ark_application::sync_storage::CommittedFeedPort;
+use ark_domain::sync_storage::CommittedFeedPort;
 use ark_store::test_support::TestDatabase;
 
 #[tokio::test]

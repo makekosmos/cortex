@@ -63,14 +63,13 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
-    let limited_policy = ark_application::sync_policy::SyncProfileRule {
+    let limited_policy = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
         mode: ark_domain::selective_sync::SyncMode::Metadata,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&limited_policy));
+    let digest = ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&limited_policy));
     handle
         .accept_peer_sync_policy(
             CommandContext::authenticated_peer("peer-a".into()),
@@ -102,14 +101,14 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
-                ark_application::sync_policy::default_sync_policy_identity(),
+                ark_domain::sync_policy::default_sync_policy_identity(),
                 1,
             ),
         )
         .await;
     assert!(matches!(stale, Err(DbError::Permission(_))));
 
-    let filtered_policy = ark_application::sync_policy::SyncProfileRule {
+    let filtered_policy = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
@@ -119,7 +118,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
         .unwrap(),
     };
     let filtered_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&filtered_policy));
+        ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&filtered_policy));
     handle
         .accept_peer_sync_policy(
             CommandContext::authenticated_peer("peer-a".into()),
@@ -154,7 +153,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
 #[tokio::test]
 async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     for limit in [0, ark_domain::task_merge_sync::MAX_TASK_MERGE_PAGE_SIZE + 1] {
         assert!(matches!(
             prepare_batch(&handle, "peer-a", identity.clone(), limit).await,
@@ -223,7 +222,7 @@ async fn prepared_batch_replays_identically_after_sqlite_reopen() {
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let prepared = prepare_batch(&handle, "peer-a", identity.clone(), 1)
         .await
         .unwrap()
@@ -268,7 +267,7 @@ async fn outbound_journal_preserves_the_conflict_resolution_guard() {
     let batch = prepare_batch(
         &handle,
         "peer-a",
-        ark_application::sync_policy::default_sync_policy_identity(),
+        ark_domain::sync_policy::default_sync_policy_identity(),
         100,
     )
     .await
@@ -292,7 +291,7 @@ async fn outbound_merge_batches_obey_the_wire_size_budget() {
         append(&handle, large, None).await.unwrap();
     }
 
-    let identity = ark_application::sync_policy::default_sync_policy_identity();
+    let identity = ark_domain::sync_policy::default_sync_policy_identity();
     let first = prepare_batch(&handle, "peer-a", identity.clone(), 100)
         .await
         .unwrap()
@@ -334,7 +333,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     append(&handle, operation('2', &['1'], "second"), None)
         .await
         .unwrap();
-    let initial_identity = ark_application::sync_policy::default_sync_policy_identity();
+    let initial_identity = ark_domain::sync_policy::default_sync_policy_identity();
     let first = prepare_batch(&handle, "peer-a", initial_identity.clone(), 1)
         .await
         .unwrap()
@@ -351,14 +350,14 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         id('2')
     );
 
-    let excluded = ark_application::sync_policy::SyncProfileRule {
+    let excluded = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
         mode: ark_domain::selective_sync::SyncMode::Metadata,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
     let excluded_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded));
+        ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded));
     handle
         .accept_peer_sync_policy(
             CommandContext::authenticated_peer("peer-a".into()),
@@ -382,13 +381,13 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     let local_operations = super::inspect(&path).operation_count;
     assert_eq!(local_operations, 2);
 
-    let full = ark_application::sync_policy::SyncProfileRule {
+    let full = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
         mode: ark_domain::selective_sync::SyncMode::Full,
         filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let full_digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&full));
+    let full_digest = ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&full));
     handle
         .accept_peer_sync_policy(
             CommandContext::authenticated_peer("peer-a".into()),
@@ -426,7 +425,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     let other_peer = prepare_batch(
         &handle,
         "peer-b",
-        ark_application::sync_policy::default_sync_policy_identity(),
+        ark_domain::sync_policy::default_sync_policy_identity(),
         1,
     )
     .await

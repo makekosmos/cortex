@@ -9,7 +9,7 @@ use crate::committed_feed::{
     append_committed_change, read_committed_feed_delivery_page,
     read_committed_feed_delivery_page_for_peer,
 };
-use ark_application::sync_storage::CommittedFeedDeliveryPage;
+use ark_domain::sync_storage::CommittedFeedDeliveryPage;
 
 #[test]
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
@@ -69,7 +69,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     crate::objects::upsert_object_compat(&receiver, &original).unwrap();
     append_committed_change(&source, "object", &original.id, "r1", false, None, None).unwrap();
 
-    let rule = |mode| ark_application::sync_policy::SyncProfileRule {
+    let rule = |mode| ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "book".into(),
         mode,
@@ -77,7 +77,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     };
     let excluded_rule = rule(ark_domain::selective_sync::SyncMode::None);
     let excluded_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded_rule));
+        ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded_rule));
     let excluded = crate::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",
@@ -125,7 +125,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
 
     let included_rule = rule(ark_domain::selective_sync::SyncMode::Full);
     let included_digest =
-        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&included_rule));
+        ark_domain::sync_policy::digest_sync_policy(std::slice::from_ref(&included_rule));
     let included = crate::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",

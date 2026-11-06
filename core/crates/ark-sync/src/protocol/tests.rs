@@ -100,7 +100,7 @@ fn test_version_vector_serialization() {
 
 #[test]
 fn sync_policy_message_round_trips_canonical_typed_rules() {
-    let rule = ark_application::sync_policy::SyncProfileRule {
+    let rule = ark_domain::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "com.example.note".into(),
         mode: ark_domain::selective_sync::SyncMode::Metadata,
@@ -109,7 +109,7 @@ fn sync_policy_message_round_trips_canonical_typed_rules() {
         )
         .unwrap(),
     };
-    let profile = ark_application::sync_policy::SyncProfile {
+    let profile = ark_domain::sync_policy::SyncProfile {
         profile_id: "phone".into(),
         device_id: "device-a".into(),
         revision: 3,
@@ -137,7 +137,7 @@ fn sync_policy_message_round_trips_canonical_typed_rules() {
 
 #[test]
 fn sync_policy_message_preserves_inactive_revision() {
-    let profile = ark_application::sync_policy::SyncProfile {
+    let profile = ark_domain::sync_policy::SyncProfile {
         profile_id: "phone".into(),
         device_id: "device-a".into(),
         revision: 4,

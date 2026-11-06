@@ -7,6 +7,7 @@
 //! the relay WebSocket) must evict all authenticated peers, and a per-peer
 //! `Disconnected` carrying our own device id must evict nothing.
 
+use ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
@@ -175,10 +176,7 @@ async fn wait_for_no_peers(relay: &RelaySync) {
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
-    let offer =
-        ark_domain::sync_contracts::protocol_negotiation::ProtocolOffer::current_with_registry_history(
-            true,
-        );
+    let offer = ProtocolOffer::current_with_registry_history(true);
     tx.send(TransportEvent::MessageReceivedFromTransport {
         from_device_id: "peer-x".to_string(),
         transport_public_key: peer_endpoint.to_owned(),

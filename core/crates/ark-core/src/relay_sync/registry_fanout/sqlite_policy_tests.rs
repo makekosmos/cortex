@@ -2,11 +2,11 @@ use super::sqlite_test_support::*;
 use crate::db::{CommandContext, ObjectReadQuery, SaveLocalSyncProfileCommand};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::types::{ArkObject, SyncEntity};
-use ark_application::sync_policy::SyncProfileRule;
-use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort};
 use ark_domain::hlc::HLC;
 use ark_domain::selective_sync::FilterV1;
 use ark_domain::selective_sync::SyncMode;
+use ark_domain::sync_policy::SyncProfileRule;
+use ark_domain::sync_storage::{PeerProgressPort, SyncEntityMutationPort};
 use std::time::{Duration, Instant};
 
 #[tokio::test(flavor = "multi_thread")]

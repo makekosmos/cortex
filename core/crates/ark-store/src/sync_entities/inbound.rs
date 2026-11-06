@@ -1,4 +1,4 @@
-use ark_application::sync_storage::{InboundApplyOutcome, ReplayNotice};
+use ark_domain::sync_storage::{InboundApplyOutcome, ReplayNotice};
 use ark_domain::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };

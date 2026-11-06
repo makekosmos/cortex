@@ -4,8 +4,8 @@ use super::super::{
     RECONNECT_BASE_MS, RECONNECT_MAX_MS, TAG,
 };
 use super::connect_and_receive;
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::client_transport::DirectClientConnector;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

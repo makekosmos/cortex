@@ -3,7 +3,7 @@ use crate::book_cover::{
     LocalBookCoverFacts, LocalBookCoverWrite, BOOK_COVER_LINK_TYPE, BOOK_TYPE_ID,
     CANONICAL_VERSION, IMAGE_TYPE_ID,
 };
-use ark_domain::types::{ArkObject, ObjectLink};
+use crate::types::{ArkObject, ObjectLink};
 use serde_json::json;
 
 fn object(id: &str, type_id: &str, deleted_at: Option<&str>) -> ArkObject {

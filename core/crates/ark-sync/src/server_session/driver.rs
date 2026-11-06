@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 
 use super::{
     ConnectedServerSessionHost, DirectServerSessionEnd, ResponderHelloRequest,

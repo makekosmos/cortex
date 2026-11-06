@@ -52,7 +52,7 @@ mod tests {
     use crate::db::SqliteStorageBackend;
     use crate::sync_server::sync_server_tests::tests::MemBackend;
     use crate::sync_transport::{SyncTransport, TransportEvent};
-    use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+    use ark_domain::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use futures_util::{SinkExt, StreamExt};
     use std::sync::{
         atomic::{AtomicBool, Ordering},

@@ -8,7 +8,6 @@ members = [
   "runtime/crates/engine-indexes",
   "runtime/crates/engine-mobile",
   "core/crates/ark-domain",
-  "core/crates/ark-application",
   "core/crates/ark-sync",
   "core/crates/ark-net",
   "core/crates/ark-store",
@@ -29,9 +28,6 @@ debug = "line-tables-only"
 debug = false
 
 [profile.dev.package."ark-domain"]
-codegen-units = 16
-
-[profile.dev.package."ark-application"]
 codegen-units = 16
 
 [profile.dev.package."ark-store"]

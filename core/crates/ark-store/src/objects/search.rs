@@ -4,7 +4,7 @@ use super::search_text::{
 use super::{
     list_objects, object_search_fts_exists, parse_json_or_default, search_text, Connection,
 };
-use ark_application::object_read::SearchResult;
+use ark_domain::object_read::SearchResult;
 use ark_domain::types::ArkObject;
 use rusqlite::params;
 

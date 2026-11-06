@@ -8,7 +8,7 @@ impl PeerIdentityBackend for MemBackend {
     async fn load_local_sync_profile(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         Ok(None)
     }
 
@@ -18,15 +18,15 @@ impl PeerIdentityBackend for MemBackend {
         _: i64,
         _: &str,
         _: bool,
-        _: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        _: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         Err("test_sync_policy_unsupported".into())
     }
 
     async fn load_accepted_peer_sync_policy(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         Ok(None)
     }
 
@@ -99,7 +99,7 @@ impl PeerIdentityBackend for MemBackend {
         &self,
         _: &str,
         _: &[ark_domain::device_registry::RegistryEvent],
-    ) -> Result<ark_application::replication_storage::RegistryPageApply, String> {
+    ) -> Result<ark_domain::replication_storage::RegistryPageApply, String> {
         Err("test_registry_unsupported".into())
     }
 

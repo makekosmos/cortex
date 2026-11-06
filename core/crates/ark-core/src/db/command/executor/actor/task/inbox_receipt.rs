@@ -1,7 +1,7 @@
 use super::{settle, Publish, WriterTask};
 use crate::db::command::CommandContext;
 use crate::db::{DbError, InboxState};
-use ark_application::sync_storage::{InboxReceiptWrite, InboxReceiptWriteError};
+use ark_domain::sync_storage::{InboxReceiptWrite, InboxReceiptWriteError};
 use ark_store::writer::{SqliteWriter, StoreTransactionFailure};
 use tokio::sync::oneshot;
 

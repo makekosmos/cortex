@@ -1,7 +1,5 @@
-use ark_application::{
-    replication_storage::PeerIdentityBackend,
-    sync_storage::{CommittedFeedPort, PeerProgressPort},
-};
+use ark_domain::replication_storage::PeerIdentityBackend;
+use ark_domain::sync_storage::{CommittedFeedPort, PeerProgressPort};
 use ark_domain::types::VersionVector;
 
 use crate::registry_admission::AdmissionUpdate;
@@ -149,9 +147,7 @@ impl DirectClientAdmission {
         ))
     }
 
-    pub async fn handle<
-        S: ark_application::registry_admission::RegistryAdmissionStorage + ?Sized,
-    >(
+    pub async fn handle<S: ark_domain::registry_admission::RegistryAdmissionStorage + ?Sized>(
         &mut self,
         storage: &S,
         message: LanSyncMessage,

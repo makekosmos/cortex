@@ -48,7 +48,21 @@ pub use ark_domain::selective_sync::{
 
 pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS sync_profiles (
+        "CREATE TABLE IF NOT EXISTS external_refs (
+           connector_id TEXT NOT NULL, account_id TEXT NOT NULL,
+           external_type TEXT NOT NULL, external_id TEXT NOT NULL,
+           object_id TEXT NOT NULL REFERENCES objects(id) ON DELETE CASCADE,
+           external_revision TEXT, external_url TEXT, content_hash TEXT,
+           last_pulled_at TEXT, last_pushed_at TEXT,
+           conflict_state TEXT NOT NULL DEFAULT 'clean'
+             CHECK(conflict_state IN ('clean','local_changed','remote_changed','conflict',\
+             'missing','invalid','disabled')),
+           PRIMARY KEY(connector_id,account_id,external_type,external_id)
+         );
+         CREATE UNIQUE INDEX IF NOT EXISTS external_refs_object_identity
+           ON external_refs(connector_id,account_id,object_id,external_type);
+         CREATE INDEX IF NOT EXISTS external_refs_object ON external_refs(object_id);
+         CREATE TABLE IF NOT EXISTS sync_profiles (
            profile_id TEXT PRIMARY KEY CHECK(length(CAST(profile_id AS BLOB)) BETWEEN 1 AND \
            128),
            device_id TEXT NOT NULL CHECK(length(CAST(device_id AS BLOB)) BETWEEN 1 AND 128),
@@ -96,11 +110,12 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub use ark_application::sync_policy::{
+pub use ark_domain::sync_policy::{
     default_sync_policy_identity, digest_sync_policy, AcceptedPeerSyncPolicy, SyncProfile,
     SyncProfileRule,
 };
 
+pub use ark_domain::external_ref::ExternalRefUpsert;
 #[path = "accepted_peer_policy.rs"]
 mod accepted_peer_policy;
 pub use accepted_peer_policy::{accept_peer_sync_policy, load_accepted_peer_sync_policy};
@@ -351,6 +366,37 @@ fn parse_sync_mode(mode: &str) -> rusqlite::Result<SyncMode> {
         "none" => Ok(SyncMode::None),
         _ => Err(rusqlite::Error::InvalidQuery),
     }
+}
+
+pub fn upsert_external_ref(conn: &Connection, r: &ExternalRefUpsert) -> Result<(), String> {
+    if r.connector_id.is_empty()
+        || r.account_id.is_empty()
+        || r.external_type.is_empty()
+        || r.external_id.is_empty()
+        || r.object_id.is_empty()
+    {
+        return Err("invalid external ref".into());
+    }
+    conn.execute(
+        "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,
+         external_revision,content_hash,conflict_state)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8)
+         ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET
+         object_id=excluded.object_id,external_revision=excluded.external_revision,
+         content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
+        params![
+            r.connector_id,
+            r.account_id,
+            r.external_type,
+            r.external_id,
+            r.object_id,
+            r.revision,
+            r.hash,
+            r.state
+        ],
+    )
+    .map_err(|e| e.to_string())
+    .map(|_| ())
 }
 
 #[cfg(test)]

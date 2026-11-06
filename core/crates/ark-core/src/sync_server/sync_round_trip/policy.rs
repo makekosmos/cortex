@@ -1,8 +1,4 @@
 use super::fixtures::{pair_storages, pick_port};
-use ark_application::sync_policy::SyncProfileRule;
-use ark_application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
-};
 use ark_core::db::{
     CommandContext, DbHandle, DbOwner, ObjectReadQuery, SaveLocalSyncProfileCommand,
 };
@@ -13,6 +9,10 @@ use ark_core::sync_server::SyncServer;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
 use ark_core::SqliteStorageBackend;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
+use ark_domain::sync_policy::SyncProfileRule;
+use ark_domain::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;

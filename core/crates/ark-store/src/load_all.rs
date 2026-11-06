@@ -2,7 +2,7 @@
 // Bulk operations
 // ---------------------------------------------------------------------------
 
-use ark_application::load_all_data::LoadAllData;
+use ark_domain::load_all_data::LoadAllData;
 use rusqlite::Connection;
 
 pub fn clear_all(conn: &Connection) -> Result<(), String> {

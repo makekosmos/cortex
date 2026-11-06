@@ -129,7 +129,7 @@ fn make_sync_entity(
     }
 }
 
-pub(super) fn emit_replay_notices(notices: Vec<ark_application::sync_storage::ReplayNotice>) {
+pub(super) fn emit_replay_notices(notices: Vec<ark_domain::sync_storage::ReplayNotice>) {
     for notice in notices {
         emit_event(notice.event_payload());
     }

@@ -1,4 +1,4 @@
-use ark_domain::types::ArkObjectWrite;
+use crate::types::ArkObjectWrite;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

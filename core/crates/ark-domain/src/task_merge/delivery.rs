@@ -2,7 +2,7 @@ use crate::sync_policy::{
     default_sync_policy_identity, validate_task_merge_sync_policy, AcceptedPeerSyncPolicy,
     TaskMergeSyncPolicyError,
 };
-use ark_domain::PolicyIdentity;
+use crate::PolicyIdentity;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,8 +24,8 @@ pub struct TaskMergeJournalPage {
     pub through_position: i64,
     pub entries: Vec<TaskMergeJournalEntry>,
 }
-use ark_domain::task_merge::TaskConflictSet;
-use ark_domain::task_merge_sync::{TaskMergeBatch, TaskMergeBatchAck, TaskMergeJournalEntry};
+use crate::task_merge::TaskConflictSet;
+use crate::task_merge_sync::{TaskMergeBatch, TaskMergeBatchAck, TaskMergeJournalEntry};
 
 const MAX_TASK_MERGE_BATCH_BYTES: usize = 1_048_576 - 4_096;
 

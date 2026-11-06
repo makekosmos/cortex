@@ -31,7 +31,7 @@ impl DbHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_application::sync_storage::{
+    use ark_domain::sync_storage::{
         OutboundProgressMutation, OutboundProgressPolicy, OutboundProgressWrite,
     };
     use std::time::{Duration, Instant};

@@ -9,11 +9,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GRAPH = {
   "ark-domain": [],
-  "ark-application": ["ark-domain"],
-  "ark-store": ["ark-application", "ark-domain"],
-  "ark-sync": ["ark-application", "ark-domain"],
+  "ark-store": ["ark-domain"],
+  "ark-sync": ["ark-domain"],
   "ark-net": ["ark-domain"],
-  "ark-core": ["ark-application", "ark-domain", "ark-net", "ark-store", "ark-sync"],
+  "ark-core": ["ark-domain", "ark-net", "ark-store", "ark-sync"],
 };
 const DESKTOP_ONLY_IROH_FEATURES = ["fast-apple-datapath", "metrics", "portmapper"];
 

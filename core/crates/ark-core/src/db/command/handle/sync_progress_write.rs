@@ -5,7 +5,7 @@ impl DbHandle {
     pub(crate) async fn set_sync_progress(
         &self,
         context: CommandContext,
-        write: ark_application::sync_storage::SyncProgressWrite,
+        write: ark_store::sync_progress_write::SyncProgressWrite,
     ) -> Result<(), DbError> {
         if context.class != CommandClass::SyncLive {
             return Err(DbError::Invalid("database command class mismatch".into()));

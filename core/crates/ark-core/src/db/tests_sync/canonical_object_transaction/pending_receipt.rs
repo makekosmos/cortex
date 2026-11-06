@@ -1,5 +1,5 @@
 use super::*;
-use ark_application::sync_storage::PeerProgressPort;
+use ark_domain::sync_storage::PeerProgressPort;
 
 #[tokio::test]
 async fn pending_authenticated_object_is_accepted() {
@@ -22,12 +22,12 @@ async fn pending_authenticated_object_is_accepted() {
 fn save_test_local_policy(
     path: &std::path::Path,
     expected_revision: Option<i64>,
-) -> ark_application::sync_policy::SyncProfile {
+) -> ark_domain::sync_policy::SyncProfile {
     ark_store::test_support::SyncTestState::save_local_profile(path, expected_revision).unwrap()
 }
 
 fn test_policy_identity(
-    profile: &ark_application::sync_policy::SyncProfile,
+    profile: &ark_domain::sync_policy::SyncProfile,
 ) -> ark_domain::sync_policy::PolicyIdentity {
     ark_sync::protocol::sync_policy_identity(Some(profile))
 }

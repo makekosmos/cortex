@@ -186,8 +186,7 @@ impl RelaySync {
         // it may itself have compacted refs the next hop still needs a claim
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.
-        let read_class =
-            ark_application::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
+        let read_class = ark_domain::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
         let complete_through = match self
             .storage
             .usage_complete_through_for_peer(peer_device_id, read_class)

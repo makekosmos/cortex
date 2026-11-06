@@ -8,16 +8,16 @@ impl DbHandle {
     pub(crate) async fn submit_canonical_game_upsert(
         &self,
         context: CommandContext,
-        command: ark_application::canonical_game::GameUpsertCommand,
+        command: ark_domain::canonical_game::GameUpsertCommand,
         fallback_device_id: String,
-    ) -> Result<ark_application::canonical_game::GameMutationResult, DbError> {
+    ) -> Result<ark_domain::canonical_game::GameMutationResult, DbError> {
         if context.class != CommandClass::Interactive {
             return Err(DbError::Invalid("database command class mismatch".into()));
         }
         context.require_engine()?;
         #[derive(serde::Serialize)]
         struct GameCommand<'a> {
-            command: &'a ark_application::canonical_game::GameUpsertCommand,
+            command: &'a ark_domain::canonical_game::GameUpsertCommand,
             fallback_device_id: &'a str,
         }
         let weight = serde_json::to_vec(&GameCommand {
@@ -44,7 +44,7 @@ impl DbHandle {
     pub(crate) async fn submit_local_book_cover(
         &self,
         context: CommandContext,
-        write: ark_application::book_cover::LocalBookCoverWrite,
+        write: ark_domain::book_cover::LocalBookCoverWrite,
     ) -> Result<bool, DbError> {
         if context.class != CommandClass::Interactive {
             return Err(DbError::Invalid("database command class mismatch".into()));
@@ -52,7 +52,7 @@ impl DbHandle {
         context.require_engine()?;
         #[derive(serde::Serialize)]
         struct BookCoverCommand<'a> {
-            write: &'a ark_application::book_cover::LocalBookCoverWrite,
+            write: &'a ark_domain::book_cover::LocalBookCoverWrite,
         }
         let weight = serde_json::to_vec(&BookCoverCommand { write: &write })
             .map_or(usize::MAX, |bytes| bytes.len());
@@ -72,11 +72,11 @@ impl DbHandle {
     pub(crate) async fn submit_local_object_upsert(
         &self,
         context: CommandContext,
-        write: ark_application::object_mutation::LocalObjectUpsert,
+        write: ark_store::object_mutation::LocalObjectUpsert,
         operation_id: Option<String>,
     ) -> Result<
         super::super::operation_receipt::OperationResult<
-            ark_application::object_mutation::ObjectUpsertCommit,
+            ark_store::object_mutation::ObjectUpsertCommit,
         >,
         DbError,
     > {
@@ -94,7 +94,7 @@ impl DbHandle {
         }
         #[derive(serde::Serialize)]
         struct UpsertCommand<'a> {
-            write: &'a ark_application::object_mutation::LocalObjectUpsert,
+            write: &'a ark_store::object_mutation::LocalObjectUpsert,
         }
         #[derive(serde::Serialize)]
         struct ReceiptCommand<'a> {
@@ -133,11 +133,11 @@ impl DbHandle {
     pub(crate) async fn submit_local_object_delete(
         &self,
         context: CommandContext,
-        write: ark_application::object_mutation::LocalObjectDelete,
+        write: ark_store::object_mutation::LocalObjectDelete,
         operation_id: Option<String>,
     ) -> Result<
         super::super::operation_receipt::OperationResult<
-            ark_application::object_mutation::ObjectDeleteCommit,
+            ark_store::object_mutation::ObjectDeleteCommit,
         >,
         DbError,
     > {
@@ -155,7 +155,7 @@ impl DbHandle {
         }
         #[derive(serde::Serialize)]
         struct DeleteCommand<'a> {
-            write: &'a ark_application::object_mutation::LocalObjectDelete,
+            write: &'a ark_store::object_mutation::LocalObjectDelete,
         }
         #[derive(serde::Serialize)]
         struct ReceiptCommand<'a> {

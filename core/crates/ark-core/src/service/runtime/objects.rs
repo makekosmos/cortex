@@ -35,9 +35,9 @@ pub(super) async fn estimate_data_volume(
 ) -> Result<Value, String> {
     let scopes = scopes
         .into_iter()
-        .map(ark_application::data_volume::DataVolumeScope::try_from)
+        .map(ark_store::data_volume::DataVolumeScope::try_from)
         .collect::<Result<Vec<_>, _>>()?;
-    let query = ark_application::data_volume::DataVolumeQuery::new(scopes)?;
+    let query = ark_store::data_volume::DataVolumeQuery::new(scopes)?;
     object_read(state, db::ObjectReadQuery::EstimateDataVolume(query)).await
 }
 
@@ -166,7 +166,7 @@ pub(super) async fn canonical_set_book_cover(
     let changed = get_db_handle(state)?
         .submit_local_book_cover(
             db::CommandContext::engine(),
-            ark_application::book_cover::LocalBookCoverWrite {
+            ark_domain::book_cover::LocalBookCoverWrite {
                 book_id: book_id.clone(),
                 source_ref,
                 existing_image_id,
@@ -220,7 +220,7 @@ pub(super) async fn upsert_object(
         let result = get_db_handle(state)?
             .submit_local_object_upsert(
                 db::CommandContext::engine(),
-                ark_application::object_mutation::LocalObjectUpsert {
+                ark_store::object_mutation::LocalObjectUpsert {
                     object,
                     expected_snapshot,
                     device_id: local_write_device_id(device_id),

@@ -1,7 +1,7 @@
 use super::*;
 
 pub(in crate::db::command) struct TrackedAppMutationTask {
-    pub mutation: ark_application::tracked_app_mutation::TrackedAppMutation,
+    pub mutation: ark_store::tracked_app_mutation::TrackedAppMutation,
     pub reply: oneshot::Sender<Result<crate::types::SyncEntity, DbError>>,
 }
 

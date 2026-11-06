@@ -6,8 +6,8 @@ use crate::db::{
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_bind::SyncBind;
 use crate::types::{ArkObject, ArkObjectWrite};
-use ark_application::sync_policy::SyncProfileRule;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
+use ark_domain::sync_policy::SyncProfileRule;
 use ark_net::iroh::RelayMode;
 use std::future::Future;
 use std::sync::Arc;

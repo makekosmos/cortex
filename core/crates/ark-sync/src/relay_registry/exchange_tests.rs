@@ -3,11 +3,10 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use ark_application::replication_storage::{PeerIdentityBackend, RegistryPageApply};
-use ark_application::{
-    registry_admission::RegistryAdmissionStorage, sync_storage::SyncRuntimeStorage,
-};
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
+use ark_domain::replication_storage::{PeerIdentityBackend, RegistryPageApply};
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ed25519_dalek::SigningKey;
 
 use ark_domain::sync_contracts::peer_control::{PeerControlSendOutcome, PeerSessionControl};
@@ -25,7 +24,7 @@ impl PeerIdentityBackend for FakeStorage {
     async fn load_local_sync_profile(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         Ok(None)
     }
 
@@ -35,15 +34,15 @@ impl PeerIdentityBackend for FakeStorage {
         _: i64,
         _: &str,
         _: bool,
-        _: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        _: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         Err("test_sync_policy_unsupported".into())
     }
 
     async fn load_accepted_peer_sync_policy(
         &self,
         _: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         Ok(None)
     }
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
-use ark_application::sync_storage::PeerSyncPolicyPort;
+use ark_domain::sync_storage::PeerSyncPolicyPort;
 
 #[async_trait::async_trait]
 impl PeerSyncPolicyPort for SqliteStorageBackend {
@@ -12,7 +12,7 @@ impl PeerSyncPolicyPort for SqliteStorageBackend {
             self.load_accepted_peer_sync_policy(peer_device_id)
                 .await?
                 .map_or_else(
-                    ark_application::sync_policy::default_sync_policy_identity,
+                    ark_domain::sync_policy::default_sync_policy_identity,
                     |policy| policy.identity(),
                 ),
         ))
@@ -24,7 +24,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn load_local_sync_profile(
         &self,
         local_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::SyncProfile>, String> {
         self.db
             .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -40,8 +40,8 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         revision: i64,
         digest: &str,
         active: bool,
-        rules: &[ark_application::sync_policy::SyncProfileRule],
-    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        rules: &[ark_domain::sync_policy::SyncProfileRule],
+    ) -> Result<ark_domain::sync_policy::AcceptedPeerSyncPolicy, String> {
         self.db
             .accept_peer_sync_policy(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
@@ -60,7 +60,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn load_accepted_peer_sync_policy(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<ark_domain::sync_policy::AcceptedPeerSyncPolicy>, String> {
         self.db
             .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),

@@ -5,7 +5,7 @@ pub(super) async fn upsert_tracked_app(
     tracked_app: TrackedApp,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    use ark_application::tracked_app_mutation::{TrackedAppMutation, TrackedAppUpsert};
+    use ark_store::tracked_app_mutation::{TrackedAppMutation, TrackedAppUpsert};
 
     let entity = get_db_handle(state)?
         .submit_tracked_app_mutation(
@@ -26,7 +26,7 @@ pub(super) async fn delete_tracked_app(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    use ark_application::tracked_app_mutation::{TrackedAppDelete, TrackedAppMutation};
+    use ark_store::tracked_app_mutation::{TrackedAppDelete, TrackedAppMutation};
 
     let entity = get_db_handle(state)?
         .submit_tracked_app_mutation(

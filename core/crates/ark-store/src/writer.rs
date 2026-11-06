@@ -1,19 +1,28 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
+pub(crate) use authenticated_task::SqliteAuthenticatedCoreTaskWriteSession;
 mod bootstrap;
 mod committed_feed;
 mod device_registry;
 mod error;
 mod inbound_entity;
+mod integration_admin;
 mod registry_local_mutation;
 mod snapshot_restore;
 pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
+#[cfg(debug_assertions)]
+pub use integration_admin::apply_integration_admin_on_connection;
+pub use integration_admin::IntegrationAdminWrites;
 pub use registry_local_mutation::{
     DeviceEnrollmentOutcome, RegistryLocalMutationError, RegistryLocalWrites,
 };
 mod iroh_identity;
+mod signed_integration_frame;
 mod sync_key_value;
+pub use signed_integration_frame::{
+    SignedIntegrationFrameWriteError, SignedIntegrationFrameWrites,
+};
 mod sync_policy;
 mod task_merge;
 pub use task_merge::TaskMergeWrites;
@@ -30,6 +39,7 @@ pub use inbound_entity::{
     PendingObjectType,
 };
 pub use iroh_identity::IrohIdentityWrites;
+use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
 pub use tracked_app_mutation::TrackedAppMutationWrites;
 
@@ -103,22 +113,22 @@ impl UsageWrites<'_, '_> {
     pub fn apply_local_usage_write(
         &mut self,
         device_id: &str,
-        write: ark_application::usage::LocalUsageWrite,
-    ) -> Result<Vec<ark_application::usage::UsageMutation>, String> {
+        write: crate::usage::LocalUsageWrite,
+    ) -> Result<Vec<crate::usage::UsageMutation>, String> {
         let session = crate::usage_mutation::SqliteUsageWriteSession::new(self.transaction);
-        ark_application::usage::apply_local_usage_write(&session, device_id, write)
+        crate::usage::apply_local_usage_write(&session, device_id, write)
     }
 }
 
 impl ObjectWrites<'_, '_> {
     pub fn apply_local_object_upsert(
         &mut self,
-        write: ark_application::object_mutation::LocalObjectUpsert,
+        write: crate::object_mutation::LocalObjectUpsert,
         principal: &str,
         operation_id: Option<&str>,
     ) -> Result<
-        ark_application::object_mutation::ObjectUpsertOutcome,
-        ark_application::object_mutation::ObjectUpsertError,
+        crate::object_mutation::ObjectUpsertOutcome,
+        crate::object_mutation::ObjectUpsertError,
     > {
         crate::object_write::apply_local_object_upsert_in(
             self.transaction,
@@ -130,12 +140,12 @@ impl ObjectWrites<'_, '_> {
 
     pub fn apply_local_object_delete(
         &mut self,
-        write: ark_application::object_mutation::LocalObjectDelete,
+        write: crate::object_mutation::LocalObjectDelete,
         principal: &str,
         operation_id: Option<&str>,
     ) -> Result<
-        (ark_application::object_mutation::ObjectDeleteCommit, bool),
-        ark_application::object_mutation::ObjectDeleteError,
+        (crate::object_mutation::ObjectDeleteCommit, bool),
+        crate::object_mutation::ObjectDeleteError,
     > {
         crate::object_mutation::apply_local_object_delete_in(
             self.transaction,
@@ -149,7 +159,7 @@ impl ObjectWrites<'_, '_> {
 impl BookCoverWrites<'_, '_> {
     pub fn apply_local_book_cover(
         &mut self,
-        write: ark_application::book_cover::LocalBookCoverWrite,
+        write: ark_domain::book_cover::LocalBookCoverWrite,
     ) -> Result<bool, crate::book_cover::BookCoverOperationError> {
         crate::book_cover::apply_local_book_cover_in(self.transaction, write)
     }
@@ -158,10 +168,10 @@ impl BookCoverWrites<'_, '_> {
 impl CanonicalGameWrites<'_, '_> {
     pub fn apply_upsert(
         &mut self,
-        command: ark_application::canonical_game::GameUpsertCommand,
+        command: ark_domain::canonical_game::GameUpsertCommand,
         fallback_device_id: &str,
     ) -> Result<
-        ark_application::canonical_game::GameMutationResult,
+        ark_domain::canonical_game::GameMutationResult,
         crate::canonical_game::CanonicalGameOperationError,
     > {
         crate::canonical_game::upsert_game_in(self.transaction, command, fallback_device_id)
@@ -209,7 +219,19 @@ impl SqliteWriter {
         Self::write_with_capabilities_on_connection(&mut self.connection, operation)
     }
 
-    fn write_with_capabilities_on_connection<T, E>(
+    /// Runs a typed capability write on a borrowed connection for test-only
+    /// command harnesses that share their fixture connection.
+    #[cfg(feature = "test-support")]
+    pub fn write_with_test_capabilities_on_connection<T, E>(
+        connection: &mut Connection,
+        operation: impl for<'scope, 'connection> FnOnce(
+            &mut WriteCapabilities<'scope, 'connection>,
+        ) -> Result<T, E>,
+    ) -> Result<T, StoreTransactionFailure<E>> {
+        Self::write_with_capabilities_on_connection(connection, operation)
+    }
+
+    pub(crate) fn write_with_capabilities_on_connection<T, E>(
         connection: &mut Connection,
         operation: impl for<'scope, 'connection> FnOnce(
             &mut WriteCapabilities<'scope, 'connection>,
@@ -232,11 +254,11 @@ impl SqliteWriter {
 
     pub fn apply_local_core_task_write(
         &mut self,
-        write: ark_application::task_object_write::LocalCoreTaskWrite,
+        write: crate::task_object_write::LocalCoreTaskWrite,
         principal: &str,
         operation_id: Option<&str>,
     ) -> Result<
-        ark_application::task_object_write::TaskWriteOperationResult,
+        crate::task_object_write::TaskWriteOperationResult,
         StoreTransactionFailure<TaskObjectWriteError>,
     > {
         self.write_with_capabilities(|capabilities| {
@@ -249,19 +271,17 @@ impl SqliteWriter {
     pub fn apply_authenticated_core_task_write(
         &mut self,
         peer_id: &str,
-        write: ark_application::task_object_write::AuthenticatedCoreTaskWrite,
+        write: crate::task_object_write::AuthenticatedCoreTaskWrite,
     ) -> Result<
-        ark_application::task_object_write::RemoteCoreTaskOutcome,
-        StoreTransactionFailure<
-            ark_application::task_object_write::AuthenticatedCoreTaskWriteError,
-        >,
+        crate::task_object_write::RemoteCoreTaskOutcome,
+        StoreTransactionFailure<crate::task_object_write::AuthenticatedCoreTaskWriteError>,
     > {
         self.write_with_capabilities(|capabilities| {
             authenticated_task::apply_in(capabilities.transaction, peer_id, write)
         })
     }
 
-    fn immediate_on_connection<T, E>(
+    pub(crate) fn immediate_on_connection<T, E>(
         connection: &mut Connection,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, TransactionFailure<E>> {
@@ -278,13 +298,39 @@ impl SqliteWriter {
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {
         operation(&mut self.connection)
     }
+
+    pub fn apply_local_usage_write_on_connection(
+        connection: &mut Connection,
+        device_id: &str,
+        write: crate::usage::LocalUsageWrite,
+    ) -> Result<Vec<crate::usage::UsageMutation>, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
+            crate::usage::apply_local_usage_write(&session, device_id, write)
+        })
+    }
+
+    pub fn apply_local_core_task_write_on_connection(
+        connection: &mut Connection,
+        write: crate::task_object_write::LocalCoreTaskWrite,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        crate::task_object_write::TaskWriteOperationResult,
+        TransactionFailure<TaskObjectWriteError>,
+    > {
+        Self::immediate_on_connection(connection, |transaction| {
+            apply_local_core_task_write_in(transaction, write, principal, operation_id)
+        })
+    }
+
     pub fn apply_authenticated_core_task_write_on_connection(
         connection: &mut Connection,
         peer_id: &str,
-        write: ark_application::task_object_write::AuthenticatedCoreTaskWrite,
+        write: crate::task_object_write::AuthenticatedCoreTaskWrite,
     ) -> Result<
-        ark_application::task_object_write::RemoteCoreTaskOutcome,
-        TransactionFailure<ark_application::task_object_write::AuthenticatedCoreTaskWriteError>,
+        crate::task_object_write::RemoteCoreTaskOutcome,
+        TransactionFailure<crate::task_object_write::AuthenticatedCoreTaskWriteError>,
     > {
         Self::immediate_on_connection(connection, |transaction| {
             authenticated_task::apply_in(transaction, peer_id, write)
@@ -295,20 +341,23 @@ impl SqliteWriter {
         self.immediate(|transaction| crate::load_all::clear_all(transaction))
     }
 
+    pub fn clear_all_on_connection(
+        connection: &mut Connection,
+    ) -> Result<(), TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::load_all::clear_all(transaction)
+        })
+    }
+
     pub fn upsert_object_link(
         &mut self,
         object_link: ark_domain::types::ObjectLink,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
-    {
+    ) -> Result<crate::type_mutation::TypeMutationCommit, TransactionFailure<String>> {
         self.immediate(|transaction| {
             let session =
                 crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
-            ark_application::type_mutation::upsert_object_link(
-                &session,
-                object_link,
-                device_id.as_deref(),
-            )
+            crate::type_mutation::upsert_object_link(&session, object_link, device_id.as_deref())
         })
     }
 
@@ -316,12 +365,11 @@ impl SqliteWriter {
         &mut self,
         id: String,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::TypeMutationCommit, TransactionFailure<String>>
-    {
+    ) -> Result<crate::type_mutation::TypeMutationCommit, TransactionFailure<String>> {
         self.immediate(|transaction| {
             let session =
                 crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
-            ark_application::type_mutation::delete_object_link(&session, id, device_id.as_deref())
+            crate::type_mutation::delete_object_link(&session, id, device_id.as_deref())
         })
     }
 
@@ -329,16 +377,67 @@ impl SqliteWriter {
         &mut self,
         object_link: ark_domain::types::ObjectLink,
         device_id: Option<String>,
-    ) -> Result<ark_application::type_mutation::ReplaceObjectLinkCommit, TransactionFailure<String>>
-    {
+    ) -> Result<crate::type_mutation::ReplaceObjectLinkCommit, TransactionFailure<String>> {
         self.immediate(|transaction| {
             let session =
                 crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
-            ark_application::type_mutation::replace_object_link(
-                &session,
-                object_link,
-                device_id.as_deref(),
-            )
+            crate::type_mutation::replace_object_link(&session, object_link, device_id.as_deref())
+        })
+    }
+
+    pub fn upsert_object_link_on_connection(
+        connection: &mut Connection,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<crate::type_mutation::TypeMutationCommit, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            crate::type_mutation::upsert_object_link(&session, object_link, device_id.as_deref())
+        })
+    }
+
+    pub fn delete_object_link_on_connection(
+        connection: &mut Connection,
+        id: String,
+        device_id: Option<String>,
+    ) -> Result<crate::type_mutation::TypeMutationCommit, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            crate::type_mutation::delete_object_link(&session, id, device_id.as_deref())
+        })
+    }
+
+    pub fn replace_object_link_on_connection(
+        connection: &mut Connection,
+        object_link: ark_domain::types::ObjectLink,
+        device_id: Option<String>,
+    ) -> Result<crate::type_mutation::ReplaceObjectLinkCommit, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session =
+                crate::object_link_mutation::SqliteObjectLinkMutationSession::new(transaction);
+            crate::type_mutation::replace_object_link(&session, object_link, device_id.as_deref())
+        })
+    }
+
+    pub fn upsert_external_ref(
+        &mut self,
+        request: ark_domain::external_ref::ExternalRefUpsert,
+    ) -> Result<(), TransactionFailure<String>> {
+        self.immediate(|transaction| {
+            crate::data_platform::ensure_schema(transaction)?;
+            crate::data_platform::upsert_external_ref(transaction, &request)
+        })
+    }
+
+    pub fn upsert_external_ref_on_connection(
+        connection: &mut Connection,
+        request: ark_domain::external_ref::ExternalRefUpsert,
+    ) -> Result<(), TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::data_platform::ensure_schema(transaction)?;
+            crate::data_platform::upsert_external_ref(transaction, &request)
         })
     }
 }

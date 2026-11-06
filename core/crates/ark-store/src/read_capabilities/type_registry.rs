@@ -1,6 +1,6 @@
 use super::TypeRegistryReadCapabilities;
-use ark_application::type_registry::TypeGetResponse;
 use ark_domain::canonical_type::{TypeSummary, TypeVersion};
+use ark_domain::type_registry::TypeGetResponse;
 use ark_domain::types::{ObjectLink, ObjectType};
 
 impl TypeRegistryReadCapabilities<'_> {

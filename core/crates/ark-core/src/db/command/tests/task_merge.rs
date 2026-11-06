@@ -49,7 +49,7 @@ async fn append(
     handle: &DbHandle,
     operation: TaskMergeOperation,
     expected_digest: Option<String>,
-) -> Result<ark_application::task_merge::TaskMergeAppendResult, DbError> {
+) -> Result<ark_domain::task_merge::TaskMergeAppendResult, DbError> {
     handle
         .append_task_merge_operation(
             CommandContext::engine(),
@@ -95,7 +95,7 @@ async fn append_actor_uses_the_store_writer_transaction() {
     shutdown(&mut owner).await;
 }
 
-async fn read(handle: &DbHandle) -> ark_application::task_merge::TaskMergeConflictRead {
+async fn read(handle: &DbHandle) -> ark_domain::task_merge::TaskMergeConflictRead {
     handle
         .query_with_store(
             CommandContext::engine(),

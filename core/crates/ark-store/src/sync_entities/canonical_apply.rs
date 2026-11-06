@@ -8,7 +8,7 @@ use super::InboundObjectRevision;
 pub fn apply_canonical_object_entity(
     connection: &Connection,
     entity: &SyncEntity,
-) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
     let type_id = entity
         .data
         .get("typeId")
@@ -27,7 +27,7 @@ pub fn apply_canonical_object_entity(
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)
     {
-        return Ok(ark_application::sync_storage::InboundApplyOutcome::Stale);
+        return Ok(ark_domain::sync_storage::InboundApplyOutcome::Stale);
     }
     connection
         .execute_batch("SAVEPOINT canonical_sync_object")
@@ -77,9 +77,9 @@ pub fn apply_canonical_object_entity(
             .map_err(|error| error.to_string())?
             .unwrap_or_default();
         if object.type_id == "core.task" {
-            let outcome = ark_application::task_mutation::apply_inbound_task_mutation(
+            let outcome = crate::task_mutation::apply_inbound_task_mutation(
                 &task_session,
-                ark_application::task_mutation::InboundTaskMutation::CanonicalEntitySnapshot {
+                crate::task_mutation::InboundTaskMutation::CanonicalEntitySnapshot {
                     object: &object,
                     links: &links,
                     source_hlc: &entity.hlc,
@@ -87,11 +87,11 @@ pub fn apply_canonical_object_entity(
             )
             .map_err(|error| error.to_string())?;
             return Ok(Some(match outcome {
-                ark_application::task_mutation::InboundTaskMutationOutcome::Applied => {
-                    ark_application::sync_storage::InboundApplyOutcome::Applied
+                crate::task_mutation::InboundTaskMutationOutcome::Applied => {
+                    ark_domain::sync_storage::InboundApplyOutcome::Applied
                 }
-                ark_application::task_mutation::InboundTaskMutationOutcome::Stale => {
-                    ark_application::sync_storage::InboundApplyOutcome::Stale
+                crate::task_mutation::InboundTaskMutationOutcome::Stale => {
+                    ark_domain::sync_storage::InboundApplyOutcome::Stale
                 }
             }));
         }
@@ -102,18 +102,13 @@ pub fn apply_canonical_object_entity(
             &entity.hlc,
             InboundObjectRevision::Canonical,
         )?;
-        Ok(
-            (outcome != ark_application::sync_storage::InboundApplyOutcome::Applied)
-                .then_some(outcome),
-        )
+        Ok((outcome != ark_domain::sync_storage::InboundApplyOutcome::Applied).then_some(outcome))
     })();
 
     match result {
         Ok(outcome) => connection
             .execute_batch("RELEASE canonical_sync_object")
-            .map(|()| {
-                outcome.unwrap_or(ark_application::sync_storage::InboundApplyOutcome::Applied)
-            })
+            .map(|()| outcome.unwrap_or(ark_domain::sync_storage::InboundApplyOutcome::Applied))
             .map_err(|error| error.to_string()),
         Err(error) => {
             let _ = connection
@@ -126,14 +121,14 @@ pub fn apply_canonical_object_entity(
 pub fn apply_remote_task_delete(
     connection: &Connection,
     entity: &SyncEntity,
-) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_domain::sync_storage::InboundApplyOutcome, String> {
     connection
         .execute_batch("SAVEPOINT canonical_sync_task_delete")
         .map_err(|error| error.to_string())?;
     let session = crate::task_merge::SqliteTaskMutationSession::new(connection);
-    let result = ark_application::task_mutation::apply_inbound_task_mutation(
+    let result = crate::task_mutation::apply_inbound_task_mutation(
         &session,
-        ark_application::task_mutation::InboundTaskMutation::RemoteHardDelete { entity },
+        crate::task_mutation::InboundTaskMutation::RemoteHardDelete { entity },
     )
     .map_err(|error| error.to_string());
     match result {
@@ -142,11 +137,11 @@ pub fn apply_remote_task_delete(
                 .execute_batch("RELEASE canonical_sync_task_delete")
                 .map_err(|error| error.to_string())?;
             Ok(match outcome {
-                ark_application::task_mutation::InboundTaskMutationOutcome::Applied => {
-                    ark_application::sync_storage::InboundApplyOutcome::Applied
+                crate::task_mutation::InboundTaskMutationOutcome::Applied => {
+                    ark_domain::sync_storage::InboundApplyOutcome::Applied
                 }
-                ark_application::task_mutation::InboundTaskMutationOutcome::Stale => {
-                    ark_application::sync_storage::InboundApplyOutcome::Stale
+                crate::task_mutation::InboundTaskMutationOutcome::Stale => {
+                    ark_domain::sync_storage::InboundApplyOutcome::Stale
                 }
             })
         }
@@ -163,7 +158,7 @@ pub fn apply_remote_task_delete(
 mod tests {
     use super::apply_canonical_object_entity;
     use crate::schema::CREATE_TABLES;
-    use ark_application::sync_storage::InboundApplyOutcome;
+    use ark_domain::sync_storage::InboundApplyOutcome;
     use ark_domain::types::SyncEntity;
     use rusqlite::Connection;
     use serde_json::{json, Map};

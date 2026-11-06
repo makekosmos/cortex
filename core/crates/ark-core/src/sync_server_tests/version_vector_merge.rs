@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::sync_server::{save_version_vector, SyncRuntimeStorage};
 use crate::types::VersionVector;
-use ark_application::sync_storage::PeerProgressPort;
+use ark_domain::sync_storage::PeerProgressPort;
 
 use super::MemBackend;
 

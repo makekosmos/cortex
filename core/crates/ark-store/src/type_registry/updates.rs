@@ -1,8 +1,8 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{list_type_summaries, list_type_versions, resolve_type_id};
-use ark_application::type_registry::TypeGetResponse;
 use ark_domain::canonical_type::registry::{validate_version, LEGACY_VERSION};
+use ark_domain::type_registry::TypeGetResponse;
 
 pub fn get_type(
     conn: &Connection,

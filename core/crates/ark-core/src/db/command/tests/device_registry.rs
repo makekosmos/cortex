@@ -288,7 +288,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         .expect("local disable must append a signed registry event");
     assert_eq!(disabled.event_id(), "local-device:2");
 
-    let write = ark_application::sync_storage::InboxReceiptWrite::new(
+    let write = ark_domain::sync_storage::InboxReceiptWrite::new(
         "paired-device".into(),
         "revoked-receipt".into(),
         "{}".into(),
@@ -311,7 +311,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
     let apply = handle
         .submit_authenticated_inbound_entity(
             CommandContext::authenticated_peer("paired-device".into()),
-            ark_application::sync_storage::InboxReceiptWrite::new(
+            ark_domain::sync_storage::InboxReceiptWrite::new(
                 "paired-device".into(),
                 "revoked-session-write".into(),
                 serde_json::to_string(&entity).unwrap(),

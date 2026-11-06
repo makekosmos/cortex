@@ -8,7 +8,6 @@ description = "Transport-neutral replication protocol and direct-session runtime
 test-support = []
 
 [dependencies]
-ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
 async-trait.workspace = true
 chrono.workspace = true

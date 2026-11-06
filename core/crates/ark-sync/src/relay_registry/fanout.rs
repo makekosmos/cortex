@@ -4,7 +4,8 @@ use super::{
     state::{Admission, RelayRegistryPeer},
     RegistryOutcome, RelayRegistryCoordinator,
 };
-use ark_application::registry_admission::RegistryAdmissionStorage;
+use ark_domain::registry_admission::RegistryAdmissionStorage;
+use ark_domain::sync_contracts::peer_control::PeerControlSendOutcome;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
 
 impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S> {
@@ -115,10 +116,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        Ok(ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::Sent)
-                        | Ok(
-                            ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::PeerOffline,
-                        ) => {}
+                        Ok(PeerControlSendOutcome::Sent)
+                        | Ok(PeerControlSendOutcome::PeerOffline) => {}
                         Err(error) => outcome.set_error(format!(
                             "failed to fan out registry event to {id}: {error}"
                         )),
@@ -160,10 +159,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        Ok(ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::Sent)
-                        | Ok(
-                            ark_domain::sync_contracts::peer_control::PeerControlSendOutcome::PeerOffline,
-                        ) => {}
+                        Ok(PeerControlSendOutcome::Sent)
+                        | Ok(PeerControlSendOutcome::PeerOffline) => {}
                         Err(error) => {
                             outcome.set_error(format!(
                                 "failed to send disable event to {id}: {error}"

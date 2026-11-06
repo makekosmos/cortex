@@ -14,7 +14,7 @@ mod task_merge;
 mod type_read;
 mod usage_read;
 
-pub(crate) use ark_application::task_object_write::{
+pub(crate) use ark_store::task_object_write::{
     AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError, LocalCoreTaskWrite,
     RemoteCoreTaskOutcome, TaskWriteOperationResult,
 };

@@ -7,9 +7,9 @@ use super::{
     feed_recovery, live_messages, registry_admission, registry_control, server_hello, snapshot_ack,
     snapshot_drive, sync_changes, sync_policy,
 };
-use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::sync_contracts::client_transport::ConnectedClientTransport;
 use ark_domain::sync_contracts::wire::LanSyncMessage;
+use ark_domain::sync_storage::SyncRuntimeStorage;
 use ark_domain::types::PeerRecord;
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
@@ -97,7 +97,7 @@ pub(super) async fn run<'a>(
                     device_name,
                     space_id,
                     addresses: own_addresses,
-                    auth_secret: auth_secret.as_deref(),
+                    auth_secret,
                     task_merge_bootstrap_v2,
                     platform: platform.clone(),
                     app_version: app_version.clone(),
@@ -198,7 +198,7 @@ pub(super) async fn run<'a>(
                                         server_hello::Context {
                                             local_device_id: device_id,
                                             local_space_id: space_id,
-                                            auth_secret: auth_secret.as_deref(),
+                                            auth_secret,
                                             local_offer: &client_hello.offer,
                                             local_auth_nonce: client_hello.auth_nonce.as_deref(),
                                             peer,
@@ -268,12 +268,12 @@ pub(super) async fn run<'a>(
                                     usage_complete_through,
                                 } => {
                                     let context = sync_changes::Context {
-                                        storage: storage,
+                                        storage,
                                         tx: &tx,
                                         peer_device_id: client_session.peer_device_id(),
                                         local_device_id: device_id,
-                                        authenticated_tx: authenticated_tx,
-                                        on_change: on_change,
+                                        authenticated_tx,
+                                        on_change,
                                     };
                                     if let Err(error) = sync_changes::apply(
                                         context, batch_id, entities, is_last,
@@ -429,10 +429,10 @@ pub(super) async fn run<'a>(
                                             device_id,
                                             storage,
                                             tx: &tx,
-                                            authenticated_tx: authenticated_tx,
+                                            authenticated_tx,
                                             peer,
-                                            on_registry_events: on_registry_events,
-                                            on_connected: on_connected,
+                                            on_registry_events,
+                                            on_connected,
                                             client_session: &mut client_session,
                                             stopped: stopped.as_ref(),
                                         },

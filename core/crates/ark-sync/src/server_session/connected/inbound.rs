@@ -11,7 +11,7 @@ use crate::{
     inbound_snapshot::{InboundSnapshotBatch, SnapshotEntityResult},
     server_session::DirectServerSyncChanges,
 };
-use ark_application::sync_storage::entity_inbox_message_id;
+use ark_domain::sync_storage::entity_inbox_message_id;
 use ark_domain::types::{PeerRecord, SyncEntity};
 
 impl ConnectedServerSession {

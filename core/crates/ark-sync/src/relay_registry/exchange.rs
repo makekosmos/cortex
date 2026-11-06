@@ -1,5 +1,5 @@
-use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::{RegistryEvent, RegistryOperation};
+use ark_domain::registry_admission::RegistryAdmissionStorage;
 
 use ark_domain::sync_contracts::wire::{generate_id, LanSyncMessage};
 

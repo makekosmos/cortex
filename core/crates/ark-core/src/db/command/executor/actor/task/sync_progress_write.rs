@@ -1,8 +1,9 @@
 use super::*;
+use ark_store::sync_progress_write::SyncProgressWriteError;
 
 pub(in crate::db::command) struct SyncProgressWriteTask {
     pub context: CommandContext,
-    pub write: ark_application::sync_storage::SyncProgressWrite,
+    pub write: ark_store::sync_progress_write::SyncProgressWrite,
     pub reply: oneshot::Sender<Result<(), DbError>>,
 }
 
@@ -25,18 +26,18 @@ impl WriterTask for SyncProgressWriteTask {
                     DbError::Storage(error.to_string())
                 }
                 ark_store::writer::StoreTransactionFailure::Operation(error) => match error {
-                    ark_application::sync_storage::SyncProgressWriteError::MissingLocalDevice => {
+                    ark_store::sync_progress_write::SyncProgressWriteError::MissingLocalDevice => {
                         DbError::Permission(
                             "sync_policy_identity_missing_local_device".into(),
                         )
                     }
-                    ark_application::sync_storage::SyncProgressWriteError::StalePolicy => {
+                    ark_store::sync_progress_write::SyncProgressWriteError::StalePolicy => {
                         DbError::Permission("stale_or_unnegotiated_sync_policy".into())
                     }
-                    ark_application::sync_storage::SyncProgressWriteError::PolicyStorage(error) => {
+                    SyncProgressWriteError::PolicyStorage(error) => {
                         DbError::from_application_error(error)
                     }
-                    ark_application::sync_storage::SyncProgressWriteError::SyncValueStorage(
+                    ark_store::sync_progress_write::SyncProgressWriteError::SyncValueStorage(
                         error,
                     ) => {
                         DbError::Storage(error)

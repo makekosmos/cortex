@@ -1,5 +1,5 @@
 use super::*;
-use ark_application::sync_storage::InboxReceiptWrite;
+use ark_domain::sync_storage::InboxReceiptWrite;
 
 pub(in crate::db::command) struct AuthenticatedInboundEntityTask {
     pub peer_id: String,
@@ -62,19 +62,19 @@ fn map_failure(
             DbError::from_application_error(error)
         }
         StoreTransactionFailure::Operation(Error::Receipt(error)) => match error {
-            ark_application::sync_storage::InboxReceiptWriteError::PolicyChanged => {
+            ark_domain::sync_storage::InboxReceiptWriteError::PolicyChanged => {
                 DbError::Permission("stale_or_unnegotiated_sync_policy".into())
             }
-            ark_application::sync_storage::InboxReceiptWriteError::PeerNotAdmitted => {
+            ark_domain::sync_storage::InboxReceiptWriteError::PeerNotAdmitted => {
                 DbError::Permission("sync_peer_not_admitted".into())
             }
-            ark_application::sync_storage::InboxReceiptWriteError::PeerRemoved => {
+            ark_domain::sync_storage::InboxReceiptWriteError::PeerRemoved => {
                 DbError::Permission("sync_peer_removed".into())
             }
-            ark_application::sync_storage::InboxReceiptWriteError::PolicyStorage(error)
-            | ark_application::sync_storage::InboxReceiptWriteError::RegistryStorage(error)
-            | ark_application::sync_storage::InboxReceiptWriteError::RemovedPeersStorage(error)
-            | ark_application::sync_storage::InboxReceiptWriteError::Inbox(error) => {
+            ark_domain::sync_storage::InboxReceiptWriteError::PolicyStorage(error)
+            | ark_domain::sync_storage::InboxReceiptWriteError::RegistryStorage(error)
+            | ark_domain::sync_storage::InboxReceiptWriteError::RemovedPeersStorage(error)
+            | ark_domain::sync_storage::InboxReceiptWriteError::Inbox(error) => {
                 DbError::from_application_error(error)
             }
         },

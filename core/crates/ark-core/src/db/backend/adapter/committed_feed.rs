@@ -1,14 +1,14 @@
 use super::SqliteStorageBackend;
 use crate::db::{CommandClass, CommandContext};
 use crate::replication_storage::PeerIdentityBackend;
-use ark_application::sync_storage::{
+use ark_domain::sync_policy::PolicyIdentity;
+use ark_domain::sync_storage::{
     OutboundAck, OutboundProgress, OutboundProgressMutation as ProgressMutation,
     OutboundProgressPolicy, OutboundProgressWrite,
 };
-use ark_domain::sync_policy::PolicyIdentity;
 
 #[async_trait::async_trait]
-impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
+impl ark_domain::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     fn selective_sync_policy_generation(&self) -> i64 {
         let Some(profile) = self.selective_sync_profile() else {
             return 0;
@@ -45,7 +45,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_domain::sync_storage::FeedSnapshot, String> {
         self.db
             .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -60,7 +60,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
+    ) -> Result<Vec<ark_domain::sync_storage::CommittedFeedEntry>, String> {
         self.db
             .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -75,7 +75,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
+    ) -> Result<ark_domain::sync_storage::CommittedFeedDeliveryPage, String> {
         self.db
             .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -97,8 +97,8 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         high_watermark: i64,
         limit: usize,
     ) -> Result<
-        ark_application::sync_storage::PolicyBoundFeedPage,
-        ark_application::sync_storage::PolicyBoundFeedReadError,
+        ark_domain::sync_storage::PolicyBoundFeedPage,
+        ark_domain::sync_storage::PolicyBoundFeedReadError,
     > {
         self.db
             .query_with_store(
@@ -114,11 +114,11 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
             .await
             .map_err(|error| match error {
                 crate::db::DbError::StaleSyncPolicy => {
-                    ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy
+                    ark_domain::sync_storage::PolicyBoundFeedReadError::StalePolicy
                 }
-                error => ark_application::sync_storage::PolicyBoundFeedReadError::Storage(
-                    error.to_string(),
-                ),
+                error => {
+                    ark_domain::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
+                }
             })
     }
 

@@ -2,11 +2,11 @@
 //!
 //! The caller owns the connection and sends each returned protocol message;
 //! this module owns the challenge, proof, history exchange, and readiness rules.
-use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
 use ark_domain::device_registry::{
     DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
 };
+use ark_domain::registry_admission::RegistryAdmissionStorage;
 use ark_domain::sync_contracts::protocol_negotiation::{
     generate_auth_nonce, NegotiatedProtocol, ProtocolCapability,
 };

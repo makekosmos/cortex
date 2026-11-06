@@ -1,3 +1,5 @@
+#[cfg(debug_assertions)]
+use super::Connection;
 use super::{SqliteWriter, StoreTransactionFailure, WriteCapabilities};
 use ark_domain::device_registry::{RegistryApplyOutcome, RegistryEvent};
 use rusqlite::Transaction;
@@ -26,8 +28,7 @@ impl DeviceRegistryWrites<'_, '_> {
         &mut self,
         sender_device_id: &str,
         events: &[RegistryEvent],
-    ) -> Result<ark_application::replication_storage::RegistryPageApply, RegistryEventApplyError>
-    {
+    ) -> Result<ark_domain::replication_storage::RegistryPageApply, RegistryEventApplyError> {
         let transaction = self.transaction;
         // Known revoked peers may still deliver registry control events; ordinary sync data has
         // a separate admission check in the same Store transaction path.
@@ -114,7 +115,7 @@ impl DeviceRegistryWrites<'_, '_> {
         let digest = crate::device_registry::registry_digest(transaction)
             .map_err(RegistryEventApplyError::Storage)?;
 
-        Ok(ark_application::replication_storage::RegistryPageApply {
+        Ok(ark_domain::replication_storage::RegistryPageApply {
             digest,
             sender_is_admitted,
             local_device_is_admitted,
@@ -130,10 +131,26 @@ impl SqliteWriter {
         sender_device_id: &str,
         events: &[RegistryEvent],
     ) -> Result<
-        ark_application::replication_storage::RegistryPageApply,
+        ark_domain::replication_storage::RegistryPageApply,
         StoreTransactionFailure<RegistryEventApplyError>,
     > {
         self.write_with_capabilities(|capabilities| {
+            capabilities
+                .device_registry()
+                .apply_events(sender_device_id, events)
+        })
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn apply_device_registry_events_on_connection(
+        connection: &mut Connection,
+        sender_device_id: &str,
+        events: &[RegistryEvent],
+    ) -> Result<
+        ark_domain::replication_storage::RegistryPageApply,
+        StoreTransactionFailure<RegistryEventApplyError>,
+    > {
+        Self::write_with_capabilities_on_connection(connection, |capabilities| {
             capabilities
                 .device_registry()
                 .apply_events(sender_device_id, events)
