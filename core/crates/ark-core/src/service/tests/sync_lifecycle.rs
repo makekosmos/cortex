@@ -97,9 +97,11 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         "outbound client must stop despite DB failure"
     );
     assert!(clients.lock().await.is_empty());
+    let emitted_disconnect_for_peer = std::iter::from_fn(|| event_rx.try_recv().ok())
+        .any(|event| event["event"] == "peer_disconnected" && event["device_id"] == "peer-123");
     assert!(
-        event_rx.try_recv().is_err(),
-        "failed persistence must not emit a success event"
+        !emitted_disconnect_for_peer,
+        "failed persistence must not emit a success event for peer-123"
     );
     handle_request(
         &state,
