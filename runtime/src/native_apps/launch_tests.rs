@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(unix)]
+use std::ffi::OsStr;
 
 #[test]
 fn real_child_id_gets_foreground_grant() {
