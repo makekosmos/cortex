@@ -38,6 +38,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # oxlint loads the anti-slop ruleset as a JS plugin (.oxlintrc.json
+      # jsPlugins), so it needs node_modules. Without this step no CI job ran
+      # `oxlint .`: a lint error reached main untouched and only surfaced on
+      # the release job's full pre-commit gate.
+      - name: Bootstrap pnpm and install
+        shell: bash
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Lint (oxlint, including the anti-slop plugin)
+        shell: bash
+        run: pnpm run lint
+
       - name: Install Rust toolchain
         shell: bash
         run: |
