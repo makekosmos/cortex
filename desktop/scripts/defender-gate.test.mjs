@@ -10,6 +10,8 @@ test("classifies clean, detection and unavailable MpCmdRun output", () => {
   assert.equal(classifyMpCmdRun(0, CLEAN).kind, "clean");
   assert.equal(classifyMpCmdRun(2, DETECTION).kind, "detection");
   assert.equal(classifyMpCmdRun(2, "").kind, "detection");
+  // KOS-441: exit 2 with an unavailable HRESULT is not a detection.
+  assert.equal(classifyMpCmdRun(2, UNAVAILABLE).kind, "unavailable");
   assert.equal(classifyMpCmdRun(1, DETECTION).kind, "detection");
   const u = classifyMpCmdRun(2147549370 % 256, UNAVAILABLE);
   assert.equal(u.kind, "unavailable");
