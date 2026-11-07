@@ -31,14 +31,19 @@ export const UNAVAILABLE_HRESULTS = [
 export function classifyMpCmdRun(status, output = "") {
   const text = String(output);
   const lower = text.toLowerCase();
+  // Unavailable HRESULTs / service text must win over bare exit 2: MpCmdRun
+  // uses exit 2 both for "found a threat" and for "scanner did not run"
+  // (KOS-441). Real detection still wins when threat count / threat info
+  // is present in the output.
   const threats = /found\s+(\d+)\s+threats?/i.exec(text);
-  if (status === 2 || (threats && Number(threats[1]) > 0) || /threat\s+information/i.test(text))
+  if ((threats && Number(threats[1]) > 0) || /threat\s+information/i.test(text))
     return { kind: "detection", detail: threats ? `${threats[1]} threat(s)` : `exit ${status}` };
-  if (status === 0) return { kind: "clean", detail: "no threats" };
   const hr = UNAVAILABLE_HRESULTS.find((code) => lower.includes(code));
   if (hr) return { kind: "unavailable", detail: `hr ${hr}` };
   if (/service.*(not (running|started)|disabled)/i.test(text))
     return { kind: "unavailable", detail: "Defender service not running" };
+  if (status === 0) return { kind: "clean", detail: "no threats" };
+  if (status === 2) return { kind: "detection", detail: `exit ${status}` };
   return { kind: "error", detail: `exit ${status ?? "(signal)"}` };
 }
 
