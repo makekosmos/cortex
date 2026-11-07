@@ -52,6 +52,26 @@ pub const SYSTEM_SERVICE_NAME: &str = "MundusSystemSvc";
 /// Named pipe the privileged system service listens on.
 pub const SYSTEM_SERVICE_PIPE: &str = r"\\.\pipe\mundus-system-service";
 
+/// Wire header naming the calling client's role. Neutral on purpose: the
+/// product may be renamed again, and the wire should not have to follow.
+pub const CLIENT_CLASS_HEADER: &str = "x-client-class";
+
+/// The pre-rename class header, still accepted from already-shipped clients
+/// (Atlas, agenda, memoria, dictation, imago's kit). Persisted contract — see
+/// `docs/brand-legacy-identifiers.md`.
+pub const LEGACY_CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
+
+/// Classes that speak for the Manager, latest first. A class is a role, not a
+/// framework: `manager` is what the new Manager sends, `manager-gpui` is what
+/// the one it replaces sends, and the Engine honours both until the old
+/// Manager is gone.
+pub const MANAGER_CLIENT_CLASSES: &[&str] = &["manager", "mundus-manager", "manager-gpui"];
+
+/// Whether a client class may perform Manager-only operations.
+pub fn is_manager_client(class: Option<&str>) -> bool {
+    class.is_some_and(|class| MANAGER_CLIENT_CLASSES.contains(&class))
+}
+
 /// OS keyring (Windows Credential Manager) service holding user API keys
 /// and package integration secrets. Persisted legacy identifier: renaming it
 /// orphans every stored credential. See docs/brand-legacy-identifiers.md.

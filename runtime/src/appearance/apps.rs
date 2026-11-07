@@ -106,7 +106,7 @@ impl AppearanceStore {
             return Err("invalid app_id".into());
         }
         let global = read(&self.path)?;
-        let can_set_follow_apps = client.class.as_deref() == Some("manager-gpui");
+        let can_set_follow_apps = crate::brand::is_manager_client(client.class.as_deref());
         let (settings, policy) = if global.follow_apps {
             (
                 AppAppearanceSettings::from(&global),
@@ -140,7 +140,7 @@ impl AppearanceStore {
             return Err("invalid app_id".into());
         }
         let authorized = client.class.as_deref() == Some(app_id)
-            || client.class.as_deref() == Some("manager-gpui");
+            || crate::brand::is_manager_client(client.class.as_deref());
         if !authorized {
             return Err("client is not authorized to set appearance for this app_id".into());
         }
@@ -185,7 +185,7 @@ impl AppearanceStore {
         let policy = AppearancePolicy {
             following: false,
             editable: true,
-            can_set_follow_apps: client.class.as_deref() == Some("manager-gpui"),
+            can_set_follow_apps: crate::brand::is_manager_client(client.class.as_deref()),
         };
         Ok(self.app_response(app_id, settings, policy).await)
     }

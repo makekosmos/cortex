@@ -1,0 +1,56 @@
+[package]
+name = "manager"
+version = "0.4.0"
+edition = "2021"
+description = "Mundus Manager — the Engine's control panel"
+publish = false
+default-run = "manager"
+# Its own workspace, like the GPUI Manager it replaces: the release pipeline
+# builds this binary on its own.
+[workspace]
+
+[build-dependencies]
+# Shared with the Engine and the Manager it replaces: one resource script,
+# one set of brand strings, one Windows manifest.
+pe-version-info = { path = "../runtime/crates/pe-version-info" }
+
+[dependencies]
+# The same stack as Atlas: gpui-kit 0.8 routes windows and rendering through
+# gpui-fast, and the NSH pages run in that renderer, not in a second one.
+gpui = { package = "gpui-kit", version = "=0.8.0", features = ["gpui-fast"] }
+gpui-component = { version = "=0.8.0", features = ["gpui-fast"] }
+imago-nsh = { git = "https://github.com/makekosmos/imago.git", rev = "3fe52688917ed9c598060d0c6904224a87a48453" }
+# The NSH host the pages talk to: `js` runs the bundle, `dev` the hot-reload client.
+nsh-platform-gpui = { version = "=0.4.0", default-features = false, features = ["js", "dev"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tracing = "0.1"
+ureq = { version = "2.12", default-features = false, features = ["json"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+gpui-fast-backend = { package = "gpui-fast", version = "=0.1.10", features = ["windows-manifest-provided-by-host"] }
+
+# Dev builds compile our own code fast; dependencies stay optimized, since an
+# unoptimized gpui/taffy/cosmic-text tops a mod?est UI out at ~20fps (KOS-328).
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+
+# GPUI fast gates debug selectors and test instrumentation on assertions.
+[profile.dev.package.gpui-fast]
+debug-assertions = true
+
+[profile.dev.package.gpui-fast-macros]
+debug-assertions = true
+
+[patch.crates-io]
+# One Imago revision for everything: the renderer, the kit and the NSH host come
+# from the same commit as `imago-nsh` above, so a checkout rebuilds what CI built.
+gpui-fast = { git = "https://github.com/makekosmos/imago.git", rev = "3fe52688917ed9c598060d0c6904224a87a48453" }
+gpui-pre = { git = "https://github.com/makekosmos/imago.git", rev = "3fe52688917ed9c598060d0c6904224a87a48453" }

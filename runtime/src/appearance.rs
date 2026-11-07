@@ -32,6 +32,16 @@ const THEME_IDS: &[&str] = &[
     "graphite",
     "amethyst-haze",
     "vercel",
+    // The Manager's own palette family (imago-nsh `palettes.ts`): a device-wide
+    // choice like the rest, so the Engine stores it and every client reads it.
+    "cobalt-foundry",
+    "cinder-peak",
+    "ember-hollow",
+    "heliotrope",
+    "merino-light",
+    "alpine-milk",
+    "buttercream-diner",
+    "coastal-linen",
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -330,8 +340,8 @@ impl AppearanceStore {
             }
             return self.set_scoped(app_id, patch, client).await;
         }
-        if client.class.as_deref() != Some("manager-gpui") {
-            return Err("appearance.set is restricted to the manager-gpui client".into());
+        if !crate::brand::is_manager_client(client.class.as_deref()) {
+            return Err("appearance.set is restricted to the Manager client".into());
         }
         let patch = object;
         if patch.is_empty() {
