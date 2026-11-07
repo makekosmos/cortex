@@ -9,11 +9,11 @@ import {
 
 function metadata(overrides = {}) {
   const graph = {
-    "domain": [],
-    "store": ["domain"],
-    "sync": ["domain"],
-    "net": ["domain"],
-    "kernel": ["domain", "net", "store", "sync"],
+    domain: [],
+    store: ["domain"],
+    sync: ["domain"],
+    net: ["domain"],
+    kernel: ["domain", "net", "store", "sync"],
     ...overrides,
   };
   return {
@@ -44,7 +44,7 @@ test("accepts the declared ARK dependency whitelist and ignores dev-only edges",
 
 test("rejects an injected forbidden dependency edge", () => {
   const graph = metadata({
-    "sync": ["kernel", "domain"],
+    sync: ["kernel", "domain"],
   });
   assert.deepEqual(validateDependencyGraph(graph), [
     "sync: internal normal dependencies are [domain, kernel], expected [domain]",
@@ -103,6 +103,27 @@ test("ignores workspace packages outside core/crates", () => {
     });
   }
   assert.deepEqual(validateDependencyGraph(graph), []);
+});
+
+test("decodes a Windows manifest path at the boundary", () => {
+  const graph = metadata();
+  graph.packages.push({
+    name: "kernel-future",
+    manifest_path: "D:\\a\\cortex\\cortex\\core\\crates\\kernel-future\\Cargo.toml",
+    dependencies: [{ name: "kernel", kind: null }],
+  });
+  assert.deepEqual(validateDependencyGraph(graph), [
+    "kernel-future: core workspace package is missing from the dependency graph",
+  ]);
+});
+
+test("rejects cargo metadata whose manifest path is not text", () => {
+  const graph = metadata();
+  graph.packages[0].manifest_path = null;
+  assert.throws(
+    () => validateDependencyGraph(graph),
+    /cargo metadata: packages\[0\]\.manifest_path is not a string/,
+  );
 });
 
 test("accepts desktop networking features and rejects them in the mobile graph", () => {

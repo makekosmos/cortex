@@ -8,24 +8,57 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GRAPH = {
-  "domain": [],
-  "store": ["domain"],
-  "sync": ["domain"],
-  "net": ["domain"],
-  "kernel": ["domain", "net", "store", "sync"],
+  domain: [],
+  store: ["domain"],
+  sync: ["domain"],
+  net: ["domain"],
+  kernel: ["domain", "net", "store", "sync"],
 };
 const DESKTOP_ONLY_IROH_FEATURES = ["fast-apple-datapath", "metrics", "portmapper"];
 
-/** Core crates are the packages under `core/crates/`; the graph describes them. */
-function isCoreCrate(pkg) {
-  return (
-    typeof pkg.manifest_path === "string" &&
-    pkg.manifest_path.replaceAll("\\", "/").includes("/core/crates/")
+const CORE_CRATES = "/core/crates/";
+
+/**
+ * Cargo metadata is parsed JSON, so a field is whatever the tool printed. The
+ * graph reads two of them, and it decodes them here — at the I/O boundary —
+ * instead of narrowing them again wherever they are used: past this point a
+ * package name and its manifest path are text.
+ */
+function decodeText(value, field) {
+  if (Object.prototype.toString.call(value) !== "[object String]") {
+    throw new Error(`cargo metadata: ${field} is not a string`);
+  }
+  return value;
+}
+
+/** Decode one cargo metadata package into what the graph reads: name and path. */
+function decodePackage(entry, index) {
+  const field = `packages[${index}]`;
+  return {
+    name: decodeText(entry.name, `${field}.name`),
+    // `\` -> `/`, so a manifest path reads the same on Windows and on CI.
+    manifestPath: decodeText(entry.manifest_path, `${field}.manifest_path`).replaceAll("\\", "/"),
+    // Edges keep cargo's shape: the graph compares their names and `kind`.
+    dependencies: entry.dependencies,
+  };
+}
+
+function decodePackages(metadata) {
+  return new Map(
+    metadata.packages.map((entry, index) => {
+      const pkg = decodePackage(entry, index);
+      return [pkg.name, pkg];
+    }),
   );
 }
 
+/** Core crates are the packages under `core/crates/`; the graph describes them. */
+function isCoreCrate(pkg) {
+  return pkg.manifestPath.includes(CORE_CRATES);
+}
+
 export function validateDependencyGraph(metadata) {
-  const packages = new Map(metadata.packages.map((pkg) => [pkg.name, pkg]));
+  const packages = decodePackages(metadata);
   const errors = [];
   const unclassifiedPackages = [...packages.values()]
     .filter((pkg) => isCoreCrate(pkg) && !Object.hasOwn(GRAPH, pkg.name))
@@ -167,7 +200,7 @@ async function main() {
   );
   if (errors.length) throw new Error(errors.join("\n"));
 
-  const packages = new Map(metadata.packages.map((pkg) => [pkg.name, pkg]));
+  const packages = decodePackages(metadata);
   const artifact = {
     profile,
     target,
