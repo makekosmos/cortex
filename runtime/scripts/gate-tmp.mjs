@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 
-// KOS-270: engine/ark-core tests must never write to the user's %TEMP%.
+// KOS-270: engine/kernel tests must never write to the user's %TEMP%.
 // `openGateTmp` creates a fresh per-run scratch directory inside the cargo
 // target dir; the gate injects it as TMP/TEMP/TMPDIR for every cargo
 // invocation so tempfile::tempdir() and friends land there. After the test

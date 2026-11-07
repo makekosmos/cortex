@@ -2,8 +2,8 @@
 
 The Engine process owns the user's SQLite database. `ArkService` preserves the
 request and response contract and composes the application, sync, transport,
-and storage components. `ark-core` owns request admission, fairness, and the
-database actor lifecycle. `ark-store` owns SQLite connections, schema and SQL
+and storage components. `kernel` owns request admission, fairness, and the
+database actor lifecycle. `store` owns SQLite connections, schema and SQL
 adapters, the single writer, transaction boundaries, and snapshot/restore.
 
 ## Allowed write paths
@@ -23,7 +23,7 @@ adapters, the single writer, transaction boundaries, and snapshot/restore.
 - No process other than the Engine opens the user's database. No sidecar,
   renderer, or package worker opens it directly.
 - Application, domain, sync, and network code do not issue SQLite statements or
-  retain SQLite connections. SQL belongs to `ark-store`; transport code uses
+  retain SQLite connections. SQL belongs to `store`; transport code uses
   typed sync effects and application capabilities.
 - A write to a syncable entity updates the revision, sequence, tombstone,
   receipt, and committed-feed state required by that operation in the same
@@ -37,7 +37,7 @@ adapters, the single writer, transaction boundaries, and snapshot/restore.
 
 ## Durability and recovery
 
-`ark-store::open_db` configures every SQLite connection for WAL,
+`store::open_db` configures every SQLite connection for WAL,
 `synchronous=FULL`, foreign keys, and a 5-second busy timeout. Successful
 application acknowledgements follow the operation's SQLite commit. This is the
 configured SQLite durability contract; it is not a claim that every operating

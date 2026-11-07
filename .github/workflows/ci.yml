@@ -72,7 +72,7 @@ jobs:
           node scripts/check-dep-pins.mjs
 
       - name: ARK dependency graph checker tests
-        run: node --test scripts/check-ark-dependency-graph.test.mjs
+        run: node --test scripts/check-dependency-graph.test.mjs
 
       # Warn-only until the KOS-340 dep cleanup clears the existing advisories;
       # keep the signal visible without gating PRs on sibling-ticket upgrades.
@@ -145,8 +145,8 @@ jobs:
 
       - name: Verify desktop ARK graph and release target
         run: |
-          node scripts/check-ark-dependency-graph.mjs --profile desktop --target "${{ matrix.ark_target }}"
-          cargo check --locked --release -p ark-core --features desktop-net --target "${{ matrix.ark_target }}"
+          node scripts/check-dependency-graph.mjs --profile desktop --target "${{ matrix.ark_target }}"
+          cargo check --locked --release -p kernel --features desktop-net --target "${{ matrix.ark_target }}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -179,7 +179,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo run --locked --release -p ark-store --example sqlite_commit_durability \
+          cargo run --locked --release -p store --example sqlite_commit_durability \
             | tee sqlite-commit-durability.log
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -265,7 +265,7 @@ jobs:
 
       - name: Verify mobile ARK graph and release target
         run: |
-          node scripts/check-ark-dependency-graph.mjs --profile mobile --target aarch64-linux-android
+          node scripts/check-dependency-graph.mjs --profile mobile --target aarch64-linux-android
           cargo check --locked --release -p engine-mobile --target aarch64-linux-android
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -2,7 +2,7 @@
 //!
 //! Two duties, both off the hot path:
 //!   * `usage_sync_log` compaction in ark.db — the superseded-ref rule lives
-//!     in ark-core (`compact_usage_sync_log` op); here we only drive it in
+//!     in kernel (`compact_usage_sync_log` op); here we only drive it in
 //!     bounded batches with a pause between calls, so the serial ARK worker
 //!     stays responsive and no write lock is held across the sweep;
 //!   * `file-index.db` prune + bounded VACUUM (policy in
@@ -46,7 +46,7 @@ fn initial_delay_ms() -> u64 {
 
 async fn read_last_run(ark: &ArkHost) -> Option<DateTime<Utc>> {
     let resp = ark
-        .request("get_sync_kv", json!({ "key": LAST_RUN_KEY }))
+        .request("kv.get", json!({ "key": LAST_RUN_KEY }))
         .await
         .ok()?;
     DateTime::parse_from_rfc3339(resp.data.as_str()?)
@@ -57,7 +57,7 @@ async fn read_last_run(ark: &ArkHost) -> Option<DateTime<Utc>> {
 async fn write_last_run(ark: &ArkHost) {
     let _ = ark
         .request(
-            "set_sync_kv",
+            "kv.set",
             json!({ "key": LAST_RUN_KEY, "value": Utc::now().to_rfc3339() }),
         )
         .await;
@@ -70,7 +70,7 @@ async fn write_last_run(ark: &ArkHost) {
 /// must surface as a maintenance failure, not silently pin own refs.
 async fn own_usage_device_id(ark: &ArkHost) -> Result<Option<String>, String> {
     let resp = ark
-        .request("get_sync_kv", json!({ "key": "usage_tracker.device_id" }))
+        .request("kv.get", json!({ "key": "usage_tracker.device_id" }))
         .await
         .map_err(|e| e.to_string())?;
     if !resp.ok {
@@ -96,7 +96,7 @@ async fn compact_usage_sync_log(ark: &ArkHost) -> Result<u64, String> {
     let mut total = 0_u64;
     for _ in 0..COMPACT_MAX_BATCHES {
         let resp = ark
-            .request("compact_usage_sync_log", params.clone())
+            .request("usage.log.compact", params.clone())
             .await
             .map_err(|e| e.to_string())?;
         if !resp.ok {
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn compact_params_omit_device_id_when_the_tracker_never_wrote() {
         // No `usage_tracker.device_id` key → no `device_id` on the wire:
-        // ark-core then bounds every origin by its contiguous cursor.
+        // kernel then bounds every origin by its contiguous cursor.
         assert!(compact_params(None).get("device_id").is_none());
         assert_eq!(
             compact_params(Some("usage-tracker-abc"))["device_id"],

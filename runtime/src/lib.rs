@@ -47,7 +47,7 @@ pub mod engine_control;
 pub mod engine_settings;
 pub mod engine_supervisor;
 pub mod engine_versions;
-pub mod focus;
+pub mod hosts;
 pub mod installer;
 pub mod macos_dock;
 pub mod manager_api;

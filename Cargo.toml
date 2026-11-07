@@ -7,11 +7,11 @@ members = [
   "runtime/crates/engine-dictation",
   "runtime/crates/engine-indexes",
   "runtime/crates/engine-mobile",
-  "core/crates/ark-domain",
-  "core/crates/ark-sync",
-  "core/crates/ark-net",
-  "core/crates/ark-store",
-  "core/crates/ark-core",
+  "core/crates/domain",
+  "core/crates/sync",
+  "core/crates/net",
+  "core/crates/store",
+  "core/crates/kernel",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)
 # are standalone crates, never workspace members.
@@ -27,19 +27,19 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
-[profile.dev.package."ark-domain"]
+[profile.dev.package."domain"]
 codegen-units = 16
 
-[profile.dev.package."ark-store"]
+[profile.dev.package."store"]
 codegen-units = 16
 
-[profile.dev.package."ark-sync"]
+[profile.dev.package."sync"]
 codegen-units = 16
 
-[profile.dev.package."ark-net"]
+[profile.dev.package."net"]
 codegen-units = 16
 
-[profile.dev.package."ark-core"]
+[profile.dev.package."kernel"]
 codegen-units = 16
 
 # No [profile.test] override: the test profile inherits dev. A different

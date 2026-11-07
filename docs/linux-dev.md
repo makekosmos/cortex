@@ -23,7 +23,7 @@ corepack prepare pnpm@12.4.1 --activate  # pinned packageManager
 
 ## Engine + ARK
 
-`ark-core` is owned by Cortex and lives under `core/`, without a separate
+`kernel` is owned by Cortex and lives under `core/`, without a separate
 Git repository or upstream synchronization. Edit and commit Core changes in
 Cortex. A single Cortex checkout builds the whole product. `runtime` uses
 a path dependency; `node scripts/check-core-pin.mjs` checks that wiring and
@@ -31,7 +31,7 @@ rejects a nested `core/.git`.
 
 ```text
 cargo build -p engine            # writes target/debug/mundus-engine
-# ark-core is a library dependency; the Engine serves ARK in-process —
+# kernel is a library dependency; the Engine serves ARK in-process —
 # no sidecar to build or provision.
 ```
 

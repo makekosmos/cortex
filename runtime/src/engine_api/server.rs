@@ -61,7 +61,7 @@ impl EngineApiServer {
     }
 
     #[cfg(test)]
-    pub(super) async fn bind_with_test_dispatcher(
+    pub(crate) async fn bind_with_test_dispatcher(
         auth_token: String,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
         request_timeout: Duration,

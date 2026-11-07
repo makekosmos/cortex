@@ -143,7 +143,7 @@ pub fn render_pairing_prompt(request: &Value, cx: &mut Context<ManagerApp>) -> i
                                 ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.action(
-                                        "decline_pairing",
+                                        "sync.pair.decline",
                                         serde_json::json!({"device_id": decline_id}),
                                     );
                                     cx.notify();
@@ -161,7 +161,7 @@ pub fn render_pairing_prompt(request: &Value, cx: &mut Context<ManagerApp>) -> i
                                 ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.action(
-                                        "accept_pairing",
+                                        "sync.pair.accept",
                                         serde_json::json!({"device_id": device_id}),
                                     );
                                     cx.notify();

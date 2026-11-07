@@ -13,7 +13,7 @@ async fn pairing_connect_reply_surfaces_outcome(cx: &mut TestAppContext) {
     let params = json!({"ticket": "endpointx", "pairing_code": "endpointx"});
 
     manager.update(cx, |app, _cx| {
-        app.action("connect_with_pairing_code", params.clone());
+        app.action("sync.pair.connect", params.clone());
     });
     manager.read_with(cx, |app, _| assert!(app.action_busy));
 
@@ -27,7 +27,7 @@ async fn pairing_connect_reply_surfaces_outcome(cx: &mut TestAppContext) {
     });
 
     manager.update(cx, |app, _cx| {
-        app.action("connect_with_pairing_code", params);
+        app.action("sync.pair.connect", params);
         app.action_reply(Ok(json!({
             "status": "connected",
             "device_id": "dev-mac",
@@ -59,7 +59,7 @@ async fn pairing_pending_and_declined_replies(cx: &mut TestAppContext) {
     let (manager, cx) = launch(cx);
 
     manager.update(cx, |app, _cx| {
-        app.action("connect_with_pairing_code", json!({"pairing_code": "x"}));
+        app.action("sync.pair.connect", json!({"pairing_code": "x"}));
     });
     manager.update(cx, |app, _cx| {
         app.action_reply(Ok(json!({"status": "pending"})));
@@ -71,7 +71,7 @@ async fn pairing_pending_and_declined_replies(cx: &mut TestAppContext) {
     });
 
     manager.update(cx, |app, _cx| {
-        app.action("decline_pairing", json!({"device_id": "dev-b"}));
+        app.action("sync.pair.decline", json!({"device_id": "dev-b"}));
         app.action_reply(Ok(json!({"status": "declined"})));
     });
     manager.read_with(cx, |app, _| {

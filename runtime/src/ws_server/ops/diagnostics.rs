@@ -19,14 +19,14 @@ pub(in crate::ws_server) async fn build_diagnostics_snapshot(
         "app_index": app_index_snapshot,
           "protocol_usage": protocol_usage.snapshot(),
         "correlation_id": correlation_id,
-        "ark_core": {
+        "kernel": {
             "mode": "in-process",
             "panics_recovered": ark_host.panic_count(),
         },
         "engine_supervisor": crate::engine_supervisor::diagnostics_snapshot(data_dir),
         "background_workers": {
             "app_index": app_index_background_worker,
-            "db_backup": crate::db_backup::diagnostics_snapshot(),
+            "backup.create": crate::db_backup::diagnostics_snapshot(),
         },
     })
 }

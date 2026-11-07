@@ -100,7 +100,7 @@ fn normalize_path(path: &str) -> String {
 /// app_index is non-fatal — rows render with letter badges.
 fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
     let mut snapshot = engine.rpc(
-        "get_usage_analytics",
+        "usage.analytics",
         json!({
             "range_days": 3650,
             "top_apps_limit": 500,

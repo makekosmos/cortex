@@ -442,7 +442,7 @@ impl ProcessProbeCache {
 /// pre-change ids the same way at query time.
 pub fn tracked_app_id_for(exe_path: &str) -> String {
     let normalized = normalize_exe_path(exe_path);
-    let canonical = ark_domain::app_identity::canonical_app_key(&normalized, "");
+    let canonical = domain::app_identity::canonical_app_key(&normalized, "");
     let mut hasher = Sha256::new();
     hasher.update(format!("{PLATFORM}:{canonical}").as_bytes());
     format!("{:x}", hasher.finalize())

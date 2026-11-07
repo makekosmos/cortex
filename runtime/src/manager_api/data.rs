@@ -97,7 +97,7 @@ fn collect_type_buckets(rows: &[Value]) -> (Vec<Value>, u64) {
 impl ManagerState {
     pub async fn data_summary(&self, ark: &Arc<ArkHost>) -> Result<Value, String> {
         let rows = ark
-            .request("list_object_summaries", json!({}))
+            .request("objects.list", json!({"summaries": true}))
             .await
             .map_err(|e| e.to_string())?;
         let (types, total) =
@@ -111,7 +111,7 @@ impl ManagerState {
 
     pub async fn data_types(&self, ark: &Arc<ArkHost>) -> Result<Value, String> {
         let response = ark
-            .request("list_object_summaries", json!({}))
+            .request("objects.list", json!({"summaries": true}))
             .await
             .map_err(|e| e.to_string())?;
         let (types, _) = collect_type_buckets(
@@ -134,7 +134,7 @@ impl ManagerState {
             .and_then(Value::as_str)
             .map(|t| bucket_key(t).to_owned());
         let response = ark
-            .request("list_object_summaries", json!({}))
+            .request("objects.list", json!({"summaries": true}))
             .await
             .map_err(|e| e.to_string())?;
         let rows = response.data.as_array().cloned().unwrap_or_default();
@@ -161,7 +161,7 @@ impl ManagerState {
             return Err("invalid-query".into());
         }
         let response = ark
-            .request("search_objects", json!({"query": query}))
+            .request("objects.list", json!({"query": query}))
             .await
             .map_err(|e| e.to_string())?;
         let hits = response.data.as_array().cloned().unwrap_or_default();
@@ -178,7 +178,7 @@ impl ManagerState {
             return Ok(json!({"items": [], "truncated": false}));
         }
         let objects = ark
-            .request("get_objects_by_ids", json!({"ids": ids}))
+            .request("objects.list", json!({"ids": ids}))
             .await
             .map_err(|e| e.to_string())?;
         let mut by_id: std::collections::HashMap<&str, &Value> = objects

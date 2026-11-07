@@ -34,7 +34,7 @@
           },
           "note": { "android": "android cfg hooks exist; no Android build in CI" },
           "boundary": "portable",
-          "code": ["core/crates/ark-core/src/host.rs"]
+          "code": ["core/crates/kernel/src/host.rs"]
         },
         {
           "id": "sync",

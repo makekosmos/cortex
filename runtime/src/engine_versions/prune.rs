@@ -21,7 +21,7 @@
 //! A version dir is never deleted outright: it is first renamed to a
 //! `.tombstone-<v>-<n>` sibling. On Windows the rename fails while any file
 //! inside is mapped or open (a still-shutting-down Engine, a lingering
-//! `ark-core-rpc`), which is the in-use guard — no process-name matching.
+//! `kernel-rpc`), which is the in-use guard — no process-name matching.
 //! Only a successfully renamed dir is then `remove_dir_all`'d. A failed
 //! rename skips the dir until the next pass; a crash between rename and
 //! removal leaves a stale tombstone the next pass removes.

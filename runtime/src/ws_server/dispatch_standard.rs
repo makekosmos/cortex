@@ -75,15 +75,10 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
-    } else if let Some(rest) = operation.strip_prefix("focus.") {
-        {
-            let result = handle_focus_op(rest, params, &ark_host).await;
-            LocalResponse {
-                ok: result.ok,
-                data: result.data,
-                error: result.error,
-            }
-        }
+    } else if crate::hosts::is_hosts_operation(&operation) {
+        crate::hosts::sync(&params)
+            .map(LocalResponse::ok)
+            .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("updater.") {
         let result =
             crate::updater::handle_updater_op(rest, params, &manager_state.updater()).await;

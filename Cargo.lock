@@ -115,97 +115,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-core"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "ark-net",
- "ark-store",
- "ark-sync",
- "async-trait",
- "chrono",
- "ed25519-dalek",
- "futures-util",
- "iroh",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-tungstenite",
- "windows",
-]
-
-[[package]]
-name = "ark-domain"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "ed25519-dalek",
- "rand 0.8.8",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "ark-net"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "async-trait",
- "ed25519-dalek",
- "futures-util",
- "hostname",
- "if-addrs",
- "iroh",
- "iroh-tickets",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "tracing",
-]
-
-[[package]]
-name = "ark-store"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "chrono",
- "ed25519-dalek",
- "proptest",
- "rand 0.8.8",
- "rusqlite",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "windows",
-]
-
-[[package]]
-name = "ark-sync"
-version = "0.1.0"
-dependencies = [
- "ark-domain",
- "ark-store",
- "async-trait",
- "chrono",
- "ed25519-dalek",
- "rand 0.8.8",
- "rusqlite",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "array-init"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1116,6 +1025,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "domain"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "ed25519-dalek",
+ "rand 0.8.8",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "ed25519"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1178,12 +1103,11 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 name = "engine"
 version = "0.1.0"
 dependencies = [
- "ark-core",
- "ark-domain",
  "async-trait",
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "domain",
  "engine-base",
  "engine-dictation",
  "engine-indexes",
@@ -1195,6 +1119,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
+ "kernel",
  "libc",
  "lnk",
  "pe-version-info",
@@ -1301,7 +1226,7 @@ dependencies = [
 name = "engine-mobile"
 version = "0.1.0"
 dependencies = [
- "ark-core",
+ "kernel",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
@@ -2650,6 +2575,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernel"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "ed25519-dalek",
+ "futures-util",
+ "iroh",
+ "net",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "store",
+ "sync",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite",
+ "windows",
+]
+
+[[package]]
 name = "keyring"
 version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3009,6 +2957,25 @@ name = "ndk-context"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
+
+[[package]]
+name = "net"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "domain",
+ "ed25519-dalek",
+ "futures-util",
+ "hostname",
+ "if-addrs",
+ "iroh",
+ "iroh-tickets",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+]
 
 [[package]]
 name = "netdev"
@@ -4690,6 +4657,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "store"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "domain",
+ "ed25519-dalek",
+ "proptest",
+ "rand 0.8.8",
+ "rusqlite",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows",
+]
+
+[[package]]
 name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4771,6 +4756,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sync"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "domain",
+ "ed25519-dalek",
+ "rand 0.8.8",
+ "rusqlite",
+ "serde_json",
+ "store",
+ "tokio",
 ]
 
 [[package]]

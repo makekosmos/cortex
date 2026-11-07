@@ -1,10 +1,8 @@
-// In-process ARK host — wraps `ark_core::service::ArkService` directly.
-// (Was: supervisor for the ark-core-rpc child process over newline-delimited
+// In-process ARK host — wraps `kernel::service::ArkService` directly.
+// (Was: supervisor for the kernel-rpc child process over newline-delimited
 // JSON-RPC. The sidecar is gone; the Engine hosts ARK as a library now.)
 
-use ark_core::canonical_types::game::{GameMutationResult, GameRecord, GameUpsertCommand};
-use ark_core::service::ArkService;
-use ark_core::type_registry::TypeRegistration;
+use kernel::service::ArkService;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -21,11 +19,11 @@ pub enum ArkHostError {
 
 pub type ArkResult<T> = Result<T, ArkHostError>;
 
-impl From<ark_core::service::ArkServiceError> for ArkHostError {
-    fn from(error: ark_core::service::ArkServiceError) -> Self {
+impl From<kernel::service::ArkServiceError> for ArkHostError {
+    fn from(error: kernel::service::ArkServiceError) -> Self {
         match error {
-            ark_core::service::ArkServiceError::Request(message) => Self::RpcError(message),
-            ark_core::service::ArkServiceError::Busy(message) => {
+            kernel::service::ArkServiceError::Request(message) => Self::RpcError(message),
+            kernel::service::ArkServiceError::Busy(message) => {
                 Self::RpcError(format!("ark service busy: {message}"))
             }
             other => Self::Unavailable(other.to_string()),
@@ -66,67 +64,24 @@ impl Drop for ArkHost {
 impl ArkHost {
     /// Trusted package-install seam. The ARK side owns the SQLite transaction;
     /// callers never receive a database handle or issue arbitrary SQL.
-    pub async fn register_package_definitions(
-        &self,
-        registrations: Vec<TypeRegistration>,
-    ) -> ArkResult<()> {
-        let response = self
-            .request(
-                "types.registerPackageDefinitions",
-                serde_json::json!({ "registrations": registrations }),
-            )
-            .await?;
-        typed_response(response, "package_definition_registration_failed")
-    }
-    pub async fn canonical_game_list(&self) -> ArkResult<Vec<GameRecord>> {
-        let response = self
-            .request(
-                "canonical.game.list",
-                serde_json::json!({ "deviceId": stable_device_id() }),
-            )
-            .await?;
-        typed_response(response, "game_list_failed")
-    }
-
-    pub async fn canonical_game_get(&self, id: &str) -> ArkResult<Option<GameRecord>> {
-        let response = self
-            .request(
-                "canonical.game.get",
-                serde_json::json!({ "id": id, "deviceId": stable_device_id() }),
-            )
-            .await?;
-        typed_response(response, "game_not_found")
-    }
-
-    pub async fn canonical_game_upsert(
-        &self,
-        mut game: GameUpsertCommand,
-    ) -> ArkResult<GameMutationResult> {
-        game.device_id = Some(stable_device_id());
-        let response = self
-            .request("canonical.game.upsert", serde_json::json!({ "game": game }))
-            .await?;
-        typed_response(response, "game_upsert_failed")
-    }
-
     /// Open (create if needed) the ARK database at `db_path` and start the
     /// service worker. Same semantics as the old `ArkHost::spawn` + `init`.
     pub async fn open(db_path: &str) -> ArkResult<Self> {
         // Host config: the real %SystemRoot%, resolved once here via
-        // GetSystemWindowsDirectoryW. ark-core marks exes under it as system
+        // GetSystemWindowsDirectoryW. kernel marks exes under it as system
         // apps; a request param would let clients lie about that, so it lives
         // in construction-time config. On failure we warn and pass None —
         // nothing gets misclassified.
         let service = ArkService::open_with_host_config(
             db_path,
-            ark_core::service::ArkHostConfig {
+            kernel::service::ArkHostConfig {
                 windows_dir: system_windows_dir().map(str::to_string),
             },
         )
         .await
         .map_err(|error| {
             ArkHostError::RpcError(format!(
-                "failed to open ARK database at {db_path} (locked by a stale ark-core-rpc \
+                "failed to open ARK database at {db_path} (locked by a stale kernel-rpc \
                  or another Engine?): {error}"
             ))
         })?;
@@ -172,12 +127,12 @@ impl ArkHost {
                 data,
                 error: None,
             }),
-            Err(ark_core::service::ArkServiceError::Request(error)) => Ok(ArkResponse {
+            Err(kernel::service::ArkServiceError::Request(error)) => Ok(ArkResponse {
                 ok: false,
                 data: serde_json::Value::Null,
                 error: Some(error),
             }),
-            Err(ark_core::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
+            Err(kernel::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
                 ok: false,
                 data: serde_json::Value::Null,
                 error: Some(format!("ark service busy: {error}")),
@@ -221,25 +176,6 @@ impl ArkHost {
             .expect("ArkHost service is present until shutdown");
         service.shutdown(deadline).await.map_err(Into::into)
     }
-}
-
-fn stable_device_id() -> String {
-    crate::brand::env("DEVICE_ID")
-        .filter(|id| !id.trim().is_empty())
-        .map(|id| id.trim().to_owned())
-        .unwrap_or_else(|| "ark-host-local".to_owned())
-}
-
-fn typed_response<T: for<'de> Deserialize<'de>>(
-    response: ArkResponse,
-    fallback: &str,
-) -> ArkResult<T> {
-    if !response.ok {
-        return Err(ArkHostError::RpcError(
-            response.error.unwrap_or_else(|| fallback.into()),
-        ));
-    }
-    serde_json::from_value(response.data).map_err(ArkHostError::Json)
 }
 
 /// Real %SystemRoot% via `GetSystemWindowsDirectoryW`, memoized. `None`
@@ -289,7 +225,7 @@ mod tests {
         let host = ArkHost::open(db_path.to_str().unwrap()).await.unwrap();
 
         let failed = host
-            .request("get_object", serde_json::json!({"id": "missing"}))
+            .request("objects.get", serde_json::json!({"id": "missing"}))
             .await
             .unwrap();
         // unknown/missing object returns null data or an error envelope —
@@ -353,7 +289,7 @@ mod tests {
             .unwrap();
         let exe = format!("{windows_dir}\\explorer.exe");
         host.request(
-            "upsert_tracked_app",
+            "usage.apps.upsert",
             serde_json::json!({
                 "tracked_app": {
                     "id": "app-explorer",
@@ -372,7 +308,7 @@ mod tests {
         .await
         .unwrap();
         host.request(
-            "upsert_usage_session",
+            "usage.sessions.upsert",
             serde_json::json!({
                 "usage_session": {
                     "id": "s-1",
@@ -397,7 +333,7 @@ mod tests {
         .unwrap();
 
         let report = host
-            .request("get_usage_analytics", serde_json::json!({}))
+            .request("usage.analytics", serde_json::json!({}))
             .await
             .unwrap();
         let explorer = report.data["topApps"]

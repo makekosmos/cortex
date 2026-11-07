@@ -38,7 +38,7 @@ test("Rust, native, and packaging files expand conservatively", () => {
 });
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {
-  assert.deepEqual(plan("--files", "core/crates/ark-core/src/lib.rs").json.checks, [
+  assert.deepEqual(plan("--files", "core/crates/kernel/src/lib.rs").json.checks, [
     "ark-db-writers",
     "rustfmt",
     "clippy",
@@ -51,10 +51,10 @@ test("core subtree maps crates to rust checks and inert paths to none", () => {
 
 test("ARK writer census runs when its scanner, baseline, or tests change", () => {
   for (const file of [
-    "scripts/audit-ark-db-writers.mjs",
-    "scripts/audit-ark-db-writers.test.mjs",
+    "scripts/audit-db-writers.mjs",
+    "scripts/audit-db-writers.test.mjs",
     "scripts/rust-source-scan.mjs",
-    "scripts/ark-db-writers.allow.json",
+    "scripts/db-writers.allow.json",
   ])
     assert.ok(plan("--files", file).json.checks.includes("ark-db-writers"), file);
 });

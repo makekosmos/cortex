@@ -1,0 +1,307 @@
+// End-to-end sync integration test (AC20 / AC18 / AC19).
+//
+// Spins up two `SyncServer` instances in-process on loopback, dials one from
+// the other via `DirectClient`, and walks through a full protocol exchange:
+// `hello` → `version_vector` → `sync_changes` + ACK → `live_change` +
+// `live_ack`. Also exercises the self-connect rejection path.
+
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::sync::Arc;
+use std::time::Duration;
+
+use ::domain::replication_storage::PeerIdentityBackend;
+use ::domain::sync_storage::SyncEntityReadPort;
+use kernel::db::SqliteStorageBackend;
+use kernel::types::{SyncEntity, TrackedApp, UsageEvent, UsageSession};
+use serde_json::{json, Value};
+
+pub(super) struct TestStorage {
+    backend: Arc<SqliteStorageBackend>,
+    _database: ::store::test_support::TestDatabase,
+}
+
+impl TestStorage {
+    pub(super) fn arc(&self) -> Arc<SqliteStorageBackend> {
+        Arc::clone(&self.backend)
+    }
+
+    pub(super) async fn shutdown(&self) {
+        self.backend
+            .shutdown_for_test(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await
+            .expect("test database actor shuts down before temp directory cleanup");
+    }
+}
+
+impl Deref for TestStorage {
+    type Target = SqliteStorageBackend;
+
+    fn deref(&self) -> &Self::Target {
+        &self.backend
+    }
+}
+
+pub(super) async fn make_storage(device_id: &str) -> Arc<TestStorage> {
+    make_storage_with_identity(device_id).await.0
+}
+
+pub(super) async fn make_storage_with_identity(device_id: &str) -> (Arc<TestStorage>, String) {
+    let database = ::store::test_support::TestDatabase::create().expect("database");
+    let backend = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            database
+                .path()
+                .to_str()
+                .expect("temporary database path is UTF-8")
+                .to_owned(),
+        )
+        .await
+        .expect("production database actor starts"),
+    );
+    let endpoint = backend
+        .load_or_generate_iroh_secret_key_for_test()
+        .await
+        .expect("device signing key persisted")
+        .public()
+        .to_string();
+    backend.set_device_id(device_id).unwrap();
+    (
+        Arc::new(TestStorage {
+            backend,
+            _database: database,
+        }),
+        endpoint,
+    )
+}
+
+pub(super) async fn pair_storages(
+    storage_a: &SqliteStorageBackend,
+    device_a: &str,
+    endpoint_a: &str,
+    storage_b: &SqliteStorageBackend,
+    device_b: &str,
+    endpoint_b: &str,
+) {
+    storage_a
+        .enroll_paired_device(device_a, device_b, endpoint_b)
+        .await
+        .expect("enroll device B on A");
+    storage_b
+        .enroll_paired_device(device_b, device_a, endpoint_a)
+        .await
+        .expect("enroll device A on B");
+}
+
+pub(super) fn task_object_entity(
+    id: &str,
+    title: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let data = json!({
+        "typeId": "core.task",
+        "typeVersion": "0.1.0",
+        "title": title,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {
+            "state": {"kind": "open", "at": null},
+            "planning": {"kind": "inbox", "period": "any", "date": null},
+            "deadline": null,
+            "reminders": [],
+            "recurrence": null,
+            "priority": "none",
+            "checklist": [],
+            "extensions": {}
+        },
+        "createdAt": "2026-04-01T00:00:00.000Z",
+        "updatedAt": "2026-04-01T00:00:00.000Z",
+        "deletedAt": null
+    })
+    .as_object()
+    .expect("canonical task payload is an object")
+    .clone();
+    SyncEntity {
+        entity_type: "object".to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
+    }
+}
+
+pub(super) fn note_object_entity(
+    id: &str,
+    title: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let data = json!({
+        "typeId": "core.note",
+        "typeVersion": "0.1.0",
+        "title": title,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {"description": null, "extensions": {}},
+        "createdAt": "2026-04-01T00:00:00.000Z",
+        "updatedAt": "2026-04-01T00:00:00.000Z",
+        "deletedAt": null
+    })
+    .as_object()
+    .expect("canonical note payload is an object")
+    .clone();
+    SyncEntity {
+        entity_type: "object".to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+        origin_device_id: None,
+        origin_seq: None,
+    }
+}
+
+pub(super) fn sync_entity_from_value(
+    entity_type: &str,
+    id: &str,
+    value: Value,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let data = value
+        .as_object()
+        .cloned()
+        .expect("usage sync entity value should be an object");
+    SyncEntity {
+        entity_type: entity_type.to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+        origin_device_id: ::domain::types::is_sequenced_usage_entity(entity_type)
+            .then(|| device_id.to_string()),
+        origin_seq: ::domain::types::is_sequenced_usage_entity(entity_type).then_some(counter),
+    }
+}
+
+pub(super) fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
+    let tracked_app = TrackedApp {
+        id: id.to_string(),
+        platform: "windows".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        normalized_exe_path: r"c:\\games\\atlas\\atlas.exe".to_string(),
+        process_name: "atlas.exe".to_string(),
+        display_name: Some("Atlas".to_string()),
+        publisher: Some("Mundus".to_string()),
+        icon_ref: None,
+        first_seen_at: "2026-04-01T00:00:00.000Z".to_string(),
+        last_seen_at: "2026-04-01T00:05:00.000Z".to_string(),
+    };
+    sync_entity_from_value(
+        "tracked_app",
+        &tracked_app.id,
+        serde_json::to_value(&tracked_app).unwrap(),
+        device_id,
+        counter,
+    )
+}
+
+pub(super) fn usage_session_entity(
+    id: &str,
+    tracked_app_id: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let session = UsageSession {
+        id: id.to_string(),
+        tracked_app_id: tracked_app_id.to_string(),
+        device_id: device_id.to_string(),
+        device_name: "Alpha".to_string(),
+        platform: "windows".to_string(),
+        started_at: "2026-04-01T00:00:00.000Z".to_string(),
+        ended_at: Some("2026-04-01T00:45:00.000Z".to_string()),
+        runtime_ms: 2_700_000,
+        foreground_ms: 2_400_000,
+        idle_ms: 300_000,
+        window_title: Some("Atlas Launcher".to_string()),
+        process_name: "atlas.exe".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        pid_start: Some(501),
+        pid_end: Some(501),
+        meta_json: json!({"source": "integration-test"}),
+    };
+    sync_entity_from_value(
+        "usage_session",
+        &session.id,
+        serde_json::to_value(&session).unwrap(),
+        device_id,
+        counter,
+    )
+}
+
+pub(super) fn usage_event_entity(
+    id: &str,
+    tracked_app_id: &str,
+    usage_session_id: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let event = UsageEvent {
+        id: id.to_string(),
+        tracked_app_id: tracked_app_id.to_string(),
+        usage_session_id: Some(usage_session_id.to_string()),
+        device_id: device_id.to_string(),
+        device_name: "Alpha".to_string(),
+        platform: "windows".to_string(),
+        occurred_at: "2026-04-01T00:15:00.000Z".to_string(),
+        kind: "window_changed".to_string(),
+        window_title: Some("Atlas Match".to_string()),
+        process_name: "atlas.exe".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        pid: Some(501),
+        is_foreground: true,
+        is_idle: false,
+        meta_json: json!({"source": "integration-test", "windowTitle": "Atlas Match"}),
+    };
+    sync_entity_from_value(
+        "usage_event",
+        &event.id,
+        serde_json::to_value(&event).unwrap(),
+        device_id,
+        counter,
+    )
+}
+
+pub(super) async fn pick_port() -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    drop(listener);
+    addr.port()
+}
+
+pub(super) async fn wait_for_entities(
+    storage: &SqliteStorageBackend,
+    condition: impl Fn(&[SyncEntity]) -> bool,
+) -> Vec<SyncEntity> {
+    let mut observed_ids = Vec::new();
+    let result = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let entities = storage.load_entities(&HashMap::new()).await.unwrap();
+            if condition(&entities) {
+                return entities;
+            }
+            observed_ids = entities
+                .iter()
+                .map(|entity| format!("{}:{}", entity.entity_type, entity.id))
+                .collect();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await;
+    let timeout_message = format!(
+        "selected sync entities should arrive before the timeout; observed: {}",
+        observed_ids.join(", ")
+    );
+    result.expect(&timeout_message)
+}

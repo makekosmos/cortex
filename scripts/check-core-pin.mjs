@@ -3,12 +3,12 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 const retiredRevision = "6692038ed5c0cb7052f2b5ffc3e206358bb0a10c";
-const retiredPath = "core/ark/crates/ark-core/rust";
-const subtreePath = "core/crates/ark-core";
+const retiredPath = "core/ark/crates/kernel/rust";
+const subtreePath = "core/crates/kernel";
 const files = [
   "Cargo.toml",
   "runtime/Cargo.toml",
-  "desktop/scripts/ark-core-source.mjs",
+  "desktop/scripts/kernel-source.mjs",
   "Cargo.lock",
 ];
 
@@ -28,8 +28,8 @@ const subtreeManifest = (await readFile(`${subtreePath}/Cargo.toml`, "utf8")).re
   /\r\n/g,
   "\n",
 );
-if (!/^name = "ark-core"$/m.test(subtreeManifest))
-  throw new Error(`${subtreePath}/Cargo.toml is not the ark-core crate`);
+if (!/^name = "kernel"$/m.test(subtreeManifest))
+  throw new Error(`${subtreePath}/Cargo.toml is not the kernel crate`);
 
 const workspace = contents.get("Cargo.toml");
 if (!workspace.includes(`"${subtreePath}"`))
@@ -37,21 +37,21 @@ if (!workspace.includes(`"${subtreePath}"`))
 
 const runtime = contents.get("runtime/Cargo.toml");
 if (runtime.includes("github.com/makekosmos/core"))
-  throw new Error("runtime/Cargo.toml still pins ark-core from the remote Core repository");
-if (!runtime.includes('path = "../core/crates/ark-core", package = "ark-core"'))
-  throw new Error("runtime/Cargo.toml does not depend on the in-tree ark-core subtree");
+  throw new Error("runtime/Cargo.toml still pins kernel from the remote Core repository");
+if (!runtime.includes('path = "../core/crates/kernel", package = "kernel"'))
+  throw new Error("runtime/Cargo.toml does not depend on the in-tree kernel subtree");
 
-const source = contents.get("desktop/scripts/ark-core-source.mjs");
+const source = contents.get("desktop/scripts/kernel-source.mjs");
 if (!source.includes(`"${subtreePath}"`))
-  throw new Error("ark-core source module does not point at the in-tree subtree");
+  throw new Error("kernel source module does not point at the in-tree subtree");
 
 const lock = contents.get("Cargo.lock");
-const arkPackage = lock.match(/\[\[package\]\]\nname = "ark-core"\n[^[]*/)?.[0];
-if (!arkPackage) throw new Error("Cargo.lock does not contain an ark-core package");
-if ((lock.match(/name = "ark-core"/g) ?? []).length !== 1)
-  throw new Error("Cargo.lock has an unexpected ark-core package count");
+const arkPackage = lock.match(/\[\[package\]\]\nname = "kernel"\n[^[]*/)?.[0];
+if (!arkPackage) throw new Error("Cargo.lock does not contain an kernel package");
+if ((lock.match(/name = "kernel"/g) ?? []).length !== 1)
+  throw new Error("Cargo.lock has an unexpected kernel package count");
 if (/source = /.test(arkPackage))
-  throw new Error("Cargo.lock resolves ark-core from a source other than the workspace path");
+  throw new Error("Cargo.lock resolves kernel from a source other than the workspace path");
 console.log(
-  "Core ownership passed: ark-core is local Cortex source, without a nested Git repository.",
+  "Core ownership passed: kernel is local Cortex source, without a nested Git repository.",
 );

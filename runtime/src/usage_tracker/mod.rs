@@ -562,7 +562,7 @@ struct ActiveUsageSpan {
     last_flushed_at_unix: i64,
 }
 
-/// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
+/// Локальный snapshot полей TrackedApp. Не используем kernel::types::TrackedApp
 /// напрямую чтобы не плодить дублирующий type-import — JSON envelope build'ится
 /// руками (тот же shape что у RPC operation `upsert_tracked_app`).
 #[cfg(target_os = "windows")]
@@ -895,7 +895,7 @@ async fn persist_compact_usage_span(
     let flags = i64::from(span.key.is_idle) | (i64::from(span.key.is_private) << 1);
     ark_request(
         ark,
-        "upsert_usage_span",
+        "usage.spans.upsert",
         json!({
             "usage_span": {
                 "deviceId": identity.device_id,
@@ -1008,7 +1008,7 @@ async fn ark_request(ark: &Arc<ArkHost>, op: &str, params: Value) -> Result<Valu
 }
 
 async fn load_or_create_tracker_device_id(ark: &Arc<ArkHost>) -> Result<String, String> {
-    let existing = ark_request(ark, "get_sync_kv", json!({ "key": TRACKER_DEVICE_ID_KEY })).await?;
+    let existing = ark_request(ark, "kv.get", json!({ "key": TRACKER_DEVICE_ID_KEY })).await?;
     if let Some(value) = existing.as_str() {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
@@ -1019,7 +1019,7 @@ async fn load_or_create_tracker_device_id(ark: &Arc<ArkHost>) -> Result<String, 
     let generated = format!("usage-tracker-{}", new_uuid_simple());
     ark_request(
         ark,
-        "set_sync_kv",
+        "kv.set",
         json!({ "key": TRACKER_DEVICE_ID_KEY, "value": generated }),
     )
     .await?;
@@ -1045,7 +1045,7 @@ async fn persist_tracked_app(
     });
     ark_request(
         ark,
-        "upsert_tracked_app",
+        "usage.apps.upsert",
         json!({ "tracked_app": payload, "device_id": device_id }),
     )
     .await
@@ -1059,7 +1059,7 @@ async fn persist_usage_session(
 ) -> Result<(), String> {
     ark_request(
         ark,
-        "upsert_usage_session",
+        "usage.sessions.upsert",
         json!({ "usage_session": session, "device_id": device_id }),
     )
     .await
