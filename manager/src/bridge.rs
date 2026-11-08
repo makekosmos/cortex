@@ -20,7 +20,7 @@ const ROUTES: [&str; 12] = [
     "server",
     "about",
     "appearance",
-    "apps",
+    "plugins",
     "integrations",
     "storage",
     "activity",
@@ -55,6 +55,9 @@ impl ManagerBridge {
         engine::watch(engine.clone(), context.clone(), state.clone());
         let loader = Loader::start(engine, context.clone(), state.clone());
         loader.open("server");
+        // The sidebar lists installed plugins on every page, not only on the
+        // one that installs them, so that is read from the start.
+        loader.open("plugins");
         Self {
             context,
             state,
@@ -126,6 +129,11 @@ fn ticket(value: Value) -> Value {
     }
 }
 
+/// A page the sidebar can open: one of the listed routes, or a plugin's own.
+fn is_route(route: &str) -> bool {
+    ROUTES.contains(&route) || route.starts_with("plugin/")
+}
+
 /// Whether a page still has something in flight.
 fn is_busy(route: &str, state: &Arc<Mutex<Value>>) -> bool {
     let state = match state.lock() {
@@ -165,7 +173,7 @@ impl NativeComponent for ManagerBridge {
         }
         let route = value
             .and_then(Value::as_str)
-            .filter(|route| ROUTES.contains(route))
+            .filter(|route| is_route(route))
             .unwrap_or("server");
         self.route = route.to_owned();
         let route = self.route.clone();
@@ -180,6 +188,8 @@ impl NativeComponent for ManagerBridge {
         self.context.emit("navigate", json!({ "route": route }));
     }
 
+    /// A plugin's own page, `plugin/<id>`: the id is the plugin's, so the
+    /// route is built rather than listed.
     fn command(&mut self, name: &str, args: &Value, window: &mut Window, cx: &mut App) {
         let Some(loader) = self.loader.clone() else {
             return;
@@ -326,6 +336,39 @@ impl NativeComponent for ManagerBridge {
             // The rest of the page's presses move it, not the Engine.
             "connect.open" => self.context.emit("navigate", json!({ "route": "devices" })),
 
+            // Plugins: the Engine installs from the catalog and keeps the
+            // settings, so every one of these is a call and a re-read.
+            // A download is one blocking call: the page shows its press as
+            // spent and reads the list again when the Engine answers.
+            "plugins.install" => loader.then_reload(
+                "plugins.installed",
+                "plugins.install",
+                json!({ "id": Self::id(args) }),
+                "plugins",
+            ),
+            "plugins.remove" => loader.then_reload(
+                "plugins.installed",
+                "plugins.remove",
+                json!({ "id": Self::id(args) }),
+                "plugins",
+            ),
+            "plugins.launch" => loader.then_reload(
+                "plugins.installed",
+                "plugins.launch",
+                json!({ "id": Self::id(args) }),
+                "plugins",
+            ),
+            // The page that sent this is the plugin's own (`plugin/<id>`).
+            "plugins.set" => loader.then_reload(
+                "plugins.current",
+                "plugins.settings.set",
+                json!({
+                    "id": Self::id(args),
+                    "values": args.get("values").cloned().unwrap_or_else(|| json!({})),
+                }),
+                &self.route.clone(),
+            ),
+
             // The window's bar and its sidebar: a press there moves the window,
             // which the host has to start itself (`chrome::start_move`).
             "window.drag" => crate::chrome::start_move(window, cx),
@@ -357,6 +400,13 @@ fn snapshot() -> Value {
         "storage": { "dataDir": data_directory(), "size": "" },
         "backups": [],
         "connectors": [],
+        // Until the Engine answers: nothing to install, nothing installed. The
+        // page reads these two as "не удалось получить список".
+        "plugins": {
+            "catalog": { "available": [], "stale": false, "url": "" },
+            "installed": [],
+            "current": null,
+        },
         "updates": {
             "state": "idle",
             "currentVersion": "",

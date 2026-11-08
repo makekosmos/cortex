@@ -17,6 +17,14 @@ type Call = (&'static str, &'static str, Value);
 
 /// route → the calls that page needs.
 fn calls(route: &str) -> Vec<Call> {
+    // One plugin's page: its manifest and its stored settings.
+    if let Some(id) = route.strip_prefix("plugin/") {
+        return vec![(
+            "plugins.current",
+            "plugins.settings.get",
+            json!({ "id": id }),
+        )];
+    }
     match route {
         "models" => vec![("models", "dictation.list_local_models", json!({}))],
         "keys" => vec![("keys", "dictation.get_config", json!({}))],
@@ -33,6 +41,10 @@ fn calls(route: &str) -> Vec<Call> {
         "integrations" => vec![("connectors", "integrations.list", json!({}))],
         "about" => vec![("updates", "updater.status", json!({}))],
         "appearance" => vec![("appearance", "appearance.get", json!({}))],
+        "plugins" => vec![
+            ("plugins.catalog", "plugins.catalog", json!({})),
+            ("plugins.installed", "plugins.list", json!({})),
+        ],
         "settings" => vec![
             ("settings", "engine.settings.get", json!({})),
             ("settings.autostart", "engine.autostart.get", json!({})),
@@ -197,6 +209,10 @@ fn write(state: &mut Value, path: &str, value: Value) {
 
 /// The Engine's answer, narrowed to what the pages render.
 fn shape(key: &str, data: Value) -> Value {
+    // Plugins are shaped in a module of their own: nothing here knows them.
+    if let Some(shaped) = crate::plugins::shape(key, &data) {
+        return shaped;
+    }
     match key {
         // `engine.autostart.get` answers `{available, enabled, reason}`; the
         // screen wants the switch's position, not the object it arrives in.
@@ -258,7 +274,7 @@ pub fn sync_view(snapshot: &Value) -> Value {
     sync(snapshot)
 }
 
-fn array(data: &Value, paths: &[&str]) -> Vec<Value> {
+pub(crate) fn array(data: &Value, paths: &[&str]) -> Vec<Value> {
     if let Some(items) = data.as_array() {
         return items.clone();
     }
@@ -270,7 +286,7 @@ fn array(data: &Value, paths: &[&str]) -> Vec<Value> {
     Vec::new()
 }
 
-fn text(value: &Value, paths: &[&str]) -> Option<String> {
+pub(crate) fn text(value: &Value, paths: &[&str]) -> Option<String> {
     paths
         .iter()
         .find_map(|path| value.pointer(path).and_then(Value::as_str))

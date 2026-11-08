@@ -200,3 +200,48 @@ fn the_published_catalog_parses_and_mirrors_the_dictation_config() {
         ]
     );
 }
+
+/// The dictation app this Engine already installs predates the catalog: it has
+/// `install.json` but no `plugin.json`. The catalog says who it is, and the
+/// copy is kept beside the install so the page opens once, not once per visit.
+#[test]
+fn an_install_without_a_manifest_takes_the_catalogs() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    let app = dir.path().join("Apps").join("com.kosmos.dictation");
+    std::fs::create_dir_all(app.join("0.5.2")).unwrap();
+    std::fs::write(
+        app.join("install.json"),
+        json!({
+            "schema_version": 1,
+            "id": "com.kosmos.dictation",
+            "version": "0.5.2",
+            "executable": "dictation-gpui.exe",
+            "sha256": "0".repeat(64),
+            "size": 4_200_000,
+            "repository": "makekosmos/dictation",
+            "release_tag": "gpui-v0.5.2",
+            "installed_at": 1_794_000_000_000u64,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(app.join("0.5.2").join("dictation-gpui.exe"), b"MZ").unwrap();
+    assert_eq!(store.manifest("com.kosmos.dictation"), None);
+    assert!(store.record("com.kosmos.dictation").unwrap().is_some());
+
+    let catalog =
+        super::catalog::Catalog::parse_for_test(include_str!("../../../plugins/catalog.json"))
+            .expect("published catalog");
+    let adopted = super::ops::adopt(&store, &catalog, "com.kosmos.dictation").expect("adopted");
+    assert_eq!(adopted.name, "Диктовка");
+    // Kept: the next read does not need the catalog.
+    assert_eq!(store.manifest("com.kosmos.dictation"), Some(adopted));
+    let installed = store.installed();
+    assert_eq!(
+        installed[0].manifest.as_ref().map(|m| m.name.as_str()),
+        Some("Диктовка")
+    );
+    // And its settings are the ones the dictation stack already wrote.
+    assert_eq!(installed[0].settings["hotkey"], json!("Ctrl+Shift+;"));
+}

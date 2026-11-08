@@ -11,31 +11,6 @@ import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
 import { Page } from "../page";
 
-/** The Engine of this branch keeps no installed-app catalog, and the Start-Menu
- * index it does keep is not one: it names programs on the system, not apps
- * Mundus installed. So the page says that much and offers nothing to press —
- * a button that opens what it cannot name is worse than no button. */
-export function AppsPage(props: PageProps) {
-  return (
-    <Page colors={props.colors} title="Приложения">
-      <View>
-        <SectionLabel colors={props.colors}>Установленные</SectionLabel>
-        <Card colors={props.colors}>
-          <CardRow
-            colors={props.colors}
-            icon="apps"
-            iconFill={props.colors.raised}
-            accent={props.colors.muted}
-            title="Пока ничего не установлено"
-            subtitle="Engine не сообщает об установленных приложениях"
-            last
-          />
-        </Card>
-      </View>
-    </Page>
-  );
-}
-
 export function ModelsPage(props: PageProps) {
   const models = () => props.state().models;
   const stateOf = (model: ManagerState["models"][number]) => {

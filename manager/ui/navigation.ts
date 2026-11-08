@@ -42,7 +42,7 @@ export const navigation: NavGroup[] = [
   {
     id: "running",
     entries: [
-      { route: "apps", label: "Приложения", icon: "apps", accent: "#fa6710", accentTo: "#fc2d3e" },
+      { route: "plugins", label: "Плагины", icon: "apps", accent: "#fa6710", accentTo: "#fc2d3e" },
       {
         route: "integrations",
         label: "Интеграции",

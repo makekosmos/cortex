@@ -16,7 +16,7 @@ pub async fn handle_plugin_op(subop: &str, params: Value) -> crate::plugins::OpR
         "install" => install(&params).await,
         "remove" => remove(&params),
         "launch" => launch(&params),
-        "settings.get" => settings_get(&params),
+        "settings.get" => settings_get(&params).await,
         "settings.set" => settings_set(&params),
         other => Err(PluginError::Manifest(format!(
             "plugins.{other}: неизвестная операция"
@@ -59,10 +59,40 @@ impl From<Result<Value>> for OpResponse {
     }
 }
 
+/// Installed plugins. A plugin installed before manifests were kept (the
+/// dictation app this Engine already ships) has no `plugin.json` of its own:
+/// the catalog's copy is stored beside it, once, so the pages can name it and
+/// open its settings — a plugin that is on disk is not "unknown" because it
+/// arrived before the catalog did.
 async fn list() -> Result<Value> {
     let store = PluginStore::new()?;
-    let installed = store.installed();
+    let mut installed = store.installed();
+    if installed.iter().any(|plugin| plugin.manifest.is_none()) {
+        if let Ok(answer) = catalog::fetch().await {
+            for plugin in installed.iter_mut().filter(|p| p.manifest.is_none()) {
+                if let Some(manifest) = adopt(&store, &answer.catalog, &plugin.id) {
+                    plugin.settings = store.settings(&manifest).unwrap_or_default();
+                    plugin.manifest = Some(manifest);
+                }
+            }
+        }
+    }
     Ok(serde_json::json!({ "plugins": installed }))
+}
+
+/// The catalog's manifest for `id`, stored beside the install when it has none.
+pub(super) fn adopt(
+    store: &PluginStore,
+    catalog: &catalog::Catalog,
+    id: &str,
+) -> Option<PluginManifest> {
+    let manifest = catalog
+        .plugins
+        .iter()
+        .find(|plugin| plugin.id == id)?
+        .clone();
+    store.save_manifest(&manifest).ok()?;
+    Some(manifest)
 }
 
 async fn install(params: &Value) -> Result<Value> {
@@ -119,10 +149,18 @@ fn launch(params: &Value) -> Result<Value> {
     Ok(serde_json::json!({ "launched": id }))
 }
 
-fn settings_get(params: &Value) -> Result<Value> {
+async fn settings_get(params: &Value) -> Result<Value> {
     let store = PluginStore::new()?;
     let id = param_id(params)?;
-    let manifest = store.manifest(&id).ok_or(PluginError::NotInstalled)?;
+    let manifest = match store.manifest(&id) {
+        Some(manifest) => manifest,
+        // An install from before the catalog: ask the catalog who it is.
+        None => {
+            store.record(&id)?.ok_or(PluginError::NotInstalled)?;
+            let answer = catalog::fetch().await?;
+            adopt(&store, &answer.catalog, &id).ok_or(PluginError::Unknown)?
+        }
+    };
     let values = store.settings(&manifest)?;
     Ok(serde_json::json!({ "id": id, "manifest": manifest, "values": values }))
 }
