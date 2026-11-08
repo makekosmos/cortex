@@ -32,6 +32,8 @@ ureq = { version = "2.12", default-features = false, features = ["json"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 gpui-fast-backend = { package = "gpui-fast", version = "=0.1.10", features = ["windows-manifest-provided-by-host"] }
+# The window's own handle, for the drag the host has to start itself (chrome.rs).
+raw-window-handle = "=0.6.2" 
 
 # Dev builds compile our own code fast; dependencies stay optimized, since an
 # unoptimized gpui/taffy/cosmic-text tops a modest UI out at ~20fps (KOS-328).

@@ -4,7 +4,6 @@ import {
   CardRow,
   Icon,
   SectionLabel,
-  SettingsPage,
   Switch,
   ThemeCard,
   darkThemes,
@@ -12,6 +11,7 @@ import {
 } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { ApplicationTheme, PaletteTheme } from "@makekosmos/imago-nsh";
+import { Page } from "../page";
 
 function ThemeRow(props: {
   title: string;
@@ -51,7 +51,7 @@ export function AppearancePage(props: PageProps) {
   const state = () => props.state();
   const follow = () => state().appearance.followApps;
   return (
-    <SettingsPage colors={props.colors} title="Внешний вид">
+    <Page colors={props.colors} title="Внешний вид">
       <ThemeRow
         title={`Светлая тема${state().appearance.mode === "light" ? " — активна" : ""}`}
         themes={lightThemes}
@@ -121,6 +121,6 @@ export function AppearancePage(props: PageProps) {
           Тема применяется ко всем окнам Mundus на этом компьютере.
         </Text>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }

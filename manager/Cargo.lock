@@ -4674,6 +4674,7 @@ dependencies = [
  "imago-nsh",
  "nsh-platform-gpui",
  "pe-version-info",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "tracing",

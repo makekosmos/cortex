@@ -1,14 +1,8 @@
 import { Text, View } from "nsh";
-import {
-  Card,
-  CardRow,
-  FieldRow,
-  PillButton,
-  SectionLabel,
-  SettingsPage,
-} from "@makekosmos/imago-nsh";
+import { Card, CardRow, FieldRow, PillButton, SectionLabel } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import { statusLabel } from "../state";
+import { Page } from "../page";
 
 /** The page of the reference: what the Engine is doing right now. */
 export function ServerPage(props: PageProps) {
@@ -17,7 +11,7 @@ export function ServerPage(props: PageProps) {
   const busy = state().engine.status === "starting" || state().engine.status === "stopping";
   const code = state().sync.ownCode;
   return (
-    <SettingsPage colors={props.colors} title="Сервер">
+    <Page colors={props.colors} title="Сервер">
       <Card colors={props.colors}>
         <CardRow
           colors={props.colors}
@@ -114,6 +108,6 @@ export function ServerPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }

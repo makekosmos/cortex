@@ -180,7 +180,7 @@ impl NativeComponent for ManagerBridge {
         self.context.emit("navigate", json!({ "route": route }));
     }
 
-    fn command(&mut self, name: &str, args: &Value, _window: &mut Window, _cx: &mut App) {
+    fn command(&mut self, name: &str, args: &Value, window: &mut Window, cx: &mut App) {
         let Some(loader) = self.loader.clone() else {
             return;
         };
@@ -325,6 +325,10 @@ impl NativeComponent for ManagerBridge {
 
             // The rest of the page's presses move it, not the Engine.
             "connect.open" => self.context.emit("navigate", json!({ "route": "devices" })),
+
+            // The window's bar and its sidebar: a press there moves the window,
+            // which the host has to start itself (`chrome::start_move`).
+            "window.drag" => crate::chrome::start_move(window, cx),
             _ => {}
         }
     }

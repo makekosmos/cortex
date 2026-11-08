@@ -7,10 +7,12 @@
 mod assets;
 mod boot;
 mod bridge;
+mod chrome;
 mod data;
 mod engine;
 mod identity;
 
+use gpui::prelude::*;
 use gpui::{px, size, App, AppContext, Bounds, WindowBounds, WindowOptions};
 #[cfg(target_os = "windows")]
 use gpui_fast_backend as _;
@@ -19,6 +21,31 @@ use imago_nsh::{Bundle, NshApp};
 const WINDOW_TITLE: &str = identity::PRODUCT_NAME;
 const WINDOW_WIDTH: f32 = 1180.;
 const WINDOW_HEIGHT: f32 = 820.;
+
+/// The window's content: the NSH surface inside gpui-component's Root, with the
+/// window's own caption buttons over it.
+struct Shell {
+    root: gpui::Entity<gpui_component::Root>,
+}
+
+impl gpui::Render for Shell {
+    fn render(
+        &mut self,
+        window: &mut gpui::Window,
+        _cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        let dark = matches!(
+            window.appearance(),
+            gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark
+        );
+        gpui::div()
+            .size_full()
+            .relative()
+            .child(self.root.clone())
+            .child(chrome::drag())
+            .children(chrome::controls(dark))
+    }
+}
 
 fn main() {
     // The pages only mirror the Engine, so one has to answer before the window
@@ -52,11 +79,20 @@ fn main() {
         };
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            // Same as Atlas (KOS-368): a title at creation reaches AppKit's
+            // `changeWindowsItem:` before the window is tracked, which leaves a
+            // phantom Dock entry and turns the real window's close, minimize
+            // and zoom into something other than the system's. `set_window_title`
+            // below renames the entry AppKit added itself.
             titlebar: Some(gpui::TitlebarOptions {
-                title: Some(WINDOW_TITLE.into()),
+                title: None,
                 appears_transparent: true,
                 ..Default::default()
             }),
+            // The pages drag the window themselves (`desktop={{ windowDrag }}`)
+            // from the page heading and the sidebar, so AppKit must not drag the
+            // same strip a second time.
+            app_owns_titlebar_drag: true,
             ..Default::default()
         };
         cx.open_window(options, |window, cx| {
@@ -82,8 +118,11 @@ fn main() {
                 }
                 view
             });
-            // gpui-component widgets (the pages' inputs and menus) need a Root.
-            cx.new(|cx| gpui_component::Root::new(view, window, cx))
+            // gpui-component widgets (the pages' inputs and menus) need a Root,
+            // and the caption buttons sit above it: they belong to the window,
+            // not to the pages (see `chrome`).
+            let root = cx.new(|cx| gpui_component::Root::new(view, window, cx));
+            cx.new(|_| Shell { root })
         })
         .expect("the Manager window opens");
         cx.activate(true);

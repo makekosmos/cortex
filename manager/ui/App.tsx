@@ -1,11 +1,13 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
 import { Window as DesktopWindow } from "nsh/desktop";
+import { platform } from "os";
 import {
   SettingsSidebar,
   TextInput,
   cobaltFoundry,
   darkThemes,
   lightThemes,
+  settingsMetrics,
 } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
@@ -116,9 +118,61 @@ function command(name: string, args: CommandArgs = {}) {
  * `titleBar()` reports the caption area so the sidebar can inset below it.
  */
 const TITLEBAR_HEIGHT = 36;
+/// Windows draws a caption button at this width (`46 × 3` is the area
+/// `titleBar()` reserves on the right when the system's own are there).
+const CAPTION_BUTTON_WIDTH = 46;
 
 function useHiddenChrome() {
   effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
+}
+
+/**
+ * Whether the strip on the right of the band belongs to the window's caption
+ * buttons. On Windows it always does: an embedded host's buttons are drawn by
+ * `manager/src/chrome.rs`, and a host that owns its window (`nsh run`, `nsh
+ * dev`) draws them itself and reports the strip in `titleBar()`. Either way the
+ * band must keep that strip out of its drag area, or a press on a button starts
+ * a window move and the button never sees it.
+ */
+function reservesCaptions() {
+  const host = platform();
+  return host === "win32" || host === "windows";
+}
+
+function TitleBar(props: { colors: ApplicationTheme }) {
+  // macOS keeps AppKit's traffic lights in this band's left corner.
+  const macos = platform() === "darwin";
+  return (
+    <View class="w-full shrink-0 flex-row" style={{ height: TITLEBAR_HEIGHT }}>
+      {/* Each half carries the colour of what stands under it, so the band reads
+          as the top of the sidebar and the top of the page, not as a third bar. */}
+      <View
+        desktop={{ windowDrag: true }}
+        class="h-full flex-row items-center"
+        style={{
+          width: settingsMetrics.sidebarWidth,
+          backgroundColor: props.colors.shell,
+          paddingLeft: macos ? 80 : 14,
+        }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: "500", color: props.colors.muted }}>Mundus</Text>
+      </View>
+      <View
+        desktop={{ windowDrag: true }}
+        class="h-full flex-1"
+        style={{ backgroundColor: props.colors.background }}
+      />
+      {reservesCaptions() ? (
+        <View
+          style={{
+            width: CAPTION_BUTTON_WIDTH * 3,
+            height: TITLEBAR_HEIGHT,
+            backgroundColor: props.colors.background,
+          }}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 function renderPage(page: string) {
@@ -204,15 +258,24 @@ function App() {
         onState={(next: ManagerState) => state.set(next)}
         onNavigate={(event: { route: string }) => route.set(event.route)}
       />
+      <TitleBar colors={colors()} />
+
       <View class="min-h-0 flex-1 flex-row">
-        <SettingsSidebar
-          colors={colors()}
-          groups={navigation}
-          current={route()}
-          search={search()}
-          onSearch={(value) => search.set(value)}
-          onNavigate={(next) => route.set(next)}
-        />
+        {/* The sidebar is the window's other titlebar: an empty stretch of it
+            drags, and a row that takes a press stays a row — which is why the
+            drag area is a background of its own under the rows, not a handler on
+            their parent (a handler there would fire for the rows' presses too). */}
+        <View class="h-full flex-col relative" desktop={{ windowDrag: true }}>
+          <View class="absolute inset-0" desktop={{ windowDrag: true }} />
+          <SettingsSidebar
+            colors={colors()}
+            groups={navigation}
+            current={route()}
+            search={search()}
+            onSearch={(value) => search.set(value)}
+            onNavigate={(next) => route.set(next)}
+          />
+        </View>
         {renderPage(route())}
       </View>
 

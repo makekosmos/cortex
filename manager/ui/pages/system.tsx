@@ -1,16 +1,9 @@
 import { Text, View } from "nsh";
-import {
-  Card,
-  CardRow,
-  PillButton,
-  SectionLabel,
-  SettingsPage,
-  StatusDot,
-  Switch,
-} from "@makekosmos/imago-nsh";
+import { Card, CardRow, PillButton, SectionLabel, StatusDot, Switch } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
 import { minutes, productVersion, statusLabel } from "../state";
+import { Page } from "../page";
 
 /** When a backup was taken, as a list row reads it. */
 function stamp(milliseconds: number): string {
@@ -77,7 +70,7 @@ export function AboutPage(props: PageProps) {
   const state = () => props.state();
   const version = productVersion(state());
   return (
-    <SettingsPage colors={props.colors} title="О приложении">
+    <Page colors={props.colors} title="О приложении">
       <Card colors={props.colors}>
         <CardRow
           colors={props.colors}
@@ -126,7 +119,7 @@ export function AboutPage(props: PageProps) {
         />
       </Card>
       <Text style={{ fontSize: 12, color: props.colors.faint }}>© Yoso Industries 2025–2026</Text>
-    </SettingsPage>
+    </Page>
   );
 }
 
@@ -134,7 +127,7 @@ export function StoragePage(props: PageProps) {
   const state = () => props.state();
   const backups = () => state().backups;
   return (
-    <SettingsPage colors={props.colors} title="Хранилище">
+    <Page colors={props.colors} title="Хранилище">
       <View>
         <SectionLabel colors={props.colors}>Данные</SectionLabel>
         <Card colors={props.colors}>
@@ -192,14 +185,14 @@ export function StoragePage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }
 
 export function ActivityPage(props: PageProps) {
   const usage = () => props.state().usage;
   return (
-    <SettingsPage colors={props.colors} title="Активность">
+    <Page colors={props.colors} title="Активность">
       <View>
         <SectionLabel colors={props.colors}>Экранное время</SectionLabel>
         <Card colors={props.colors}>
@@ -235,14 +228,14 @@ export function ActivityPage(props: PageProps) {
           )}
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }
 
 export function PreferencesPage(props: PageProps) {
   const state = () => props.state();
   return (
-    <SettingsPage colors={props.colors} title="Настройки">
+    <Page colors={props.colors} title="Настройки">
       <View>
         <SectionLabel colors={props.colors}>Общие</SectionLabel>
         <Card colors={props.colors}>
@@ -275,6 +268,6 @@ export function PreferencesPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }

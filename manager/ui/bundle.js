@@ -1,6 +1,7 @@
 import { append, bindProp, component, element, insert, merge, prop, setup, text } from "nsh:rt";
 import { effect, mount, nativeComponent, signal } from "nsh";
 import { Window, titleBar } from "nsh/desktop";
+import { platform } from "os";
 
 //#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/types.ts
 /** Metrics of the settings shell the Manager and NSH preference panes wear. */
@@ -509,59 +510,6 @@ function SettingsSidebar(props) {
 		}), __nsh_hv11);
 		append(__nsh_hv9, __nsh_hv10);
 		return __nsh_hv9;
-	})();
-}
-/**
-* Page frame: the scroll area, its gutter and the column the cards sit in. The
-* page's own heading is the window's top row — dragging it moves the window, and
-* the window's controls hang off it when the platform does not paint its own.
-*/
-function SettingsPage(props) {
-	const controls = titleBar();
-	return (() => {
-		const __nsh_hv14 = element("scroll");
-		prop(__nsh_hv14, "class", "min-h-0 flex-1");
-		bindProp(__nsh_hv14, "style", () => ({ backgroundColor: props.colors.background }));
-		const __nsh_hv15 = element("view");
-		prop(__nsh_hv15, "class", "w-full");
-		bindProp(__nsh_hv15, "style", () => ({
-			maxWidth: settingsMetrics.pageMaxWidth,
-			paddingLeft: settingsMetrics.pageGutter,
-			paddingRight: settingsMetrics.pageGutter,
-			paddingTop: settingsMetrics.pageTop,
-			paddingBottom: settingsMetrics.pageBottom
-		}));
-		const __nsh_hv16 = element("view");
-		prop(__nsh_hv16, "class", "flex-row items-center");
-		bindProp(__nsh_hv16, "style", () => ({
-			height: settingsMetrics.headerHeight,
-			paddingLeft: controls.left
-		}));
-		prop(__nsh_hv16, "desktop", { windowDrag: true });
-		const __nsh_hv18 = element("view");
-		prop(__nsh_hv18, "class", "flex-1");
-		append(__nsh_hv16, __nsh_hv18);
-		insert(__nsh_hv16, [() => props.title ? (() => {
-			const __nsh_hv17 = element("text");
-			bindProp(__nsh_hv17, "style", () => ({
-				fontSize: 13,
-				lineHeight: 19,
-				fontWeight: "500",
-				color: props.colors.foreground
-			}));
-			insert(__nsh_hv17, () => props.title);
-			return __nsh_hv17;
-		})() : null, () => props.actions ?? null], __nsh_hv18);
-		const __nsh_hv19 = element("view");
-		bindProp(__nsh_hv19, "style", () => ({
-			gap: settingsMetrics.sectionGap,
-			marginTop: settingsMetrics.headerGap
-		}));
-		insert(__nsh_hv19, () => props.children);
-		append(__nsh_hv15, __nsh_hv16);
-		append(__nsh_hv15, __nsh_hv19);
-		append(__nsh_hv14, __nsh_hv15);
-		return __nsh_hv14;
 	})();
 }
 function SectionLabel(props) {
@@ -1273,6 +1221,64 @@ function Confirm(props) {
 }
 
 //#endregion
+//#region page.tsx
+/**
+* The frame every page sits in: the scroll area, its gutter, the heading row the
+* window is dragged by, and the column the sections stack in.
+*
+* The kit's `SettingsPage` does the same but caps the column at 1180 points,
+* which leaves a strip of bare background on a wide window. A Manager window is
+* the size the person gave it, so the cards take all of it.
+*/
+function Page(props) {
+	const controls = titleBar();
+	return (() => {
+		const __nsh_hv0 = element("scroll");
+		prop(__nsh_hv0, "class", "min-h-0 flex-1");
+		bindProp(__nsh_hv0, "style", () => ({ backgroundColor: props.colors.background }));
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "class", "w-full");
+		bindProp(__nsh_hv1, "style", () => ({
+			paddingLeft: settingsMetrics.pageGutter,
+			paddingRight: settingsMetrics.pageGutter,
+			paddingTop: settingsMetrics.pageTop,
+			paddingBottom: settingsMetrics.pageBottom
+		}));
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "class", "flex-row items-center");
+		bindProp(__nsh_hv2, "style", () => ({
+			height: settingsMetrics.headerHeight,
+			paddingLeft: controls.left
+		}));
+		prop(__nsh_hv2, "desktop", { windowDrag: true });
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "class", "flex-1");
+		append(__nsh_hv2, __nsh_hv4);
+		insert(__nsh_hv2, [() => props.title ? (() => {
+			const __nsh_hv3 = element("text");
+			bindProp(__nsh_hv3, "style", () => ({
+				fontSize: 13,
+				lineHeight: 19,
+				fontWeight: "500",
+				color: props.colors.foreground
+			}));
+			insert(__nsh_hv3, () => props.title);
+			return __nsh_hv3;
+		})() : null, () => props.actions ?? null], __nsh_hv4);
+		const __nsh_hv5 = element("view");
+		bindProp(__nsh_hv5, "style", () => ({
+			gap: settingsMetrics.sectionGap,
+			marginTop: settingsMetrics.headerGap
+		}));
+		insert(__nsh_hv5, () => props.children);
+		append(__nsh_hv1, __nsh_hv2);
+		append(__nsh_hv1, __nsh_hv5);
+		append(__nsh_hv0, __nsh_hv1);
+		return __nsh_hv0;
+	})();
+}
+
+//#endregion
 //#region pages/server.tsx
 /** The page of the reference: what the Engine is doing right now. */
 function ServerPage(props) {
@@ -1280,7 +1286,7 @@ function ServerPage(props) {
 	const running = state().engine.status === "running";
 	const busy = state().engine.status === "starting" || state().engine.status === "stopping";
 	const code = state().sync.ownCode;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1517,7 +1523,7 @@ function ThemeRow(props) {
 function AppearancePage(props) {
 	const state = () => props.state();
 	const follow = () => state().appearance.followApps;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1714,7 +1720,7 @@ function updateSubtitle(updates) {
 function AboutPage(props) {
 	const state = () => props.state();
 	const version = productVersion(state());
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1828,7 +1834,7 @@ function AboutPage(props) {
 function StoragePage(props) {
 	const state = () => props.state();
 	const backups = () => state().backups;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1943,7 +1949,7 @@ function StoragePage(props) {
 }
 function ActivityPage(props) {
 	const usage = () => props.state().usage;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2031,7 +2037,7 @@ function ActivityPage(props) {
 }
 function PreferencesPage(props) {
 	const state = () => props.state();
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2104,7 +2110,7 @@ function PreferencesPage(props) {
 * Mundus installed. So the page says that much and offers nothing to press —
 * a button that opens what it cannot name is worse than no button. */
 function AppsPage(props) {
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2153,7 +2159,7 @@ function ModelsPage(props) {
 		if (model.downloaded) return model.selected ? `${model.size} · выбрана` : `${model.size} · загружена`;
 		return `${model.size} · не загружена`;
 	};
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2274,7 +2280,7 @@ function KeysPage(props) {
 		draft.set("");
 		verifyNote.set("Ключ отправлен в Engine");
 	};
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2434,7 +2440,7 @@ function KeysPage(props) {
 function DevicesPage(props) {
 	const state = () => props.state();
 	const peers = () => state().sync.peers;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2598,7 +2604,7 @@ function DevicesPage(props) {
 * not a list the Manager keeps. */
 function IntegrationsPage(props) {
 	const connectors = () => props.state().connectors;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2723,7 +2729,7 @@ function IntegrationsPage(props) {
 * control that never reaches the Engine is worse than no control.
 */
 function BrowserPage(props) {
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2866,6 +2872,59 @@ function useHiddenChrome() {
 		height: TITLEBAR_HEIGHT
 	}));
 }
+/**
+* Whether the strip on the right of the band belongs to the window's caption
+* buttons. On Windows it always does: an embedded host's buttons are drawn by
+* `manager/src/chrome.rs`, and a host that owns its window (`nsh run`, `nsh
+* dev`) draws them itself and reports the strip in `titleBar()`. Either way the
+* band must keep that strip out of its drag area, or a press on a button starts
+* a window move and the button never sees it.
+*/
+function reservesCaptions() {
+	const host = platform();
+	return host === "win32" || host === "windows";
+}
+function TitleBar(props) {
+	const macos = platform() === "darwin";
+	return (() => {
+		const __nsh_hv0 = element("view");
+		prop(__nsh_hv0, "class", "w-full shrink-0 flex-row");
+		prop(__nsh_hv0, "style", { height: TITLEBAR_HEIGHT });
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "desktop", { windowDrag: true });
+		prop(__nsh_hv1, "class", "h-full flex-row items-center");
+		bindProp(__nsh_hv1, "style", () => ({
+			width: settingsMetrics.sidebarWidth,
+			backgroundColor: props.colors.shell,
+			paddingLeft: macos ? 80 : 14
+		}));
+		const __nsh_hv2 = element("text");
+		bindProp(__nsh_hv2, "style", () => ({
+			fontSize: 12,
+			fontWeight: "500",
+			color: props.colors.muted
+		}));
+		const __nsh_hv3 = text("Mundus");
+		append(__nsh_hv2, __nsh_hv3);
+		append(__nsh_hv1, __nsh_hv2);
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "desktop", { windowDrag: true });
+		prop(__nsh_hv4, "class", "h-full flex-1");
+		bindProp(__nsh_hv4, "style", () => ({ backgroundColor: props.colors.background }));
+		append(__nsh_hv0, __nsh_hv1);
+		append(__nsh_hv0, __nsh_hv4);
+		insert(__nsh_hv0, () => reservesCaptions() ? (() => {
+			const __nsh_hv5 = element("view");
+			bindProp(__nsh_hv5, "style", () => ({
+				width: 138,
+				height: TITLEBAR_HEIGHT,
+				backgroundColor: props.colors.background
+			}));
+			return __nsh_hv5;
+		})() : null);
+		return __nsh_hv0;
+	})();
+}
 function renderPage(page) {
 	const props = {
 		colors: colors(),
@@ -2924,14 +2983,14 @@ function PairingModal(props) {
 		get children() {
 			return [
 				(() => {
-					const __nsh_hv0 = element("text");
-					bindProp(__nsh_hv0, "style", () => ({
+					const __nsh_hv6 = element("text");
+					bindProp(__nsh_hv6, "style", () => ({
 						fontSize: 13,
 						lineHeight: 19,
 						color: props.colors.foreground
 					}));
-					insert(__nsh_hv0, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
-					return __nsh_hv0;
+					insert(__nsh_hv6, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
+					return __nsh_hv6;
 				})(),
 				() => who ? note(props.colors, who) : null,
 				() => note(props.colors, "Устройство получит доступ к задачам, заметкам и истории. Подключайте только то, что узнаёте.")
@@ -2942,12 +3001,19 @@ function PairingModal(props) {
 function App() {
 	useHiddenChrome();
 	return (() => {
-		const __nsh_hv1 = element("view");
-		prop(__nsh_hv1, "class", "h-full w-full");
-		bindProp(__nsh_hv1, "style", () => ({ backgroundColor: colors().background }));
-		const __nsh_hv2 = element("view");
-		prop(__nsh_hv2, "class", "min-h-0 flex-1 flex-row");
-		insert(__nsh_hv2, [component(SettingsSidebar, {
+		const __nsh_hv7 = element("view");
+		prop(__nsh_hv7, "class", "h-full w-full");
+		bindProp(__nsh_hv7, "style", () => ({ backgroundColor: colors().background }));
+		const __nsh_hv8 = element("view");
+		prop(__nsh_hv8, "class", "min-h-0 flex-1 flex-row");
+		const __nsh_hv9 = element("view");
+		prop(__nsh_hv9, "class", "h-full flex-col relative");
+		prop(__nsh_hv9, "desktop", { windowDrag: true });
+		const __nsh_hv10 = element("view");
+		prop(__nsh_hv10, "class", "absolute inset-0");
+		prop(__nsh_hv10, "desktop", { windowDrag: true });
+		append(__nsh_hv9, __nsh_hv10);
+		insert(__nsh_hv9, component(SettingsSidebar, {
 			get colors() {
 				return colors();
 			},
@@ -2960,9 +3026,11 @@ function App() {
 			},
 			onSearch: (value) => search.set(value),
 			onNavigate: (next) => route.set(next)
-		}), () => renderPage(route())]);
-		append(__nsh_hv1, __nsh_hv2);
-		insert(__nsh_hv1, component(Bridge, {
+		}));
+		append(__nsh_hv8, __nsh_hv9);
+		insert(__nsh_hv8, () => renderPage(route()));
+		append(__nsh_hv7, __nsh_hv8);
+		insert(__nsh_hv7, [component(Bridge, {
 			ref: (node) => {
 				session = { command: (name, args) => node.command(name, args) };
 			},
@@ -2971,8 +3039,10 @@ function App() {
 			},
 			onState: (next) => state.set(next),
 			onNavigate: (event) => route.set(event.route)
-		}), __nsh_hv2);
-		insert(__nsh_hv1, [
+		}), component(TitleBar, { get colors() {
+			return colors();
+		} })], __nsh_hv8);
+		insert(__nsh_hv7, [
 			component(PairingModal, { get colors() {
 				return colors();
 			} }),
@@ -3100,7 +3170,7 @@ function App() {
 				}
 			}) : null
 		]);
-		return __nsh_hv1;
+		return __nsh_hv7;
 	})();
 }
 mount(App);

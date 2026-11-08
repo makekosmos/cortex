@@ -4,12 +4,12 @@ import {
   CardRow,
   PillButton,
   SectionLabel,
-  SettingsPage,
   StatusDot,
   TextInput,
 } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
+import { Page } from "../page";
 
 /** The Engine of this branch keeps no installed-app catalog, and the Start-Menu
  * index it does keep is not one: it names programs on the system, not apps
@@ -17,7 +17,7 @@ import type { ManagerState } from "../state";
  * a button that opens what it cannot name is worse than no button. */
 export function AppsPage(props: PageProps) {
   return (
-    <SettingsPage colors={props.colors} title="Приложения">
+    <Page colors={props.colors} title="Приложения">
       <View>
         <SectionLabel colors={props.colors}>Установленные</SectionLabel>
         <Card colors={props.colors}>
@@ -32,7 +32,7 @@ export function AppsPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }
 
@@ -45,7 +45,7 @@ export function ModelsPage(props: PageProps) {
     return `${model.size} · не загружена`;
   };
   return (
-    <SettingsPage colors={props.colors} title="Модели">
+    <Page colors={props.colors} title="Модели">
       <View>
         <SectionLabel colors={props.colors}>Локальные модели</SectionLabel>
         <Card colors={props.colors}>
@@ -109,7 +109,7 @@ export function ModelsPage(props: PageProps) {
       <Text style={{ fontSize: 12, color: props.colors.faint }}>
         Модели распознавания живут на этом компьютере: звук не уходит в сеть.
       </Text>
-    </SettingsPage>
+    </Page>
   );
 }
 
@@ -128,7 +128,7 @@ export function KeysPage(props: PageProps) {
     verifyNote.set("Ключ отправлен в Engine");
   };
   return (
-    <SettingsPage colors={props.colors} title="Ключи">
+    <Page colors={props.colors} title="Ключи">
       <View>
         <SectionLabel colors={props.colors}>Диктовка</SectionLabel>
         <Card colors={props.colors}>
@@ -191,6 +191,6 @@ export function KeysPage(props: PageProps) {
       <Text style={{ fontSize: 12, color: props.colors.faint }}>
         Ключ хранится в связке ключей Engine. Manager его не читает и нигде не показывает.
       </Text>
-    </SettingsPage>
+    </Page>
   );
 }
