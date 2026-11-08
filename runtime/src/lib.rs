@@ -28,6 +28,7 @@ pub use engine_base::*;
 // the native-app registry stay in the Engine.
 pub mod ark_host;
 pub mod native_apps;
+pub mod plugins;
 
 pub mod appearance;
 pub mod backend_tray;

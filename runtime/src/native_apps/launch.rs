@@ -30,23 +30,46 @@ pub(super) fn foreground_grant_target(child_id: u32) -> Option<u32> {
 /// foreground rights (see module doc). Grant failure is logged, not
 /// fatal — the app already runs, it is just possibly behind.
 pub fn spawn_detached(executable: &Path, args: &[&OsStr]) -> io::Result<()> {
-    let child = spawn(executable, args)?;
+    spawn_detached_with(executable, args, &[])
+}
+
+/// Spawn with environment the child needs to find what belongs to it — a
+/// plugin is told where the Engine keeps its settings, so it never has to
+/// know the layout itself.
+pub fn spawn_detached_with(
+    executable: &Path,
+    args: &[&OsStr],
+    envs: &[(&str, &OsStr)],
+) -> io::Result<()> {
+    let child = spawn(executable, args, envs)?;
     grant_foreground(child.id());
     Ok(())
 }
 
 #[cfg(windows)]
-fn spawn(executable: &Path, args: &[&OsStr]) -> io::Result<std::process::Child> {
+fn spawn(
+    executable: &Path,
+    args: &[&OsStr],
+    envs: &[(&str, &OsStr)],
+) -> io::Result<std::process::Child> {
     use std::os::windows::process::CommandExt;
     std::process::Command::new(executable)
         .args(args)
+        .envs(envs.iter().copied())
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
 }
 
 #[cfg(not(windows))]
-fn spawn(executable: &Path, args: &[&OsStr]) -> io::Result<std::process::Child> {
-    std::process::Command::new(executable).args(args).spawn()
+fn spawn(
+    executable: &Path,
+    args: &[&OsStr],
+    envs: &[(&str, &OsStr)],
+) -> io::Result<std::process::Child> {
+    std::process::Command::new(executable)
+        .args(args)
+        .envs(envs.iter().copied())
+        .spawn()
 }
 
 fn grant_foreground(child_id: u32) {

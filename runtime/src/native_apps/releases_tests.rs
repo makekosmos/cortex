@@ -63,19 +63,20 @@ fn parse_sums_reads_sha256sum_format() {
 #[test]
 fn select_asset_picks_the_host_target_line() {
     let parsed = parse_sums(&sums("0.3.0", &"a".repeat(64)));
-    let found = select_asset(&parsed, AGENDA, TARGET).expect("windows line");
+    let found = select_asset(&parsed, AGENDA.target(), TARGET).expect("windows line");
     assert_eq!(found.version, "0.3.0");
     assert_eq!(found.asset, "agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
     assert_eq!(found.sha256, "a".repeat(64));
     // Other targets resolve to their own extension.
-    let found = select_asset(&parsed, AGENDA, "aarch64-apple-darwin").expect("darwin line");
+    let found =
+        select_asset(&parsed, AGENDA.target(), "aarch64-apple-darwin").expect("darwin line");
     assert_eq!(found.version, "0.3.0");
     assert!(found.asset.ends_with(".tar.gz"));
     // Absent target → None.
-    assert!(select_asset(&parsed, AGENDA, "x86_64-pc-windows-gnu").is_none());
+    assert!(select_asset(&parsed, AGENDA.target(), "x86_64-pc-windows-gnu").is_none());
     // Wrong stem → None.
     let dictation = app_descriptor("com.kosmos.dictation").unwrap();
-    assert!(select_asset(&parsed, dictation, TARGET).is_none());
+    assert!(select_asset(&parsed, dictation.target(), TARGET).is_none());
 }
 
 #[test]
@@ -101,8 +102,8 @@ fn tag_round_trip_per_app() {
 fn info_from_sums_rejects_tag_version_mismatch() {
     let body = sums("0.3.0", &"a".repeat(64));
     // Tag says v9.9.9, asset says 0.3.0 → cross-check fails closed.
-    assert!(info_from_sums(AGENDA, "v9.9.9", &body, TARGET).is_err());
-    let info = info_from_sums(AGENDA, "v0.3.0", &body, TARGET).unwrap();
+    assert!(info_from_sums(AGENDA.target(), "v9.9.9", &body, TARGET).is_err());
+    let info = info_from_sums(AGENDA.target(), "v0.3.0", &body, TARGET).unwrap();
     assert_eq!(info.tag, "v0.3.0");
     assert_eq!(info.version, "0.3.0");
     assert_eq!(info.asset, "agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
@@ -121,7 +122,7 @@ async fn fetch_latest_follows_tag_redirect() {
     )
     .await;
     let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
-    let result = fetch_latest(&probe, AGENDA, TARGET, None).await;
+    let result = fetch_latest(&probe, AGENDA.target(), TARGET, None).await;
     let Ok(ReleaseCheck::Fresh { info, etag }) = result else {
         panic!("expected fresh release, got {result:?}")
     };
@@ -150,7 +151,7 @@ async fn fetch_latest_revalidates_with_etag() {
         etag: "\"sums-v0.1.1\"".into(),
     };
     assert!(matches!(
-        fetch_latest(&probe, AGENDA, TARGET, Some(&cached)).await,
+        fetch_latest(&probe, AGENDA.target(), TARGET, Some(&cached)).await,
         Ok(ReleaseCheck::NotModified)
     ));
 }
@@ -183,7 +184,7 @@ async fn not_modified_for_a_different_tag_refetches() {
         etag: "\"sums-v0.1.1\"".into(),
     };
     let Ok(ReleaseCheck::Fresh { info, .. }) =
-        fetch_latest(&probe, AGENDA, TARGET, Some(&stale)).await
+        fetch_latest(&probe, AGENDA.target(), TARGET, Some(&stale)).await
     else {
         panic!("moved tag must refetch the body")
     };
@@ -207,7 +208,7 @@ async fn direct_body_for_latest_is_rejected() {
         .await;
     let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
     assert!(matches!(
-        fetch_latest(&probe, AGENDA, TARGET, None).await,
+        fetch_latest(&probe, AGENDA.target(), TARGET, None).await,
         Err(ReleaseError::Unavailable)
     ));
 }
@@ -217,7 +218,7 @@ async fn fetch_latest_fails_closed_offline_and_on_mismatch() {
     // Unreachable base → Unavailable, never a panic.
     let probe = ReleaseProbe::with_base("http://127.0.0.1:9".into()).unwrap();
     assert!(matches!(
-        fetch_latest(&probe, AGENDA, TARGET, None).await,
+        fetch_latest(&probe, AGENDA.target(), TARGET, None).await,
         Err(ReleaseError::Unavailable)
     ));
 
@@ -236,7 +237,7 @@ async fn fetch_latest_fails_closed_offline_and_on_mismatch() {
     .await;
     let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
     assert!(matches!(
-        fetch_latest(&probe, AGENDA, TARGET, None).await,
+        fetch_latest(&probe, AGENDA.target(), TARGET, None).await,
         Err(ReleaseError::Invalid("tag/version mismatch"))
     ));
 }
@@ -248,7 +249,7 @@ async fn oversized_sums_body_is_rejected() {
     stub_sums(&server, "v0.1.1", "x".repeat(128 * 1024), None).await;
     let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
     assert!(matches!(
-        fetch_latest(&probe, AGENDA, TARGET, None).await,
+        fetch_latest(&probe, AGENDA.target(), TARGET, None).await,
         Err(ReleaseError::Invalid("sums too large"))
     ));
 }
@@ -339,12 +340,12 @@ async fn fetch_tagged_reads_sums_for_the_named_tag() {
     )
     .await;
     let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
-    let info = fetch_tagged(&probe, AGENDA, "v0.1.1", TARGET)
+    let info = fetch_tagged(&probe, AGENDA.target(), "v0.1.1", TARGET)
         .await
         .expect("tagged fetch");
     assert_eq!(info.tag, "v0.1.1");
     assert_eq!(info.version, "0.1.1");
-    assert!(fetch_tagged(&probe, AGENDA, "v9.9.9", TARGET)
+    assert!(fetch_tagged(&probe, AGENDA.target(), "v9.9.9", TARGET)
         .await
         .is_err());
 }

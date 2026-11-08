@@ -41,15 +41,11 @@ pub fn parse_sums(body: &str) -> Vec<SumsEntry> {
 /// Find the sums line for `target`.
 pub fn select_asset(
     sums: &[SumsEntry],
-    desc: &NativeAppDescriptor,
+    release: ReleaseTarget<'_>,
     target: &str,
 ) -> Option<AssetMatch> {
-    let prefix = format!("{}-", desc.asset_stem);
-    let suffix = format!(
-        "-{}.{}",
-        target,
-        NativeAppDescriptor::asset_extension(target)
-    );
+    let prefix = format!("{}-", release.asset_stem);
+    let suffix = format!("-{}.{}", target, ReleaseTarget::asset_extension(target));
     sums.iter().find_map(|entry| {
         let version = entry.name.strip_prefix(&prefix)?.strip_suffix(&suffix)?;
         semver::Version::parse(version).ok()?;
@@ -65,14 +61,14 @@ pub fn select_asset(
 /// everything an install needs. The tag is always authoritative: it comes
 /// from the release endpoint's own redirect.
 pub fn info_from_sums(
-    desc: &NativeAppDescriptor,
+    release: ReleaseTarget<'_>,
     tag: &str,
     body: &str,
     target: &str,
 ) -> Result<ReleaseInfo, ReleaseError> {
-    let found = select_asset(&parse_sums(body), desc, target)
+    let found = select_asset(&parse_sums(body), release, target)
         .ok_or(ReleaseError::Invalid("no asset for target"))?;
-    if desc.version_from_tag(tag).as_deref() != Some(found.version.as_str()) {
+    if release.version_from_tag(tag).as_deref() != Some(found.version.as_str()) {
         return Err(ReleaseError::Invalid("tag/version mismatch"));
     }
     Ok(ReleaseInfo {

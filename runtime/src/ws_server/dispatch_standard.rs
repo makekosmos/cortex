@@ -75,6 +75,13 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
+    } else if let Some(rest) = operation.strip_prefix("plugins.") {
+        let result = crate::plugins::handle_plugin_op(rest, params).await;
+        LocalResponse {
+            ok: result.ok,
+            data: result.data,
+            error: result.error,
+        }
     } else if crate::hosts::is_hosts_operation(&operation) {
         crate::hosts::sync(&params)
             .map(LocalResponse::ok)

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "schema_version": 1,
+      "id": "com.kosmos.dictation",
+      "name": "Диктовка",
+      "summary": "Речь в текст по горячей клавише: расшифровка на облаке или локально и вставка в активное окно.",
+      "source": {
+        "kind": "release",
+        "repository": "makekosmos/dictation",
+        "tag_prefix": "gpui-v",
+        "asset": "dictation-gpui"
+      },
+      "settings_file": "dictation-config.json",
+      "settings": [
+        {
+          "key": "hotkey",
+          "label": "Клавиша записи",
+          "kind": { "type": "text" },
+          "value": "Ctrl+Shift+;",
+          "hint": "Например: Ctrl+Shift+; или Alt+D"
+        },
+        {
+          "key": "triggerMode",
+          "label": "Как записывать",
+          "kind": {
+            "type": "choice",
+            "options": [
+              { "value": "toggle", "label": "Нажал — говорю, нажал — готово" },
+              { "value": "push_to_talk", "label": "Держу клавишу — говорю" }
+            ]
+          },
+          "value": "toggle"
+        },
+        {
+          "key": "language",
+          "label": "Язык речи",
+          "kind": {
+            "type": "choice",
+            "options": [
+              { "value": "ru", "label": "Русский" },
+              { "value": "en", "label": "Английский" },
+              { "value": "auto", "label": "Определять автоматически" }
+            ]
+          },
+          "value": "ru"
+        },
+        {
+          "key": "injectMode",
+          "label": "Куда девать текст",
+          "kind": {
+            "type": "choice",
+            "options": [
+              { "value": "auto_paste", "label": "Вставлять в активное окно" },
+              { "value": "clipboard_only", "label": "Только в буфер обмена" }
+            ]
+          },
+          "value": "auto_paste"
+        },
+        {
+          "key": "providerEnabled",
+          "label": "Облачная расшифровка",
+          "kind": { "type": "toggle" },
+          "value": true,
+          "hint": "Выключите, чтобы работать только с локальной моделью"
+        },
+        {
+          "key": "httpProxy",
+          "label": "Прокси",
+          "kind": { "type": "text" },
+          "value": "",
+          "hint": "http://, https:// или socks5:// — если облако недоступно напрямую"
+        },
+        {
+          "key": "transcriptionPrompt",
+          "label": "Подсказка для расшифровки",
+          "kind": { "type": "text" },
+          "value": "",
+          "hint": "Слова и имена, которые стоит ждать: «Mundus, GPUI, NSH»"
+        }
+      ]
+    }
+  ]
+}
