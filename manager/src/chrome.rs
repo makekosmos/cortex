@@ -11,13 +11,17 @@
 //! So the three buttons live here, next to the window, and mark their areas
 //! with [`WindowControlArea`] the same way NSH does — Windows then answers
 //! `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE`, handles the clicks itself (and the
-//! maximize button's snap layouts). The glyphs are NSH's: one device pixel,
-//! square corners, the shapes Windows uses.
+//! maximize button's snap layouts). The glyphs are Zeron's (`assets/icons/`):
+//! a 16-point box, 1.25 stroke, round caps — thin and rounded, where NSH draws
+//! a square one-device-pixel line. A maximized window gets the restore glyph,
+//! decided while painting, so it changes in the frame the state does.
 //!
 //! Only Windows: on macOS AppKit keeps the traffic lights, and on Linux the
 //! window manager decides.
 
-use gpui::{canvas, div, prelude::*, px, PathBuilder, Rgba, WindowControlArea};
+use gpui::{
+    canvas, div, prelude::*, px, Rgba, SharedString, TransformationMatrix, WindowControlArea,
+};
 
 /// The strip `setTitleBar` takes for the app's own bar; the pages' heading row
 /// is laid out inside it.
@@ -25,8 +29,16 @@ pub const TITLEBAR_HEIGHT: f32 = 36.;
 /// A caption button's width, and the three together are the `138` points
 /// `titleBar()` reserves while NSH owns the window.
 const BUTTON_WIDTH: f32 = 46.;
-/// The glyph's box, in points, as NSH draws it.
-const GLYPH: f32 = 10.;
+/// The glyph's box: the SVGs' own 16-point viewBox, so their 6.5-point shapes
+/// land at the size Zeron's titlebar draws them.
+const GLYPH: f32 = 16.;
+
+/// Zeron's caption glyphs, verbatim (`assets/icons/README.md` says where they
+/// come from and under which licence).
+const MINIMIZE: &[u8] = include_bytes!("../assets/icons/window-minimize.svg");
+const MAXIMIZE: &[u8] = include_bytes!("../assets/icons/window-maximize.svg");
+const RESTORE: &[u8] = include_bytes!("../assets/icons/window-restore.svg");
+const CLOSE: &[u8] = include_bytes!("../assets/icons/close.svg");
 
 #[derive(Clone, Copy)]
 enum Control {
@@ -38,6 +50,9 @@ enum Control {
 #[derive(Clone, Copy)]
 struct Colors {
     glyph: Rgba,
+    /// The glyphs of a window that is not the active one — Windows dims them
+    /// the same way, so an unfocused Manager reads as unfocused.
+    glyph_idle: Rgba,
     hover: Rgba,
     press: Rgba,
 }
@@ -50,12 +65,14 @@ impl Colors {
         if dark {
             Self {
                 glyph: gpui::rgba(0xffffffe6),
+                glyph_idle: gpui::rgba(0xffffff80),
                 hover: gpui::rgba(0xffffff14),
                 press: gpui::rgba(0xffffff24),
             }
         } else {
             Self {
                 glyph: gpui::rgba(0x000000e6),
+                glyph_idle: gpui::rgba(0x00000080),
                 hover: gpui::rgba(0x00000012),
                 press: gpui::rgba(0x00000020),
             }
@@ -63,38 +80,35 @@ impl Colors {
     }
 }
 
-/// The glyph's path, at a device pixel wide whatever the display's scale is —
-/// the same geometry `nsh-platform-gpui` draws, so the Manager's window looks
-/// like the one `nsh dev` opens.
-fn glyph(control: Control, color: Rgba) -> impl IntoElement {
+/// One glyph, as its SVG: `paint_svg` rasterizes the file's own geometry
+/// (round caps, rounded corners) at the element's box, and the maximized state
+/// is read while painting — a window that is maximized as the frame is drawn
+/// shows the restore shape, not the shape it had when the pages laid out.
+fn glyph(control: Control, colors: Colors) -> impl IntoElement {
     canvas(
         |_, _, _| {},
-        move |bounds, _, window, _| {
-            let (x0, y0) = (f32::from(bounds.origin.x), f32::from(bounds.origin.y));
-            let line = 1.0_f32 / window.scale_factor();
-            let p = |x: f32, y: f32| gpui::point(px(x0 + x), px(y0 + y));
-            let mut path = PathBuilder::stroke(px(line.max(1.0)));
-            match control {
-                Control::Minimize => {
-                    path.move_to(p(0., GLYPH / 2.));
-                    path.line_to(p(GLYPH, GLYPH / 2.));
-                }
-                Control::Maximize => {
-                    path.move_to(p(0., 0.));
-                    path.line_to(p(GLYPH, 0.));
-                    path.line_to(p(GLYPH, GLYPH));
-                    path.line_to(p(0., GLYPH));
-                    path.close();
-                }
-                Control::Close => {
-                    path.move_to(p(0., 0.));
-                    path.line_to(p(GLYPH, GLYPH));
-                    path.move_to(p(GLYPH, 0.));
-                    path.line_to(p(0., GLYPH));
-                }
-            }
-            let path = path.build().expect("caption glyph path");
-            window.paint_path(path, color);
+        move |bounds, _, window, cx| {
+            let (name, data) = match control {
+                Control::Minimize => ("caption-minimize", MINIMIZE),
+                Control::Maximize if window.is_maximized() => ("caption-restore", RESTORE),
+                Control::Maximize => ("caption-maximize", MAXIMIZE),
+                Control::Close => ("caption-close", CLOSE),
+            };
+            let color = if window.is_window_active() {
+                colors.glyph
+            } else {
+                colors.glyph_idle
+            };
+            window
+                .paint_svg(
+                    bounds,
+                    SharedString::from(name),
+                    Some(data),
+                    TransformationMatrix::default(),
+                    color.into(),
+                    cx,
+                )
+                .ok();
         },
     )
     .w(px(GLYPH))
@@ -121,7 +135,7 @@ fn button(
         .window_control_area(area)
         .hover(move |style| style.bg(colors.hover))
         .active(move |style| style.bg(colors.press))
-        .child(glyph(control, colors.glyph))
+        .child(glyph(control, colors))
 }
 
 /// The three caption buttons, right to left: close, maximize, minimize — the
