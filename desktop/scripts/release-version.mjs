@@ -12,7 +12,7 @@
 // what the macOS cortex publish ships (KOS-349); 0.5.1 was only the last
 // makekosmos/desktop-mac tag before that repo was deleted, not a second product.
 // The "win" key is what the nightly workflow, `runtime/crates/pe-version-info`
-// (product_version, used by runtime/build.rs and manager-gpui/build.rs) and
+// (product_version, used by runtime/build.rs and manager/build.rs) and
 // older checkouts read by name. Packaged builds inject it as
 // MUNDUS_PRODUCT_VERSION via release-build-env.mjs.
 //

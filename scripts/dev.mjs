@@ -6,7 +6,7 @@
 //   node scripts/dev.mjs --data-dir /tmp/other
 //
 // The Manager checks Engine health at startup and spawns the binary named by
-// MUNDUS_ENGINE_PATH when none is running (manager-gpui/src/boot.rs), so the
+// MUNDUS_ENGINE_PATH when none is running (manager/src/boot.rs), so the
 // only things this wrapper owns are the shared MUNDUS_DATA_DIR and the path.
 // The Engine is deliberately detached from the Manager: closing the Manager
 // leaves it running; its pid is in <data-dir>/engine.lock.json.
@@ -47,5 +47,5 @@ if (values["engine-only"]) {
   cargo(["run", "-p", "engine"], env);
 } else {
   cargo(["build", "-p", "engine", "--bin", "mundus-engine"]);
-  cargo(["run", "--manifest-path", "manager-gpui/Cargo.toml"], env);
+  cargo(["run", "--manifest-path", "manager/Cargo.toml"], env);
 }

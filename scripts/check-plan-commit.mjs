@@ -4,7 +4,7 @@
 // (merge-base with origin/main) over the pushed tree and runs them there. Both
 // hooks share the disk-tree cache, so a commit right after check:affected is a
 // cache hit and never counts deferred checks as passed.
-export const PUSH_ONLY_CHECKS = ["clippy", "test:rust", "runtime-staging", "manager-gpui"];
+export const PUSH_ONLY_CHECKS = ["clippy", "test:rust", "runtime-staging", "manager"];
 
 /** The part of a pre-commit plan that runs at commit time. */
 export function commitPlan(plan) {

@@ -1,7 +1,7 @@
 # AGENTS.md — cortex
 
 Cortex — это Mundus Engine (`runtime/`), встроенное ядро данных ARK (`core/`),
-Manager (`manager-gpui/`) и упаковка/релизы (`desktop/`). Агенда, Memoria и
+Manager (`manager/`) и упаковка/релизы (`desktop/`). Агенда, Memoria и
 Dictation живут в своих репозиториях (`makekosmos/agenda-unified`,
 `makekosmos/memoria-gpui`, `makekosmos/dictation`) и ставятся Engine из GitHub
 Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
@@ -17,8 +17,11 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
   pe-version-info}`. ARK работает внутри процесса: `runtime/src/ark_host.rs`.
 - `core/crates/kernel/` — Rust + SQLite, контракт и инварианты в
   `core/crates/kernel/AGENTS.md` и `docs/{kernel,sync,write-boundary}.md`.
-- `manager-gpui/` — GPUI-приложение Manager. Это отдельный Cargo workspace со
-  своим `Cargo.lock`, корневой `cargo`-команды его не затрагивают.
+- `manager/` — Manager: крейт `manager` на GPUI-хосте NSH (`nsh-platform-gpui`),
+  страницы — TSX в `manager/ui/`; `nsh build` собирает их в
+  `manager/ui/bundle.js`, который лежит в репозитории и вшивается в exe
+  (`include_str!`), поэтому свежий клон собирается без `nsh`. Отдельный Cargo
+  workspace со своим `Cargo.lock`, корневой `cargo`-команды его не затрагивают.
 - `desktop/` — скрипты установщика (NSIS), релизный BOM и публикация.
 - `scripts/` — локальный гейт (`check-*.mjs`), `dev.mjs`; `docs/` — решения и
   замеры (`docs/experiments/` — журнал измерений, не правила).
@@ -81,7 +84,7 @@ CI на GitHub запускается на каждый PR и на push в `main
   `cargo check -p <crate> --all-targets` и `cargo nextest run -p <crate>`.
   Для `engine` добавляй
   `--features package-worker-fixture,markdown-bridge-fixture`. Manager:
-  `pnpm run check:manager-gpui`. Полный гейт обязателен перед push.
+  `pnpm run check:manager`. Полный гейт обязателен перед push.
 - Локальная диктовка (whisper.cpp, Parakeet/ONNX) собирается только с фичей
   `engine/local-dictation`: её включает `pnpm run clippy`, а CI и обычные
   сборки нет. Правя `runtime/crates/engine-dictation/src/local/`, проверяй с
@@ -98,7 +101,7 @@ CI на GitHub запускается на каждый PR и на push в `main
   `Cargo.toml` (`unwrap_used` и `unreachable` — deny; `panic`, `todo`,
   `unimplemented` — warn) плюс `cargo clippy -- -D warnings`. Точечный
   `#[allow(clippy::…)]` на элементе допустим только с причиной рядом.
-  В `manager-gpui` таблицы `[lints]` нет, там действует один `-D warnings`.
+  В `manager/` таблицы `[lints]` нет, там действует один `-D warnings`.
 - Размер файла: больше 300 строк — предупреждение, больше 500 — ошибка
   (`scripts/check-source-size.mjs`). Список `GRANDFATHERED` только сокращается.
 - Нельзя `#[ignore]` без причины и тест, который «проходит» ранним `return`

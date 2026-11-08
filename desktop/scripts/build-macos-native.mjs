@@ -113,7 +113,7 @@ cargo(
     "--release",
     "--locked",
     "--manifest-path",
-    path.join(cortexRoot, "manager-gpui", "Cargo.toml"),
+    path.join(cortexRoot, "manager", "Cargo.toml"),
   ],
-  path.join(cortexRoot, "manager-gpui"),
+  path.join(cortexRoot, "manager"),
 );

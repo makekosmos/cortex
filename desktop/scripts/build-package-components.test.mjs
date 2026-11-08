@@ -26,7 +26,7 @@ test("the component build produces exactly a manager stage", () => {
   expect(source).toContain('".tmp", "components"');
   expect(source).toContain("rmSync(componentsRoot, { recursive: true, force: true })");
   expect(source).toContain('"manager", "win-unpacked"');
-  // manager-gpui is built for the Windows target and staged under the
+  // The Manager is built for the Windows target and staged under the
   // packaged name the tray resolves.
   expect(source).toContain('"cargo"');
   expect(source).toContain('"--locked"');
@@ -34,7 +34,7 @@ test("the component build produces exactly a manager stage", () => {
   expect(source).toContain("MANAGER_EXE");
   expect(MANAGER_EXE).toBe("Mundus Manager.exe");
   // A missing build product fails the script instead of shipping nothing.
-  expect(source).toMatch(/missing \$\{?managerExe|missing.*manager-gpui\.exe/i);
+  expect(source).toMatch(/missing \$\{?managerExe|missing.*manager\.exe/i);
 });
 
 test("build-desktop fails closed when the staged manager payload is stale or incomplete", () => {

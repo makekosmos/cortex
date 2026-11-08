@@ -119,7 +119,8 @@ fn sanitize_client_class(value: &str) -> String {
             value.to_owned()
         }
         // Roles rather than frameworks: the Manager is `manager`, the one it
-        // replaces is `manager-gpui` (see `brand::MANAGER_CLIENT_CLASSES`).
+        // replaces sent `manager-gpui`, still accepted (see
+        // `brand::MANAGER_CLIENT_CLASSES`).
         class if crate::brand::is_manager_client(Some(class)) => class.to_owned(),
         _ => "unknown".into(),
     }

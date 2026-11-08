@@ -18,7 +18,7 @@ pipeline that ships them to Windows and macOS every night.
 <p>
   <a href="rust-toolchain.toml"><img alt="Rust" src="https://img.shields.io/badge/rust-1.95.0-ce422b?style=for-the-badge&logo=rust&logoColor=white" /></a>
   <a href="package.json"><img alt="pnpm" src="https://img.shields.io/badge/pnpm-12.4.1-f69220?style=for-the-badge&logo=pnpm&logoColor=white" /></a>
-  <a href="manager-gpui/"><img alt="GPUI" src="https://img.shields.io/badge/UI-GPUI-6366f1?style=for-the-badge&logo=zedindustries&logoColor=white" /></a>
+  <a href="manager/"><img alt="NSH" src="https://img.shields.io/badge/UI-NSH%20%C2%B7%20GPUI-6366f1?style=for-the-badge&logo=zedindustries&logoColor=white" /></a>
   <a href="core/crates/kernel/"><img alt="SQLite" src="https://img.shields.io/badge/storage-SQLite-0f80cc?style=for-the-badge&logo=sqlite&logoColor=white" /></a>
   <a href="#download"><img alt="Windows" src="https://img.shields.io/badge/Windows-primary-0078d4?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==" /></a>
   <a href="#download"><img alt="macOS" src="https://img.shields.io/badge/macOS-DMG-e4e4e7?style=for-the-badge&logo=apple&logoColor=black" /></a>
@@ -46,7 +46,7 @@ This repository owns the Engine and everything around it.
 | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ⚙️ **Engine**    | `runtime/`              | `mundus-engine`: Engine API (`/v1/rpc`, WebSocket), package host and supervisor, focus, dictation, updater, tray, autostart. Privileged ops sit behind a one-time UAC grant |
 | 🗄️ **ARK**       | `core/crates/kernel/` | Rust + SQLite data core, hosted in-process by the Engine. Append-only schema, HLC clocks, p2p sync over iroh, relay, or LAN beacon                                                       |
-| 🖥️ **Manager**   | `manager-gpui/`         | The GPUI control panel for the Engine. A separate Cargo workspace with its own `Cargo.lock`                                                                                              |
+| 🖥️ **Manager**   | `manager/`              | The Engine's control panel: a Rust/GPUI host (`nsh-platform-gpui`) running TSX pages. A separate Cargo workspace with its own `Cargo.lock`                                               |
 | 📦 **Packaging** | `desktop/`              | NSIS installer, macOS DMG, release BOM, manifest, and publishing                                                                                                                         |
 | 🧪 **Gate**      | `scripts/`              | Local check planner (`check-*.mjs`), `dev.mjs`, Lefthook contracts                                                                                                                       |
 | 📚 **Docs**      | `docs/`                 | Decisions and measurements (`docs/experiments/` is a measurement log, not rules)                                                                                                         |
@@ -101,7 +101,7 @@ flowchart LR
         dictation["Dictation"]
     end
 
-    manager["Manager<br/><sub>manager-gpui</sub>"]
+    manager["Manager<br/><sub>manager/ui · TSX</sub>"]
 
     subgraph engine["mundus-engine"]
         api["Engine API<br/><sub>/v1/rpc · WebSocket</sub>"]
@@ -148,7 +148,7 @@ pnpm run dev -- --data-dir DIR    # default: <tmp>/mundus-dev, shared by both
 
 ```sh
 MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run -p engine
-MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.toml
+MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager/Cargo.toml
 ```
 
 `cargo run -p engine` works because the crate sets
@@ -183,7 +183,7 @@ pnpm run check             # full local gate (scripts/check-plan-commands.mjs)
 pnpm run check:affected    # only checks selected by the diff
 pnpm run check:plan        # print the plan: JSON on stdout, reasons on stderr
 node scripts/quick-check.mjs   # tight edit → check loop for the crates you touched
-pnpm run check:manager-gpui    # Manager fmt + Clippy + tests
+pnpm run check:manager         # Manager fmt + Clippy + tests
 ```
 
 The hooks install with `pnpm install` (recover with `pnpm run prepare`).
@@ -328,4 +328,4 @@ The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 | Dictation models          | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | Linux development         | [`docs/linux-dev.md`](docs/linux-dev.md)                         |
 | Packaging and releases    | [`desktop/DEV.md`](desktop/DEV.md)                               |
-| Manager                   | [`manager-gpui/README.md`](manager-gpui/README.md)               |
+| Manager                   | [`manager/README.md`](manager/README.md)                           |

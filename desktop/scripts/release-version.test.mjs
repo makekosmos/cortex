@@ -107,7 +107,7 @@ test("the mac pin is the same product version as win", () => {
 // no other script may read or write it. Test files are exempt — they build
 // fixture copies under temp roots and read the real file as a contract input.
 // On the Rust side the only reader is runtime/crates/pe-version-info
-// (product_version, consumed by runtime/build.rs and manager-gpui/build.rs);
+// (product_version, consumed by runtime/build.rs and manager/build.rs);
 // runtime/crates/engine-base/src/build_info.rs is exempted explicitly — it only doc-comments the
 // file name while describing where MUNDUS_PRODUCT_VERSION comes from.
 test("only release-version.mjs and pe-version-info touch release-versions.json", async () => {
@@ -125,7 +125,7 @@ test("only release-version.mjs and pe-version-info touch release-versions.json",
         offenders.push(file);
     }
   }
-  for (const dir of ["runtime", "manager-gpui", "core"]) {
+  for (const dir of ["runtime", "manager", "core"]) {
     for (const entry of await readdir(path.join(repoRoot, dir), { recursive: true })) {
       // Vendored crates and build output are not ours to police.
       const segments = entry.split(/[\\/]/);

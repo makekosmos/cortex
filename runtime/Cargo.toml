@@ -103,7 +103,7 @@ windows = { version = "0.62", features = [
 libc.workspace = true
 
 [build-dependencies]
-# Shared with manager-gpui/build.rs — one resource script for every shipped exe.
+# Shared with manager/build.rs — one resource script for every shipped exe.
 pe-version-info = { path = "crates/pe-version-info" }
 
 [dev-dependencies]

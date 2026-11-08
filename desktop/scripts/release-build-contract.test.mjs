@@ -69,18 +69,17 @@ test("shipped binaries read the product version only from the variable the build
   assert.match(buildEnv, /MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit/);
   assert.match(components, /releaseBuildIdentity\(root\)\.env/);
   assert.match(macos, /releaseBuildIdentity\(cortexRoot\)/);
-  // A bare cargo build has no injected version. Both readers say "dev"
-  // rather than the crate's 0.1.0.
-  for (const file of [
-    "runtime/crates/engine-base/src/build_info.rs",
-    "manager-gpui/src/views/about.rs",
-  ]) {
+  // A bare cargo build has no injected version. The Engine's reader says
+  // "dev" rather than the crate's 0.1.0; the Manager never invents one — its
+  // About page shows what the Engine reports, and the crate version is only
+  // its own (`manager/Cargo.toml` documents that).
+  for (const file of ["runtime/crates/engine-base/src/build_info.rs"]) {
     const source = await readFile(path.join(repo, file), "utf8");
     assert.match(source, /"dev"/, file);
     assert.doesNotMatch(source, /CARGO_PKG_VERSION/, file);
   }
   const readers = [];
-  for (const dir of ["runtime/src", "runtime/crates", "manager-gpui/src", "core/crates"]) {
+  for (const dir of ["runtime/src", "runtime/crates", "manager/src", "core/crates"]) {
     for (const entry of readdirSync(path.join(repo, dir), { recursive: true })) {
       if (!entry.endsWith(".rs")) continue;
       const source = await readFile(path.join(repo, dir, entry), "utf8");

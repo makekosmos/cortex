@@ -112,7 +112,7 @@ async fn atlas_ten_operations_through_ark_service_and_appearance_handler() {
     // 9-10. appearance.get / appearance.set through their runtime handler.
     let appearance = AppearanceStore::new(directory.path().join("appearance"));
     let manager = DispatchClient {
-        class: Some("manager-gpui".into()),
+        class: Some("manager".into()),
         ..DispatchClient::default()
     };
     let before = appearance

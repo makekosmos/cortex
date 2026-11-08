@@ -4,7 +4,7 @@ use std::path::PathBuf;
 // ship every exe with icon + VERSIONINFO + application manifest —
 // Defender's ML treats a bare exe with empty CompanyName/FileDescription as
 // dropper-shaped. `pe-version-info` holds the single resource script shared
-// with manager-gpui's build.rs.
+// with the Manager's build.rs.
 // Build script: a failure must abort the build — panic/expect is the
 // mechanism, an Err return would be silently ignored.
 #[allow(clippy::panic, clippy::unwrap_used)]

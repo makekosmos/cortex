@@ -21,7 +21,7 @@ const SCRIPT_CHECKS = {
     rustfmt: ["rustfmt"],
     clippy: ["clippy"],
     "test:rust": ["test:rust"],
-    "check:manager-gpui": ["manager-gpui"],
+    "check:manager": ["manager"],
     "test:desktop-contracts": ["desktop-contracts"],
     "test:db-writers": ["ark-db-writers"],
     "test:release-bom": ["release-bom"],

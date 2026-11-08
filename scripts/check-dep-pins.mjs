@@ -24,15 +24,9 @@ const ALLOWED = new Map([
   // hpke =0.14.1: the iroh/noq stack pins the same RustCrypto draft suite;
   // a caret bump splits the crypto traits.
   ["Cargo.toml::hpke", "=0.14.1"],
-  // embed-resource =3.0.11: Windows resource compiler helper, pinned to keep
-  // manager-gpui build output reproducible.
+  // embed-resource =3.0.11: Windows resource compiler helper, pinned so every
+  // shipped exe's VERSIONINFO is reproducible.
   ["runtime/crates/pe-version-info/Cargo.toml::embed-resource", "=3.0.11"],
-  // gpui-kit/gpui-component/gpui-base =0.7.1: the 0.7.1 family pins gpui-pre
-  // =0.3.8, which our imago [patch.crates-io] entries replace — the exact pin
-  // is required so the patched source satisfies the requirement.
-  ["manager-gpui/Cargo.toml::gpui", "=0.7.1"],
-  ["manager-gpui/Cargo.toml::gpui-component", "=0.7.1"],
-  ["manager-gpui/Cargo.toml::gpui-base", "=0.7.1"],
   // gpui-kit/gpui-component =0.8.0, gpui-fast =0.1.10 (the NSH Manager): the
   // 0.8.0 family pins gpui-pre =0.3.9 and gpui-fast =0.1.10, which our imago
   // [patch.crates-io] entries replace — the exact pin is what lets the patched

@@ -3,7 +3,7 @@
 The shipped Mundus Desktop package is Engine + GPUI components. There is no
 Electron shell, Vite dev server, or packaged Vue UI in this repository.
 
-Component development happens in the dedicated checkouts (`manager-gpui`,
+Component development happens in the dedicated checkouts (`manager`,
 sibling `dictation` repo). This directory owns packaging scripts and build
 resources only.
 

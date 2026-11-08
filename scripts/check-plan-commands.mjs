@@ -22,14 +22,14 @@ const COMMANDS_BY_CHECK = {
   // pnpm.native), so node runs the test file directly — it resolves paths
   // from import.meta.url anyway.
   "runtime-staging": [process.execPath, ["--test", "desktop/scripts/runtime-staging.test.mjs"]],
-  "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
+  manager: ["pnpm", ["run", "check:manager"]],
   "test:static": ["pnpm", ["run", "test:static"]],
   "doc-paths": ["pnpm", ["run", "check:doc-paths"]],
 };
 
 // The full gate, defined once: `pnpm run check` is `check-plan --full --run`,
 // and a fail-closed plan executes the same list — the two cannot drift.
-const FULL_GATE = ["fast", "clippy", "test:static", "test:rust", "manager-gpui", "runtime-staging"];
+const FULL_GATE = ["fast", "clippy", "test:static", "test:rust", "manager", "runtime-staging"];
 
 // Docs go stale silently: every full gate run re-checks the file paths that
 // docs and AGENTS.md cite (scripts/check-doc-paths.mjs).

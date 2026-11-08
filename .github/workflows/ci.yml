@@ -64,12 +64,12 @@ jobs:
         shell: bash
         run: node scripts/check-toolchain.mjs
 
-      # Two cargo workspaces: the root workspace and standalone manager-gpui.
+      # Two cargo workspaces: the root workspace and the standalone Manager.
       - name: Rustfmt
         shell: bash
         run: |
           cargo fmt --all -- --check
-          cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check
+          cargo fmt --manifest-path manager/Cargo.toml --all -- --check
 
       - name: Actionlint
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
@@ -154,7 +154,7 @@ jobs:
           workspaces: |
             . -> target
             core -> target
-            manager-gpui -> target
+            manager -> target
           save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Verify desktop ARK graph and release target
@@ -202,18 +202,19 @@ jobs:
           path: sqlite-commit-durability.log
           if-no-files-found: error
 
-      # manager-gpui is a standalone Cargo workspace — the root sweep does
-      # not cover it, so it gets the same clippy/test/build the local
-      # `pnpm run check:manager-gpui` runs. Plain `cargo test`, not nextest:
-      # the local gate uses cargo test here (a single unittests binary), so
-      # there is no second profile to keep in sync.
-      - name: Clippy (manager-gpui)
-        run: cargo clippy --locked --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings
+      # The Manager is a standalone Cargo workspace — the root sweep does not
+      # cover it, so it gets the same clippy/test/build the local
+      # `pnpm run check:manager` runs. Plain `cargo test`, not nextest: the
+      # local gate uses cargo test here (a single unittests binary), so there
+      # is no second profile to keep in sync. This is also the only place the
+      # NSH host is built on macOS before a nightly ships it.
+      - name: Clippy (Manager)
+        run: cargo clippy --locked --manifest-path manager/Cargo.toml --all-targets -- -D warnings
 
       - name: Test and build Manager
         run: |
-          cargo test --locked --manifest-path manager-gpui/Cargo.toml
-          cargo build --locked --manifest-path manager-gpui/Cargo.toml
+          cargo test --locked --manifest-path manager/Cargo.toml
+          cargo build --locked --manifest-path manager/Cargo.toml
 
       # No-op on Windows (the script exits before swiftc). On macOS it
       # compiles the Swift helpers, then release-builds the Engine and

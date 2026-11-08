@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn manager_client() -> DispatchClient {
     DispatchClient {
-        class: Some("manager-gpui".into()),
+        class: Some(crate::brand::MANAGER_CLIENT_CLASSES[0].into()),
         ..Default::default()
     }
 }
@@ -184,7 +184,7 @@ fn font_size_requires_a_finite_number_in_range() {
 }
 
 #[tokio::test]
-async fn unscoped_set_requires_manager_gpui_client() {
+async fn unscoped_set_requires_a_manager_client() {
     let dir = tempfile::tempdir().unwrap();
     let store = AppearanceStore::new(dir.path().to_path_buf());
     let before = store.get(&json!({}), &anon_client()).await.unwrap();
@@ -196,6 +196,12 @@ async fn unscoped_set_requires_manager_gpui_client() {
 
     assert!(store
         .set(&json!({"mode": "light"}), &manager_client())
+        .await
+        .is_ok());
+    // The class a Manager installed before 0.10.27 sends still works: the
+    // Engine outlives the Manager that started it.
+    assert!(store
+        .set(&json!({"mode": "dark"}), &client_with_class("manager-gpui"))
         .await
         .is_ok());
 }

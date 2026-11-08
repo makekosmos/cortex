@@ -10,7 +10,7 @@ const desktop = path.join(root, "desktop");
 // This exercises the component build itself, so it runs with --local: the
 // release preflight (clean main, publishable version, Engine manifest) has its
 // own tests and must not be satisfied here with fabricated inputs.
-// The Manager component is manager-gpui (cargo); only the desktop leg needs
+// The Manager component is `manager/` (cargo); only the desktop leg needs
 // installed pnpm dependencies.
 const prerequisites =
   process.platform === "win32" &&

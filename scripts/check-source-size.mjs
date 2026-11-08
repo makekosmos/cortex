@@ -48,8 +48,7 @@ const IGNORED = new Set([
   "release",
   "target",
   "tools",
-  // Vendored third-party crate sources (e.g. manager-gpui/vendor/) are not
-  // our code.
+  // Vendored third-party crate sources are not our code.
   "vendor",
   // What `nsh` generates into a UI bundle's directory: typings, compiled
   // output and the test runners. Regenerated on every run, never edited.

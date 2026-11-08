@@ -119,7 +119,7 @@ jobs:
           workspaces: |
             . -> target
             core -> target
-            manager-gpui -> target
+            manager -> target
 
       # Same recipe as the release's "Build installer" step, minus the
       # receipt/preflight (--local): identical NSIS compile and staging.

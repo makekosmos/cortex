@@ -26,7 +26,7 @@ export function nativeBuildPlan({
       args: ["build", "--locked", "--release", "-p", "engine", "--bin", "mundus-engine"],
       env,
     },
-    { cwd: path.join(root, "manager-gpui"), args: ["build", "--locked", "--release"], env },
+    { cwd: path.join(root, "manager"), args: ["build", "--locked", "--release"], env },
   ];
 }
 

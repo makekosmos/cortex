@@ -8,13 +8,13 @@ edition = "2021"
 description = "Mundus Manager — the Engine's control panel"
 publish = false
 default-run = "manager"
-# Its own workspace, like the GPUI Manager it replaces: the release pipeline
-# builds this binary on its own.
+# Its own workspace: the release pipeline builds this binary on its own, from
+# this directory, with the lockfile next to it.
 [workspace]
 
 [build-dependencies]
-# Shared with the Engine and the Manager it replaces: one resource script,
-# one set of brand strings, one Windows manifest.
+# Shared with the Engine: one resource script, one set of brand strings, one
+# Windows manifest.
 pe-version-info = { path = "../runtime/crates/pe-version-info" }
 
 [dependencies]
