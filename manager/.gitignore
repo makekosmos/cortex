@@ -1,0 +1,13 @@
+# Build output and captures of this workspace. The UI's `bundle.*` files are
+# compiled from `App.tsx` by `nsh`, and `ui/*.png` are screenshot-test output.
+/target/
+/.run.log
+/.tmp-*
+
+ui/node_modules/
+ui/.nsh/
+ui/bundle.js
+ui/bundle.js.map
+ui/bundle.nshc
+ui/.tmp-*
+ui/*.png

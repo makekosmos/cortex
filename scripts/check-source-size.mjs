@@ -51,13 +51,23 @@ const IGNORED = new Set([
   // Vendored third-party crate sources (e.g. manager-gpui/vendor/) are not
   // our code.
   "vendor",
+  // What `nsh` generates into a UI bundle's directory: typings, compiled
+  // output and the test runners. Regenerated on every run, never edited.
+  ".nsh",
 ]);
+
+// `nsh` writes these beside `App.tsx`: compiled bundles, not sources.
+const GENERATED_FILES = new Set(["bundle.js", "bundle.js.map", "bundle.nshc"]);
 
 async function collect(dir, files = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory() && !IGNORED.has(entry.name)) {
       await collect(path.join(dir, entry.name), files);
-    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+    } else if (
+      entry.isFile() &&
+      SOURCE_EXTENSIONS.has(path.extname(entry.name)) &&
+      !GENERATED_FILES.has(entry.name)
+    ) {
       files.push(path.join(dir, entry.name));
     }
   }

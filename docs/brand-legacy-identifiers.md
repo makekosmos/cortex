@@ -50,3 +50,26 @@ existing user data is not orphaned.
 Changelog/release notes and decision/hand-off logs keep old names verbatim —
 they describe the past. The check allows `CHANGELOG*`/`HISTORY*`/
 `RELEASE_NOTES*` paths and a small explicit file list in the allowlist.
+
+## Neutral wire names (Manager migration)
+
+The Manager is being rewritten on the NSH/GPUI stack, and the next product
+rename must not need a repository-wide hunt again. The client *class* header
+is the first name that leaves the repository, so it is a role, not a product:
+
+| Name                             | Where it lives                                          | Why                                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Client-Class`                 | `engine_base::brand::CLIENT_CLASS_HEADER`, the Manager's `identity::CLIENT_CLASS_HEADER` | Names the caller's role. A product rename never touches the wire.                                    |
+| `x-kosmos-client-class` (legacy) | `brand::LEGACY_CLIENT_CLASS_HEADER`                      | Still accepted from already-shipped clients (Atlas, agenda, memoria, dictation, imago's kit). Dropped only once they all send the new one. |
+| `manager`, `mundus-manager`      | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager's own class.                                                                              |
+| `manager-gpui` (legacy)          | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager this one replaces still sends it, and it ships until the new binary takes its place.      |
+
+`appearance.set` and the `follow_apps` writes in `runtime/src/appearance/apps.rs`
+accept every class in `MANAGER_CLIENT_CLASSES`, so the old Manager and the new
+one are interchangeable while both exist.
+
+Deliberately **not** renamed in this pass, because each would break installs in
+the field: `com.kosmos.*` package ids, `publisher: "kosmos"`, the `ark.db`
+extension keys and media types, the `kosmos-release-2026` signing key id, the
+`kosmos-kepler` keyring service, the `kepler-fallback` device id, and the
+`x-kosmos-*` headers pinned component builds still send.

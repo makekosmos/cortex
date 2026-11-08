@@ -56,7 +56,9 @@ pub(in crate::engine_api) fn authenticate(
 
     Ok(AuthenticatedClient {
         pid: pid.expect("validated client PID"),
+        // Neutral name first, the pre-rename one second: both mean the same.
         class: header_string(headers, CLIENT_CLASS_HEADER)
+            .or_else(|| header_string(headers, LEGACY_CLIENT_CLASS_HEADER))
             .unwrap_or_else(|| "engine-http".to_string()),
         version: header_string(headers, CLIENT_VERSION_HEADER)
             .unwrap_or_else(|| API_VERSION.to_string()),

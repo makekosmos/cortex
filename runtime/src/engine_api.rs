@@ -36,7 +36,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // names — persisted contract, see docs/brand-legacy-identifiers.md.
 const CLIENT_PID_HEADER: &str = "x-kosmos-client-pid";
 const API_VERSION_HEADER: &str = "x-kosmos-api-version";
-const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
+// The class header is neutral now; the pre-rename name stays on the accepted
+// list while shipped clients still send it (`brand::MANAGER_CLIENT_CLASSES`).
+const CLIENT_CLASS_HEADER: &str = crate::brand::CLIENT_CLASS_HEADER;
+const LEGACY_CLIENT_CLASS_HEADER: &str = crate::brand::LEGACY_CLIENT_CLASS_HEADER;
 const CLIENT_VERSION_HEADER: &str = "x-kosmos-client-version";
 
 // BoxBody so the launch `events` route can answer with a long-lived SSE
