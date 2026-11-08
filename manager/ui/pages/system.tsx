@@ -161,6 +161,7 @@ export function StoragePage(props: PageProps) {
                 right={
                   <PillButton
                     colors={props.colors}
+                    tone="danger"
                     label="Восстановить"
                     onPress={() => props.onCommand("backups.restore", { id: backup.id })}
                   />

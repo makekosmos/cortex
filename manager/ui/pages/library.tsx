@@ -79,6 +79,7 @@ export function ModelsPage(props: PageProps) {
                         ) : null}
                         <PillButton
                           colors={props.colors}
+                          tone="danger"
                           label="Удалить"
                           onPress={() => props.onCommand("models.delete", { id: model.id })}
                         />

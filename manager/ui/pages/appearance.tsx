@@ -23,7 +23,7 @@ function ThemeRow(props: {
   return (
     <View>
       <SectionLabel colors={props.colors}>{props.title}</SectionLabel>
-      <View class="flex-row" style={{ gap: 14 }}>
+      <View class="flex-row flex-wrap" style={{ gap: 14 }}>
         {props.themes.map((theme) => (
           <ThemeCard
             key={theme.key}

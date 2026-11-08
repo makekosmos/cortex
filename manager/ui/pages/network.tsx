@@ -56,6 +56,7 @@ export function DevicesPage(props: PageProps) {
                     />
                     <PillButton
                       colors={props.colors}
+                      tone="danger"
                       label="Отключить"
                       onPress={() => props.onCommand("device.unlink", { id: device.id })}
                     />
