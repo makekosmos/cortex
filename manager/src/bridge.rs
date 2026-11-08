@@ -411,8 +411,10 @@ fn hostname() -> String {
         .unwrap_or_else(|_| "Этот компьютер".into())
 }
 
+/// Where the Engine keeps its data, resolved the way the Engine resolves it, so
+/// the storage page names the same directory a running Engine writes to.
 pub fn data_directory() -> String {
-    std::env::var("MUNDUS_DATA_DIR")
-        .or_else(|_| std::env::var("APPDATA").map(|base| format!("{base}\\Mundus")))
+    crate::engine::data_home()
+        .map(|dir| dir.display().to_string())
         .unwrap_or_default()
 }

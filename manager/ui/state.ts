@@ -108,10 +108,9 @@ export const demoState: ManagerState = {
     { id: "desktop", name: "Мастерская", status: "online", platform: "windows", current: false },
     { id: "phone", name: "Pixel 9", status: "offline", platform: "android", current: false },
   ],
-  apps: [
-    { id: "agenda", name: "Mundus Agenda", version: "0.9.4", installed: true },
-    { id: "memoria", name: "Mundus Memoria", version: "0.6.1", installed: true },
-  ],
+  // Atlas is what the Engine's app index lists on a machine that has it; the
+  // page reads the real list as soon as the bridge answers.
+  apps: [{ id: "atlas", name: "Atlas", version: "", installed: true }],
   models: [
     {
       id: "whisper-small",

@@ -2,8 +2,6 @@
 
 use super::*;
 
-use super::*;
-
 #[test]
 fn sizes_read_as_the_page_wants() {
     assert_eq!(size(940), "940 Б");
@@ -21,6 +19,63 @@ fn a_device_list_survives_an_engine_without_peers() {
 fn an_empty_answer_keeps_the_page_readable() {
     let settings = shape("settings", json!({ "available": true, "enabled": true }));
     assert_eq!(settings["autostart"], true);
+}
+
+/// The route the `settings` page takes: the call lands under `settings.autostart`
+/// and the switch reads it there. The Engine answers an object, the state holds
+/// the position — an object would be truthy in JavaScript and pin the switch on.
+#[test]
+fn autostart_reaches_the_switch_as_a_boolean() {
+    let mut state = json!({ "settings": { "autostart": false, "telemetry": false } });
+
+    apply(
+        &mut state,
+        "settings.autostart",
+        json!({ "available": true, "enabled": true, "reason": "registry" }),
+        None,
+    );
+    assert_eq!(state["settings"]["autostart"], json!(true));
+
+    apply(
+        &mut state,
+        "settings.autostart",
+        json!({ "available": false, "enabled": false, "reason": "unsupported" }),
+        None,
+    );
+    assert_eq!(state["settings"]["autostart"], json!(false));
+
+    apply(
+        &mut state,
+        "settings.autostart",
+        json!({ "available": true, "reason": "no value yet" }),
+        None,
+    );
+    assert_eq!(state["settings"]["autostart"], json!(false));
+}
+
+/// `app_index.list_all` as a live Engine answered it; the page filters nothing,
+/// and every row carries the id `app_index.launch` looks up.
+#[test]
+fn the_apps_page_reads_the_same_index_the_open_button_launches_from() {
+    let apps = shape(
+        "apps",
+        json!({
+            "apps": [
+                {
+                    "id": "8a2db24424ddaf1f",
+                    "name": "Kero",
+                    "exec_path": "C:/Users/kirill/AppData/Local/Programs/Kero/Kero.exe",
+                    "icon_path": null,
+                    "kind": "win32",
+                    "source": "start_menu",
+                    "mtime": 1_761_000_000_u64,
+                },
+            ],
+        }),
+    );
+    assert_eq!(apps[0]["id"], json!("8a2db24424ddaf1f"));
+    assert_eq!(apps[0]["name"], json!("Kero"));
+    assert_eq!(apps[0]["installed"], json!(true));
 }
 
 #[test]
@@ -42,26 +97,29 @@ fn usage_counts_minutes_from_the_engines_milliseconds() {
 
 #[test]
 fn a_model_states_its_size_in_megabytes() {
-    let rows = shape(
-        "models",
-        json!({ "models": [{ "id": "whisper-small", "name": "Whisper Small", "sizeMb": 466, "downloaded": true }] }),
-    );
+    let models = json!({
+        "models": [
+            { "id": "whisper-small", "name": "Whisper Small", "sizeMb": 466, "downloaded": true },
+        ],
+    });
+    let rows = shape("models", models);
     assert_eq!(rows[0]["size"], "466 МБ");
     assert_eq!(rows[0]["downloaded"], true);
 }
 
 #[test]
 fn a_pairing_request_carries_who_is_asking() {
-    let sync = shape(
-        "sync",
-        json!({
-            "running": true,
-            "incoming_pairing_requests": [
-                { "device_id": "d1", "device_name": "Мастерская", "platform": "windows", "app_version": "0.10.26" }
-            ],
-            "peers": [{ "device_id": "d2", "device_name": "Pixel", "status": "online" }],
-        }),
-    );
+    let snapshot = json!({
+        "running": true,
+        "incoming_pairing_requests": [{
+            "device_id": "d1",
+            "device_name": "Мастерская",
+            "platform": "windows",
+            "app_version": "0.10.26",
+        }],
+        "peers": [{ "device_id": "d2", "device_name": "Pixel", "status": "online" }],
+    });
+    let sync = shape("sync", snapshot);
     assert_eq!(sync["incoming"][0]["name"], "Мастерская");
     assert_eq!(sync["incoming"][0]["id"], "d1");
     assert_eq!(sync["peers"][0]["status"], "online");
@@ -69,20 +127,29 @@ fn a_pairing_request_carries_who_is_asking() {
 
 #[test]
 fn appearance_reads_the_settings_the_engine_stores() {
-    let theme = shape(
-        "appearance",
-        json!({ "settings": { "mode": "dark", "light_theme": "merino-light", "dark_theme": "cobalt-foundry", "follow_apps": true } }),
-    );
+    let stored = json!({
+        "settings": {
+            "mode": "dark",
+            "light_theme": "merino-light",
+            "dark_theme": "cobalt-foundry",
+            "follow_apps": true,
+        },
+    });
+    let theme = shape("appearance", stored);
     assert_eq!(theme["dark"], "cobalt-foundry");
     assert_eq!(theme["followApps"], true);
 }
 
 #[test]
 fn updates_say_what_the_channel_offers() {
-    let updates = shape(
-        "updates",
-        json!({ "state": "available", "currentVersion": "0.10.26", "newVersion": "0.10.27", "canInstall": true, "percent": 0 }),
-    );
+    let status = json!({
+        "state": "available",
+        "currentVersion": "0.10.26",
+        "newVersion": "0.10.27",
+        "canInstall": true,
+        "percent": 0,
+    });
+    let updates = shape("updates", status);
     assert_eq!(updates["newVersion"], "0.10.27");
     assert_eq!(updates["canInstall"], true);
 }

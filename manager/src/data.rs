@@ -18,7 +18,8 @@ type Call = (&'static str, &'static str, Value);
 /// route → the calls that page needs.
 fn calls(route: &str) -> Vec<Call> {
     match route {
-        "apps" => vec![("apps", "apps.list", json!({}))],
+        // One catalog for the page: the same index `app.open` launches from.
+        "apps" => vec![("apps", "app_index.list_all", json!({}))],
         "models" => vec![("models", "dictation.list_local_models", json!({}))],
         "keys" => vec![("keys", "dictation.get_config", json!({}))],
         "devices" => vec![("sync", "get_sync_snapshot", json!({}))],
@@ -136,19 +137,23 @@ fn run(
         Err(_) => return,
     };
     match answer {
-        Ok(data) => {
-            let mapped = match transform {
-                Some(transform) => transform(data),
-                None => shape(key, data),
-            };
-            write(&mut state, key, mapped);
-        }
+        Ok(data) => apply(&mut state, key, data, transform),
         Err(message) => {
             // Keep what the page shows: a failed refresh is not an empty page.
             tracing::warn!(op, error = %message, "engine call failed");
         }
     }
     context.emit("state", state.clone());
+}
+
+/// Narrows one answer and writes it where the pages read it. Split out of `run`
+/// so the mapping that reaches the state can be tested without an Engine.
+fn apply(state: &mut Value, key: &str, answer: Value, transform: Option<fn(Value) -> Value>) {
+    let mapped = match transform {
+        Some(transform) => transform(answer),
+        None => shape(key, answer),
+    };
+    write(state, key, mapped);
 }
 
 /// Writes `a.b` (or `a`) in the state.
@@ -181,6 +186,13 @@ fn shape(key: &str, data: Value) -> Value {
                 .iter()
                 .map(app_row)
                 .collect(),
+        ),
+        // `engine.autostart.get` answers `{available, enabled, reason}`; the
+        // screen wants the switch's position, not the object it arrives in.
+        "settings.autostart" => Value::Bool(
+            data.pointer("/enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         ),
         "models" => Value::Array(
             array(&data, &["/models", "/data/models"])
@@ -226,7 +238,8 @@ fn sync(data: &Value) -> Value {
         "ownCodeAvailable": bool_at(data, &["/own_pairing_code_available"]),
         "incoming": array(data, &["/incoming_pairing_requests"]).iter().map(|request| json!({
             "id": text(request, &["/device_id"]).unwrap_or_default(),
-            "name": text(request, &["/device_name"]).unwrap_or_else(|| "Новое устройство".into()),
+            "name": text(request, &["/device_name"])
+                .unwrap_or_else(|| "Новое устройство".into()),
             "platform": text(request, &["/platform"]).unwrap_or_default(),
             "appVersion": text(request, &["/app_version"]).unwrap_or_default(),
         })).collect::<Vec<_>>(),
@@ -277,21 +290,14 @@ fn bool_at(value: &Value, paths: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+/// A row of `app_index.list_all`: the index only holds programs it can start,
+/// and `app_index.launch` looks an id up in that same index.
 fn app_row(app: &Value) -> Value {
-    let installed = app
-        .pointer("/installed")
-        .and_then(Value::as_bool)
-        .or_else(|| {
-            app.pointer("/state")
-                .and_then(Value::as_str)
-                .map(|state| state == "installed")
-        })
-        .unwrap_or(false);
     json!({
-        "id": text(app, &["/id", "/slug", "/app_id"]).unwrap_or_default(),
-        "name": text(app, &["/name", "/title", "/display_name"]).unwrap_or_default(),
-        "version": text(app, &["/version", "/installed_version"]).unwrap_or_default(),
-        "installed": installed,
+        "id": text(app, &["/id"]).unwrap_or_default(),
+        "name": text(app, &["/name", "/display_name", "/title"]).unwrap_or_default(),
+        "version": text(app, &["/version"]).unwrap_or_default(),
+        "installed": true,
     })
 }
 
@@ -325,7 +331,8 @@ fn keys(data: &Value) -> Value {
 fn device_row(peer: &Value) -> Value {
     json!({
         "id": text(peer, &["/device_id", "/id"]).unwrap_or_default(),
-        "name": text(peer, &["/device_name", "/name"]).unwrap_or_else(|| "Без имени".into()),
+        "name": text(peer, &["/device_name", "/name"])
+            .unwrap_or_else(|| "Без имени".into()),
         "status": match text(peer, &["/status"]).as_deref() {
             Some("online") => "online",
             _ => "offline",
@@ -409,7 +416,7 @@ fn usage(data: &Value) -> Value {
             .and_then(|value| value.as_u64())
             .unwrap_or(0)
     };
-    let today = trend.last().map(&day_ms).unwrap_or_default();
+    let today = trend.last().map(day_ms).unwrap_or_default();
     let week: u64 = trend.iter().rev().take(7).map(&day_ms).sum();
     let top: Vec<Value> = array(data, &["/topApps", "/top_apps"])
         .iter()

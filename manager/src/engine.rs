@@ -153,6 +153,28 @@ fn request_id() -> String {
 /// Where the Engine keeps its lock file, most specific first. `MUNDUS_DATA_DIR`
 /// wins so a dev Manager reads the dev Engine even when one is installed.
 pub fn data_dir() -> Option<PathBuf> {
+    data_dirs()
+        .into_iter()
+        .find(|dir| dir.join("engine.lock.json").is_file())
+}
+
+/// The dir the Engine is on, or the one it would use: the env override when it
+/// names an existing dir, otherwise the roaming `Mundus`. The storage page shows
+/// it before an Engine has ever written a lock.
+pub fn data_home() -> Option<PathBuf> {
+    let mut candidates = data_dirs();
+    match candidates
+        .iter()
+        .position(|dir| dir.join("engine.lock.json").is_file())
+    {
+        Some(index) => Some(candidates.swap_remove(index)),
+        None => candidates.into_iter().next(),
+    }
+    .or_else(|| config_root().map(|base| base.join("Mundus")))
+}
+
+/// Every dir the Engine may be running on, most specific first.
+fn data_dirs() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(dir) = env_dir("MUNDUS_DATA_DIR") {
         candidates.push(dir);
@@ -161,13 +183,11 @@ pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = env_dir("KOSMOS_DATA_DIR") {
         candidates.push(dir);
     }
-    if let Some(base) = config_dir() {
+    if let Some(base) = config_root() {
         candidates.push(base.join("Mundus"));
         candidates.push(base.join("Kosmos"));
     }
     candidates
-        .into_iter()
-        .find(|dir| dir.join("engine.lock.json").is_file())
 }
 
 fn env_dir(name: &str) -> Option<PathBuf> {
@@ -176,10 +196,40 @@ fn env_dir(name: &str) -> Option<PathBuf> {
         .filter(|dir| dir.is_dir())
 }
 
-fn config_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA")
-        .or_else(|| std::env::var_os("XDG_CONFIG_HOME"))
-        .map(PathBuf::from)
+/// The roaming config root, exactly as `engine_base::data_dir` resolves it:
+/// `%APPDATA%` on Windows, `~/Library/Application Support` on macOS (which does
+/// not honour `XDG_*`), `$XDG_CONFIG_HOME` or `~/.config` on other Unix. A third
+/// scheme here would send the Manager looking for a lock file the Engine never
+/// wrote.
+fn config_root() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        env_value("HOME").map(|home| home.join("Library").join("Application Support"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let appdata = env_value("APPDATA");
+        if appdata.is_some() {
+            return appdata;
+        }
+        #[cfg(unix)]
+        {
+            if let Some(xdg) = env_value("XDG_CONFIG_HOME") {
+                return Some(xdg);
+            }
+            if let Some(home) = env_value("HOME") {
+                return Some(home.join(".config"));
+            }
+        }
+        None
+    }
+}
+
+/// An environment directory, trimmed and refused when empty.
+fn env_value(name: &str) -> Option<PathBuf> {
+    let value = std::env::var(name).ok()?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
 }
 
 /// Polls the Engine for as long as the window lives, and pushes every change
@@ -251,7 +301,7 @@ fn probe(engine: &Engine, seen: &mut Option<Instant>) -> Value {
         "version": text("version", ""),
         "channel": text("channel", "production"),
         "port": port,
-        "uptimeMinutes": (started.elapsed().as_secs() / 60) as u64,
+        "uptimeMinutes": started.elapsed().as_secs() / 60,
     })
 }
 
@@ -286,10 +336,22 @@ mod tests {
     #[ignore = "needs a running Engine (`MUNDUS_DATA_DIR` set)"]
     fn live_engine_answers_a_list_call() {
         let engine = Engine::new(data_dir());
-        let apps = engine
-            .rpc("apps.list", json!({}))
-            .expect("apps.list succeeds");
-        assert!(apps["apps"].is_array(), "apps.list answers a list");
+        let listed = engine
+            .rpc("app_index.list_all", json!({}))
+            .expect("app_index.list_all succeeds");
+        let apps = listed["apps"]
+            .as_array()
+            .expect("a list of launchable apps");
+        let id = apps
+            .first()
+            .and_then(|app| app["id"].as_str())
+            .expect("the index names its rows");
+        // `app_index.icon_path` looks the id up the same way `app_index.launch`
+        // does, so this answers whether launching that exact id would resolve.
+        let icon = engine
+            .rpc("app_index.icon_path", json!({ "id": id }))
+            .expect("an id from list_all resolves in the index");
+        assert!(icon.get("path").is_some() || icon.is_object());
     }
 
     #[test]

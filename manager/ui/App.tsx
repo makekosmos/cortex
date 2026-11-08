@@ -31,8 +31,6 @@ const restoreId = signal("");
 /// The pairing code the user types to reach another device.
 const connectOpen = signal(false);
 const connectCode = signal("");
-/// Requests already answered, so the modal closes before the Engine confirms.
-const answered = signal<string[]>([]);
 
 const Bridge = nativeComponent<
   { route: string },
@@ -144,18 +142,19 @@ function renderPage(page: string) {
   }
 }
 
-/** The pairing request the Engine is holding, if there is one to answer. */
+/**
+ * The pairing request the Engine is holding, if there is one to answer. The
+ * Engine is the one that closes the handshake: the modal leaves only once the
+ * poller reports the request gone, so a failed call keeps it on screen.
+ */
 function pendingPairing() {
-  return state().sync.incoming.find((request) => !answered().includes(request.id));
+  return state().sync.incoming[0];
 }
 
 function PairingModal(props: { colors: ApplicationTheme }) {
   const request = pendingPairing();
   if (!request) return null;
-  const answer = (name: string) => {
-    answered.set([...answered(), request.id]);
-    dispatch(name, { id: request.id });
-  };
+  const answer = (name: string) => dispatch(name, { id: request.id });
   const who =
     request.platform && request.appVersion
       ? `${request.platform} · ${request.appVersion}`
