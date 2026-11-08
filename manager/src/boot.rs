@@ -148,8 +148,9 @@ pub fn ensure_engine() -> Result<(), String> {
     wait_ready(
         health_ready,
         || {
-            let directory = engine::data_dir()
-                .or_else(|| std::env::var_os("MUNDUS_DATA_DIR").map(PathBuf::from))
+            // After a Stop the Engine has deleted `engine.lock.json`, so the
+            // dir is found by the rules the Engine itself uses, not by the lock.
+            let directory = engine::data_home()
                 .ok_or_else(|| "Не найден каталог данных Engine.".to_string())?;
             let executable = std::env::current_exe().map_err(|error| error.to_string())?;
             let path = match std::env::var_os("MUNDUS_ENGINE_PATH") {
@@ -218,8 +219,7 @@ pub fn stop_engine() -> Result<(), String> {
     let path = engine_path().ok_or_else(|| {
         "Бинарник Engine не найден: остановить сервер из Manager нельзя.".to_string()
     })?;
-    let directory =
-        engine::data_dir().or_else(|| std::env::var_os("MUNDUS_DATA_DIR").map(PathBuf::from));
+    let directory = engine::data_home();
     let mut command = Command::new(&path);
     command
         .arg("--shutdown")

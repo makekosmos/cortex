@@ -18,8 +18,9 @@ type Call = (&'static str, &'static str, Value);
 /// route → the calls that page needs.
 fn calls(route: &str) -> Vec<Call> {
     match route {
-        // One catalog for the page: the same index `app.open` launches from.
-        "apps" => vec![("apps", "app_index.list_all", json!({}))],
+        // The Engine keeps no installed-app catalog here, so the page has
+        // nothing to ask for: it renders its empty state.
+        "apps" => Vec::new(),
         "models" => vec![("models", "dictation.list_local_models", json!({}))],
         "keys" => vec![("keys", "dictation.get_config", json!({}))],
         "devices" => vec![("sync", "get_sync_snapshot", json!({}))],
@@ -148,7 +149,12 @@ fn run(
 
 /// Narrows one answer and writes it where the pages read it. Split out of `run`
 /// so the mapping that reaches the state can be tested without an Engine.
-fn apply(state: &mut Value, key: &str, answer: Value, transform: Option<fn(Value) -> Value>) {
+pub(crate) fn apply(
+    state: &mut Value,
+    key: &str,
+    answer: Value,
+    transform: Option<fn(Value) -> Value>,
+) {
     let mapped = match transform {
         Some(transform) => transform(answer),
         None => shape(key, answer),
@@ -156,7 +162,9 @@ fn apply(state: &mut Value, key: &str, answer: Value, transform: Option<fn(Value
     write(state, key, mapped);
 }
 
-/// Writes `a.b` (or `a`) in the state.
+/// Writes `a.b` (or `a`) in the state. An answer that carries a piece of an
+/// object merges into it: `engine.settings.get` must not drop the
+/// `settings.autostart` another call already wrote.
 fn write(state: &mut Value, path: &str, value: Value) {
     let Some(object) = state.as_object_mut() else {
         return;
@@ -165,7 +173,19 @@ fn write(state: &mut Value, path: &str, value: Value) {
     let mut parts = path.split('.').peekable();
     while let Some(part) = parts.next() {
         if parts.peek().is_none() {
-            cursor.insert(part.to_owned(), value);
+            match value {
+                Value::Object(fresh) => match cursor.get_mut(part) {
+                    Some(Value::Object(existing)) => {
+                        existing.extend(fresh);
+                    }
+                    _ => {
+                        cursor.insert(part.to_owned(), Value::Object(fresh));
+                    }
+                },
+                other => {
+                    cursor.insert(part.to_owned(), other);
+                }
+            }
             return;
         }
         let entry = cursor
@@ -181,12 +201,6 @@ fn write(state: &mut Value, path: &str, value: Value) {
 /// The Engine's answer, narrowed to what the pages render.
 fn shape(key: &str, data: Value) -> Value {
     match key {
-        "apps" => Value::Array(
-            array(&data, &["/apps", "/data/apps"])
-                .iter()
-                .map(app_row)
-                .collect(),
-        ),
         // `engine.autostart.get` answers `{available, enabled, reason}`; the
         // screen wants the switch's position, not the object it arrives in.
         "settings.autostart" => Value::Bool(
@@ -290,17 +304,6 @@ fn bool_at(value: &Value, paths: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-/// A row of `app_index.list_all`: the index only holds programs it can start,
-/// and `app_index.launch` looks an id up in that same index.
-fn app_row(app: &Value) -> Value {
-    json!({
-        "id": text(app, &["/id"]).unwrap_or_default(),
-        "name": text(app, &["/name", "/display_name", "/title"]).unwrap_or_default(),
-        "version": text(app, &["/version"]).unwrap_or_default(),
-        "installed": true,
-    })
-}
-
 fn model_row(model: &Value) -> Value {
     // The Engine states a model's weight in megabytes (`sizeMb`), not bytes.
     let megabytes = first(model, &["/sizeMb", "/size_mb"]).and_then(|value| value.as_f64());
@@ -391,14 +394,10 @@ fn appearance(data: &Value) -> Value {
 }
 
 fn settings(data: &Value) -> Value {
+    // `autostart` is deliberately absent: `engine.settings.get` does not carry
+    // it, and a `false` invented here would overwrite the real position the
+    // `engine.autostart.get` call writes under `settings.autostart`.
     json!({
-        // `engine.autostart.get` answers `{available, enabled, reason}` and
-        // `engine.settings.get` a `usage_tracker` map.
-        "autostart": data
-            .pointer("/enabled")
-            .and_then(Value::as_bool)
-            .or_else(|| data.as_bool())
-            .unwrap_or(false),
         "telemetry": data
             .pointer("/usage_tracker/enabled")
             .and_then(Value::as_bool)

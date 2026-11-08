@@ -15,9 +15,6 @@ use crate::boot;
 use crate::data::Loader;
 use crate::engine::{self, Engine};
 
-/// The Engine operation that starts an installed program by its index id.
-const APP_LAUNCH: &str = "app_index.launch";
-
 /// Which page the sidebar is on. The pages ask for it and mirror what we say.
 const ROUTES: [&str; 13] = [
     "server",
@@ -327,10 +324,6 @@ impl NativeComponent for ManagerBridge {
                 json!({}),
                 "integrations",
             ),
-
-            // «Открыть» on the apps page: the Engine launches the program from
-            // its own index (`app_index.launch`), the Manager only asks.
-            "app.open" => loader.call("apps", APP_LAUNCH, json!({ "id": Self::id(args) }), None),
 
             // Host-side facts the pages mirror.
             "client.name" => {

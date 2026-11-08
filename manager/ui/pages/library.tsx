@@ -11,8 +11,9 @@ import {
 import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
 
-/** What the Engine has installed on this computer. The store (and its
- * install/progress states) is not part of the Manager: see `todo.md`. */
+/** What the Engine says is installed here. This branch of the Engine keeps no
+ * such catalog, so the page states that instead of inventing a list — and
+ * nothing on it opens a program the Manager cannot name. */
 export function AppsPage(props: PageProps) {
   const apps = () => props.state().apps.filter((app) => app.installed);
   return (
@@ -31,14 +32,6 @@ export function AppsPage(props: PageProps) {
                 title={app.name}
                 subtitle={app.version ? `Версия ${app.version}` : "Установлено"}
                 last={index === apps().length - 1}
-                right={
-                  <PillButton
-                    colors={props.colors}
-                    tone="accent"
-                    label="Открыть"
-                    onPress={() => props.onCommand("app.open", { id: app.id })}
-                  />
-                }
               />
             ))
           ) : (

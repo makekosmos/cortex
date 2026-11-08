@@ -16,9 +16,15 @@ fn a_device_list_survives_an_engine_without_peers() {
 }
 
 #[test]
-fn an_empty_answer_keeps_the_page_readable() {
-    let settings = shape("settings", json!({ "available": true, "enabled": true }));
-    assert_eq!(settings["autostart"], true);
+fn the_settings_call_reads_only_what_it_owns() {
+    // `engine.settings.get` answers the usage-tracker switch; it says nothing
+    // about autostart, so it must not write one.
+    let settings = shape(
+        "settings",
+        json!({ "enabled": true, "usage_tracker": { "enabled": true } }),
+    );
+    assert_eq!(settings["telemetry"], true);
+    assert!(settings.get("autostart").is_none());
 }
 
 /// The route the `settings` page takes: the call lands under `settings.autostart`
@@ -53,29 +59,35 @@ fn autostart_reaches_the_switch_as_a_boolean() {
     assert_eq!(state["settings"]["autostart"], json!(false));
 }
 
-/// `app_index.list_all` as a live Engine answered it; the page filters nothing,
-/// and every row carries the id `app_index.launch` looks up.
+/// Both calls land on `settings`, in either order: the page asks for the
+/// settings object and for the autostart switch together, and neither answer
+/// may wipe the other's field.
 #[test]
-fn the_apps_page_reads_the_same_index_the_open_button_launches_from() {
-    let apps = shape(
-        "apps",
-        json!({
-            "apps": [
-                {
-                    "id": "8a2db24424ddaf1f",
-                    "name": "Kero",
-                    "exec_path": "C:/Users/kirill/AppData/Local/Programs/Kero/Kero.exe",
-                    "icon_path": null,
-                    "kind": "win32",
-                    "source": "start_menu",
-                    "mtime": 1_761_000_000_u64,
-                },
-            ],
-        }),
+fn the_two_settings_answers_do_not_wipe_each_other() {
+    let mut state = json!({
+        "settings": { "autostart": true, "telemetry": false, "language": "Русский" },
+    });
+
+    apply(
+        &mut state,
+        "settings",
+        json!({ "enabled": true, "usage_tracker": { "enabled": true } }),
+        None,
     );
-    assert_eq!(apps[0]["id"], json!("8a2db24424ddaf1f"));
-    assert_eq!(apps[0]["name"], json!("Kero"));
-    assert_eq!(apps[0]["installed"], json!(true));
+    assert_eq!(state["settings"]["autostart"], json!(true));
+    assert_eq!(state["settings"]["telemetry"], json!(true));
+    assert_eq!(state["settings"]["language"], json!("Русский"));
+
+    // And a failed autostart call writes nothing: the switch keeps its last
+    // known position instead of falling to a `false` from another answer.
+    apply(
+        &mut state,
+        "settings.autostart",
+        json!({ "available": true, "enabled": false, "reason": "registry" }),
+        None,
+    );
+    assert_eq!(state["settings"]["autostart"], json!(false));
+    assert_eq!(state["settings"]["telemetry"], json!(true));
 }
 
 #[test]

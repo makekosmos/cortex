@@ -162,7 +162,12 @@ pub fn data_dir() -> Option<PathBuf> {
 /// names an existing dir, otherwise the roaming `Mundus`. The storage page shows
 /// it before an Engine has ever written a lock.
 pub fn data_home() -> Option<PathBuf> {
-    let mut candidates = data_dirs();
+    pick_data_home(data_dirs(), config_root())
+}
+
+/// The choice `data_home` makes, split out from the environment so it can be
+/// tested: the dir holding a lock wins, otherwise the most specific candidate.
+fn pick_data_home(mut candidates: Vec<PathBuf>, root: Option<PathBuf>) -> Option<PathBuf> {
     match candidates
         .iter()
         .position(|dir| dir.join("engine.lock.json").is_file())
@@ -170,7 +175,7 @@ pub fn data_home() -> Option<PathBuf> {
         Some(index) => Some(candidates.swap_remove(index)),
         None => candidates.into_iter().next(),
     }
-    .or_else(|| config_root().map(|base| base.join("Mundus")))
+    .or_else(|| root.map(|base| base.join("Mundus")))
 }
 
 /// Every dir the Engine may be running on, most specific first.
@@ -243,10 +248,18 @@ pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>
             let engine_state = probe(&engine, &mut seen);
             // Pairing is app-wide: a request must reach the modal on whatever
             // page the user is on, so the snapshot is polled here and not with
-            // the Devices page.
+            // the Devices page. A failed read keeps the previous answer: the
+            // Engine still holds the request, and an empty list here would close
+            // a modal the user has not answered.
             let sync = engine
                 .rpc("get_sync_snapshot", json!({}))
                 .map(|snapshot| crate::data::sync_view(&snapshot))
+                .or_else(|message| {
+                    tracing::warn!(error = %message, "sync snapshot failed");
+                    last.as_ref()
+                        .map(|(_, sync, peers)| (sync.clone(), peers.clone()))
+                        .ok_or(message)
+                })
                 .unwrap_or_else(|_| {
                     (
                         json!({ "running": false, "incoming": [], "peers": [] }),
@@ -334,24 +347,45 @@ mod tests {
 
     #[test]
     #[ignore = "needs a running Engine (`MUNDUS_DATA_DIR` set)"]
-    fn live_engine_answers_a_list_call() {
+    fn live_engine_answers_the_settings_calls_the_page_makes() {
         let engine = Engine::new(data_dir());
-        let listed = engine
-            .rpc("app_index.list_all", json!({}))
-            .expect("app_index.list_all succeeds");
-        let apps = listed["apps"]
-            .as_array()
-            .expect("a list of launchable apps");
-        let id = apps
-            .first()
-            .and_then(|app| app["id"].as_str())
-            .expect("the index names its rows");
-        // `app_index.icon_path` looks the id up the same way `app_index.launch`
-        // does, so this answers whether launching that exact id would resolve.
-        let icon = engine
-            .rpc("app_index.icon_path", json!({ "id": id }))
-            .expect("an id from list_all resolves in the index");
-        assert!(icon.get("path").is_some() || icon.is_object());
+        let settings = engine
+            .rpc("engine.settings.get", json!({}))
+            .expect("engine.settings.get succeeds");
+        assert!(settings.is_object(), "settings is an object");
+
+        // `{available, enabled, reason}` is the object the state must narrow to
+        // the switch's position — the object itself is truthy in JavaScript.
+        let autostart = engine
+            .rpc("engine.autostart.get", json!({}))
+            .expect("engine.autostart.get succeeds");
+        let enabled = autostart["enabled"]
+            .as_bool()
+            .expect("the Engine states the switch's position");
+        let mut state = json!({});
+        crate::data::apply(&mut state, "settings.autostart", autostart, None);
+        assert_eq!(state["settings"]["autostart"], json!(enabled));
+    }
+
+    /// `Stop` deletes `engine.lock.json`; the directory must still be named,
+    /// or `Start` has nothing to hand the Engine and refuses to run without
+    /// `MUNDUS_DATA_DIR`. No temp dir is created: the paths simply have no lock.
+    #[test]
+    fn a_stopped_engine_still_names_its_data_directory() {
+        let stopped = PathBuf::from("nowhere/mundus-dev");
+        let legacy = PathBuf::from("nowhere/legacy-dir");
+        assert_eq!(
+            pick_data_home(vec![stopped.clone(), legacy], None),
+            Some(stopped)
+        );
+
+        // The roaming dir is the last resort, as in `engine_base::data_dir`.
+        let root = PathBuf::from("nowhere/roaming");
+        assert_eq!(
+            pick_data_home(Vec::new(), Some(root.clone())),
+            Some(root.join("Mundus"))
+        );
+        assert_eq!(pick_data_home(Vec::new(), None), None);
     }
 
     #[test]

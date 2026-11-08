@@ -108,9 +108,9 @@ export const demoState: ManagerState = {
     { id: "desktop", name: "Мастерская", status: "online", platform: "windows", current: false },
     { id: "phone", name: "Pixel 9", status: "offline", platform: "android", current: false },
   ],
-  // Atlas is what the Engine's app index lists on a machine that has it; the
-  // page reads the real list as soon as the bridge answers.
-  apps: [{ id: "atlas", name: "Atlas", version: "", installed: true }],
+  // The Engine keeps no installed-app catalog on this path, so the page has
+  // nothing to show: see the empty state in `pages/library.tsx`.
+  apps: [],
   models: [
     {
       id: "whisper-small",

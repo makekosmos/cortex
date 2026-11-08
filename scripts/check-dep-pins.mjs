@@ -33,6 +33,16 @@ const ALLOWED = new Map([
   ["manager-gpui/Cargo.toml::gpui", "=0.7.1"],
   ["manager-gpui/Cargo.toml::gpui-component", "=0.7.1"],
   ["manager-gpui/Cargo.toml::gpui-base", "=0.7.1"],
+  // gpui-kit/gpui-component =0.8.0, gpui-fast =0.1.10 (the NSH Manager): the
+  // 0.8.0 family pins gpui-pre =0.3.9 and gpui-fast =0.1.10, which our imago
+  // [patch.crates-io] entries replace — the exact pin is what lets the patched
+  // source satisfy the requirement.
+  ["manager/Cargo.toml::gpui", "=0.8.0"],
+  ["manager/Cargo.toml::gpui-component", "=0.8.0"],
+  ["manager/Cargo.toml::gpui-fast-backend", "=0.1.10"],
+  // nsh-platform-gpui =0.4.0: the host crate runs the bundle that `nsh` 0.4
+  // emits, so the host and the tool that builds `manager/ui` move together.
+  ["manager/Cargo.toml::nsh-platform-gpui", "=0.4.0"],
   // KOS-423 is a reproducible comparison of Automerge, Loro, and Yrs merge
   // behavior and encoded sizes. Pin all inputs, including JSON serialization,
   // so regenerating its standalone lockfile cannot silently change results.
@@ -80,7 +90,8 @@ function offendingPins(manifest) {
 export function collectViolations(root) {
   const violations = [];
   for (const manifest of cargoTomls(root)) {
-    const rel = relative(root, manifest);
+    // ALLOWED keys are written with forward slashes; Windows joins with `\`.
+    const rel = relative(root, manifest).replaceAll("\\", "/");
     for (const hit of offendingPins(manifest)) {
       const key = `${rel}::${hit.dep}`;
       if (ALLOWED.get(key) === hit.req) continue;
