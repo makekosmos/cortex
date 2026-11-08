@@ -16,7 +16,7 @@ test("executor commands never require Bun or a shell-resolved shim", async () =>
     createPlan({ mode: "worktree", full: true }),
     createPlan({ mode: "pre-commit", files: ["desktop/scripts/engine-distribution.mjs"] }),
     createPlan({ mode: "worktree", files: ["runtime/src/lib.rs"] }),
-    createPlan({ mode: "worktree", files: ["manager-gpui/src/app.rs"] }),
+    createPlan({ mode: "worktree", files: ["manager/src/app.rs"] }),
   ])
     executePlan(plan, (command) => (seen.push(command), 0));
   assert.ok(seen.length > 0);
@@ -59,7 +59,7 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     "clippy",
     "test:rust",
   ]);
-  assert.deepEqual(run(["manager-gpui/src/app.rs"]), ["brand", "test-skips", "manager-gpui"]);
+  assert.deepEqual(run(["manager/src/app.rs"]), ["brand", "test-skips", "manager"]);
 });
 
 test("pre-commit emits the source-size safeguard through pnpm", async () => {

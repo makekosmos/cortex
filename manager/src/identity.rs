@@ -3,7 +3,7 @@
 //! A product rename must touch this file, `brand.mjs`/`engine-base::brand` on
 //! the Engine side and the packaging scripts — not string literals scattered
 //! through the tree. The client class is a role, not a framework: the Engine
-//! accepts it next to the `manager-gpui` the previous Manager sends.
+//! accepts it next to the class managers installed before 0.10.27 send.
 
 /// Window title, About heading and the packaged binary's description.
 pub const PRODUCT_NAME: &str = "Mundus Manager";

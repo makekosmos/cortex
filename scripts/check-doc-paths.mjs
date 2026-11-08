@@ -17,7 +17,8 @@ const ROOT =
 
 // Only paths with a directory component are checked: a bare file name is a
 // reference to code, not a claim about where it lives.
-const PATH_LIKE = /^[\w@.-]+(?:\/[\w@.-]+)+\.(?:md|rs|mjs|cjs|js|jsx|ts|tsx|vue|json|jsonl|toml|ya?ml|sh|ps1|swift)$/;
+const PATH_LIKE =
+  /^[\w@.-]+(?:\/[\w@.-]+)+\.(?:md|rs|mjs|cjs|js|jsx|ts|tsx|vue|json|jsonl|toml|ya?ml|sh|ps1|swift)$/;
 // Generated or ignored output trees are not part of the checkout.
 const GENERATED = /^(?:\.(?:audit|tmp|dev-logs|dev-data)|release|target|node_modules)\//;
 // docs/experiments/** records dated measurements; its paths describe the tree
@@ -45,7 +46,7 @@ async function markdownFiles(root) {
     }
   }
   await collect(path.join(root, "docs"));
-  for (const directory of ["core", "runtime", "desktop", "manager-gpui"]) {
+  for (const directory of ["core", "runtime", "desktop", "manager"]) {
     async function collectAgents(dir, depth) {
       if (depth > 3) return;
       let entries;

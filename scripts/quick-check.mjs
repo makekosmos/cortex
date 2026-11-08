@@ -27,7 +27,7 @@ const CRATE_MAP = [
   { prefix: "core/crates/net/", packages: ["net"] },
   { prefix: "core/crates/kernel/", packages: ["kernel"] },
   { prefix: "runtime/", packages: ["engine"] },
-  { prefix: "manager-gpui/", packages: [], manager: true },
+  { prefix: "manager/", packages: [], manager: true },
 ];
 
 function changedFiles() {
@@ -100,7 +100,7 @@ for (const pkg of packages) {
   run(["check", "-p", pkg, "--all-targets", ...features]);
 }
 if (manager) {
-  run(["check", "--manifest-path", "manager-gpui/Cargo.toml", "--all-targets"]);
+  run(["check", "--manifest-path", "manager/Cargo.toml", "--all-targets"]);
 }
 
 if (!checkOnly) {
@@ -109,6 +109,6 @@ if (!checkOnly) {
     run(["nextest", "run", "-p", pkg, ...features, ...filterArgs]);
   }
   if (manager) {
-    run(["nextest", "run", "--manifest-path", "manager-gpui/Cargo.toml", ...filterArgs]);
+    run(["nextest", "run", "--manifest-path", "manager/Cargo.toml", ...filterArgs]);
   }
 }

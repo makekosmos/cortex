@@ -23,7 +23,7 @@ const CHECK_ORDER = [
   "clippy",
   "test:rust",
   "runtime-staging",
-  "manager-gpui",
+  "manager",
   "lint",
   "format",
 ];
@@ -113,11 +113,11 @@ function classify(file, revisions) {
     return ["ark-db-writers", "rustfmt", "clippy", "test:rust"];
   if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
   if (/^core\//.test(path)) return [];
-  // manager-gpui is a standalone Cargo workspace (own [workspace] table), so
+  // The Manager is a standalone Cargo workspace (own [workspace] table), so
   // it stays out of the cortex `cargo fmt/clippy/test --workspace` sweep and
   // gets its own gate. Its Cargo.toml/Cargo.lock still fail closed via
   // isFullInfluence above.
-  if (/^manager-gpui\//.test(path)) return ["manager-gpui"];
+  if (/^manager\//.test(path)) return ["manager"];
   return "full";
 }
 

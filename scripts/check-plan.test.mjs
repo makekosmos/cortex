@@ -34,7 +34,7 @@ test("Rust, native, and packaging files expand conservatively", () => {
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
+  assert.deepEqual(plan("--files", "manager/src/app.rs").json.checks, ["manager"]);
 });
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {
@@ -59,9 +59,9 @@ test("ARK writer census runs when its scanner, baseline, or tests change", () =>
     assert.ok(plan("--files", file).json.checks.includes("ark-db-writers"), file);
 });
 
-test("manager-gpui maps to its standalone crate gate", () => {
-  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
-  assert.equal(plan("--files", "manager-gpui/Cargo.toml").json.full, true);
+test("the Manager maps to its standalone crate gate", () => {
+  assert.deepEqual(plan("--files", "manager/src/app.rs").json.checks, ["manager"]);
+  assert.equal(plan("--files", "manager/Cargo.toml").json.full, true);
 });
 
 test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
@@ -221,14 +221,14 @@ test("command failures aggregate instead of stopping after the first selected gr
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
-    { full: false, checks: ["desktop-contracts", "manager-gpui"], changed: [], reasons: [] },
+    { full: false, checks: ["desktop-contracts", "manager"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
       return command.name === "desktop-contracts" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager-gpui"]);
+  assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager"]);
 });
 
 test("the full gate runs the same steps pnpm run check is made of", async () => {
@@ -253,7 +253,7 @@ test("the full gate runs the same steps pnpm run check is made of", async () => 
     "clippy",
     "test:static",
     "test:rust",
-    "manager-gpui",
+    "manager",
     "runtime-staging",
     "doc-paths",
   ]);
@@ -275,7 +275,7 @@ test("the full gate aggregates failures instead of stopping at the first", async
     "clippy",
     "test:static",
     "test:rust",
-    "manager-gpui",
+    "manager",
     "runtime-staging",
     "doc-paths",
   ]);

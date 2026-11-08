@@ -62,9 +62,10 @@ pub const CLIENT_CLASS_HEADER: &str = "x-client-class";
 pub const LEGACY_CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
 
 /// Classes that speak for the Manager, latest first. A class is a role, not a
-/// framework: `manager` is what the new Manager sends, `manager-gpui` is what
-/// the one it replaces sends, and the Engine honours both until the old
-/// Manager is gone.
+/// framework: `manager` is what the Manager sends. `manager-gpui` stays on the
+/// list because a Manager installed before 0.10.27 still sends it — an Engine
+/// outlives the Manager that started it, so a mixed install must keep working;
+/// drop it once no such binary can be running.
 pub const MANAGER_CLIENT_CLASSES: &[&str] = &["manager", "mundus-manager", "manager-gpui"];
 
 /// Whether a client class may perform Manager-only operations.

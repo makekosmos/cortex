@@ -62,11 +62,11 @@ is the first name that leaves the repository, so it is a role, not a product:
 | `X-Client-Class`                 | `engine_base::brand::CLIENT_CLASS_HEADER`, the Manager's `identity::CLIENT_CLASS_HEADER` | Names the caller's role. A product rename never touches the wire.                                    |
 | `x-kosmos-client-class` (legacy) | `brand::LEGACY_CLIENT_CLASS_HEADER`                      | Still accepted from already-shipped clients (Atlas, agenda, memoria, dictation, imago's kit). Dropped only once they all send the new one. |
 | `manager`, `mundus-manager`      | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager's own class.                                                                              |
-| `manager-gpui` (legacy)          | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager this one replaces still sends it, and it ships until the new binary takes its place.      |
+| `manager-gpui` (legacy)          | `brand::MANAGER_CLIENT_CLASSES`                         | The class Managers installed before 0.10.27 send. An Engine outlives the Manager that started it, so a mixed install must keep working; drop it when no such binary can run. |
 
 `appearance.set` and the `follow_apps` writes in `runtime/src/appearance/apps.rs`
-accept every class in `MANAGER_CLIENT_CLASSES`, so the old Manager and the new
-one are interchangeable while both exist.
+accept every class in `MANAGER_CLIENT_CLASSES`, so a Manager from before the
+0.10.27 packaging switch keeps working against a newer Engine.
 
 Deliberately **not** renamed in this pass, because each would break installs in
 the field: `com.kosmos.*` package ids, `publisher: "kosmos"`, the `ark.db`

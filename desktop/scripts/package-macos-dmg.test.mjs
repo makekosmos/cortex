@@ -25,7 +25,7 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     const cargoTarget = path.join(root, "cargo-target");
     await mkdir(path.join(cargoTarget, "release"), { recursive: true });
     const engine = path.join(cargoTarget, "release", ENGINE_BINARY_UNIX);
-    const manager = path.join(cargoTarget, "release", "manager-gpui");
+    const manager = path.join(cargoTarget, "release", "manager");
     await writeFakeBinary(engine, "engine-bin");
     await writeFakeBinary(manager, "manager-bin");
     await chmod(engine, 0o755);

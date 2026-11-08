@@ -176,7 +176,7 @@ impl ManagerState {
     }
 
     pub fn autostart(&self) -> Value {
-        // Dev builds too: the manager-gpui settings toggle registers
+        // Dev builds too: the Manager's settings toggle registers
         // `<exe> --start` — headless engine at sign-in, no UI window.
         let available = cfg!(any(windows, target_os = "macos"))
             && std::env::var_os("MUNDUS_TEST_MODE").is_none();

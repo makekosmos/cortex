@@ -127,7 +127,7 @@ jobs:
           workspaces: |
             . -> target
             core -> target
-            manager-gpui -> target
+            manager -> target
 
       # The plan ran in the `plan` job before the smoke. Its sha is HEAD
       # normally, or the already-tagged commit when retrying a run that died
@@ -369,7 +369,7 @@ jobs:
           workspaces: |
             . -> target
             core -> target
-            manager-gpui -> target
+            manager -> target
 
       # Align pins with the planned release version without pushing — Win owns
       # the bump commit + tag on main. Checkout may be detached at plan.sha.

@@ -1,12 +1,14 @@
-# Build output and captures of this workspace. The UI's `bundle.*` files are
-# compiled from `App.tsx` by `nsh`, and `ui/*.png` are screenshot-test output.
+# Build output and captures of this workspace.
 /target/
 /.run.log
 /.tmp-*
 
+# `ui/bundle.js` is NOT ignored: the host embeds it with `include_str!`, so the
+# release build must find it in a fresh clone. Regenerate it with
+# `nsh build ui && cp ui/.nsh/out/bundle.js ui/bundle.js` after changing a page.
+# The bytecode and source map are build-only.
 ui/node_modules/
 ui/.nsh/
-ui/bundle.js
 ui/bundle.js.map
 ui/bundle.nshc
 ui/.tmp-*

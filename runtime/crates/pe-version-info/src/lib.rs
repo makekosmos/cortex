@@ -4,7 +4,7 @@
 //!
 //! Defender's ML weighs the absence of version metadata heavily; a bare exe
 //! with empty CompanyName/FileDescription looks like a dropper. Both
-//! `runtime/build.rs` (mundus-engine) and `manager-gpui/build.rs` call
+//! `runtime/build.rs` (mundus-engine) and `manager/build.rs` call
 //! [`embed`] so the resource script is written once, here.
 
 #![cfg_attr(test, allow(clippy::unwrap_used))]
@@ -112,7 +112,7 @@ pub struct ExeInfo<'a> {
 /// falls back to `desktop/release-versions.json` `win`, which is exactly
 /// what those scripts read — never a silent `CARGO_PKG_VERSION` drift.
 /// `package_dir` is the *calling* crate's `CARGO_MANIFEST_DIR` (`runtime/` or
-/// `manager-gpui/`), so both resolve the same `../desktop/` path.
+/// `manager/`), so both resolve the same `../desktop/` path.
 // Build-time helper: a bad/missing version must abort the build — panic is
 // the mechanism, an Err would be silently ignored by the caller's build.rs.
 #[allow(clippy::panic, clippy::unwrap_used)]

@@ -56,10 +56,10 @@ function engineBinaryCandidates() {
 function managerBinaryCandidates() {
   const targetDir = process.env.CARGO_TARGET_DIR
     ? path.resolve(process.env.CARGO_TARGET_DIR)
-    : path.join(cortexRoot, "manager-gpui", "target");
+    : path.join(cortexRoot, "manager", "target");
   return [
-    path.join(targetDir, "release", "manager-gpui"),
-    path.join(cortexRoot, "manager-gpui", "target", "release", "manager-gpui"),
+    path.join(targetDir, "release", "manager"),
+    path.join(cortexRoot, "manager", "target", "release", "manager"),
   ];
 }
 
@@ -154,7 +154,7 @@ export function stageMacosApp({ version, stageDir }) {
   mkdirSync(nativeDir, { recursive: true });
 
   const engineSrc = findBinary(engineBinaryCandidates(), ENGINE_BINARY_UNIX);
-  const managerSrc = findBinary(managerBinaryCandidates(), "manager-gpui");
+  const managerSrc = findBinary(managerBinaryCandidates(), "manager");
   const engineDst = path.join(macos, ENGINE_BINARY_UNIX);
   const managerDst = path.join(macos, MANAGER_MAC_BIN);
   copyFileSync(engineSrc, engineDst);
