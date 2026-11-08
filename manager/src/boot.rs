@@ -246,8 +246,6 @@ pub fn stop_engine() -> Result<(), String> {
     Err("Engine принял запрос, но продолжает отвечать. Проверьте его журнал.".to_string())
 }
 
-/* (running_pid removed: the shutdown flag is the supported way to stop it) */
-
 #[cfg(test)]
 mod tests {
     use super::*;

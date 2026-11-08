@@ -1,6 +1,9 @@
 [package]
 name = "manager"
-version = "0.4.0"
+# The crate's own number, not the product's: the release version is the
+# Engine's to report (`pe_version_info::product_version` stamps the exe), and
+# the pages show what the Engine says rather than this.
+version = "0.1.0"
 edition = "2021"
 description = "Mundus Manager — the Engine's control panel"
 publish = false
@@ -31,7 +34,7 @@ ureq = { version = "2.12", default-features = false, features = ["json"] }
 gpui-fast-backend = { package = "gpui-fast", version = "=0.1.10", features = ["windows-manifest-provided-by-host"] }
 
 # Dev builds compile our own code fast; dependencies stay optimized, since an
-# unoptimized gpui/taffy/cosmic-text tops a mod?est UI out at ~20fps (KOS-328).
+# unoptimized gpui/taffy/cosmic-text tops a modest UI out at ~20fps (KOS-328).
 [profile.dev]
 opt-level = 1
 debug = "line-tables-only"

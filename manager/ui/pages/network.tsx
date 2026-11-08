@@ -97,8 +97,9 @@ export function DevicesPage(props: PageProps) {
   );
 }
 
-/** Connectors are the Engine's (`integrations.list`): the Manager shows them
- * and can ask for a sync, nothing more — the catalog is `todo.md`. */
+/** Connectors are the Engine's (`integrations.list`): the Manager shows what it
+ * reports and can ask for a sync. Which services exist is the Engine's catalog,
+ * not a list the Manager keeps. */
 export function IntegrationsPage(props: PageProps) {
   const connectors = () => props.state().connectors;
   return (

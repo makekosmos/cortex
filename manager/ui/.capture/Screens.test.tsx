@@ -14,7 +14,6 @@ const pages: Array<{ route: string; label: string }> = [
   { route: "keys", label: "Ключи" },
   { route: "models", label: "Модели" },
   { route: "settings", label: "Настройки" },
-  { route: "developer", label: "Разработчикам" },
 ];
 
 for (const page of pages) {

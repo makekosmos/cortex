@@ -4,7 +4,9 @@
  * host — `nsh dev`, `nsh test`, a browser — `demoState` keeps every page
  * readable instead of blank.
  */
-export type EngineStatus = "running" | "starting" | "stopping" | "stopped" | "unreachable";
+/** What the bridge and the poller report: a stopped Engine simply stops
+ * answering, so that is `unreachable`, not a state of its own. */
+export type EngineStatus = "running" | "starting" | "stopping" | "unreachable";
 
 export type DeviceRow = {
   id: string;
@@ -38,29 +40,20 @@ export type ConnectorRow = {
 };
 
 export type ManagerState = {
-  engine: {
-    status: EngineStatus;
-    version: string;
-    channel: string;
-    port: number;
-    uptimeMinutes: number;
-  };
-  client: { name: string; remoteControl: boolean };
-  product: { channel: string; bundleId?: string };
+  engine: { status: EngineStatus; version: string; channel: string; port: number };
+  client: { name: string };
+  product: { bundleId?: string };
   sync: {
     running: boolean;
-    pairingAvailable: boolean;
-    ownCodeAvailable: boolean;
+    /** The pairing code this computer showed, until the user hides it. */
     ownCode?: string;
     incoming: PairingRequest[];
     peers: DeviceRow[];
   };
-  devices: DeviceRow[];
-  apps: { id: string; name: string; version: string; installed: boolean }[];
   models: ModelRow[];
   keys: { hasApiKey: boolean; engine: string; language: string; model: string };
   usage: { todayMinutes: number; weekMinutes: number; top: { name: string; minutes: number }[] };
-  storage: { dataDir: string; size: string; lastBackup: string };
+  storage: { dataDir: string; size: string };
   backups: BackupRow[];
   connectors: ConnectorRow[];
   updates: {
@@ -70,16 +63,14 @@ export type ManagerState = {
     channel: string;
     canInstall: boolean;
     percent: number;
-    checkedAt: string;
   };
-  settings: { autostart: boolean; telemetry: boolean; language: string; localOnly: boolean };
+  settings: { autostart: boolean; telemetry: boolean };
   appearance: {
     mode: string;
     light: string;
     dark: string;
     followApps: boolean;
     accentSource: string;
-    accentColor: string;
   };
 };
 
@@ -88,29 +79,19 @@ export const demoState: ManagerState = {
     status: "running",
     version: "0.10.26",
     channel: "production",
+    // Demo only: the real port comes from `engine.lock.json`.
     port: 47_321,
-    uptimeMinutes: 186,
   },
-  client: { name: "Кирилл — ноутбук", remoteControl: false },
-  product: { channel: "production", bundleId: "com.kazui.mundus.manager" },
+  client: { name: "Этот компьютер" },
+  product: { bundleId: "com.kazui.mundus.manager" },
   sync: {
     running: true,
-    pairingAvailable: true,
-    ownCodeAvailable: true,
     incoming: [],
     peers: [
       { id: "desktop", name: "Мастерская", status: "online", platform: "windows", current: false },
       { id: "phone", name: "Pixel 9", status: "offline", platform: "android", current: false },
     ],
   },
-  devices: [
-    { id: "this", name: "Кирилл — ноутбук", status: "online", platform: "windows", current: true },
-    { id: "desktop", name: "Мастерская", status: "online", platform: "windows", current: false },
-    { id: "phone", name: "Pixel 9", status: "offline", platform: "android", current: false },
-  ],
-  // The Engine keeps no installed-app catalog on this path, so the page has
-  // nothing to show: see the empty state in `pages/library.tsx`.
-  apps: [],
   models: [
     {
       id: "whisper-small",
@@ -142,10 +123,10 @@ export const demoState: ManagerState = {
     ],
   },
   storage: {
-    dataDir: "C:\\Users\\kirill\\AppData\\Roaming\\Mundus",
+    dataDir: "C:\\Users\\you\\AppData\\Roaming\\Mundus",
     size: "1.8 ГБ",
-    lastBackup: "сегодня, 09:14",
   },
+  // The Engine's database is `ark.db`, so its backups carry that name.
   backups: [
     { id: "ark.db.backup-2026-11-07-201738", size: "3.9 МБ", modified: 1_794_082_659_398 },
     { id: "ark.db.backup-2026-11-04-151322", size: "475 КБ", modified: 1_793_805_202_952 },
@@ -173,16 +154,14 @@ export const demoState: ManagerState = {
     channel: "production",
     canInstall: false,
     percent: 0,
-    checkedAt: "",
   },
-  settings: { autostart: true, telemetry: false, language: "Русский", localOnly: true },
+  settings: { autostart: true, telemetry: false },
   appearance: {
     mode: "dark",
     light: "merino-light",
     dark: "cobalt-foundry",
     followApps: false,
     accentSource: "theme",
-    accentColor: "",
   },
 };
 
@@ -194,8 +173,6 @@ export function statusLabel(status: EngineStatus): string {
       return "Запускается";
     case "stopping":
       return "Останавливается";
-    case "stopped":
-      return "Остановлен";
     default:
       return "Нет связи";
   }

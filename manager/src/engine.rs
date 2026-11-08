@@ -8,7 +8,7 @@
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use imago_nsh::ComponentContext;
@@ -242,10 +242,9 @@ fn env_value(name: &str) -> Option<PathBuf> {
 /// the window, and `ComponentContext` is made to be used from any thread.
 pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>) {
     std::thread::spawn(move || {
-        let mut seen: Option<Instant> = None;
-        let mut last: Option<(Value, Value, Value)> = None;
+        let mut last: Option<(Value, Value)> = None;
         loop {
-            let engine_state = probe(&engine, &mut seen);
+            let engine_state = probe(&engine);
             // Pairing is app-wide: a request must reach the modal on whatever
             // page the user is on, so the snapshot is polled here and not with
             // the Devices page. A failed read keeps the previous answer: the
@@ -256,25 +255,17 @@ pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>
                 .map(|snapshot| crate::data::sync_view(&snapshot))
                 .or_else(|message| {
                     tracing::warn!(error = %message, "sync snapshot failed");
-                    last.as_ref()
-                        .map(|(_, sync, peers)| (sync.clone(), peers.clone()))
-                        .ok_or(message)
+                    last.as_ref().map(|(_, sync)| sync.clone()).ok_or(message)
                 })
-                .unwrap_or_else(|_| {
-                    (
-                        json!({ "running": false, "incoming": [], "peers": [] }),
-                        json!([]),
-                    )
-                });
-            let (sync_state, peers) = sync;
-            let reading = (engine_state, sync_state, peers);
+                .unwrap_or_else(|_| no_sync());
+            let reading = (engine_state, sync);
             if last.as_ref() != Some(&reading) {
                 last = Some(reading.clone());
                 if let Ok(mut state) = state.lock() {
+                    let shown = state.get("sync").cloned();
                     if let Some(object) = state.as_object_mut() {
                         object.insert("engine".into(), reading.0);
-                        object.insert("sync".into(), reading.1);
-                        object.insert("devices".into(), reading.2);
+                        object.insert("sync".into(), with_shown_code(reading.1, shown.as_ref()));
                     }
                     context.emit("state", state.clone());
                 }
@@ -284,24 +275,40 @@ pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>
     });
 }
 
+/// What the pages show while no snapshot has arrived.
+fn no_sync() -> Value {
+    json!({ "running": false, "incoming": [], "peers": [] })
+}
+
+/// The snapshot replaces `sync`, except for the pairing code the user asked to
+/// see: that one is the Manager's own answer, and the poll two seconds later
+/// must not blank a code the user is reading out.
+fn with_shown_code(mut sync: Value, previous: Option<&Value>) -> Value {
+    let shown = previous
+        .and_then(|sync| sync.get("ownCode"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if let Some(object) = sync.as_object_mut() {
+        object.insert("ownCode".into(), shown);
+    }
+    sync
+}
+
 /// One reading of the Engine: whether it answers, and what it says it is.
-fn probe(engine: &Engine, seen: &mut Option<Instant>) -> Value {
+fn probe(engine: &Engine) -> Value {
     let offline = json!({
         "status": "unreachable",
         "version": "",
         "channel": "production",
         "port": 0,
-        "uptimeMinutes": 0,
     });
     let port = match engine.lock() {
         Ok(lock) => lock.http_port,
         Err(_) => return offline,
     };
     if engine.status("health").is_err() {
-        *seen = None;
         return offline;
     }
-    let started = *seen.get_or_insert_with(Instant::now);
     let info = engine.status("info").unwrap_or(Value::Null);
     let text = |key: &str, fallback: &str| {
         info.get(key)
@@ -314,7 +321,6 @@ fn probe(engine: &Engine, seen: &mut Option<Instant>) -> Value {
         "version": text("version", ""),
         "channel": text("channel", "production"),
         "port": port,
-        "uptimeMinutes": started.elapsed().as_secs() / 60,
     })
 }
 
@@ -325,10 +331,26 @@ mod tests {
     #[test]
     fn a_missing_lock_reads_as_unreachable() {
         let engine = Engine::new(Some(PathBuf::from("C:/definitely/not/here")));
-        let mut seen = None;
-        let state = probe(&engine, &mut seen);
+        let state = probe(&engine);
         assert_eq!(state["status"], "unreachable");
-        assert!(seen.is_none());
+        assert_eq!(state["port"], 0);
+    }
+
+    /// The pairing code the user asked to see outlives the poll that follows it:
+    /// the snapshot carries no code, so a plain replace would blank the row the
+    /// user is reading out loud.
+    #[test]
+    fn the_shown_pairing_code_survives_a_poll() {
+        let shown = json!({ "running": true, "incoming": [], "peers": [], "ownCode": "123456" });
+        let next = json!({ "running": true, "incoming": [], "peers": [] });
+        assert_eq!(
+            with_shown_code(next.clone(), Some(&shown))["ownCode"],
+            "123456"
+        );
+        assert_eq!(with_shown_code(next.clone(), None)["ownCode"], Value::Null);
+        // Hiding it is the Manager's own answer, and it sticks.
+        let hidden = json!({ "running": true, "incoming": [], "peers": [], "ownCode": "" });
+        assert_eq!(with_shown_code(next, Some(&hidden))["ownCode"], "");
     }
 
     /// Against a live Engine (`MUNDUS_DATA_DIR` set, Engine running):

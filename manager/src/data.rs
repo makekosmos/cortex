@@ -18,9 +18,6 @@ type Call = (&'static str, &'static str, Value);
 /// route → the calls that page needs.
 fn calls(route: &str) -> Vec<Call> {
     match route {
-        // The Engine keeps no installed-app catalog here, so the page has
-        // nothing to ask for: it renders its empty state.
-        "apps" => Vec::new(),
         "models" => vec![("models", "dictation.list_local_models", json!({}))],
         "keys" => vec![("keys", "dictation.get_config", json!({}))],
         "devices" => vec![("sync", "get_sync_snapshot", json!({}))],
@@ -203,6 +200,8 @@ fn shape(key: &str, data: Value) -> Value {
     match key {
         // `engine.autostart.get` answers `{available, enabled, reason}`; the
         // screen wants the switch's position, not the object it arrives in.
+        // The Engine keeps no installed-app catalog here: the Apps page has
+        // nothing to ask for and renders its empty state.
         "settings.autostart" => Value::Bool(
             data.pointer("/enabled")
                 .and_then(Value::as_bool)
@@ -216,12 +215,6 @@ fn shape(key: &str, data: Value) -> Value {
         ),
         "keys" => keys(&data),
         "sync" => sync(&data),
-        "devices" => Value::Array(
-            array(&data, &["/peers", "/data/peers"])
-                .iter()
-                .map(device_row)
-                .collect(),
-        ),
         "connectors" => Value::Array(
             array(&data, &["/providers", "/data/providers"])
                 .iter()
@@ -248,8 +241,6 @@ fn shape(key: &str, data: Value) -> Value {
 fn sync(data: &Value) -> Value {
     json!({
         "running": data.get("running").and_then(Value::as_bool).unwrap_or(false),
-        "pairingAvailable": bool_at(data, &["/pairing_available"]),
-        "ownCodeAvailable": bool_at(data, &["/own_pairing_code_available"]),
         "incoming": array(data, &["/incoming_pairing_requests"]).iter().map(|request| json!({
             "id": text(request, &["/device_id"]).unwrap_or_default(),
             "name": text(request, &["/device_name"])
@@ -261,17 +252,10 @@ fn sync(data: &Value) -> Value {
     })
 }
 
-/// The sync snapshot, for the poller: peers and incoming requests together.
-pub fn sync_view(snapshot: &Value) -> (Value, Value) {
-    (
-        sync(snapshot),
-        Value::Array(
-            array(snapshot, &["/peers"])
-                .iter()
-                .map(device_row)
-                .collect(),
-        ),
-    )
+/// The sync snapshot, as the poller writes it: peers and incoming requests
+/// together, under the one `sync` key the pages read them from.
+pub fn sync_view(snapshot: &Value) -> Value {
+    sync(snapshot)
 }
 
 fn array(data: &Value, paths: &[&str]) -> Vec<Value> {
@@ -373,7 +357,6 @@ fn updates(data: &Value) -> Value {
         "channel": text(data, &["/channel"]).unwrap_or_default(),
         "canInstall": bool_at(data, &["/canInstall", "/can_install"]),
         "percent": data.get("percent").and_then(Value::as_f64).unwrap_or(0.0),
-        "checkedAt": text(data, &["/checkedAt", "/checked_at"]).unwrap_or_default(),
     })
 }
 
@@ -389,7 +372,6 @@ fn appearance(data: &Value) -> Value {
             .unwrap_or_else(|| "cobalt-foundry".into()),
         "followApps": bool_at(settings, &["/follow_apps", "/followApps"]),
         "accentSource": text(settings, &["/accent_source"]).unwrap_or_else(|| "theme".into()),
-        "accentColor": text(settings, &["/accent_color"]).unwrap_or_default(),
     })
 }
 
@@ -442,7 +424,6 @@ fn storage(data: &Value) -> Value {
             Some(bytes) => size(bytes),
             None => text(data, &["/size_label"]).unwrap_or_default(),
         },
-        "lastBackup": text(data, &["/last_backup", "/last_backup_at"]).unwrap_or_default(),
     })
 }
 

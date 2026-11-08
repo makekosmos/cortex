@@ -16,7 +16,7 @@ use crate::data::Loader;
 use crate::engine::{self, Engine};
 
 /// Which page the sidebar is on. The pages ask for it and mirror what we say.
-const ROUTES: [&str; 13] = [
+const ROUTES: [&str; 12] = [
     "server",
     "about",
     "appearance",
@@ -29,7 +29,6 @@ const ROUTES: [&str; 13] = [
     "keys",
     "models",
     "settings",
-    "developer",
 ];
 
 /// Routes whose data keeps moving while a job runs (a download, an update):
@@ -182,7 +181,6 @@ impl NativeComponent for ManagerBridge {
     }
 
     fn command(&mut self, name: &str, args: &Value, _window: &mut Window, _cx: &mut App) {
-        let text = args.get("value").cloned().unwrap_or(Value::Null);
         let Some(loader) = self.loader.clone() else {
             return;
         };
@@ -325,18 +323,8 @@ impl NativeComponent for ManagerBridge {
                 "integrations",
             ),
 
-            // Host-side facts the pages mirror.
-            "client.name" => {
-                self.set("client.name", text);
-                self.publish();
-            }
-            "client.remoteControl" => {
-                self.set("client.remoteControl", json!(flag));
-                self.publish();
-            }
-            "appearance.new" | "connect.open" => {
-                self.context.emit("navigate", json!({ "route": "devices" }));
-            }
+            // The rest of the page's presses move it, not the Engine.
+            "connect.open" => self.context.emit("navigate", json!({ "route": "devices" })),
             _ => {}
         }
     }
@@ -350,26 +338,19 @@ fn snapshot() -> Value {
             "status": "unreachable",
             "version": "",
             "channel": "production",
-            "port": 47321,
-            "uptimeMinutes": 0,
+            // A port appears when an Engine answers; the default Engine port is
+            // not a fact the Manager may state.
+            "port": 0,
         },
-        "client": { "name": hostname(), "remoteControl": false },
+        "client": { "name": hostname() },
         // The product version is the Engine's to report; the crate's own version
         // never stands in for it.
-        "product": { "channel": "production", "bundleId": crate::identity::BUNDLE_ID },
-        "sync": {
-            "running": false,
-            "pairingAvailable": false,
-            "ownCodeAvailable": false,
-            "incoming": [],
-            "peers": [],
-        },
-        "devices": [],
-        "apps": [],
+        "product": { "bundleId": crate::identity::BUNDLE_ID },
+        "sync": { "running": false, "incoming": [], "peers": [] },
         "models": [],
         "keys": { "hasApiKey": false, "engine": "", "language": "", "model": "" },
         "usage": { "todayMinutes": 0, "weekMinutes": 0, "top": [] },
-        "storage": { "dataDir": data_directory(), "size": "", "lastBackup": "" },
+        "storage": { "dataDir": data_directory(), "size": "" },
         "backups": [],
         "connectors": [],
         "updates": {
@@ -379,21 +360,14 @@ fn snapshot() -> Value {
             "channel": "",
             "canInstall": false,
             "percent": 0.0,
-            "checkedAt": "",
         },
-        "settings": {
-            "autostart": false,
-            "telemetry": false,
-            "language": "Русский",
-            "localOnly": true,
-        },
+        "settings": { "autostart": false, "telemetry": false },
         "appearance": {
             "mode": "dark",
             "light": "merino-light",
             "dark": "cobalt-foundry",
             "followApps": false,
             "accentSource": "theme",
-            "accentColor": "",
         },
     })
 }

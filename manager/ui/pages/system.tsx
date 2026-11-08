@@ -2,7 +2,6 @@ import { Text, View } from "nsh";
 import {
   Card,
   CardRow,
-  FieldRow,
   PillButton,
   SectionLabel,
   SettingsPage,
@@ -87,9 +86,7 @@ export function AboutPage(props: PageProps) {
           accent={props.colors.accent}
           title={version ? `Mundus ${version}` : "Mundus"}
           subtitle={
-            version
-              ? `канал ${state().engine.channel || state().product.channel}`
-              : statusLabel(state().engine.status)
+            version ? `канал ${state().engine.channel}` : statusLabel(state().engine.status)
           }
           right={
             <StatusDot
@@ -107,9 +104,11 @@ export function AboutPage(props: PageProps) {
               : statusLabel(state().engine.status)
           }
           right={
-            <Text style={{ fontSize: 12.5, color: props.colors.muted }}>
-              порт {state().engine.port}
-            </Text>
+            state().engine.port ? (
+              <Text style={{ fontSize: 12.5, color: props.colors.muted }}>
+                порт {state().engine.port}
+              </Text>
+            ) : null
           }
         />
         <CardRow
@@ -259,11 +258,6 @@ export function PreferencesPage(props: PageProps) {
               />
             }
           />
-          <FieldRow colors={props.colors} label="Язык">
-            <Text style={{ fontSize: 13, color: props.colors.foreground }}>
-              {state().keys.language || state().settings.language}
-            </Text>
-          </FieldRow>
           <CardRow
             colors={props.colors}
             title="Телеметрия"
@@ -277,43 +271,6 @@ export function PreferencesPage(props: PageProps) {
                 onChange={(value) => props.onCommand("settings.telemetry", { value })}
               />
             }
-          />
-        </Card>
-      </View>
-    </SettingsPage>
-  );
-}
-
-export function DeveloperPage(props: PageProps) {
-  return (
-    <SettingsPage colors={props.colors} title="Разработчикам">
-      <View>
-        <SectionLabel colors={props.colors}>Инструменты</SectionLabel>
-        <Card colors={props.colors}>
-          <CardRow
-            colors={props.colors}
-            icon="pulse"
-            iconFill={props.colors.raised}
-            title="Счётчик кадров"
-            subtitle="Оверлей FPS — в разработке"
-            right={<Text style={{ fontSize: 12.5, color: props.colors.faint }}>скоро</Text>}
-          />
-          <CardRow
-            colors={props.colors}
-            icon="code"
-            iconFill={props.colors.raised}
-            title="Контракт Engine"
-            subtitle="Операции /v1/rpc этого Engine"
-            right={<Text style={{ fontSize: 12.5, color: props.colors.faint }}>скоро</Text>}
-          />
-          <CardRow
-            colors={props.colors}
-            icon="database"
-            iconFill={props.colors.raised}
-            title="Журналы Engine"
-            subtitle="mundus-engine.<date>.log"
-            right={<Text style={{ fontSize: 12.5, color: props.colors.faint }}>скоро</Text>}
-            last
           />
         </Card>
       </View>

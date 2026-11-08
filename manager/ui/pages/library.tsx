@@ -11,37 +11,25 @@ import {
 import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
 
-/** What the Engine says is installed here. This branch of the Engine keeps no
- * such catalog, so the page states that instead of inventing a list — and
- * nothing on it opens a program the Manager cannot name. */
+/** The Engine of this branch keeps no installed-app catalog, and the Start-Menu
+ * index it does keep is not one: it names programs on the system, not apps
+ * Mundus installed. So the page says that much and offers nothing to press —
+ * a button that opens what it cannot name is worse than no button. */
 export function AppsPage(props: PageProps) {
-  const apps = () => props.state().apps.filter((app) => app.installed);
   return (
     <SettingsPage colors={props.colors} title="Приложения">
       <View>
         <SectionLabel colors={props.colors}>Установленные</SectionLabel>
         <Card colors={props.colors}>
-          {apps().length ? (
-            apps().map((app, index) => (
-              <CardRow
-                key={app.id}
-                colors={props.colors}
-                icon="apps"
-                iconFill={props.colors.raised}
-                accent={props.colors.muted}
-                title={app.name}
-                subtitle={app.version ? `Версия ${app.version}` : "Установлено"}
-                last={index === apps().length - 1}
-              />
-            ))
-          ) : (
-            <CardRow
-              colors={props.colors}
-              title="Пока ничего не установлено"
-              subtitle="Engine не сообщает об установленных приложениях"
-              last
-            />
-          )}
+          <CardRow
+            colors={props.colors}
+            icon="apps"
+            iconFill={props.colors.raised}
+            accent={props.colors.muted}
+            title="Пока ничего не установлено"
+            subtitle="Engine не сообщает об установленных приложениях"
+            last
+          />
         </Card>
       </View>
     </SettingsPage>

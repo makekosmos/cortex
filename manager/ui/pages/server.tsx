@@ -6,8 +6,6 @@ import {
   PillButton,
   SectionLabel,
   SettingsPage,
-  Switch,
-  TextInput,
 } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import { statusLabel } from "../state";
@@ -24,7 +22,7 @@ export function ServerPage(props: PageProps) {
         <CardRow
           colors={props.colors}
           logo
-          title="Мундус"
+          title="Mundus"
           subtitle={statusLabel(state().engine.status)}
           last
           right={
@@ -67,7 +65,7 @@ export function ServerPage(props: PageProps) {
               <PillButton
                 colors={props.colors}
                 label={code ? "Скрыть" : "Показать"}
-                onPress={() => props.onCommand("pairing.code")}
+                onPress={() => props.onCommand(code ? "pairing.hide" : "pairing.code")}
               />
             }
           />
@@ -96,29 +94,22 @@ export function ServerPage(props: PageProps) {
       </View>
 
       <View>
-        <SectionLabel colors={props.colors}>Информация о Клиенте</SectionLabel>
+        <SectionLabel colors={props.colors}>Компьютер</SectionLabel>
         <Card colors={props.colors}>
-          <FieldRow colors={props.colors} label="Название">
-            <TextInput
-              colors={props.colors}
-              value={state().client.name}
-              placeholder="Имя компьютера"
-              accessibilityLabel="Название клиента"
-              onChange={(value) => props.onCommand("client.name", { value })}
-            />
+          <FieldRow colors={props.colors} label="Имя">
+            <Text style={{ fontSize: 13, color: props.colors.foreground }}>
+              {state().client.name}
+            </Text>
           </FieldRow>
           <CardRow
             colors={props.colors}
-            title="Удаленное управление"
-            subtitle={state().client.remoteControl ? "Работает" : "Выключено"}
+            title="Порт Engine"
+            subtitle="Из engine.lock.json того Engine, что отвечает"
             last
             right={
-              <Switch
-                colors={props.colors}
-                value={state().client.remoteControl}
-                accessibilityLabel="Удаленное управление"
-                onChange={(value) => props.onCommand("client.remoteControl", { value })}
-              />
+              <Text style={{ fontSize: 12.5, color: props.colors.muted }}>
+                {state().engine.port || "—"}
+              </Text>
             }
           />
         </Card>

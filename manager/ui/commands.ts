@@ -14,7 +14,7 @@ declare global {
 
 /** What a page may send with a command. Nothing untyped crosses this line. */
 export type CommandArgs = {
-  /** The row a command acts on: a device, a model, a backup, an app. */
+  /** The row a command acts on: a device, a model, a backup. */
   id?: string;
   /** A switch's new position, or the text a field holds. */
   value?: string | boolean;

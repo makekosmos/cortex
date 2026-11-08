@@ -1,6 +1,12 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
 import { Window as DesktopWindow } from "nsh/desktop";
-import { SettingsSidebar, TextInput, darkThemes, cobaltFoundry } from "@makekosmos/imago-nsh";
+import {
+  SettingsSidebar,
+  TextInput,
+  cobaltFoundry,
+  darkThemes,
+  lightThemes,
+} from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
 import { demoState } from "./state";
@@ -9,13 +15,7 @@ import type { CommandArgs } from "./commands";
 import { Cancel, Confirm, Modal, note } from "./modal";
 import { ServerPage } from "./pages/server";
 import { AppearancePage } from "./pages/appearance";
-import {
-  AboutPage,
-  ActivityPage,
-  DeveloperPage,
-  PreferencesPage,
-  StoragePage,
-} from "./pages/system";
+import { AboutPage, ActivityPage, PreferencesPage, StoragePage } from "./pages/system";
 import { AppsPage, KeysPage, ModelsPage } from "./pages/library";
 import { BrowserPage, DevicesPage, IntegrationsPage } from "./pages/network";
 
@@ -42,8 +42,16 @@ const Bridge = nativeComponent<
 
 let session: { command: (name: string, args?: CommandArgs) => void } | undefined;
 
-const colors = (): ApplicationTheme =>
-  darkThemes.find((theme) => theme.key === state().appearance.dark)?.colors ?? cobaltFoundry;
+/** The palette the pages wear: whichever pair of themes the Engine says is on.
+ * A light mode must not paint a dark card set, or the pages would say «светлая
+ * тема» over dark cards. */
+const colors = (): ApplicationTheme => {
+  const { mode, light, dark } = state().appearance;
+  const themes = mode === "light" ? lightThemes : darkThemes;
+  return (
+    themes.find((theme) => theme.key === (mode === "light" ? light : dark))?.colors ?? cobaltFoundry
+  );
+};
 
 function patch(next: Partial<ManagerState>) {
   state.set({ ...state(), ...next });
@@ -87,6 +95,9 @@ function command(name: string, args: CommandArgs = {}) {
           [args.mode === "light" ? "light" : "dark"]: String(args.key),
         },
       });
+      return;
+    case "pairing.hide":
+      patch({ sync: { ...state().sync, ownCode: "" } });
       return;
     case "appearance.followApps":
       dispatch("appearance.set", { patch: { follow_apps: Boolean(args.value) } });
@@ -135,8 +146,6 @@ function renderPage(page: string) {
       return <ModelsPage {...props} />;
     case "settings":
       return <PreferencesPage {...props} />;
-    case "developer":
-      return <DeveloperPage {...props} />;
     default:
       return <ServerPage {...props} />;
   }

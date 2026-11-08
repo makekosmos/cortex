@@ -2,8 +2,9 @@ import { open, test } from "nsh/test";
 import { Window } from "nsh/desktop";
 
 /// The two questions the Manager asks before something irreversible, captured
-/// as the user sees them. (The pairing request needs a live Engine snapshot, so
-/// its card is captured from a state that holds a request: see `report`.)
+/// as the user sees them. The pairing card is not here: it only exists while an
+/// Engine holds a request from another device, and an invented request would be
+/// a picture of something the product never shows.
 
 test("modal: stop engine", async () => {
   const app = await open("../App.tsx");

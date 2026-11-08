@@ -9,10 +9,14 @@ fn sizes_read_as_the_page_wants() {
     assert_eq!(size(24_500_000_000), "25 ГБ");
 }
 
+/// The Devices page reads its rows from `sync` and nowhere else: one catalog,
+/// so an Engine without peers leaves an empty list rather than a second copy of
+/// the devices that disagrees with the first.
 #[test]
 fn a_device_list_survives_an_engine_without_peers() {
-    let rows = shape("devices", json!({ "running": false, "peers": [] }));
-    assert_eq!(rows, json!([]));
+    let sync = shape("sync", json!({ "running": false, "peers": [] }));
+    assert_eq!(sync["peers"], json!([]));
+    assert_eq!(sync["incoming"], json!([]));
 }
 
 #[test]
@@ -64,9 +68,7 @@ fn autostart_reaches_the_switch_as_a_boolean() {
 /// may wipe the other's field.
 #[test]
 fn the_two_settings_answers_do_not_wipe_each_other() {
-    let mut state = json!({
-        "settings": { "autostart": true, "telemetry": false, "language": "Русский" },
-    });
+    let mut state = json!({ "settings": { "autostart": true, "telemetry": false } });
 
     apply(
         &mut state,
@@ -76,7 +78,6 @@ fn the_two_settings_answers_do_not_wipe_each_other() {
     );
     assert_eq!(state["settings"]["autostart"], json!(true));
     assert_eq!(state["settings"]["telemetry"], json!(true));
-    assert_eq!(state["settings"]["language"], json!("Русский"));
 
     // And a failed autostart call writes nothing: the switch keeps its last
     // known position instead of falling to a `false` from another answer.
