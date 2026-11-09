@@ -37,6 +37,11 @@ const ALLOWED = new Map([
   // nsh-platform-gpui =0.4.0: the host crate runs the bundle that `nsh` 0.4
   // emits, so the host and the tool that builds `manager/ui` move together.
   ["manager/Cargo.toml::nsh-platform-gpui", "=0.4.0"],
+  // raw-window-handle =0.6.2: the Manager reads its own HWND out of the window
+  // (`chrome`), and the trait it uses has to be the same 0.6.2 gpui-fast was
+  // built against — a caret bump would give it a second, incompatible
+  // `HasWindowHandle` implementation to resolve.
+  ["manager/Cargo.toml::raw-window-handle", "=0.6.2"],
   // KOS-423 is a reproducible comparison of Automerge, Loro, and Yrs merge
   // behavior and encoded sizes. Pin all inputs, including JSON serialization,
   // so regenerating its standalone lockfile cannot silently change results.
