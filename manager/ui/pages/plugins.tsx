@@ -28,6 +28,7 @@ function versionLine(plugin: PluginRow): string {
   const parts: string[] = [];
   if (plugin.version) parts.push(`Версия ${plugin.version}`);
   if (plugin.running) parts.push("запущен");
+  if (plugin.autostart && !plugin.running) parts.push("с автозапуском");
   return parts.join(" · ");
 }
 
@@ -220,6 +221,9 @@ export function PluginPage(props: PageProps & { id: string }) {
   };
 
   const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+  /** A program is needed to start, and a start already answered stays
+   * answerable even while the manifest beside the install lags behind. */
+  const canAutostart = () => Boolean(plugin()?.executable && plugin()?.startable);
   const shown = manifest();
   /** The choice whose list is open, if any: `picking` holds its key. */
   const pickingField = () => {
@@ -285,6 +289,30 @@ export function PluginPage(props: PageProps & { id: string }) {
             />
           </Card>
         </View>
+
+        {canAutostart() ? (
+          <View>
+            <SectionLabel colors={props.colors}>Запуск</SectionLabel>
+            <Card colors={props.colors}>
+              <CardRow
+                colors={props.colors}
+                title="Запускать вместе с движком"
+                subtitle="Движок стартует при входе в систему — плагин поднимется вместе с ним"
+                last
+                right={
+                  <Switch
+                    colors={props.colors}
+                    value={Boolean(plugin()?.autostart)}
+                    accessibilityLabel="Запускать вместе с движком"
+                    onChange={(on) =>
+                      props.onCommand("plugins.autostart", { id: props.id, value: on })
+                    }
+                  />
+                }
+              />
+            </Card>
+          </View>
+        ) : null}
 
         <View>
           <SectionLabel colors={props.colors}>Настройки</SectionLabel>

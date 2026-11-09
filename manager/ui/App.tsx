@@ -1,15 +1,16 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
 import { Window as DesktopWindow } from "nsh/desktop";
 import {
-  SettingsSidebar,
   TextInput,
   cobaltFoundry,
   darkThemes,
   lightThemes,
   settingsMetrics,
 } from "@makekosmos/imago-nsh";
-import type { ApplicationTheme, NavGroup } from "@makekosmos/imago-nsh";
-import { navigation } from "./navigation";
+import type { ApplicationTheme } from "@makekosmos/imago-nsh";
+import { configuration, navigation } from "./navigation";
+import type { NavSection } from "./navigation";
+import { Sidebar } from "./sidebar";
 import { TITLEBAR_HEIGHT } from "./chrome";
 import { connectHost, dragBinding } from "./host";
 import { demoState } from "./state";
@@ -18,7 +19,7 @@ import type { CommandArgs } from "./commands";
 import { Cancel, Confirm, Modal, note } from "./modal";
 import { ServerPage } from "./pages/server";
 import { AppearancePage } from "./pages/appearance";
-import { AboutPage, ActivityPage, PreferencesPage, StoragePage } from "./pages/system";
+import { ActivityPage, PreferencesPage, StoragePage } from "./pages/system";
 import { KeysPage, ModelsPage } from "./pages/library";
 import { PluginPage, PluginsPage } from "./pages/plugins";
 import { BrowserPage, DevicesPage, IntegrationsPage } from "./pages/network";
@@ -125,18 +126,15 @@ function useHiddenChrome() {
 }
 
 /**
- * How far the sidebar's own top padding has to come up for its search field to
- * sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
- * it, and the field is centred in the band.
+ * Where the sidebar's content starts: below the band the caption buttons sit in,
+ * with a gap of its own. The search field used to be pulled up into the band and
+ * ended up glued to the window's edge.
  */
-const SIDEBAR_LIFT =
-  settingsMetrics.sidebarTop - (TITLEBAR_HEIGHT - settingsMetrics.searchHeight) / 2;
+const SIDEBAR_TOP = TITLEBAR_HEIGHT + 8;
 
 function renderPage(page: string) {
   const props = { colors: colors(), state: () => state(), onCommand: command };
   switch (page) {
-    case "about":
-      return <AboutPage {...props} />;
     case "appearance":
       return <AppearancePage {...props} />;
     case "plugins":
@@ -167,26 +165,25 @@ function renderPage(page: string) {
 }
 
 /**
- * The sidebar: the product's own groups, then the plugins that are installed.
- * A plugin is not a page the Manager was built around — it sits below the
- * machine's settings because it is the person's addition, and it disappears
- * with the plugin.
+ * The sidebar: the product's own sections, then the plugins that are installed,
+ * then how the app looks and behaves. A plugin is not a page the Manager was
+ * built around — it sits under the sections because it is the person's
+ * addition, and it disappears with the plugin.
  */
-function sidebarGroups(): NavGroup[] {
+function sidebarSections(): NavSection[] {
   const installed = state().plugins.installed;
-  if (!installed.length) return navigation;
+  if (!installed.length) return [...navigation, configuration];
   return [
     ...navigation,
     {
       id: "plugins-installed",
-      entries: installed.map((plugin) => ({
+      rows: installed.map((plugin) => ({
         route: `plugin/${plugin.id}`,
         label: plugin.name,
         icon: "plug" as const,
-        accent: "#15b8a4",
-        accentTo: "#1784fc",
       })),
     },
+    configuration,
   ];
 }
 
@@ -256,16 +253,15 @@ function App() {
           {...dragBinding()}
         >
           <View class="absolute inset-0" {...dragBinding()} />
-          <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
-            <SettingsSidebar
-              colors={colors()}
-              groups={sidebarGroups()}
-              current={route()}
-              search={search()}
-              onSearch={(value) => search.set(value)}
-              onNavigate={(next) => route.set(next)}
-            />
-          </View>
+          <Sidebar
+            colors={colors()}
+            sections={sidebarSections()}
+            current={route()}
+            search={search()}
+            top={SIDEBAR_TOP}
+            onSearch={(value) => search.set(value)}
+            onNavigate={(next) => route.set(next)}
+          />
         </View>
         {renderPage(route())}
       </View>

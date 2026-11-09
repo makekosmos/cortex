@@ -16,9 +16,8 @@ use crate::data::Loader;
 use crate::engine::{self, Engine};
 
 /// Which page the sidebar is on. The pages ask for it and mirror what we say.
-const ROUTES: [&str; 12] = [
+const ROUTES: [&str; 11] = [
     "server",
-    "about",
     "appearance",
     "plugins",
     "integrations",
@@ -33,7 +32,7 @@ const ROUTES: [&str; 12] = [
 
 /// Routes whose data keeps moving while a job runs (a download, an update):
 /// the page is re-read until the job says it is done.
-const FOLLOW: [&str; 2] = ["models", "about"];
+const FOLLOW: [&str; 2] = ["models", "server"];
 
 pub struct ManagerBridge {
     context: ComponentContext,
@@ -146,7 +145,9 @@ fn is_busy(route: &str, state: &Arc<Mutex<Value>>) -> bool {
                 .iter()
                 .any(|model| model["downloading"] == json!(true))
         }),
-        "about" => {
+        // An update is taken from the product's own page: it follows the
+        // download the same way a model's page follows its own.
+        "server" => {
             let percent = state["updates"]["percent"].as_f64().unwrap_or(0.0);
             let downloading = state["updates"]["state"]
                 .as_str()
@@ -295,14 +296,15 @@ impl NativeComponent for ManagerBridge {
             ),
 
             // Updates: status is read, the download and the install need a
-            // click each — nothing downloads behind the user's back.
-            "updates.check" => loader.then_reload("updates", "updater.check", json!({}), "about"),
+            // click each — nothing downloads behind the user's back. They are
+            // rows of the server's page, so that is the page re-read.
+            "updates.check" => loader.then_reload("updates", "updater.check", json!({}), "server"),
             "updates.download" => {
-                loader.then_reload("updates", "updater.download", json!({}), "about");
-                self.follow("about", loader.clone(), self.state.clone());
+                loader.then_reload("updates", "updater.download", json!({}), "server");
+                self.follow("server", loader.clone(), self.state.clone());
             }
             "updates.install" => {
-                loader.then_reload("updates", "updater.install", json!({}), "about")
+                loader.then_reload("updates", "updater.install", json!({}), "server")
             }
 
             // Appearance is device-wide and Engine-owned.
@@ -356,6 +358,17 @@ impl NativeComponent for ManagerBridge {
                 "plugins.installed",
                 "plugins.launch",
                 json!({ "id": Self::id(args) }),
+                "plugins",
+            ),
+            // Whether the Engine starts this plugin on boot: the answer lands
+            // under a key of its own, and the list is read again for the row.
+            "plugins.autostart" => loader.then_reload(
+                "plugins.autostart",
+                "plugins.autostart.set",
+                json!({
+                    "id": Self::id(args),
+                    "enabled": args.get("value").and_then(Value::as_bool).unwrap_or(false),
+                }),
                 "plugins",
             ),
             // The page that sent this is the plugin's own (`plugin/<id>`).

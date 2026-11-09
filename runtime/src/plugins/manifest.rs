@@ -45,6 +45,20 @@ pub struct PluginManifest {
     /// `<plugin dir>/config.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_file: Option<String>,
+    /// How the plugin's program is started when it starts with the Engine.
+    /// `None` — the plugin is only started by hand, and the autostart switch
+    /// is not offered for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<PluginStart>,
+}
+
+/// The command line a plugin starts with: the pill a person never opens a
+/// window for runs `--background`, the window they do open runs bare.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginStart {
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 /// Where a plugin's code comes from.
@@ -144,6 +158,18 @@ pub struct Choice {
     pub label: String,
 }
 
+impl PluginStart {
+    /// Arguments the Engine is willing to hand to a program it did not write: a
+    /// bounded count of short, plain strings — no empty one, nothing with a NUL.
+    pub fn valid(&self) -> bool {
+        self.args.len() <= 16
+            && self
+                .args
+                .iter()
+                .all(|arg| !arg.is_empty() && arg.len() <= 256 && !arg.contains('\0'))
+    }
+}
+
 impl PluginManifest {
     /// Refuse a manifest the Engine cannot act on: a newer format, an id that
     /// could name a path of its own, duplicate keys, a source with no name.
@@ -168,6 +194,16 @@ impl PluginManifest {
         if let Some(op) = self.settings_op.as_deref() {
             if !valid_op(op) {
                 return Err(PluginError::Manifest(format!("операция настроек «{op}»")));
+            }
+        }
+        if let Some(start) = self.start.as_ref() {
+            if !start.valid() {
+                return Err(PluginError::Manifest("аргументы запуска".into()));
+            }
+            if matches!(self.source, PluginSource::Builtin) {
+                return Err(PluginError::Manifest(
+                    "у встроенного плагина нет программы, которую можно запустить".into(),
+                ));
             }
         }
         let mut keys = std::collections::HashSet::new();

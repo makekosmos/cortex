@@ -1,101 +1,62 @@
-import type { NavGroup } from "@makekosmos/imago-nsh";
+import type { IconName } from "@makekosmos/imago-nsh";
 
 /**
- * Sidebar groups of the Manager. The first group answers "is my Mundus well",
- * the second covers what runs inside it, the third the machines and their data,
- * and the last two the app's own configuration.
+ * One row of the Manager's sidebar: a page, its name and a plain icon.
+ *
+ * There is no accent colour to give: the rows are monochrome on purpose, so the
+ * only thing that stands out is the one row that is the product itself
+ * (`head`), which wears its own mark.
  */
-export const navigation: NavGroup[] = [
-  // The server on its own: whether Mundus is well is a different question
-  // from what runs inside it, so it sits above the first group.
+export type NavRow = {
+  route: string;
+  label: string;
+  icon: IconName;
+  /** The product's own row: a mark on a dark tile, not a page's icon. */
+  head?: boolean;
+};
+
+export type NavSection = { id: string; rows: NavRow[] };
+
+/**
+ * What the Manager has, in the order the sidebar shows it: the product itself,
+ * then what runs inside it, then the machines, then the person's own additions
+ * (a plugin's page), and last how it looks and behaves.
+ */
+export const navigation: NavSection[] = [
   {
     id: "server",
-    entries: [
-      {
-        route: "server",
-        label: "Сервер",
-        icon: "server",
-        accent: "#3b82f6",
-        accentTo: "#359ecb",
-      },
-    ],
-  },
-  {
-    id: "app",
-    entries: [
-      {
-        route: "about",
-        label: "О приложении",
-        icon: "info",
-        accent: "#1784fc",
-        accentTo: "#915bfc",
-      },
-      {
-        route: "appearance",
-        label: "Внешний вид",
-        icon: "palette",
-        accent: "#f79411",
-        accentTo: "spectrum",
-      },
-    ],
+    rows: [{ route: "server", label: "Mundus", icon: "mundus", head: true }],
   },
   {
     id: "running",
-    entries: [
-      { route: "plugins", label: "Плагины", icon: "apps", accent: "#fa6710", accentTo: "#fc2d3e" },
-      {
-        route: "integrations",
-        label: "Интеграции",
-        icon: "plug",
-        accent: "#915bfc",
-        accentTo: "#fb3499",
-      },
-      {
-        route: "storage",
-        label: "Хранилище",
-        icon: "database",
-        accent: "#15b8a4",
-        accentTo: "#1784fc",
-      },
-      {
-        route: "activity",
-        label: "Активность",
-        icon: "pulse",
-        accent: "#fa6710",
-        accentTo: "#fc2d3e",
-      },
+    rows: [
+      { route: "plugins", label: "Плагины", icon: "apps" },
+      { route: "integrations", label: "Интеграции", icon: "plug" },
+      { route: "storage", label: "Хранилище", icon: "database" },
+      { route: "activity", label: "Активность", icon: "pulse" },
     ],
   },
   {
     id: "machines",
-    entries: [
-      {
-        route: "devices",
-        label: "Девайсы",
-        icon: "monitor",
-        accent: "#1784fc",
-        accentTo: "#15b8a4",
-      },
-      { route: "browser", label: "Браузер", icon: "globe", accent: "#915bfc", accentTo: "#1784fc" },
+    rows: [
+      { route: "devices", label: "Девайсы", icon: "monitor" },
+      { route: "browser", label: "Браузер", icon: "globe" },
     ],
   },
   {
     id: "data",
-    entries: [
-      { route: "keys", label: "Ключи", icon: "key", accent: "#f79411", accentTo: "#fa6710" },
-      { route: "models", label: "Модели", icon: "chip", accent: "#fb3499", accentTo: "#915bfc" },
-    ],
-  },
-  {
-    id: "config",
-    entries: [
-      {
-        route: "settings",
-        label: "Настройки",
-        icon: "gear",
-        accent: "#777777",
-        accentTo: "#777777",
-      },
+    rows: [
+      { route: "keys", label: "Ключи", icon: "key" },
+      { route: "models", label: "Модели", icon: "chip" },
     ],
   },
 ];
+
+/** What sits under the person's additions: the app's own configuration. */
+export const configuration: NavSection = {
+  id: "config",
+  rows: [
+    { route: "appearance", label: "Внешний вид", icon: "palette" },
+    { route: "settings", label: "Настройки", icon: "gear" },
+  ],
+};

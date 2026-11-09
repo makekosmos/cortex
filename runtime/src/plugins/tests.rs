@@ -257,3 +257,149 @@ fn an_install_without_a_manifest_takes_the_catalogs() {
     // And its settings are the ones the dictation stack already wrote.
     assert_eq!(installed[0].settings["hotkey"], json!("Ctrl+Shift+;"));
 }
+
+/// The list of plugins that start with the Engine: written on the first
+/// answer, kept as answered afterwards, and never naming an uninstalled plugin
+/// back to life.
+#[test]
+fn the_autostart_list_is_written_once_and_then_obeyed() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    let data = dir.path().join("data");
+    assert!(!super::autostart::stored(&data));
+
+    // First answer: an installed plugin that says how it starts goes on the list.
+    let mut parsed = manifest(None);
+    parsed.start = Some(super::PluginStart {
+        args: vec!["--background".into()],
+    });
+    store.save_manifest(&parsed).expect("manifest");
+    let apps = dir.path().join("Apps").join(&parsed.id);
+    std::fs::create_dir_all(apps.join("0.5.2")).unwrap();
+    std::fs::write(
+        apps.join("install.json"),
+        json!({
+            "schema_version": 1,
+            "id": parsed.id,
+            "version": "0.5.2",
+            "executable": "dictation-gpui.exe",
+            "sha256": "0".repeat(64),
+            "size": 4_200_000,
+            "repository": "makekosmos/dictation",
+            "release_tag": "gpui-v0.5.2",
+            "installed_at": 1_794_000_000_000u64,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(apps.join("0.5.2").join("dictation-gpui.exe"), b"MZ").unwrap();
+
+    let installed = store.installed();
+    assert!(installed[0].startable, "the manifest says how it starts");
+    assert!(!installed[0].autostart, "nothing was written yet");
+    assert_eq!(
+        store.start_args(&parsed.id),
+        Some(vec!["--background".to_owned()])
+    );
+
+    // Answering "off" writes the list, and a written list is not re-seeded.
+    let ids = super::autostart::set(&store, &parsed.id, false).expect("off");
+    assert!(ids.is_empty());
+    assert!(super::autostart::stored(&data));
+    assert!(!store.installed()[0].autostart);
+
+    let ids = super::autostart::set(&store, &parsed.id, true).expect("on");
+    assert_eq!(ids, vec![parsed.id.clone()]);
+    assert!(store.installed()[0].autostart);
+    // What it starts with is written down with it: an older catalog cannot
+    // take the pill's command line away later.
+    let entries = super::autostart::load(&data);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].args, ["--background"]);
+
+    // Uninstalling the plugin takes it off the list.
+    std::fs::remove_file(apps.join("0.5.2").join("dictation-gpui.exe")).ok();
+    store.remove(&parsed.id).expect("removed");
+    assert!(super::autostart::load(&data).is_empty());
+}
+
+#[test]
+fn a_plugin_without_a_program_cannot_be_put_on_the_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    let mut parsed = manifest(None);
+    parsed.start = Some(super::PluginStart::default());
+    store.save_manifest(&parsed).expect("manifest");
+    let error = super::autostart::set(&store, &parsed.id, true).unwrap_err();
+    assert!(matches!(error, PluginError::NotInstalled), "{error:?}");
+}
+
+/// The published catalog names the command line the pill starts with.
+#[test]
+fn the_catalog_says_the_dictation_pill_starts_in_the_background() {
+    let catalog =
+        super::catalog::Catalog::parse_for_test(include_str!("../../../plugins/catalog.json"))
+            .expect("published catalog");
+    let dictation = catalog
+        .plugins
+        .iter()
+        .find(|plugin| plugin.id == "com.kosmos.dictation")
+        .expect("dictation in the catalog");
+    let start = dictation.start.as_ref().expect("a start line");
+    assert_eq!(start.args, ["--background"]);
+}
+
+/// A manifest can lag behind (an older catalog, an offline cache) — the
+/// command line already answered for is not lost by switching the switch off
+/// and on again.
+#[test]
+fn the_command_line_survives_a_manifest_that_forgot_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    let data = dir.path().join("data");
+    let mut parsed = manifest(None);
+    parsed.start = Some(super::PluginStart {
+        args: vec!["--background".into()],
+    });
+    store.save_manifest(&parsed).expect("manifest");
+    let apps = dir.path().join("Apps").join(&parsed.id);
+    std::fs::create_dir_all(apps.join("0.5.2")).unwrap();
+    std::fs::write(
+        apps.join("install.json"),
+        json!({
+            "schema_version": 1,
+            "id": parsed.id,
+            "version": "0.5.2",
+            "executable": "dictation-gpui.exe",
+            "sha256": "0".repeat(64),
+            "size": 4_200_000,
+            "repository": "makekosmos/dictation",
+            "release_tag": "gpui-v0.5.2",
+            "installed_at": 1_794_000_000_000u64,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(apps.join("0.5.2").join("dictation-gpui.exe"), b"MZ").unwrap();
+    super::autostart::set(&store, &parsed.id, true).expect("on");
+
+    // The catalog this machine can reach says less than the manifest did.
+    parsed.start = None;
+    store
+        .save_manifest(&parsed)
+        .expect("manifest without start");
+    assert_eq!(store.start_args(&parsed.id), None);
+
+    super::autostart::set(&store, &parsed.id, false).expect("off");
+    assert!(
+        !store.installed()[0].autostart,
+        "a switched-off plugin does not report itself as starting"
+    );
+    super::autostart::set(&store, &parsed.id, true).expect("on again");
+    assert_eq!(
+        super::autostart::load(&data)[0].args,
+        ["--background"],
+        "the pill is still started the way it was answered"
+    );
+    assert!(store.installed()[0].autostart);
+}

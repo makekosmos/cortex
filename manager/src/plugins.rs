@@ -58,6 +58,15 @@ fn plugin_row(plugin: &Value) -> Value {
         "running": plugin.get("running").and_then(Value::as_bool).unwrap_or(false),
         // Whether the plugin brought a program of its own (a `builtin` does not).
         "executable": plugin.get("executable").is_some_and(Value::is_string),
+        // The Engine's answers carry these; a catalog row (which is a manifest)
+        // says whether it *can* start by declaring its `start` line.
+        "autostart": plugin.get("autostart").and_then(Value::as_bool).unwrap_or(false),
+        "startable": plugin
+            .get("startable")
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| {
+                manifest.is_some_and(|manifest| !manifest.get("start").is_none_or(Value::is_null))
+            }),
         "settings": plugin.get("settings").cloned().unwrap_or(Value::Null),
     })
 }
