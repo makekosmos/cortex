@@ -1112,7 +1112,9 @@ const demoState = {
 				summary: "Речь в текст по горячей клавише",
 				version: "",
 				running: false,
-				executable: false
+				executable: false,
+				autostart: false,
+				startable: false
 			}],
 			stale: false,
 			url: "https://raw.githubusercontent.com/makekosmos/cortex/main/plugins/catalog.json"
@@ -1123,7 +1125,9 @@ const demoState = {
 			summary: "Речь в текст по горячей клавише",
 			version: "0.5.2",
 			running: false,
-			executable: true
+			executable: true,
+			autostart: true,
+			startable: true
 		}],
 		current: null
 	},
@@ -2604,6 +2608,7 @@ function versionLine(plugin) {
 	const parts = [];
 	if (plugin.version) parts.push(`Версия ${plugin.version}`);
 	if (plugin.running) parts.push("запущен");
+	if (plugin.autostart && !plugin.running) parts.push("с автозапуском");
 	return parts.join(" · ");
 }
 /** A row of the installed list: open it, change its settings, remove it. */
@@ -2957,216 +2962,260 @@ function PluginPage(props) {
 			})() : null;
 		},
 		get children() {
-			return [(() => {
-				const __nsh_hv9 = element("view");
-				insert(__nsh_hv9, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Плагин";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return component(CardRow, {
+			return [
+				(() => {
+					const __nsh_hv9 = element("view");
+					insert(__nsh_hv9, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Плагин";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								icon: "plug",
+								get accent() {
+									return props.colors.accent;
+								},
+								get accentTo() {
+									return props.colors.accent;
+								},
+								get title() {
+									return shown.name;
+								},
+								get subtitle() {
+									return shown.summary;
+								},
+								last: true,
+								get right() {
+									return (() => {
+										const __nsh_hv10 = element("view");
+										prop(__nsh_hv10, "class", "flex-row items-center gap-2");
+										insert(__nsh_hv10, [() => plugin()?.running ? component(StatusDot, { get colors() {
+											return props.colors;
+										} }) : null, component(PillButton, {
+											get colors() {
+												return props.colors;
+											},
+											tone: "neutral",
+											label: "Открыть",
+											onPress: () => props.onCommand("plugins.launch", { id: props.id })
+										})]);
+										return __nsh_hv10;
+									})();
+								}
+							});
+						}
+					})]);
+					return __nsh_hv9;
+				})(),
+				() => plugin()?.startable ? (() => {
+					const __nsh_hv11 = element("view");
+					insert(__nsh_hv11, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Запуск";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								title: "Запускать вместе с движком",
+								subtitle: "Движок стартует при входе в систему — плагин поднимется вместе с ним",
+								last: true,
+								get right() {
+									return component(Switch, {
+										get colors() {
+											return props.colors;
+										},
+										get value() {
+											return Boolean(plugin()?.autostart);
+										},
+										accessibilityLabel: "Запускать вместе с движком",
+										onChange: (on) => props.onCommand("plugins.autostart", {
+											id: props.id,
+											value: on
+										})
+									});
+								}
+							});
+						}
+					})]);
+					return __nsh_hv11;
+				})() : null,
+				(() => {
+					const __nsh_hv12 = element("view");
+					insert(__nsh_hv12, [
+						component(SectionLabel, {
 							get colors() {
 								return props.colors;
 							},
-							icon: "plug",
-							get accent() {
-								return props.colors.accent;
-							},
-							get accentTo() {
-								return props.colors.accent;
-							},
-							get title() {
-								return shown.name;
-							},
-							get subtitle() {
-								return shown.summary;
-							},
-							last: true,
-							get right() {
-								return (() => {
-									const __nsh_hv10 = element("view");
-									prop(__nsh_hv10, "class", "flex-row items-center gap-2");
-									insert(__nsh_hv10, [() => plugin()?.running ? component(StatusDot, { get colors() {
-										return props.colors;
-									} }) : null, component(PillButton, {
-										get colors() {
-											return props.colors;
-										},
-										tone: "neutral",
-										label: "Открыть",
-										onPress: () => props.onCommand("plugins.launch", { id: props.id })
-									})]);
-									return __nsh_hv10;
-								})();
+							get children() {
+								return "Настройки";
 							}
-						});
-					}
-				})]);
-				return __nsh_hv9;
-			})(), (() => {
-				const __nsh_hv11 = element("view");
-				insert(__nsh_hv11, [
-					component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Настройки";
-						}
-					}),
-					component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return shown.settings.map((field, index) => {
-								const last = index === shown.settings.length - 1;
-								const value = valueOf(field.key);
-								if (field.kind.type === "toggle") return component(CardRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get title() {
-										return field.label;
-									},
-									get subtitle() {
-										return field.hint;
-									},
-									last,
-									get right() {
-										return component(Switch, {
-											get colors() {
-												return props.colors;
-											},
-											get value() {
-												return Boolean(value);
-											},
-											get accessibilityLabel() {
-												return field.label;
-											},
-											onChange: (on) => send(field.key, on)
-										});
-									}
-								});
-								const kind = field.kind;
-								if (kind.type === "switch") return component(CardRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get title() {
-										return field.label;
-									},
-									get subtitle() {
-										return field.hint;
-									},
-									last,
-									get right() {
-										return component(Switch, {
-											get colors() {
-												return props.colors;
-											},
-											get value() {
-												return !same(kind.off, value) && Boolean(value);
-											},
-											get accessibilityLabel() {
-												return field.label;
-											},
-											onChange: (on) => send(field.key, on ? kind.on : kind.off)
-										});
-									}
-								});
-								if (kind.type === "choice") {
-									const options = kind.options;
-									if (options.length > 6) return component(PickerRow, {
+						}),
+						component(Card, {
+							get colors() {
+								return props.colors;
+							},
+							get children() {
+								return shown.settings.map((field, index) => {
+									const last = index === shown.settings.length - 1;
+									const value = valueOf(field.key);
+									if (field.kind.type === "toggle") return component(CardRow, {
 										get key() {
 											return field.key;
 										},
-										get fieldKey() {
-											return field.key;
-										},
-										get label() {
-											return field.label;
-										},
-										options,
-										value,
 										get colors() {
 											return props.colors;
 										},
-										last
-									});
-									return component(ChoiceRow, {
-										get key() {
-											return field.key;
-										},
-										get label() {
+										get title() {
 											return field.label;
 										},
-										options,
-										value,
-										get colors() {
-											return props.colors;
+										get subtitle() {
+											return field.hint;
 										},
 										last,
-										onPick: (next) => send(field.key, next)
+										get right() {
+											return component(Switch, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return Boolean(value);
+												},
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (on) => send(field.key, on)
+											});
+										}
 									});
-								}
-								const numeric = field.kind.type === "number";
-								return component(FieldRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get label() {
-										return field.label;
-									},
-									last,
-									labelWidth: 210,
-									get children() {
-										return component(TextInput, {
+									const kind = field.kind;
+									if (kind.type === "switch") return component(CardRow, {
+										get key() {
+											return field.key;
+										},
+										get colors() {
+											return props.colors;
+										},
+										get title() {
+											return field.label;
+										},
+										get subtitle() {
+											return field.hint;
+										},
+										last,
+										get right() {
+											return component(Switch, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return !same(kind.off, value) && Boolean(value);
+												},
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (on) => send(field.key, on ? kind.on : kind.off)
+											});
+										}
+									});
+									if (kind.type === "choice") {
+										const options = kind.options;
+										if (options.length > 6) return component(PickerRow, {
+											get key() {
+												return field.key;
+											},
+											get fieldKey() {
+												return field.key;
+											},
+											get label() {
+												return field.label;
+											},
+											options,
+											value,
 											get colors() {
 												return props.colors;
 											},
-											get value() {
-												return String(value ?? "");
+											last
+										});
+										return component(ChoiceRow, {
+											get key() {
+												return field.key;
 											},
-											placeholder: numeric ? "Число" : "Не задано",
-											get accessibilityLabel() {
+											get label() {
 												return field.label;
 											},
-											onChange: (text) => draft(field.key, numeric ? Number(text) : text),
-											onSubmit: () => {
-												const next = valueOf(field.key);
-												if (next !== void 0) send(field.key, next);
-												drafts.set({
-													id: props.id,
-													values: {}
-												});
-											}
+											options,
+											value,
+											get colors() {
+												return props.colors;
+											},
+											last,
+											onPick: (next) => send(field.key, next)
 										});
 									}
+									const numeric = field.kind.type === "number";
+									return component(FieldRow, {
+										get key() {
+											return field.key;
+										},
+										get colors() {
+											return props.colors;
+										},
+										get label() {
+											return field.label;
+										},
+										last,
+										labelWidth: 210,
+										get children() {
+											return component(TextInput, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return String(value ?? "");
+												},
+												placeholder: numeric ? "Число" : "Не задано",
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (text) => draft(field.key, numeric ? Number(text) : text),
+												onSubmit: () => {
+													const next = valueOf(field.key);
+													if (next !== void 0) send(field.key, next);
+													drafts.set({
+														id: props.id,
+														values: {}
+													});
+												}
+											});
+										}
+									});
 								});
-							});
-						}
-					}),
-					() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
-				]);
-				return __nsh_hv11;
-			})()];
+							}
+						}),
+						() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
+					]);
+					return __nsh_hv12;
+				})()
+			];
 		}
 	}), () => (() => {
 		const picked = pickingField();

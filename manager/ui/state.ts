@@ -42,6 +42,10 @@ export type PluginRow = {
   running: boolean;
   /** Whether the plugin brought a program of its own (a builtin has none). */
   executable: boolean;
+  /** Whether the Engine starts it on boot (`plugins.autostart.set`). */
+  autostart: boolean;
+  /** Whether its manifest says how it starts — without it there is no switch. */
+  startable: boolean;
 };
 
 /** What a plugin setting holds: a key, a switch, a number, a choice — or
@@ -222,6 +226,8 @@ export const demoState: ManagerState = {
           version: "",
           running: false,
           executable: false,
+          autostart: false,
+          startable: false,
         },
       ],
       stale: false,
@@ -235,6 +241,8 @@ export const demoState: ManagerState = {
         version: "0.5.2",
         running: false,
         executable: true,
+        autostart: true,
+        startable: true,
       },
     ],
     current: null,

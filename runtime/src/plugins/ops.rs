@@ -16,6 +16,7 @@ pub async fn handle_plugin_op(subop: &str, params: Value) -> crate::plugins::OpR
         "install" => install(&params).await,
         "remove" => remove(&params),
         "launch" => launch(&params),
+        "autostart.set" => autostart_set(&params),
         "settings.get" => settings_get(&params).await,
         "settings.set" => settings_set(&params),
         other => Err(PluginError::Manifest(format!(
@@ -71,8 +72,10 @@ impl From<Result<Value>> for OpResponse {
 async fn list() -> Result<Value> {
     let store = PluginStore::new()?;
     let mut installed = store.installed();
-    if installed.iter().any(|plugin| plugin.manifest.is_none()) {
-        if let Ok(answer) = catalog::fetch().await {
+    // The catalog describes the plugins the Engine has, and it moves: an
+    // install adopted before the catalog named a field is brought up to date.
+    if let Ok(answer) = catalog::fetch().await {
+        if installed.iter().any(|plugin| plugin.manifest.is_none()) {
             for plugin in installed.iter_mut().filter(|p| p.manifest.is_none()) {
                 if let Some(manifest) = adopt(&store, &answer.catalog, &plugin.id) {
                     plugin.settings = store.settings(&manifest).unwrap_or_default();
@@ -80,6 +83,8 @@ async fn list() -> Result<Value> {
                 }
             }
         }
+        super::sync_manifests(&store, &answer.catalog, &installed)?;
+        installed = store.installed();
     }
     installed.retain(|plugin| plugin.manifest.is_some());
     Ok(serde_json::json!({ "plugins": installed }))
@@ -145,6 +150,19 @@ fn remove(params: &Value) -> Result<Value> {
     let id = param_id(params)?;
     store.remove(&id)?;
     Ok(serde_json::json!({ "removed": id }))
+}
+
+/// `plugins.autostart.set { id, enabled }` — start this plugin with the
+/// Engine, or stop doing that. Answers the list as it now stands.
+fn autostart_set(params: &Value) -> Result<Value> {
+    let store = PluginStore::new()?;
+    let id = param_id(params)?;
+    let enabled = params
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| PluginError::Manifest("не сказано, включать ли автозапуск".into()))?;
+    let ids = super::autostart::set(&store, &id, enabled)?;
+    Ok(serde_json::json!({ "id": id, "autostart": enabled, "plugins": ids }))
 }
 
 fn launch(params: &Value) -> Result<Value> {

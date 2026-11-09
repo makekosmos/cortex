@@ -527,7 +527,10 @@
           "hint": "Сколько модель держать в памяти без записи"
         }
       ],
-      "settings_op": "dictation.update_config"
+      "settings_op": "dictation.update_config",
+      "start": {
+        "args": ["--background"]
+      }
     }
   ]
 }

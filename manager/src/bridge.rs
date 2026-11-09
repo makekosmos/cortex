@@ -358,6 +358,17 @@ impl NativeComponent for ManagerBridge {
                 json!({ "id": Self::id(args) }),
                 "plugins",
             ),
+            // Whether the Engine starts this plugin on boot: the answer lands
+            // under a key of its own, and the list is read again for the row.
+            "plugins.autostart" => loader.then_reload(
+                "plugins.autostart",
+                "plugins.autostart.set",
+                json!({
+                    "id": Self::id(args),
+                    "enabled": args.get("value").and_then(Value::as_bool).unwrap_or(false),
+                }),
+                "plugins",
+            ),
             // The page that sent this is the plugin's own (`plugin/<id>`).
             "plugins.set" => loader.then_reload(
                 "plugins.current",

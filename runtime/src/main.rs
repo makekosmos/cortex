@@ -36,6 +36,7 @@ use engine::{
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
     manager_api::ManagerState,
     observability::{self, CORRELATION_ID_ENV},
+    plugins,
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -254,6 +255,11 @@ async fn run_core_worker() -> ExitCode {
 
     // ARK Host остаётся живым через clone (или базовый Arc) до конца main.
     let _keep_ark_alive = ark;
+
+    // Плагины, которые живут вместе с движком (пилюля диктовки — один из них),
+    // стартуют здесь: движок уже отвечает, их окну есть к чему подключиться.
+    // Отдельная задача: неудачный запуск плагина не задерживает и не валит движок.
+    tokio::spawn(async move { plugins::autostart::on_boot().await });
 
     let (backend_tray, mut tray_events) = backend_tray::start();
     eprintln!("[mundus-engine] ready. Ctrl+C для shutdown.");

@@ -16,6 +16,7 @@
 //! | `plugins.install { id }`        | latest release → verified install → manifest   |
 //! | `plugins.remove { id }`         | the install; user settings stay                |
 //! | `plugins.launch { id }`         | the program, told where its settings are       |
+//! | `plugins.autostart.set { id, enabled }` | start it with the Engine, or not  |
 //! | `plugins.settings.get { id }`   | values merged over the manifest's defaults     |
 //! | `plugins.settings.set { id, values }` | validated against the manifest, then written |
 //!
@@ -34,6 +35,7 @@ use serde_json::{Map, Value};
 
 use crate::native_apps::{self, NativeAppInstall, NativeAppStore, NativeInstallSpec, MAX_ARCHIVE};
 
+pub mod autostart;
 pub mod catalog;
 pub mod manifest;
 pub mod ops;
@@ -41,7 +43,7 @@ pub mod release;
 #[cfg(test)]
 mod tests;
 
-pub use manifest::{PluginManifest, PluginSource, SettingField, SettingKind};
+pub use manifest::{PluginManifest, PluginSource, PluginStart, SettingField, SettingKind};
 pub use ops::{handle_plugin_op, OpResponse};
 
 /// The manifest file inside a plugin's directory.
@@ -90,8 +92,51 @@ pub struct InstalledPlugin {
     pub executable: Option<String>,
     pub installed_at: u64,
     pub running: bool,
+    /// Whether this plugin starts with the Engine (`plugins-autostart.json`).
+    pub autostart: bool,
+    /// Whether its manifest says how it starts at all — a plugin only launched
+    /// by hand leaves the autostart switch out.
+    pub startable: bool,
     /// Settings merged over the manifest's defaults.
     pub settings: Map<String, Value>,
+}
+
+/// Keep the manifests kept beside installs in step with the catalog. The
+/// catalog is the plugin's own description and it moves — a new setting, the
+/// command line it starts with — while the copy beside the install is there so
+/// the pages work without the catalog at all. Nothing a person owns lives in a
+/// manifest (settings are a file of their own), so the catalog's copy wins.
+pub fn sync_manifests(
+    store: &PluginStore,
+    catalog: &catalog::Catalog,
+    installed: &[InstalledPlugin],
+) -> Result<usize> {
+    let data_dir = store.data_dir().to_path_buf();
+    let mut updated = 0;
+    for plugin in installed {
+        let Some(described) = catalog.plugins.iter().find(|entry| entry.id == plugin.id) else {
+            continue;
+        };
+        if plugin.manifest.as_ref() == Some(described) {
+            continue;
+        }
+        store.save_manifest(described)?;
+        updated += 1;
+    }
+    // A manifest may have gained a `start` line: a plugin that was seeded
+    // before the catalog said how it starts is put on the list now, once.
+    if updated > 0 && !autostart::stored(&data_dir) {
+        let ids: std::collections::BTreeSet<String> = store
+            .installed()
+            .into_iter()
+            .filter(|plugin| plugin.startable)
+            .map(|plugin| plugin.id)
+            .collect();
+        if !ids.is_empty() {
+            autostart::save(&data_dir, &ids)?;
+        }
+    }
+    Ok(updated)
 }
 
 /// The installed plugins, at one root: the product-local `Apps` directory.
@@ -128,11 +173,18 @@ impl PluginStore {
 
     /// Every `<id>` with an `install.json`, with its manifest and settings.
     pub fn installed(&self) -> Vec<InstalledPlugin> {
+        let autostart = autostart::load(&self.data_dir);
         self.apps
             .list()
             .into_iter()
-            .map(|record| self.describe(&record))
+            .map(|record| self.describe(&record, autostart.contains(&record.id)))
             .collect()
+    }
+
+    /// The Engine's data directory: where a plugin's settings file and the
+    /// autostart list live.
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     pub fn record(&self, id: &str) -> Result<Option<NativeAppInstall>> {
@@ -150,8 +202,9 @@ impl PluginStore {
         (manifest.id == id).then_some(manifest)
     }
 
-    fn describe(&self, record: &NativeAppInstall) -> InstalledPlugin {
+    fn describe(&self, record: &NativeAppInstall, autostart: bool) -> InstalledPlugin {
         let manifest = self.manifest(&record.id);
+        let startable = manifest.as_ref().is_some_and(|m| m.start.is_some());
         let settings = manifest
             .as_ref()
             .and_then(|manifest| self.settings(manifest).ok())
@@ -166,6 +219,8 @@ impl PluginStore {
                 .map(|path| path.to_string_lossy().into_owned()),
             installed_at: record.installed_at,
             running: self.apps.app_is_running(&record.id).unwrap_or(false),
+            autostart,
+            startable,
             settings,
         }
     }
@@ -228,7 +283,18 @@ impl PluginStore {
         let record = self
             .record(&manifest.id)?
             .ok_or_else(|| PluginError::Install("установка не записалась".into()))?;
-        Ok(self.describe(&record))
+        // A plugin that brought a background program starts with the Engine
+        // from now on: that is what it was installed for.
+        if manifest.start.is_some() {
+            if let Err(error) = autostart::set(self, &manifest.id, true) {
+                crate::observability::stderr(format!(
+                    "[mundus-engine] plugin {}: not put on the autostart list ({error})",
+                    manifest.id
+                ));
+            }
+        }
+        let autostart = autostart::load(&self.data_dir).contains(&manifest.id);
+        Ok(self.describe(&record, autostart))
     }
 
     pub fn save_manifest(&self, manifest: &PluginManifest) -> Result<()> {
@@ -251,10 +317,14 @@ impl PluginStore {
     /// Remove the install. Settings are the person's, not the archive's, so
     /// they stay where they are — reinstalling picks them up again.
     pub fn remove(&self, id: &str) -> Result<()> {
-        self.apps.uninstall(id).map_err(|error| match error {
+        let removed = self.apps.uninstall(id).map_err(|error| match error {
             native_apps::NativeAppError::Running => PluginError::Running,
             other => PluginError::Install(other.to_string()),
-        })
+        });
+        if removed.is_ok() {
+            autostart::forget(self, id)?;
+        }
+        removed
     }
 
     pub fn executable(&self, id: &str) -> Option<PathBuf> {
@@ -264,6 +334,17 @@ impl PluginStore {
     /// Start the plugin's program, telling it which plugin it is and where its
     /// settings are. A plugin without a program (`builtin`) has nothing to do.
     pub fn launch(&self, id: &str) -> Result<()> {
+        self.launch_with(id, &[])
+    }
+
+    /// How this plugin starts when it starts with the Engine: the manifest's
+    /// `start.args`, or `None` when it says nothing (a plugin launched by hand).
+    pub fn start_args(&self, id: &str) -> Option<Vec<String>> {
+        self.manifest(id)?.start.map(|start| start.args)
+    }
+
+    /// Start the plugin's program with `args`.
+    pub fn launch_with(&self, id: &str, args: &[String]) -> Result<()> {
         let Some(executable) = self.executable(id) else {
             return Err(PluginError::NotInstalled);
         };
@@ -274,9 +355,10 @@ impl PluginStore {
         if let Some(parent) = config.parent() {
             fs::create_dir_all(parent)?;
         }
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
         native_apps::spawn_detached_with(
             &executable,
-            &[],
+            &args,
             &[
                 (ENV_PLUGIN_ID, std::ffi::OsStr::new(id)),
                 (ENV_PLUGIN_CONFIG, config.as_os_str()),
