@@ -64,6 +64,10 @@ impl From<Result<Value>> for OpResponse {
 /// the catalog's copy is stored beside it, once, so the pages can name it and
 /// open its settings — a plugin that is on disk is not "unknown" because it
 /// arrived before the catalog did.
+///
+/// An install nothing describes is not a plugin: the same catalog installs
+/// native apps, and a page that offered them a settings screen it cannot draw
+/// would be worse than a page that leaves them out.
 async fn list() -> Result<Value> {
     let store = PluginStore::new()?;
     let mut installed = store.installed();
@@ -77,6 +81,7 @@ async fn list() -> Result<Value> {
             }
         }
     }
+    installed.retain(|plugin| plugin.manifest.is_some());
     Ok(serde_json::json!({ "plugins": installed }))
 }
 

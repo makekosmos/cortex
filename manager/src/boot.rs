@@ -179,10 +179,12 @@ pub fn ensure_engine() -> Result<(), String> {
                 // The supervisor mode the Run entry uses; no-args defaults to
                 // it too, and the flag says so out loud.
                 .arg("--start")
-                .env("MUNDUS_DATA_DIR", &directory)
                 .stdin(Stdio::null())
                 .stdout(Stdio::from(log))
                 .stderr(Stdio::from(stderr));
+            if let Some(dir) = engine_data_dir_env(&directory) {
+                command.env("MUNDUS_DATA_DIR", dir);
+            }
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
@@ -199,6 +201,21 @@ pub fn ensure_engine() -> Result<(), String> {
         || std::thread::sleep(INTERVAL),
         ATTEMPTS,
     )
+}
+
+/// The `MUNDUS_DATA_DIR` a spawned Engine needs: only when its data dir is not
+/// the one it resolves by itself. The Engine reads the same variable as its
+/// install root for the apps (`mundus_local_data_dir`), so exporting the default
+/// through it would move `Apps` from `%LOCALAPPDATA%\Mundus` to
+/// `%APPDATA%\Mundus` — and every app the installer put in place would vanish
+/// from the list.
+fn engine_data_dir_env(directory: &Path) -> Option<&Path> {
+    let default = engine::default_data_home();
+    if default.as_deref() == Some(directory) {
+        None
+    } else {
+        Some(directory)
+    }
 }
 
 /// The Engine binary this Manager would start, if it can find one.
@@ -226,8 +243,8 @@ pub fn stop_engine() -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    if let Some(directory) = directory {
-        command.env("MUNDUS_DATA_DIR", directory);
+    if let Some(dir) = directory.as_deref().and_then(engine_data_dir_env) {
+        command.env("MUNDUS_DATA_DIR", dir);
     }
     let status = command
         .status()
@@ -317,5 +334,24 @@ mod tests {
                 .join(engine_exe_name())
         )));
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod data_dir_env_tests {
+    use super::engine_data_dir_env;
+    use std::path::Path;
+
+    /// The default data dir is not exported: the Engine moves its app install
+    /// root with `MUNDUS_DATA_DIR`, so naming the default through it would look
+    /// for apps in `%APPDATA%\Mundus\Apps` instead of the installer's local dir.
+    #[test]
+    fn the_default_data_dir_is_not_exported() {
+        let default = crate::engine::default_data_home().expect("a roaming root");
+        assert_eq!(engine_data_dir_env(&default), None);
+        assert_eq!(
+            engine_data_dir_env(&Path::new("nowhere").join("slot")),
+            Some(Path::new("nowhere").join("slot").as_path())
+        );
     }
 }
