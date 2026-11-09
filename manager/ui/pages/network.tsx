@@ -1,19 +1,13 @@
 import { Text, View } from "nsh";
-import {
-  Card,
-  CardRow,
-  PillButton,
-  SectionLabel,
-  SettingsPage,
-  StatusDot,
-} from "@makekosmos/imago-nsh";
+import { Card, CardRow, PillButton, SectionLabel, StatusDot } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
+import { Page } from "../page";
 
 export function DevicesPage(props: PageProps) {
   const state = () => props.state();
   const peers = () => state().sync.peers;
   return (
-    <SettingsPage colors={props.colors} title="Девайсы">
+    <Page colors={props.colors} title="Девайсы">
       <View>
         <SectionLabel colors={props.colors}>Этот компьютер</SectionLabel>
         <Card colors={props.colors}>
@@ -94,7 +88,7 @@ export function DevicesPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }
 
@@ -104,7 +98,7 @@ export function DevicesPage(props: PageProps) {
 export function IntegrationsPage(props: PageProps) {
   const connectors = () => props.state().connectors;
   return (
-    <SettingsPage colors={props.colors} title="Интеграции">
+    <Page colors={props.colors} title="Интеграции">
       <View>
         <SectionLabel colors={props.colors}>Коннекторы</SectionLabel>
         <Card colors={props.colors}>
@@ -173,7 +167,7 @@ export function IntegrationsPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }
 
@@ -184,7 +178,7 @@ export function IntegrationsPage(props: PageProps) {
  */
 export function BrowserPage(props: PageProps) {
   return (
-    <SettingsPage colors={props.colors} title="Браузер">
+    <Page colors={props.colors} title="Браузер">
       <View>
         <SectionLabel colors={props.colors}>Ссылки</SectionLabel>
         <Card colors={props.colors}>
@@ -199,6 +193,6 @@ export function BrowserPage(props: PageProps) {
           />
         </Card>
       </View>
-    </SettingsPage>
+    </Page>
   );
 }

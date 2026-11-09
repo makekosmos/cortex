@@ -1,6 +1,7 @@
-import { append, bindProp, component, element, insert, merge, prop, setup, text } from "nsh:rt";
+import { append, bindProp, component, element, insert, merge, prop, setup, spread, text } from "nsh:rt";
 import { effect, mount, nativeComponent, signal } from "nsh";
 import { Window, titleBar } from "nsh/desktop";
+import { platform } from "os";
 
 //#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/types.ts
 /** Metrics of the settings shell the Manager and NSH preference panes wear. */
@@ -511,59 +512,6 @@ function SettingsSidebar(props) {
 		return __nsh_hv9;
 	})();
 }
-/**
-* Page frame: the scroll area, its gutter and the column the cards sit in. The
-* page's own heading is the window's top row — dragging it moves the window, and
-* the window's controls hang off it when the platform does not paint its own.
-*/
-function SettingsPage(props) {
-	const controls = titleBar();
-	return (() => {
-		const __nsh_hv14 = element("scroll");
-		prop(__nsh_hv14, "class", "min-h-0 flex-1");
-		bindProp(__nsh_hv14, "style", () => ({ backgroundColor: props.colors.background }));
-		const __nsh_hv15 = element("view");
-		prop(__nsh_hv15, "class", "w-full");
-		bindProp(__nsh_hv15, "style", () => ({
-			maxWidth: settingsMetrics.pageMaxWidth,
-			paddingLeft: settingsMetrics.pageGutter,
-			paddingRight: settingsMetrics.pageGutter,
-			paddingTop: settingsMetrics.pageTop,
-			paddingBottom: settingsMetrics.pageBottom
-		}));
-		const __nsh_hv16 = element("view");
-		prop(__nsh_hv16, "class", "flex-row items-center");
-		bindProp(__nsh_hv16, "style", () => ({
-			height: settingsMetrics.headerHeight,
-			paddingLeft: controls.left
-		}));
-		prop(__nsh_hv16, "desktop", { windowDrag: true });
-		const __nsh_hv18 = element("view");
-		prop(__nsh_hv18, "class", "flex-1");
-		append(__nsh_hv16, __nsh_hv18);
-		insert(__nsh_hv16, [() => props.title ? (() => {
-			const __nsh_hv17 = element("text");
-			bindProp(__nsh_hv17, "style", () => ({
-				fontSize: 13,
-				lineHeight: 19,
-				fontWeight: "500",
-				color: props.colors.foreground
-			}));
-			insert(__nsh_hv17, () => props.title);
-			return __nsh_hv17;
-		})() : null, () => props.actions ?? null], __nsh_hv18);
-		const __nsh_hv19 = element("view");
-		bindProp(__nsh_hv19, "style", () => ({
-			gap: settingsMetrics.sectionGap,
-			marginTop: settingsMetrics.headerGap
-		}));
-		insert(__nsh_hv19, () => props.children);
-		append(__nsh_hv15, __nsh_hv16);
-		append(__nsh_hv15, __nsh_hv19);
-		append(__nsh_hv14, __nsh_hv15);
-		return __nsh_hv14;
-	})();
-}
 function SectionLabel(props) {
 	return (() => {
 		const __nsh_hv20 = element("view");
@@ -1028,6 +976,40 @@ const navigation = [
 ];
 
 //#endregion
+//#region chrome.ts
+function reservesCaptions() {
+	const host = platform();
+	return host === "win32" || host === "windows";
+}
+/** The width of the strip the caption buttons take, in points. */
+function captionStrip() {
+	return reservesCaptions() ? 138 : 0;
+}
+
+//#endregion
+//#region host.ts
+/**
+* The host's own window: things the pages ask for and only the shell can do.
+*
+* A press that drags the window is one of them, and *who* moves it depends on
+* whose window it is. The dev host (`nsh dev`) owns its window — it draws the
+* caption buttons, reports their strip in `titleBar().right`, hit-tests the
+* `windowDrag` areas itself and lets Windows move the window from them. An
+* embedding host (`manager.exe`) reports nothing reserved and swallows the
+* press in its surface before Windows can act on it (`Window::start_window_move`
+* is an empty default on Windows), so the press has to ask the host's own Win32
+* code over the bridge.
+*/
+let command$1;
+function connectHost(send) {
+	command$1 = send;
+}
+/** A press here moves the window, by whichever of the two means applies. */
+function dragBinding() {
+	return titleBar().right > 0 ? { desktop: { windowDrag: true } } : { onPressDown: () => command$1?.("window.drag") };
+}
+
+//#endregion
 //#region state.ts
 const demoState = {
 	engine: {
@@ -1273,6 +1255,65 @@ function Confirm(props) {
 }
 
 //#endregion
+//#region page.tsx
+/**
+* The frame every page sits in: the scroll area, its gutter, the heading row the
+* window is dragged by, and the column the sections stack in.
+*
+* The kit's `SettingsPage` does the same but caps the column at 1180 points,
+* which leaves a strip of bare background on a wide window. A Manager window is
+* the size the person gave it, so the cards take all of it.
+*/
+function Page(props) {
+	const controls = titleBar();
+	return (() => {
+		const __nsh_hv0 = element("scroll");
+		prop(__nsh_hv0, "class", "min-h-0 flex-1");
+		bindProp(__nsh_hv0, "style", () => ({ backgroundColor: props.colors.background }));
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "class", "w-full");
+		bindProp(__nsh_hv1, "style", () => ({
+			paddingLeft: settingsMetrics.pageGutter,
+			paddingRight: settingsMetrics.pageGutter,
+			paddingTop: 0,
+			paddingBottom: settingsMetrics.pageBottom
+		}));
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "class", "flex-row items-center");
+		bindProp(__nsh_hv2, "style", () => ({
+			height: 36,
+			paddingLeft: controls.left,
+			marginRight: captionStrip()
+		}));
+		spread(__nsh_hv2, dragBinding());
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "class", "flex-1");
+		append(__nsh_hv2, __nsh_hv4);
+		insert(__nsh_hv2, [() => props.title ? (() => {
+			const __nsh_hv3 = element("text");
+			bindProp(__nsh_hv3, "style", () => ({
+				fontSize: 13,
+				lineHeight: 19,
+				fontWeight: "500",
+				color: props.colors.foreground
+			}));
+			insert(__nsh_hv3, () => props.title);
+			return __nsh_hv3;
+		})() : null, () => props.actions ?? null], __nsh_hv4);
+		const __nsh_hv5 = element("view");
+		bindProp(__nsh_hv5, "style", () => ({
+			gap: settingsMetrics.sectionGap,
+			marginTop: settingsMetrics.headerGap
+		}));
+		insert(__nsh_hv5, () => props.children);
+		append(__nsh_hv1, __nsh_hv2);
+		append(__nsh_hv1, __nsh_hv5);
+		append(__nsh_hv0, __nsh_hv1);
+		return __nsh_hv0;
+	})();
+}
+
+//#endregion
 //#region pages/server.tsx
 /** The page of the reference: what the Engine is doing right now. */
 function ServerPage(props) {
@@ -1280,7 +1321,7 @@ function ServerPage(props) {
 	const running = state().engine.status === "running";
 	const busy = state().engine.status === "starting" || state().engine.status === "stopping";
 	const code = state().sync.ownCode;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1517,7 +1558,7 @@ function ThemeRow(props) {
 function AppearancePage(props) {
 	const state = () => props.state();
 	const follow = () => state().appearance.followApps;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1714,7 +1755,7 @@ function updateSubtitle(updates) {
 function AboutPage(props) {
 	const state = () => props.state();
 	const version = productVersion(state());
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1828,7 +1869,7 @@ function AboutPage(props) {
 function StoragePage(props) {
 	const state = () => props.state();
 	const backups = () => state().backups;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -1943,7 +1984,7 @@ function StoragePage(props) {
 }
 function ActivityPage(props) {
 	const usage = () => props.state().usage;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2031,7 +2072,7 @@ function ActivityPage(props) {
 }
 function PreferencesPage(props) {
 	const state = () => props.state();
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2104,7 +2145,7 @@ function PreferencesPage(props) {
 * Mundus installed. So the page says that much and offers nothing to press —
 * a button that opens what it cannot name is worse than no button. */
 function AppsPage(props) {
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2153,7 +2194,7 @@ function ModelsPage(props) {
 		if (model.downloaded) return model.selected ? `${model.size} · выбрана` : `${model.size} · загружена`;
 		return `${model.size} · не загружена`;
 	};
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2274,7 +2315,7 @@ function KeysPage(props) {
 		draft.set("");
 		verifyNote.set("Ключ отправлен в Engine");
 	};
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2434,7 +2475,7 @@ function KeysPage(props) {
 function DevicesPage(props) {
 	const state = () => props.state();
 	const peers = () => state().sync.peers;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2598,7 +2639,7 @@ function DevicesPage(props) {
 * not a list the Manager keeps. */
 function IntegrationsPage(props) {
 	const connectors = () => props.state().connectors;
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2723,7 +2764,7 @@ function IntegrationsPage(props) {
 * control that never reaches the Engine is worse than no control.
 */
 function BrowserPage(props) {
-	return component(SettingsPage, {
+	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2856,16 +2897,22 @@ function command(name, args = {}) {
 	}
 }
 /**
-* A window with no system bar of its own: the page heading is the top row, and
-* `titleBar()` reports the caption area so the sidebar can inset below it.
+* A window with no system bar of its own: the first row of the content is the
+* band the caption buttons sit in, and `titleBar()` reports the caption area so
+* the sidebar can inset below it.
 */
-const TITLEBAR_HEIGHT = 36;
 function useHiddenChrome() {
 	effect(() => Window.setTitleBar({
 		style: "hidden",
-		height: TITLEBAR_HEIGHT
+		height: 36
 	}));
 }
+/**
+* How far the sidebar's own top padding has to come up for its search field to
+* sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
+* it, and the field is centred in the band.
+*/
+const SIDEBAR_LIFT = settingsMetrics.sidebarTop - (36 - settingsMetrics.searchHeight) / 2;
 function renderPage(page) {
 	const props = {
 		colors: colors(),
@@ -2947,7 +2994,20 @@ function App() {
 		bindProp(__nsh_hv1, "style", () => ({ backgroundColor: colors().background }));
 		const __nsh_hv2 = element("view");
 		prop(__nsh_hv2, "class", "min-h-0 flex-1 flex-row");
-		insert(__nsh_hv2, [component(SettingsSidebar, {
+		const __nsh_hv3 = element("view");
+		prop(__nsh_hv3, "class", "h-full relative overflow-hidden");
+		bindProp(__nsh_hv3, "style", () => ({
+			width: settingsMetrics.sidebarWidth,
+			backgroundColor: colors().shell
+		}));
+		spread(__nsh_hv3, dragBinding());
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "class", "absolute inset-0");
+		spread(__nsh_hv4, dragBinding());
+		const __nsh_hv5 = element("view");
+		prop(__nsh_hv5, "class", "h-full");
+		prop(__nsh_hv5, "style", { marginTop: -SIDEBAR_LIFT });
+		insert(__nsh_hv5, component(SettingsSidebar, {
 			get colors() {
 				return colors();
 			},
@@ -2960,11 +3020,16 @@ function App() {
 			},
 			onSearch: (value) => search.set(value),
 			onNavigate: (next) => route.set(next)
-		}), () => renderPage(route())]);
+		}));
+		append(__nsh_hv3, __nsh_hv4);
+		append(__nsh_hv3, __nsh_hv5);
+		append(__nsh_hv2, __nsh_hv3);
+		insert(__nsh_hv2, () => renderPage(route()));
 		append(__nsh_hv1, __nsh_hv2);
 		insert(__nsh_hv1, component(Bridge, {
 			ref: (node) => {
 				session = { command: (name, args) => node.command(name, args) };
+				connectHost((name) => node.command(name, {}));
 			},
 			get route() {
 				return route();

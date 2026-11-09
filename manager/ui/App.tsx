@@ -6,9 +6,12 @@ import {
   cobaltFoundry,
   darkThemes,
   lightThemes,
+  settingsMetrics,
 } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
+import { TITLEBAR_HEIGHT } from "./chrome";
+import { connectHost, dragBinding } from "./host";
 import { demoState } from "./state";
 import type { ManagerState } from "./state";
 import type { CommandArgs } from "./commands";
@@ -112,14 +115,21 @@ function command(name: string, args: CommandArgs = {}) {
 }
 
 /**
- * A window with no system bar of its own: the page heading is the top row, and
- * `titleBar()` reports the caption area so the sidebar can inset below it.
+ * A window with no system bar of its own: the first row of the content is the
+ * band the caption buttons sit in, and `titleBar()` reports the caption area so
+ * the sidebar can inset below it.
  */
-const TITLEBAR_HEIGHT = 36;
-
 function useHiddenChrome() {
   effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
 }
+
+/**
+ * How far the sidebar's own top padding has to come up for its search field to
+ * sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
+ * it, and the field is centred in the band.
+ */
+const SIDEBAR_LIFT =
+  settingsMetrics.sidebarTop - (TITLEBAR_HEIGHT - settingsMetrics.searchHeight) / 2;
 
 function renderPage(page: string) {
   const props = { colors: colors(), state: () => state(), onCommand: command };
@@ -199,20 +209,35 @@ function App() {
       <Bridge
         ref={(node) => {
           session = { command: (name, args) => node.command(name, args) };
+          connectHost((name) => node.command(name, {}));
         }}
         route={route()}
         onState={(next: ManagerState) => state.set(next)}
         onNavigate={(event: { route: string }) => route.set(event.route)}
       />
+
       <View class="min-h-0 flex-1 flex-row">
-        <SettingsSidebar
-          colors={colors()}
-          groups={navigation}
-          current={route()}
-          search={search()}
-          onSearch={(value) => search.set(value)}
-          onNavigate={(next) => route.set(next)}
-        />
+        {/* The sidebar is the window's other titlebar: its search field sits in
+            the band, and an empty stretch of it drags — the drag is a
+            background of its own under the rows, because a handler on their
+            parent would fire for the rows' presses too. */}
+        <View
+          class="h-full relative overflow-hidden"
+          style={{ width: settingsMetrics.sidebarWidth, backgroundColor: colors().shell }}
+          {...dragBinding()}
+        >
+          <View class="absolute inset-0" {...dragBinding()} />
+          <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
+            <SettingsSidebar
+              colors={colors()}
+              groups={navigation}
+              current={route()}
+              search={search()}
+              onSearch={(value) => search.set(value)}
+              onNavigate={(next) => route.set(next)}
+            />
+          </View>
+        </View>
         {renderPage(route())}
       </View>
 

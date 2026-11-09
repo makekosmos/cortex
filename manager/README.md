@@ -29,6 +29,16 @@ nsh test .capture/Screens.test.tsx --target windows          # every page, as PN
 nsh build . && cp .nsh/out/bundle.js bundle.js               # refresh the bundle
 ```
 
+Where the window would move from — `HTCAPTION` for the titlebar and the
+sidebar, `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE` for the caption buttons — is
+answered by Windows from hitboxes, so it can be asked without touching the
+mouse: `pwsh manager/scripts/window-hit-test.ps1 -Exe manager/target/debug/manager.exe`.
+It sends the move the hit test keys off and reads back the code per probe point.
+
+The caption buttons' glyphs are Zeron's own SVGs (`assets/icons/`, Solar Icons
+by 480 Design, CC BY 4.0), painted with `Window::paint_svg` so a maximized
+window draws the restore shape in the frame its state changes.
+
 `ui/bundle.js` is committed on purpose: `src/main.rs` embeds it with
 `include_str!`, so a fresh clone — and the release build — must find it without
 an `nsh` toolchain. Rebuild it whenever a page changes; the screenshot tests
