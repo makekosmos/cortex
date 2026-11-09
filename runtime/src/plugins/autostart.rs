@@ -5,48 +5,56 @@
 //! from being launched by hand once and then forgotten, so it starts here,
 //! with the Engine, unless the person turned that off.
 //!
-//! What is remembered is a list of ids in [`FILE`], in the Engine's data
-//! directory. A plugin is started only while it is installed, has a program,
-//! and its manifest says how it starts ([`PluginStart`]) — the Engine still
-//! knows none of the ids.
+//! What is remembered is a list of [`Entry`]s in [`FILE`], in the Engine's data
+//! directory: the plugin's id and the command line it starts with. The command
+//! line is written when the person answers, taken from the manifest's
+//! [`PluginStart`] — so a catalog that later says less (an older copy, an
+//! offline cache) cannot silently stop a pill that was already promised to
+//! start. The Engine still knows none of the ids.
 //!
-//! First boot with no list at all: every installed plugin that says how it
-//! starts is put on the list. That is the default a person expects from a
+//! First boot with no list at all: every installed plugin whose manifest says
+//! how it starts is put on the list. That is what a person expects from a
 //! plugin that brought a background program; turning it off writes the list
 //! without the id, and a written list is never re-seeded.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{PluginError, PluginStore, Result};
 
-/// The list of plugin ids that start with the Engine.
+/// The list of plugins that start with the Engine.
 const FILE: &str = "plugins-autostart.json";
 /// The format of that file.
 const LIST_VERSION: u32 = 1;
 
-/// The ids on the list, in the order they were written. A missing file reads as
-/// an empty list; a damaged one does too — nothing is started by accident.
-pub fn load(data_dir: &Path) -> BTreeSet<String> {
+/// One plugin on the list: which, and with what.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Entry {
+    pub id: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// The list as it stands. A missing file reads as an empty list; a damaged one
+/// does too — nothing is started by accident.
+pub fn load(data_dir: &Path) -> Vec<Entry> {
     let Ok(bytes) = fs::read(data_dir.join(FILE)) else {
-        return BTreeSet::new();
+        return Vec::new();
     };
     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-        return BTreeSet::new();
+        return Vec::new();
     };
-    value
-        .get("plugins")
-        .and_then(Value::as_array)
-        .map(|ids| {
-            ids.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    let Some(plugins) = value.get("plugins").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    plugins
+        .iter()
+        .filter_map(|entry| serde_json::from_value::<Entry>(entry.clone()).ok())
+        .collect()
 }
 
 /// True when the person has ever answered the question — even with "nobody".
@@ -56,50 +64,55 @@ pub fn stored(data_dir: &Path) -> bool {
 
 /// Write the list. An empty list is written too: it is the answer "none of
 /// them", not the absence of an answer.
-pub fn save(data_dir: &Path, ids: &BTreeSet<String>) -> Result<()> {
+pub fn save(data_dir: &Path, entries: &[Entry]) -> Result<()> {
     fs::create_dir_all(data_dir)?;
     let body = serde_json::json!({
         "schema_version": LIST_VERSION,
-        "plugins": ids.iter().collect::<Vec<_>>(),
+        "plugins": entries,
     });
     crate::lock_file::write_owner_only_json(&data_dir.join(FILE), &body)
         .map_err(|error| PluginError::Settings(error.to_string()))
 }
 
-/// Put `id` on the list or take it off, and answer the list as it now stands.
-/// Only a plugin that is installed and has a program can be added: a switch
-/// that promises a start nobody can perform is worse than no switch.
+/// Is `id` on the list?
+pub fn starts_with_engine(data_dir: &Path, id: &str) -> bool {
+    load(data_dir).iter().any(|entry| entry.id == id)
+}
+
+/// Put `id` on the list or take it off, and answer the ids as they now stand.
+/// Only a plugin that is installed and says how it starts can be added: a
+/// switch that promises a start nobody can perform is worse than no switch.
 pub fn set(store: &PluginStore, id: &str, enabled: bool) -> Result<Vec<String>> {
     let data_dir = store.data_dir().to_path_buf();
-    let mut ids = load(&data_dir);
+    let mut entries = load(&data_dir);
+    entries.retain(|entry| entry.id != id);
     if enabled {
-        let installed = store
-            .installed()
-            .into_iter()
-            .find(|plugin| plugin.id == id)
-            .ok_or(PluginError::NotInstalled)?;
-        if !installed.startable {
-            return Err(PluginError::Manifest(format!(
-                "у плагина «{id}» нет программы, которую можно запустить"
-            )));
+        if !store.installed().iter().any(|plugin| plugin.id == id) {
+            return Err(PluginError::NotInstalled);
         }
-        ids.insert(id.to_owned());
-    } else {
-        ids.remove(id);
+        let args = store.start_args(id).ok_or_else(|| {
+            PluginError::Manifest(format!("у плагина «{id}» не сказано, как его запускать"))
+        })?;
+        entries.push(Entry {
+            id: id.to_owned(),
+            args,
+        });
     }
-    save(&data_dir, &ids)?;
-    Ok(ids.into_iter().collect())
+    save(&data_dir, &entries)?;
+    Ok(ids(&entries))
 }
 
 /// Forget `id` when it is uninstalled or removed.
 pub fn forget(store: &PluginStore, id: &str) -> Result<()> {
     let data_dir = store.data_dir().to_path_buf();
-    if !data_dir.join(FILE).is_file() {
+    if !stored(&data_dir) {
         return Ok(());
     }
-    let mut ids = load(&data_dir);
-    if ids.remove(id) {
-        save(&data_dir, &ids)?;
+    let mut entries = load(&data_dir);
+    let before = entries.len();
+    entries.retain(|entry| entry.id != id);
+    if entries.len() != before {
+        save(&data_dir, &entries)?;
     }
     Ok(())
 }
@@ -114,58 +127,73 @@ pub async fn on_boot() {
     let store = match PluginStore::new() {
         Ok(store) => store,
         Err(error) => {
-            log(&format!("plugin autostart: no store ({error})"));
+            log(&format!("no store ({error})"));
             return;
         }
     };
     if !stored(store.data_dir()) {
-        // First boot with this list: the catalog is what tells a plugin how it
-        // starts, and the install may predate that field.
-        if let Ok(answer) = super::catalog::fetch().await {
-            let installed = store.installed();
-            if let Err(error) = super::sync_manifests(&store, &answer.catalog, &installed) {
-                log(&format!(
-                    "plugin autostart: manifests not refreshed ({error})"
-                ));
-            }
-        }
-        let ids: BTreeSet<String> = store
-            .installed()
-            .into_iter()
-            .filter(|plugin| plugin.startable)
-            .map(|plugin| plugin.id)
-            .collect();
-        if !ids.is_empty() {
-            if let Err(error) = save(store.data_dir(), &ids) {
-                log(&format!("plugin autostart: list not written ({error})"));
-            }
-        }
+        seed(&store).await;
     }
-    let ids = load(store.data_dir());
-    if ids.is_empty() {
+    let entries = load(store.data_dir());
+    if entries.is_empty() {
+        log("list is empty: no plugin starts with the Engine");
         return;
     }
     let installed = store.installed();
-    for plugin in installed.iter().filter(|plugin| ids.contains(&plugin.id)) {
-        match start(&store, plugin) {
-            Ok(true) => log(&format!("plugin autostart: {} started", plugin.id)),
-            Ok(false) => {}
-            Err(error) => log(&format!("plugin autostart: {} — {error}", plugin.id)),
+    for entry in &entries {
+        let Some(plugin) = installed.iter().find(|plugin| plugin.id == entry.id) else {
+            log(&format!("{}: not installed", entry.id));
+            continue;
+        };
+        if plugin.running {
+            log(&format!("{}: already running", entry.id));
+            continue;
+        }
+        match store.launch_with(&entry.id, &entry.args) {
+            Ok(()) => log(&format!("{}: started", entry.id)),
+            Err(error) => log(&format!("{}: {error}", entry.id)),
         }
     }
 }
 
-/// Start one plugin the way its manifest says. `false` when there was nothing
-/// to do (no program, already running, no start line).
-fn start(store: &PluginStore, plugin: &super::InstalledPlugin) -> Result<bool> {
-    if !plugin.startable || plugin.running {
-        return Ok(false);
+/// The first answer: everything installed that says how it starts. The catalog
+/// is asked once here because an install made before `start` existed has no
+/// such line of its own.
+async fn seed(store: &PluginStore) {
+    if let Ok(answer) = super::catalog::fetch().await {
+        let installed = store.installed();
+        if let Err(error) = super::sync_manifests(store, &answer.catalog, &installed) {
+            log(&format!("manifests not refreshed ({error})"));
+        }
     }
-    let Some(args) = store.start_args(&plugin.id) else {
-        return Ok(false);
-    };
-    store.launch_with(&plugin.id, &args)?;
-    Ok(true)
+    let entries: Vec<Entry> = store
+        .installed()
+        .into_iter()
+        .filter(|plugin| plugin.startable)
+        .map(|plugin| Entry {
+            id: plugin.id,
+            args: Vec::new(),
+        })
+        .collect();
+    if entries.is_empty() {
+        log("nothing to seed: no installed plugin says how it starts");
+        return;
+    }
+    // The manifest, not the catalog, is what a seeded entry starts with.
+    let entries: Vec<Entry> = entries
+        .into_iter()
+        .map(|entry| Entry {
+            args: store.start_args(&entry.id).unwrap_or_default(),
+            ..entry
+        })
+        .collect();
+    if let Err(error) = save(store.data_dir(), &entries) {
+        log(&format!("list not written ({error})"));
+    }
+}
+
+fn ids(entries: &[Entry]) -> Vec<String> {
+    entries.iter().map(|entry| entry.id.clone()).collect()
 }
 
 /// A boot in a test process must not start anybody's programs.
@@ -174,5 +202,7 @@ fn enabled_here() -> bool {
 }
 
 fn log(message: &str) {
-    crate::observability::stderr(format!("[mundus-engine] {message}"));
+    // The Engine log, not stderr: a plugin that did not start is something to
+    // read in the morning, and this process is often started without a console.
+    tracing::info!(target: "plugin_autostart", "{message}");
 }

@@ -111,7 +111,6 @@ pub fn sync_manifests(
     catalog: &catalog::Catalog,
     installed: &[InstalledPlugin],
 ) -> Result<usize> {
-    let data_dir = store.data_dir().to_path_buf();
     let mut updated = 0;
     for plugin in installed {
         let Some(described) = catalog.plugins.iter().find(|entry| entry.id == plugin.id) else {
@@ -122,19 +121,6 @@ pub fn sync_manifests(
         }
         store.save_manifest(described)?;
         updated += 1;
-    }
-    // A manifest may have gained a `start` line: a plugin that was seeded
-    // before the catalog said how it starts is put on the list now, once.
-    if updated > 0 && !autostart::stored(&data_dir) {
-        let ids: std::collections::BTreeSet<String> = store
-            .installed()
-            .into_iter()
-            .filter(|plugin| plugin.startable)
-            .map(|plugin| plugin.id)
-            .collect();
-        if !ids.is_empty() {
-            autostart::save(&data_dir, &ids)?;
-        }
     }
     Ok(updated)
 }
@@ -173,11 +159,14 @@ impl PluginStore {
 
     /// Every `<id>` with an `install.json`, with its manifest and settings.
     pub fn installed(&self) -> Vec<InstalledPlugin> {
-        let autostart = autostart::load(&self.data_dir);
+        let list = autostart::load(&self.data_dir);
         self.apps
             .list()
             .into_iter()
-            .map(|record| self.describe(&record, autostart.contains(&record.id)))
+            .map(|record| {
+                let starts = list.iter().any(|entry| entry.id == record.id);
+                self.describe(&record, starts)
+            })
             .collect()
     }
 
@@ -293,8 +282,10 @@ impl PluginStore {
                 ));
             }
         }
-        let autostart = autostart::load(&self.data_dir).contains(&manifest.id);
-        Ok(self.describe(&record, autostart))
+        Ok(self.describe(
+            &record,
+            autostart::starts_with_engine(&self.data_dir, &manifest.id),
+        ))
     }
 
     pub fn save_manifest(&self, manifest: &PluginManifest) -> Result<()> {

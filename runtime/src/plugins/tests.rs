@@ -311,6 +311,11 @@ fn the_autostart_list_is_written_once_and_then_obeyed() {
     let ids = super::autostart::set(&store, &parsed.id, true).expect("on");
     assert_eq!(ids, vec![parsed.id.clone()]);
     assert!(store.installed()[0].autostart);
+    // What it starts with is written down with it: an older catalog cannot
+    // take the pill's command line away later.
+    let entries = super::autostart::load(&data);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].args, ["--background"]);
 
     // Uninstalling the plugin takes it off the list.
     std::fs::remove_file(apps.join("0.5.2").join("dictation-gpui.exe")).ok();
