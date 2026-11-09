@@ -42,7 +42,7 @@ impl gpui::Render for Shell {
             .size_full()
             .relative()
             .child(self.root.clone())
-            .child(chrome::drag())
+            .child(chrome::input())
             .children(chrome::controls(dark))
     }
 }

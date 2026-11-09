@@ -2,6 +2,8 @@ import { Scroll, Text, View } from "nsh";
 import { titleBar } from "nsh/desktop";
 import { settingsMetrics as M } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
+import { captionStrip } from "./chrome";
+import { dragWindow } from "./host";
 
 /**
  * The frame every page sits in: the scroll area, its gutter, the heading row the
@@ -29,10 +31,19 @@ export function Page(props: {
           paddingBottom: M.pageBottom,
         }}
       >
+        {/* The heading is the window's title row — and it stops where the
+            caption buttons start: this row spans the whole column, so without
+            the reserve a press on a button would land in a drag area and the
+            button would never see it. A press here moves the window, which only
+            the host can do (`dragWindow`). */}
         <View
           class="flex-row items-center"
-          style={{ height: M.headerHeight, paddingLeft: controls.left }}
-          desktop={{ windowDrag: true }}
+          style={{
+            height: M.headerHeight,
+            paddingLeft: controls.left,
+            marginRight: captionStrip(),
+          }}
+          onPressDown={() => dragWindow()}
         >
           {props.title ? (
             <Text

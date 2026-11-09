@@ -10,11 +10,19 @@
 //!
 //! So the three buttons live here, next to the window, and mark their areas
 //! with [`WindowControlArea`] the same way NSH does — Windows then answers
-//! `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE`, handles the clicks itself (and the
-//! maximize button's snap layouts). The glyphs are Zeron's (`assets/icons/`):
-//! a 16-point box, 1.25 stroke, round caps — thin and rounded, where NSH draws
-//! a square one-device-pixel line. A maximized window gets the restore glyph,
-//! decided while painting, so it changes in the frame the state does.
+//! `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE` (and offers the maximize button's snap
+//! layouts). The click itself is not Windows' though: `nsh-platform-gpui`
+//! answers every press over its surface in-process (`events.rs`, the surface's
+//! `MouseDown` handler ends with `cx.stop_propagation()`), and gpui only sets
+//! `nc_button_pressed` when the press reaches Windows — so `DefWindowProc`
+//! never gets the `WM_NCLBUTTONUP` it acts on, and a caption button that relies
+//! on it is dead. The press is therefore taken here, in the capture phase, the
+//! one place that runs before the surface can swallow it.
+//!
+//! The glyphs are Zeron's (`assets/icons/`): a 16-point box, 1.25 stroke, round
+//! caps — thin and rounded, where NSH draws a square one-device-pixel line. A
+//! maximized window gets the restore glyph, decided while painting, so it
+//! changes in the frame the state does.
 //!
 //! Only Windows: on macOS AppKit keeps the traffic lights, and on Linux the
 //! window manager decides.
@@ -40,7 +48,7 @@ const MAXIMIZE: &[u8] = include_bytes!("../assets/icons/window-maximize.svg");
 const RESTORE: &[u8] = include_bytes!("../assets/icons/window-restore.svg");
 const CLOSE: &[u8] = include_bytes!("../assets/icons/close.svg");
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Control {
     Minimize,
     Maximize,
@@ -175,43 +183,38 @@ pub fn controls(dark: bool) -> Option<impl IntoElement> {
     )
 }
 
-/// Moving the window from a press, the way a title bar does.
+/// Moving the window from a press, the way a title bar does — for a press on
+/// the band, a sidebar's empty stretch or a page's heading row.
 ///
 /// NSH's contract for `desktop={{ windowDrag: true }}` is the system's: on
 /// Windows the area answers `HTCAPTION` and `DefWindowProc` moves, maximizes and
 /// menus the window from there. Inside a host that never happens: the surface
 /// marks the press handled (`nsh-platform-gpui`'s `chrome::drag_area` stops
-/// propagation and then calls `Window::start_window_move`, which the Windows
-/// backend does not implement), so `DefWindowProc` never sees it. Measured on
-/// this window: a `HTCAPTION` press comes back handled in a few milliseconds,
-/// where a real move would keep it for as long as the drag lasts.
-///
-/// So the window starts the move itself. Which press counts is still the
-/// platform's own answer — the surface marks drag areas `HTCAPTION` and carves
-/// buttons, fields and rows out of them — asked a moment later, because that
-/// answer comes from the app's hit test and the app is busy dispatching the
-/// press while it is being dispatched.
+/// propagation and then calls `Window::start_window_move`, whose Windows
+/// implementation is the trait's empty default), so `DefWindowProc` never sees
+/// it. So the pages ask for the move themselves (`ui/host.ts`), and it starts
+/// here, where the window is: the capture is released and `WM_SYSCOMMAND` /
+/// `SC_MOVE` is posted, which is how every custom title bar reaches Windows'
+/// own move loop — the pointer follows, a maximized window restores under the
+/// cursor, and Aero Snap works.
 pub fn start_move(window: &mut gpui::Window, cx: &mut gpui::App) {
     #[cfg(target_os = "windows")]
     {
-        let async_cx = window.to_async(cx);
-        async_cx
-            .spawn(async move |cx: &mut gpui::AsyncWindowContext| {
-                let background = cx.background_executor().clone();
-                background.timer(std::time::Duration::from_millis(1)).await;
-                cx.update(|window, _| drag::move_now(window)).ok();
-            })
-            .detach();
+        let _ = cx;
+        native::move_window(window);
     }
     #[cfg(not(target_os = "windows"))]
-    window.start_window_move();
+    {
+        let _ = cx;
+        window.start_window_move();
+    }
 }
 
-/// Registers the press listener [`start_move`] works from. Painted with the
-/// shell, so it is registered once per frame, as input listeners are.
+/// Registers the caption buttons' presses. Painted with the shell, so it is
+/// registered once per frame, as input listeners are.
 #[cfg(target_os = "windows")]
-pub fn drag() -> impl IntoElement {
-    gpui::canvas(|_, _, _| {}, |_, _, window, _| drag::listen(window))
+pub fn input() -> impl IntoElement {
+    gpui::canvas(|_, _, _| {}, |_, _, window, _| native::listen(window))
         .absolute()
         .top_0()
         .left_0()
@@ -219,41 +222,30 @@ pub fn drag() -> impl IntoElement {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn drag() -> impl IntoElement {
+pub fn input() -> impl IntoElement {
     gpui::div()
 }
 
 #[cfg(target_os = "windows")]
-mod drag {
-    use gpui::{App, DispatchPhase, MouseButton, MouseDownEvent, Window};
+mod native {
+    use gpui::{px, DispatchPhase, MouseButton, MouseDownEvent, Pixels, Window};
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::{Control, BUTTON_WIDTH, TITLEBAR_HEIGHT};
 
     /// `HWND`, which is an opaque handle.
     type Hwnd = isize;
 
-    const WM_NCHITTEST: u32 = 0x0084;
     const WM_SYSCOMMAND: u32 = 0x0112;
-    const HTCAPTION: isize = 2;
-    const SC_MOVE: usize = 0xF010;
-    const VK_LBUTTON: i32 = 0x01;
-
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    struct Point {
-        x: i32,
-        y: i32,
-    }
+    /// `SC_MOVE`, with `HTCAPTION` in the low word as Windows expects it.
+    const SC_MOVE: usize = 0xf010;
+    const HTCAPTION: usize = 2;
 
     #[link(name = "user32")]
     extern "system" {
-        fn SendMessageW(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> isize;
-        fn PostMessageW(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> i32;
         fn ReleaseCapture() -> i32;
-        fn GetCursorPos(point: *mut Point) -> i32;
-        fn GetAsyncKeyState(key: i32) -> i16;
-    }
-
-    fn packed(point: Point) -> isize {
-        ((point.y as isize) << 16) | (point.x as isize & 0xffff)
+        fn PostMessageW(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> i32;
     }
 
     fn hwnd(window: &Window) -> Option<Hwnd> {
@@ -264,38 +256,61 @@ mod drag {
         }
     }
 
-    /// Start the move when the press under the cursor is one a title bar takes.
-    pub(super) fn move_now(window: &Window) {
+    /// Hands the press to Windows' move loop, which then owns the pointer until
+    /// the button comes up.
+    pub(super) fn move_window(window: &Window) {
         let Some(hwnd) = hwnd(window) else { return };
-        let mut point = Point::default();
-        // SAFETY: plain Win32 reads and the message a title bar press sends,
-        // on this thread and this thread's own window.
+        // SAFETY: a release of this window's capture and a posted system
+        // command, both plain calls on this thread's own window.
         unsafe {
-            GetCursorPos(&mut point);
-            let at = packed(point);
-            if SendMessageW(hwnd, WM_NCHITTEST, 0, at) != HTCAPTION {
-                return;
-            }
-            // A press that is over by now (a quick click) would leave a move
-            // loop waiting for the next click, so the button must still be down.
-            if GetAsyncKeyState(VK_LBUTTON) >= 0 {
-                return;
-            }
             ReleaseCapture();
-            // Posted rather than sent: the loop pumps messages, and it must not
-            // run from inside NSH's own dispatch.
-            PostMessageW(hwnd, WM_SYSCOMMAND, SC_MOVE, 0);
+            PostMessageW(hwnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
         }
     }
 
-    /// Every left press is offered; the hit test decides, so a press on a row, a
-    /// field or a caption button never moves anything.
+    /// A left press on a caption button is the button's, and is answered here:
+    /// `nsh-platform-gpui` ends its surface's `MouseDown` handler with
+    /// `cx.stop_propagation()`, so gpui never gets as far as telling Windows
+    /// which button was pressed and `DefWindowProc` never acts on the release.
+    /// The press is taken in the capture phase, the one place that runs before
+    /// the surface answers for it.
     pub(super) fn listen(window: &mut Window) {
-        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx: &mut App| {
-            if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
+        let answered: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, _| {
+            if event.button != MouseButton::Left {
                 return;
             }
-            super::start_move(window, cx);
+            if phase == DispatchPhase::Capture {
+                answered.set(false);
+            }
+            let Some(control) = button_at(event.position, window) else {
+                return;
+            };
+            // Both phases see the press; the first one to answer does.
+            if answered.replace(true) {
+                return;
+            }
+            match control {
+                Control::Minimize => window.minimize_window(),
+                Control::Maximize => window.zoom_window(),
+                Control::Close => window.remove_window(),
+            }
         });
+    }
+
+    /// Which caption button a point is on, from the layout the pages keep clear
+    /// for them: the strip is the rightmost `46 × 3` points of the band.
+    fn button_at(position: gpui::Point<Pixels>, window: &Window) -> Option<Control> {
+        let width = window.viewport_size().width;
+        let (x, y) = (position.x, position.y);
+        let strip = px(BUTTON_WIDTH * 3.);
+        if y < px(0.) || y >= px(TITLEBAR_HEIGHT) || x < width - strip {
+            return None;
+        }
+        match ((width - x) / px(BUTTON_WIDTH)) as u32 {
+            0 => Some(Control::Close),
+            1 => Some(Control::Maximize),
+            _ => Some(Control::Minimize),
+        }
     }
 }

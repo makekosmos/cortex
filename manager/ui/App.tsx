@@ -11,6 +11,8 @@ import {
 } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
+import { captionStrip, reservesCaptions } from "./chrome";
+import { connectHost, dragWindow } from "./host";
 import { demoState } from "./state";
 import type { ManagerState } from "./state";
 import type { CommandArgs } from "./commands";
@@ -118,9 +120,6 @@ function command(name: string, args: CommandArgs = {}) {
  * `titleBar()` reports the caption area so the sidebar can inset below it.
  */
 const TITLEBAR_HEIGHT = 36;
-/// Windows draws a caption button at this width (`46 × 3` is the area
-/// `titleBar()` reserves on the right when the system's own are there).
-const CAPTION_BUTTON_WIDTH = 46;
 
 function useHiddenChrome() {
   effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
@@ -128,44 +127,37 @@ function useHiddenChrome() {
 
 /**
  * Whether the strip on the right of the band belongs to the window's caption
- * buttons. On Windows it always does: an embedded host's buttons are drawn by
- * `manager/src/chrome.rs`, and a host that owns its window (`nsh run`, `nsh
- * dev`) draws them itself and reports the strip in `titleBar()`. Either way the
- * band must keep that strip out of its drag area, or a press on a button starts
- * a window move and the button never sees it.
+ * buttons (see `./chrome`).
  */
-function reservesCaptions() {
-  const host = platform();
-  return host === "win32" || host === "windows";
-}
-
 function TitleBar(props: { colors: ApplicationTheme }) {
   // macOS keeps AppKit's traffic lights in this band's left corner.
   const macos = platform() === "darwin";
   return (
     <View class="w-full shrink-0 flex-row" style={{ height: TITLEBAR_HEIGHT }}>
       {/* Each half carries the colour of what stands under it, so the band reads
-          as the top of the sidebar and the top of the page, not as a third bar. */}
+          as the top of the sidebar and the top of the page, not as a third bar.
+          No name on it: the window's title is in the taskbar, and the sidebar
+          already says what this is. `paddingLeft` keeps macOS's traffic lights
+          off the band's edge. A press here moves the window, which only the
+          host can do (`dragWindow`). */}
       <View
-        desktop={{ windowDrag: true }}
-        class="h-full flex-row items-center"
+        onPressDown={() => dragWindow()}
+        class="h-full"
         style={{
           width: settingsMetrics.sidebarWidth,
           backgroundColor: props.colors.shell,
-          paddingLeft: macos ? 80 : 14,
+          paddingLeft: macos ? 80 : 0,
         }}
-      >
-        <Text style={{ fontSize: 12, fontWeight: "500", color: props.colors.muted }}>Mundus</Text>
-      </View>
+      />
       <View
-        desktop={{ windowDrag: true }}
+        onPressDown={() => dragWindow()}
         class="h-full flex-1"
         style={{ backgroundColor: props.colors.background }}
       />
       {reservesCaptions() ? (
         <View
           style={{
-            width: CAPTION_BUTTON_WIDTH * 3,
+            width: captionStrip(),
             height: TITLEBAR_HEIGHT,
             backgroundColor: props.colors.background,
           }}
@@ -253,6 +245,7 @@ function App() {
       <Bridge
         ref={(node) => {
           session = { command: (name, args) => node.command(name, args) };
+          connectHost((name) => node.command(name, {}));
         }}
         route={route()}
         onState={(next: ManagerState) => state.set(next)}
@@ -265,8 +258,8 @@ function App() {
             drags, and a row that takes a press stays a row — which is why the
             drag area is a background of its own under the rows, not a handler on
             their parent (a handler there would fire for the rows' presses too). */}
-        <View class="h-full flex-col relative" desktop={{ windowDrag: true }}>
-          <View class="absolute inset-0" desktop={{ windowDrag: true }} />
+        <View class="h-full flex-col relative">
+          <View class="absolute inset-0" onPressDown={() => dragWindow()} />
           <SettingsSidebar
             colors={colors()}
             groups={navigation}

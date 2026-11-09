@@ -976,6 +976,36 @@ const navigation = [
 ];
 
 //#endregion
+//#region chrome.ts
+function reservesCaptions() {
+	const host = platform();
+	return host === "win32" || host === "windows";
+}
+/** The width of the strip the caption buttons take, in points. */
+function captionStrip() {
+	return reservesCaptions() ? 138 : 0;
+}
+
+//#endregion
+//#region host.ts
+/**
+* The host's own window: things the pages ask for and only the shell can do.
+*
+* A press that drags the window is one of them. The pages cannot start a move
+* themselves — `windowDrag` answers the drag rectangles NSH hit-tests while it
+* owns a window, and inside a host (`manager.exe`) that mechanism is inert, so
+* NSH stops the press and does nothing. What works is the host's own Win32
+* call (`manager/src/chrome.rs`), reached through the bridge.
+*/
+let command$1;
+function connectHost(send) {
+	command$1 = send;
+}
+function dragWindow() {
+	command$1?.("window.drag");
+}
+
+//#endregion
 //#region state.ts
 const demoState = {
 	engine: {
@@ -1248,9 +1278,10 @@ function Page(props) {
 		prop(__nsh_hv2, "class", "flex-row items-center");
 		bindProp(__nsh_hv2, "style", () => ({
 			height: settingsMetrics.headerHeight,
-			paddingLeft: controls.left
+			paddingLeft: controls.left,
+			marginRight: captionStrip()
 		}));
-		prop(__nsh_hv2, "desktop", { windowDrag: true });
+		prop(__nsh_hv2, "onPressDown", () => dragWindow());
 		const __nsh_hv4 = element("view");
 		prop(__nsh_hv4, "class", "flex-1");
 		append(__nsh_hv2, __nsh_hv4);
@@ -2874,16 +2905,8 @@ function useHiddenChrome() {
 }
 /**
 * Whether the strip on the right of the band belongs to the window's caption
-* buttons. On Windows it always does: an embedded host's buttons are drawn by
-* `manager/src/chrome.rs`, and a host that owns its window (`nsh run`, `nsh
-* dev`) draws them itself and reports the strip in `titleBar()`. Either way the
-* band must keep that strip out of its drag area, or a press on a button starts
-* a window move and the button never sees it.
+* buttons (see `./chrome`).
 */
-function reservesCaptions() {
-	const host = platform();
-	return host === "win32" || host === "windows";
-}
 function TitleBar(props) {
 	const macos = platform() === "darwin";
 	return (() => {
@@ -2891,36 +2914,27 @@ function TitleBar(props) {
 		prop(__nsh_hv0, "class", "w-full shrink-0 flex-row");
 		prop(__nsh_hv0, "style", { height: TITLEBAR_HEIGHT });
 		const __nsh_hv1 = element("view");
-		prop(__nsh_hv1, "desktop", { windowDrag: true });
-		prop(__nsh_hv1, "class", "h-full flex-row items-center");
+		prop(__nsh_hv1, "onPressDown", () => dragWindow());
+		prop(__nsh_hv1, "class", "h-full");
 		bindProp(__nsh_hv1, "style", () => ({
 			width: settingsMetrics.sidebarWidth,
 			backgroundColor: props.colors.shell,
-			paddingLeft: macos ? 80 : 14
+			paddingLeft: macos ? 80 : 0
 		}));
-		const __nsh_hv2 = element("text");
-		bindProp(__nsh_hv2, "style", () => ({
-			fontSize: 12,
-			fontWeight: "500",
-			color: props.colors.muted
-		}));
-		const __nsh_hv3 = text("Mundus");
-		append(__nsh_hv2, __nsh_hv3);
-		append(__nsh_hv1, __nsh_hv2);
-		const __nsh_hv4 = element("view");
-		prop(__nsh_hv4, "desktop", { windowDrag: true });
-		prop(__nsh_hv4, "class", "h-full flex-1");
-		bindProp(__nsh_hv4, "style", () => ({ backgroundColor: props.colors.background }));
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "onPressDown", () => dragWindow());
+		prop(__nsh_hv2, "class", "h-full flex-1");
+		bindProp(__nsh_hv2, "style", () => ({ backgroundColor: props.colors.background }));
 		append(__nsh_hv0, __nsh_hv1);
-		append(__nsh_hv0, __nsh_hv4);
+		append(__nsh_hv0, __nsh_hv2);
 		insert(__nsh_hv0, () => reservesCaptions() ? (() => {
-			const __nsh_hv5 = element("view");
-			bindProp(__nsh_hv5, "style", () => ({
-				width: 138,
+			const __nsh_hv3 = element("view");
+			bindProp(__nsh_hv3, "style", () => ({
+				width: captionStrip(),
 				height: TITLEBAR_HEIGHT,
 				backgroundColor: props.colors.background
 			}));
-			return __nsh_hv5;
+			return __nsh_hv3;
 		})() : null);
 		return __nsh_hv0;
 	})();
@@ -2983,14 +2997,14 @@ function PairingModal(props) {
 		get children() {
 			return [
 				(() => {
-					const __nsh_hv6 = element("text");
-					bindProp(__nsh_hv6, "style", () => ({
+					const __nsh_hv4 = element("text");
+					bindProp(__nsh_hv4, "style", () => ({
 						fontSize: 13,
 						lineHeight: 19,
 						color: props.colors.foreground
 					}));
-					insert(__nsh_hv6, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
-					return __nsh_hv6;
+					insert(__nsh_hv4, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
+					return __nsh_hv4;
 				})(),
 				() => who ? note(props.colors, who) : null,
 				() => note(props.colors, "Устройство получит доступ к задачам, заметкам и истории. Подключайте только то, что узнаёте.")
@@ -3001,19 +3015,18 @@ function PairingModal(props) {
 function App() {
 	useHiddenChrome();
 	return (() => {
+		const __nsh_hv5 = element("view");
+		prop(__nsh_hv5, "class", "h-full w-full");
+		bindProp(__nsh_hv5, "style", () => ({ backgroundColor: colors().background }));
+		const __nsh_hv6 = element("view");
+		prop(__nsh_hv6, "class", "min-h-0 flex-1 flex-row");
 		const __nsh_hv7 = element("view");
-		prop(__nsh_hv7, "class", "h-full w-full");
-		bindProp(__nsh_hv7, "style", () => ({ backgroundColor: colors().background }));
+		prop(__nsh_hv7, "class", "h-full flex-col relative");
 		const __nsh_hv8 = element("view");
-		prop(__nsh_hv8, "class", "min-h-0 flex-1 flex-row");
-		const __nsh_hv9 = element("view");
-		prop(__nsh_hv9, "class", "h-full flex-col relative");
-		prop(__nsh_hv9, "desktop", { windowDrag: true });
-		const __nsh_hv10 = element("view");
-		prop(__nsh_hv10, "class", "absolute inset-0");
-		prop(__nsh_hv10, "desktop", { windowDrag: true });
-		append(__nsh_hv9, __nsh_hv10);
-		insert(__nsh_hv9, component(SettingsSidebar, {
+		prop(__nsh_hv8, "class", "absolute inset-0");
+		prop(__nsh_hv8, "onPressDown", () => dragWindow());
+		append(__nsh_hv7, __nsh_hv8);
+		insert(__nsh_hv7, component(SettingsSidebar, {
 			get colors() {
 				return colors();
 			},
@@ -3027,12 +3040,13 @@ function App() {
 			onSearch: (value) => search.set(value),
 			onNavigate: (next) => route.set(next)
 		}));
-		append(__nsh_hv8, __nsh_hv9);
-		insert(__nsh_hv8, () => renderPage(route()));
-		append(__nsh_hv7, __nsh_hv8);
-		insert(__nsh_hv7, [component(Bridge, {
+		append(__nsh_hv6, __nsh_hv7);
+		insert(__nsh_hv6, () => renderPage(route()));
+		append(__nsh_hv5, __nsh_hv6);
+		insert(__nsh_hv5, [component(Bridge, {
 			ref: (node) => {
 				session = { command: (name, args) => node.command(name, args) };
+				connectHost((name) => node.command(name, {}));
 			},
 			get route() {
 				return route();
@@ -3041,8 +3055,8 @@ function App() {
 			onNavigate: (event) => route.set(event.route)
 		}), component(TitleBar, { get colors() {
 			return colors();
-		} })], __nsh_hv8);
-		insert(__nsh_hv7, [
+		} })], __nsh_hv6);
+		insert(__nsh_hv5, [
 			component(PairingModal, { get colors() {
 				return colors();
 			} }),
@@ -3170,7 +3184,7 @@ function App() {
 				}
 			}) : null
 		]);
-		return __nsh_hv7;
+		return __nsh_hv5;
 	})();
 }
 mount(App);
