@@ -5,18 +5,18 @@ use tempfile::TempDir;
 use zip::{write::FileOptions, ZipWriter};
 
 fn spec(version: &str, archive: &Path) -> NativeInstallSpec {
-    spec_for(version, archive, "agenda-gpui.exe")
+    spec_for(version, archive, "memoria-gpui.exe")
 }
 
 fn spec_for(version: &str, archive: &Path, executable: &str) -> NativeInstallSpec {
     let bytes = fs::read(archive).unwrap();
     NativeInstallSpec {
-        id: "com.kosmos.agenda".into(),
+        id: "com.kosmos.memoria".into(),
         version: version.into(),
         executable: executable.into(),
         sha256: format!("{:x}", Sha256::digest(&bytes)),
         size: bytes.len() as u64,
-        repository: "makekosmos/agenda-unified".into(),
+        repository: "makekosmos/memoria-gpui".into(),
         release_tag: format!("v{version}"),
     }
 }
@@ -96,20 +96,20 @@ fn install_from_tarball_extracts_bundle_and_keeps_exec_bit() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.tar.gz");
-    let executable = "Agenda.app/Contents/MacOS/agenda-gpui";
+    let executable = "Memoria.app/Contents/MacOS/memoria-gpui";
     // The bundle binary may arrive 0644 in the archive — the extractor must
     // still land the declared executable runnable.
     write_tar_gz(
         &archive,
         &[
-            ("Agenda.app/Contents/Info.plist", 0o644, b"plist"),
+            ("Memoria.app/Contents/Info.plist", 0o644, b"plist"),
             (executable, 0o644, b"binary"),
         ],
     );
     store
         .install_archive(&spec_for("0.2.0", &archive, executable), &archive)
         .unwrap();
-    let installed = store.executable_path("com.kosmos.agenda").unwrap();
+    let installed = store.executable_path("com.kosmos.memoria").unwrap();
     assert!(installed.is_file());
     assert_eq!(fs::read(&installed).unwrap(), b"binary");
     #[cfg(unix)]
@@ -129,9 +129,9 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
     // Windows record hygiene only accepts `*.exe`; darwin tarballs carry the
     // `.app` bundle path. Either way the safety gate must run.
     let executable = if cfg!(windows) {
-        "agenda-gpui.exe"
+        "memoria-gpui.exe"
     } else {
-        "Agenda.app/Contents/MacOS/agenda-gpui"
+        "Memoria.app/Contents/MacOS/memoria-gpui"
     };
 
     // `..` escapes staging — rejected like the zip traversal case.
@@ -143,7 +143,7 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
     assert!(store
         .install_archive(&spec_for("0.1.0", &traversal, executable), &traversal)
         .is_err());
-    assert!(store.current("com.kosmos.agenda").unwrap().is_none());
+    assert!(store.current("com.kosmos.memoria").unwrap().is_none());
     assert!(!dir.path().join("Apps").join("escape").exists());
 
     // Symlinks are rejected outright — same rule as zip unix-mode markers.
@@ -162,7 +162,7 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
         builder
             .append_data(&mut header, executable, b"binary".as_slice())
             .unwrap();
-        append_tar_link(&mut builder, "Agenda.app/link");
+        append_tar_link(&mut builder, "Memoria.app/link");
         builder.into_inner().unwrap().finish().unwrap();
     }
     assert!(store
@@ -179,14 +179,14 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
 
 #[test]
 fn executable_path_matches_each_target_layout() {
-    let agenda = app_descriptor("com.kosmos.agenda").unwrap();
+    let memoria = app_descriptor("com.kosmos.memoria").unwrap();
     assert_eq!(
-        agenda.executable("x86_64-pc-windows-msvc"),
-        "agenda-gpui.exe"
+        memoria.executable("x86_64-pc-windows-msvc"),
+        "memoria-gpui.exe"
     );
     assert_eq!(
-        agenda.executable("aarch64-apple-darwin"),
-        "Agenda.app/Contents/MacOS/agenda-gpui"
+        memoria.executable("aarch64-apple-darwin"),
+        "Memoria.app/Contents/MacOS/memoria-gpui"
     );
     assert_eq!(
         app_descriptor("com.kosmos.dictation")
@@ -209,18 +209,22 @@ fn install_flips_pointer_and_cleans_old_versions() {
     let archive = dir.path().join("app.zip");
     write_zip(
         &archive,
-        &[("agenda-gpui.exe", b"exe"), ("LICENSE", b"license")],
+        &[("memoria-gpui.exe", b"exe"), ("LICENSE", b"license")],
     );
     let first = store
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
     assert_eq!(first.version, "0.1.0");
     assert_eq!(
-        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        store
+            .current("com.kosmos.memoria")
+            .unwrap()
+            .unwrap()
+            .version,
         "0.1.0"
     );
     assert!(store
-        .executable_path("com.kosmos.agenda")
+        .executable_path("com.kosmos.memoria")
         .unwrap()
         .is_file());
 
@@ -229,7 +233,7 @@ fn install_flips_pointer_and_cleans_old_versions() {
         .install_archive(&spec("0.2.0", &archive), &archive)
         .unwrap();
     assert_eq!(second.version, "0.2.0");
-    let app_dir = dir.path().join("Apps").join("com.kosmos.agenda");
+    let app_dir = dir.path().join("Apps").join("com.kosmos.memoria");
     let dirs: Vec<_> = fs::read_dir(&app_dir)
         .unwrap()
         .flatten()
@@ -245,7 +249,7 @@ fn bad_sha_leaves_previous_version_current() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.zip");
-    write_zip(&archive, &[("agenda-gpui.exe", b"exe")]);
+    write_zip(&archive, &[("memoria-gpui.exe", b"exe")]);
     store
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
@@ -256,10 +260,10 @@ fn bad_sha_leaves_previous_version_current() {
         store.install_archive(&bad, &archive),
         Err(NativeAppError::HashMismatch)
     ));
-    let current = store.current("com.kosmos.agenda").unwrap();
+    let current = store.current("com.kosmos.memoria").unwrap();
     assert_eq!(current.expect("record").version, "0.1.0");
     assert!(store
-        .executable_path("com.kosmos.agenda")
+        .executable_path("com.kosmos.memoria")
         .unwrap()
         .is_file());
 }
@@ -269,7 +273,7 @@ fn bad_archive_leaves_previous_version_current() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let good = dir.path().join("good.zip");
-    write_zip(&good, &[("agenda-gpui.exe", b"exe")]);
+    write_zip(&good, &[("memoria-gpui.exe", b"exe")]);
     store.install_archive(&spec("0.1.0", &good), &good).unwrap();
 
     // Traversal entry fails the archive-safety gate mid-extraction.
@@ -277,7 +281,7 @@ fn bad_archive_leaves_previous_version_current() {
     {
         let file = fs::File::create(&evil).unwrap();
         let mut zip = ZipWriter::new(file);
-        zip.start_file("agenda-gpui.exe", FileOptions::default())
+        zip.start_file("memoria-gpui.exe", FileOptions::default())
             .unwrap();
         zip.write_all(b"exe").unwrap();
         zip.add_directory("../escape", FileOptions::default())
@@ -288,14 +292,18 @@ fn bad_archive_leaves_previous_version_current() {
     let result = store.install_archive(&bad, &evil);
     assert!(result.is_err());
     assert_eq!(
-        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        store
+            .current("com.kosmos.memoria")
+            .unwrap()
+            .unwrap()
+            .version,
         "0.1.0"
     );
     assert!(store
         .root()
-        .join("com.kosmos.agenda")
+        .join("com.kosmos.memoria")
         .join("0.1.0")
-        .join("agenda-gpui.exe")
+        .join("memoria-gpui.exe")
         .is_file());
     assert!(!dir.path().join("Apps").join("escape").exists());
 
@@ -305,7 +313,11 @@ fn bad_archive_leaves_previous_version_current() {
     let spec_missing = spec("0.2.0", &missing);
     assert!(store.install_archive(&spec_missing, &missing).is_err());
     assert_eq!(
-        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        store
+            .current("com.kosmos.memoria")
+            .unwrap()
+            .unwrap()
+            .version,
         "0.1.0"
     );
 }
@@ -315,28 +327,28 @@ fn uninstall_removes_everything() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.zip");
-    write_zip(&archive, &[("agenda-gpui.exe", b"exe")]);
+    write_zip(&archive, &[("memoria-gpui.exe", b"exe")]);
     store
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
     assert_eq!(store.list().len(), 1);
-    store.uninstall("com.kosmos.agenda").unwrap();
+    store.uninstall("com.kosmos.memoria").unwrap();
     assert!(store.list().is_empty());
-    assert!(store.current("com.kosmos.agenda").unwrap().is_none());
-    assert!(!dir.path().join("Apps").join("com.kosmos.agenda").exists());
+    assert!(store.current("com.kosmos.memoria").unwrap().is_none());
+    assert!(!dir.path().join("Apps").join("com.kosmos.memoria").exists());
     // Uninstall is idempotent.
-    store.uninstall("com.kosmos.agenda").unwrap();
+    store.uninstall("com.kosmos.memoria").unwrap();
 }
 
 #[test]
 fn corrupt_record_reads_as_absent() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
-    let app_dir = dir.path().join("Apps").join("com.kosmos.agenda");
+    let app_dir = dir.path().join("Apps").join("com.kosmos.memoria");
     fs::create_dir_all(&app_dir).unwrap();
     fs::write(app_dir.join(INSTALL_FILE), b"not json").unwrap();
-    assert!(store.current("com.kosmos.agenda").unwrap().is_none());
-    store.uninstall("com.kosmos.agenda").unwrap();
+    assert!(store.current("com.kosmos.memoria").unwrap().is_none());
+    store.uninstall("com.kosmos.memoria").unwrap();
     assert!(!app_dir.exists());
 }
 

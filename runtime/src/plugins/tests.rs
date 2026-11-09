@@ -187,17 +187,29 @@ fn the_published_catalog_parses_and_mirrors_the_dictation_config() {
         .iter()
         .map(|field| field.key.as_str())
         .collect();
+    // What the dictation app's own settings page shows, in its order.
     assert_eq!(
         keys,
         [
             "hotkey",
-            "triggerMode",
-            "language",
-            "injectMode",
             "providerEnabled",
-            "httpProxy",
-            "transcriptionPrompt"
+            "injectMode",
+            "duckAudioDuringRecording",
+            "language",
+            "localModel",
+            "localIdleUnloadMs"
         ]
+    );
+    // Every key is a field of the config the app reads, and the page's edits
+    // are applied by the operation that owns that config.
+    let config = serde_json::to_value(crate::dictation::config::DictationConfig::default())
+        .expect("config as json");
+    for key in &keys {
+        assert!(config.get(*key).is_some(), "{key} is not a dictation field");
+    }
+    assert_eq!(
+        dictation.settings_op.as_deref(),
+        Some("dictation.update_config")
     );
 }
 

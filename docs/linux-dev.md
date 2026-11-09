@@ -101,5 +101,5 @@ holding the app checkouts:
 
 ```text
 rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
-  agenda/src memoria/src arcadia/src dictation/src
+  memoria/src arcadia/src dictation/src
 ```

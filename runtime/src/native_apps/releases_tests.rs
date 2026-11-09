@@ -65,7 +65,7 @@ fn select_asset_picks_the_host_target_line() {
     let parsed = parse_sums(&sums("0.3.0", &"a".repeat(64)));
     let found = select_asset(&parsed, AGENDA.target(), TARGET).expect("windows line");
     assert_eq!(found.version, "0.3.0");
-    assert_eq!(found.asset, "agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
+    assert_eq!(found.asset, "memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
     assert_eq!(found.sha256, "a".repeat(64));
     // Other targets resolve to their own extension.
     let found =
@@ -106,7 +106,7 @@ fn info_from_sums_rejects_tag_version_mismatch() {
     let info = info_from_sums(AGENDA.target(), "v0.3.0", &body, TARGET).unwrap();
     assert_eq!(info.tag, "v0.3.0");
     assert_eq!(info.version, "0.3.0");
-    assert_eq!(info.asset, "agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
+    assert_eq!(info.asset, "memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
 }
 
 #[tokio::test]
@@ -117,7 +117,7 @@ async fn fetch_latest_follows_tag_redirect() {
     stub_sums(
         &server,
         "v0.1.1",
-        format!("{sha}  agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n"),
+        format!("{sha}  memoria-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n"),
         Some("\"sums-v0.1.1\""),
     )
     .await;
@@ -128,7 +128,7 @@ async fn fetch_latest_follows_tag_redirect() {
     };
     assert_eq!(info.tag, "v0.1.1");
     assert_eq!(info.version, "0.1.1");
-    assert_eq!(info.asset, "agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip");
+    assert_eq!(info.asset, "memoria-gpui-0.1.1-x86_64-pc-windows-msvc.zip");
     assert_eq!(info.sha256, sha);
     assert_eq!(etag.as_deref(), Some("\"sums-v0.1.1\""));
 }
@@ -174,7 +174,7 @@ async fn not_modified_for_a_different_tag_refetches() {
     stub_sums(
         &server,
         "v0.2.0",
-        format!("{sha}  agenda-gpui-0.2.0-x86_64-pc-windows-msvc.zip\n"),
+        format!("{sha}  memoria-gpui-0.2.0-x86_64-pc-windows-msvc.zip\n"),
         None,
     )
     .await;
@@ -229,7 +229,7 @@ async fn fetch_latest_fails_closed_offline_and_on_mismatch() {
         &server,
         "v9.9.9",
         format!(
-            "{}  agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n",
+            "{}  memoria-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n",
             "a".repeat(64)
         ),
         None,
@@ -260,8 +260,8 @@ fn tag_from_location_only_accepts_same_host_release_path() {
     assert_eq!(
         tag_from_location(
             &base,
-            "makekosmos/agenda-unified",
-            "https://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
+            "makekosmos/memoria-gpui",
+            "https://github.com/makekosmos/memoria-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
         )
         .as_deref(),
         Some("v0.3.0"),
@@ -270,8 +270,8 @@ fn tag_from_location_only_accepts_same_host_release_path() {
     assert_eq!(
         tag_from_location(
             &base,
-            "makekosmos/agenda-unified",
-            "/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
+            "makekosmos/memoria-gpui",
+            "/makekosmos/memoria-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
         )
         .as_deref(),
         Some("v0.3.0"),
@@ -279,27 +279,27 @@ fn tag_from_location_only_accepts_same_host_release_path() {
     // Other host, other repo, wrong asset → None.
     assert!(tag_from_location(
         &base,
-        "makekosmos/agenda-unified",
-        "https://evil.example/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
+        "makekosmos/memoria-gpui",
+        "https://evil.example/makekosmos/memoria-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
     )
     .is_none());
     assert!(tag_from_location(
         &base,
-        "makekosmos/agenda-unified",
+        "makekosmos/memoria-gpui",
         "https://github.com/makekosmos/other/releases/download/v0.3.0/SHA256SUMS.txt",
     )
     .is_none());
     assert!(tag_from_location(
         &base,
-        "makekosmos/agenda-unified",
-        "https://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/EVIL.txt",
+        "makekosmos/memoria-gpui",
+        "https://github.com/makekosmos/memoria-gpui/releases/download/v0.3.0/EVIL.txt",
     )
     .is_none());
     // Same host over plain http is a downgrade, not a valid tag hop.
     assert!(tag_from_location(
         &base,
-        "makekosmos/agenda-unified",
-        "http://github.com/makekosmos/agenda-unified/releases/download/v0.3.0/SHA256SUMS.txt",
+        "makekosmos/memoria-gpui",
+        "http://github.com/makekosmos/memoria-gpui/releases/download/v0.3.0/SHA256SUMS.txt",
     )
     .is_none());
 }

@@ -65,7 +65,14 @@ export type PluginSetting =
       key: string;
       label: string;
       hint?: string;
-      kind: { type: "choice"; options: { value: string; label: string }[] };
+      kind: { type: "choice"; options: { value: SettingValue; label: string }[] };
+      value: SettingValue;
+    }
+  | {
+      key: string;
+      label: string;
+      hint?: string;
+      kind: { type: "switch"; on: SettingValue; off: SettingValue };
       value: SettingValue;
     };
 

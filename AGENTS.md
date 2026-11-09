@@ -1,9 +1,8 @@
 # AGENTS.md — cortex
 
 Cortex — это Mundus Engine (`runtime/`), встроенное ядро данных ARK (`core/`),
-Manager (`manager/`) и упаковка/релизы (`desktop/`). Агенда, Memoria и
-Dictation живут в своих репозиториях (`makekosmos/agenda-unified`,
-`makekosmos/memoria-gpui`, `makekosmos/dictation`) и ставятся Engine из GitHub
+Manager (`manager/`) и упаковка/релизы (`desktop/`). Memoria и Dictation живут в своих репозиториях (`makekosmos/memoria-gpui`,
+`makekosmos/dictation`) и ставятся Engine из GitHub
 Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
 Linux годится для разработки Engine (`docs/linux-dev.md`).
 Локальный диктовочный dev-цикл (watchers, lock-файл, файловый источник

@@ -19,7 +19,7 @@ pub struct NativeAppDescriptor {
     /// unix targets).
     pub asset_stem: &'static str,
     /// Dev-only env override naming an executable to launch instead of the
-    /// installed one (`MUNDUS_AGENDA_EXECUTABLE` etc., via `brand::env`).
+    /// installed one (`MUNDUS_MEMORIA_EXECUTABLE` etc., via `brand::env`).
     pub env_override: &'static str,
 }
 
@@ -62,7 +62,7 @@ impl<'a> ReleaseTarget<'a> {
         }
     }
 
-    /// Expected asset filename, e.g. `agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
+    /// Expected asset filename, e.g. `memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
     pub fn asset_name(&self, version: &str, target: &str) -> String {
         format!(
             "{}-{}-{}.{}",
@@ -93,14 +93,6 @@ impl<'a> ReleaseTarget<'a> {
 
 /// The store's app list — the whole catalog, hardcoded.
 pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
-    NativeAppDescriptor {
-        id: "com.kosmos.agenda",
-        name: "Agenda",
-        repository: "makekosmos/agenda-unified",
-        tag_prefix: "v",
-        asset_stem: "agenda-gpui",
-        env_override: "AGENDA_EXECUTABLE",
-    },
     NativeAppDescriptor {
         id: "com.kosmos.memoria",
         name: "Memoria",
@@ -165,7 +157,7 @@ impl NativeAppDescriptor {
         ReleaseTarget::asset_extension(target)
     }
 
-    /// Expected asset filename, e.g. `agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
+    /// Expected asset filename, e.g. `memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
     pub fn asset_name(&self, version: &str, target: &str) -> String {
         self.target().asset_name(version, target)
     }

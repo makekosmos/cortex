@@ -230,7 +230,7 @@ pub mod tests {
             );
             // No type id → the field is still emitted, empty.
             log_app_rpc_rejection(
-                "agenda-gpui",
+                "dictation-gpui",
                 "objects.list",
                 None,
                 RejectionReason::Dispatch("forbidden"),

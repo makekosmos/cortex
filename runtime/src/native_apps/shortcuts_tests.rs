@@ -8,7 +8,7 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
     let archive = dir.path().join(format!("app-{version}.zip"));
     let file = fs::File::create(&archive).unwrap();
     let mut zip = ZipWriter::new(file);
-    zip.start_file("agenda-gpui.exe", FileOptions::default())
+    zip.start_file("memoria-gpui.exe", FileOptions::default())
         .unwrap();
     zip.write_all(b"MZ fixture").unwrap();
     zip.finish().unwrap();
@@ -16,12 +16,12 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
     store
         .install_archive(
             &NativeInstallSpec {
-                id: "com.kosmos.agenda".into(),
+                id: "com.kosmos.memoria".into(),
                 version: version.into(),
-                executable: "agenda-gpui.exe".into(),
+                executable: "memoria-gpui.exe".into(),
                 sha256: format!("{:x}", Sha256::digest(&bytes)),
                 size: bytes.len() as u64,
-                repository: "makekosmos/agenda-unified".into(),
+                repository: "makekosmos/memoria-gpui".into(),
                 release_tag: format!("v{version}"),
             },
             &archive,
@@ -29,22 +29,22 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
         .unwrap()
 }
 
-fn agenda() -> &'static NativeAppDescriptor {
-    app_descriptor("com.kosmos.agenda").unwrap()
+fn memoria() -> &'static NativeAppDescriptor {
+    app_descriptor("com.kosmos.memoria").unwrap()
 }
 
 fn link(dir: &TempDir) -> PathBuf {
-    link_path(dir.path(), agenda())
+    link_path(dir.path(), memoria())
 }
 
 #[test]
 fn link_lives_under_the_product_subfolder() {
     // The path must stay inside `<Programs>\Mundus\` — the installer's flat
-    // legacy deletes (`$SMPROGRAMS\Agenda.lnk`) can never reach it.
-    let link = link_path(Path::new("Programs"), agenda());
+    // legacy deletes (`$SMPROGRAMS\Memoria.lnk`) can never reach it.
+    let link = link_path(Path::new("Programs"), memoria());
     assert_eq!(
         link,
-        Path::new("Programs").join("Mundus").join("Agenda.lnk")
+        Path::new("Programs").join("Mundus").join("Memoria.lnk")
     );
 }
 
@@ -71,7 +71,7 @@ fn link_points_at_matches_its_target_only() {
     ));
     // A file that is not a link reports no match rather than an error.
     let dir = TempDir::new().unwrap();
-    let garbage = dir.path().join("Agenda.lnk");
+    let garbage = dir.path().join("Memoria.lnk");
     fs::write(&garbage, b"not a link").unwrap();
     assert!(!link_points_at(&garbage, Path::new("C:\\anywhere.exe")));
 }
@@ -82,7 +82,7 @@ fn same_path_matches_a_file_to_its_canonical_spelling() {
     // `\\?\` from canonicalize and the 8.3 TEMP path are the same file.
     // A case-only compare reports that the shortcut points somewhere else.
     let dir = TempDir::new().unwrap();
-    let file = dir.path().join("Agenda.exe");
+    let file = dir.path().join("Memoria.exe");
     fs::write(&file, b"MZ").unwrap();
     let canonical = fs::canonicalize(&file).unwrap();
     assert!(same_path(&file, &canonical), "{file:?} vs {canonical:?}");
@@ -96,26 +96,26 @@ fn sync_writes_and_repoints_the_real_lnk() {
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     install_fixture(&store, &dir, "0.1.0");
 
-    sync_shortcut(&store, &programs, agenda()).unwrap();
-    let link = link_path(&programs, agenda());
+    sync_shortcut(&store, &programs, memoria()).unwrap();
+    let link = link_path(&programs, memoria());
     assert!(link.is_file());
-    let target = store.executable_for(agenda()).unwrap();
+    let target = store.executable_for(memoria()).unwrap();
     assert!(link_points_at(&link, &target));
 
     // Idempotent: a correct link is not rewritten.
     let written = fs::metadata(&link).unwrap().modified().unwrap();
-    sync_shortcut(&store, &programs, agenda()).unwrap();
+    sync_shortcut(&store, &programs, memoria()).unwrap();
     assert_eq!(fs::metadata(&link).unwrap().modified().unwrap(), written);
 
     // Update: the link repoints at the new version's executable.
     install_fixture(&store, &dir, "0.2.0");
-    sync_shortcut(&store, &programs, agenda()).unwrap();
-    let target = store.executable_for(agenda()).unwrap();
+    sync_shortcut(&store, &programs, memoria()).unwrap();
+    let target = store.executable_for(memoria()).unwrap();
     assert!(target.to_string_lossy().contains("0.2.0"));
     assert!(link_points_at(&link, &target));
 
     // Uninstall: the link goes with the app.
-    store.uninstall("com.kosmos.agenda").unwrap();
-    sync_shortcut(&store, &programs, agenda()).unwrap();
+    store.uninstall("com.kosmos.memoria").unwrap();
+    sync_shortcut(&store, &programs, memoria()).unwrap();
     assert!(!link.exists());
 }

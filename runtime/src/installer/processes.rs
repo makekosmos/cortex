@@ -36,7 +36,6 @@ const PRODUCT_PROCESS_NAMES: &[&str] = &[
     "Mundus Manager.exe",
     // Store-installed native apps — must not hold their dir while
     // the Engine or an uninstall replaces/removes it.
-    "agenda-gpui.exe",
     "memoria-gpui.exe",
     "dictation-gpui.exe",
 ];

@@ -166,7 +166,7 @@ jobs:
           # it must run from the installed versions\<v> dir at FileVersion v.
           function Show-ProductProcesses {
             Get-Process -ErrorAction SilentlyContinue |
-              Where-Object { 'mundus-engine','Mundus Manager','Mundus','agenda-gpui','memoria-gpui','dictation-gpui' -contains $_.Name } |
+              Where-Object { 'mundus-engine','Mundus Manager','Mundus','memoria-gpui','dictation-gpui' -contains $_.Name } |
               ForEach-Object { Write-Host "  proc $($_.Name) pid=$($_.Id) path='$($_.Path)' fv='$($_.VersionInfo.FileVersion)'" }
           }
 
@@ -270,7 +270,7 @@ jobs:
             $deadline = (Get-Date).AddSeconds(60)
             do {
               $procs = Get-Process -ErrorAction SilentlyContinue |
-                Where-Object { 'mundus-engine','Mundus Manager','Mundus','agenda-gpui','memoria-gpui','dictation-gpui' -contains $_.Name } |
+                Where-Object { 'mundus-engine','Mundus Manager','Mundus','memoria-gpui','dictation-gpui' -contains $_.Name } |
                 Where-Object { $_.Path }
               $engine = $procs | Where-Object {
                 $_.Name -eq 'mundus-engine' -and

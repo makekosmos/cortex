@@ -2447,6 +2447,158 @@ function KeysPage(props) {
 }
 
 //#endregion
+//#region pages/plugin-fields.tsx
+/** A choice as a row of buttons: one is on, the rest ask to be. */
+function ChoiceRow(props) {
+	const { colors, value } = props;
+	return component(FieldRow, {
+		colors,
+		get label() {
+			return props.label;
+		},
+		get last() {
+			return props.last;
+		},
+		labelWidth: 210,
+		get children() {
+			return (() => {
+				const __nsh_hv0 = element("view");
+				prop(__nsh_hv0, "class", "flex-row flex-wrap items-center");
+				prop(__nsh_hv0, "style", { gap: 6 });
+				insert(__nsh_hv0, () => props.options.map((option) => component(PillButton, {
+					get key() {
+						return option.label;
+					},
+					colors,
+					get tone() {
+						return same(option.value, value) ? "accent" : "neutral";
+					},
+					get label() {
+						return option.label;
+					},
+					onPress: () => props.onPick(option.value)
+				})));
+				return __nsh_hv0;
+			})();
+		}
+	});
+}
+/** Two stored values are the same choice: `"ru"` with `"ru"`, `600000` with
+* `600000`, `null` with `null` — not `"5"` with `5`. */
+function same(option, value) {
+	return JSON.stringify(option ?? null) === JSON.stringify(value ?? null);
+}
+/** The open picker: which field, and what has been typed into it. One at a
+* time, so the page never stacks two lists on top of each other. */
+const picking = signal({
+	key: "",
+	query: ""
+});
+/** A long choice (a hundred languages) as one current value and a searchable
+* list behind it — a row of a hundred buttons is not a choice, it is a wall. */
+function PickerRow(props) {
+	const { colors } = props;
+	const selected = props.options.find((option) => same(option.value, props.value));
+	return component(FieldRow, {
+		colors,
+		get label() {
+			return props.label;
+		},
+		get last() {
+			return props.last;
+		},
+		labelWidth: 210,
+		get children() {
+			return (() => {
+				const __nsh_hv1 = element("view");
+				prop(__nsh_hv1, "class", "flex-row");
+				insert(__nsh_hv1, component(PillButton, {
+					colors,
+					tone: "neutral",
+					get label() {
+						return selected?.label ?? "Не выбрано";
+					},
+					onPress: () => picking.set({
+						key: props.fieldKey,
+						query: ""
+					})
+				}));
+				return __nsh_hv1;
+			})();
+		}
+	});
+}
+/** The list a `PickerRow` opens: drawn beside the page, not inside the row, so
+* it covers the window the way every other modal of the Manager does. */
+function PickerModal(props) {
+	const { colors } = props;
+	const close = () => picking.set({
+		key: "",
+		query: ""
+	});
+	const matching = () => {
+		const needle = picking().query.trim().toLowerCase();
+		if (!needle) return props.options;
+		return props.options.filter((option) => option.label.toLowerCase().includes(needle));
+	};
+	return component(Modal, {
+		get title() {
+			return props.title;
+		},
+		colors,
+		onDismiss: close,
+		width: 380,
+		get children() {
+			return [component(SearchField, {
+				colors,
+				get value() {
+					return picking().query;
+				},
+				placeholder: "Поиск",
+				onChange: (next) => picking.set({
+					key: picking().key,
+					query: next
+				})
+			}), (() => {
+				const __nsh_hv2 = element("scroll");
+				prop(__nsh_hv2, "class", "min-h-0");
+				prop(__nsh_hv2, "style", { height: 320 });
+				insert(__nsh_hv2, () => matching().map((option) => (() => {
+					const __nsh_hv3 = element("view");
+					bindProp(__nsh_hv3, "key", () => option.label);
+					prop(__nsh_hv3, "role", "button");
+					bindProp(__nsh_hv3, "accessibilityLabel", () => option.label);
+					prop(__nsh_hv3, "onPress", () => {
+						close();
+						props.onPick(option.value);
+					});
+					prop(__nsh_hv3, "class", "h-9 flex-row items-center justify-between rounded-md px-2");
+					bindProp(__nsh_hv3, "hoverStyle", () => ({ backgroundColor: colors.background }));
+					const __nsh_hv4 = element("text");
+					prop(__nsh_hv4, "class", "text-[13px]");
+					bindProp(__nsh_hv4, "style", () => ({ color: colors.foreground }));
+					insert(__nsh_hv4, () => option.label);
+					append(__nsh_hv3, __nsh_hv4);
+					insert(__nsh_hv3, () => same(option.value, props.value) ? (() => {
+						const __nsh_hv5 = element("text");
+						prop(__nsh_hv5, "class", "text-[13px]");
+						bindProp(__nsh_hv5, "style", () => ({ color: colors.accent }));
+						const __nsh_hv6 = text("✓");
+						append(__nsh_hv5, __nsh_hv6);
+						return __nsh_hv5;
+					})() : null);
+					return __nsh_hv3;
+				})()));
+				return __nsh_hv2;
+			})()];
+		}
+	});
+}
+/** The label column: wide enough for a two-word setting name, so a field never
+* wraps into the control's row (`Подсказка для расшифровки` is the longest). */
+const LABEL_WIDTH = 210;
+
+//#endregion
 //#region pages/plugins.tsx
 function versionLine(plugin) {
 	const parts = [];
@@ -2692,44 +2844,6 @@ function PluginsPage(props) {
 		}
 	});
 }
-/** A choice as a row of buttons: one is on, the rest ask to be. */
-function ChoiceRow(props) {
-	const { colors, value } = props;
-	return component(FieldRow, {
-		colors,
-		get label() {
-			return props.label;
-		},
-		get last() {
-			return props.last;
-		},
-		labelWidth: LABEL_WIDTH,
-		get children() {
-			return (() => {
-				const __nsh_hv8 = element("view");
-				prop(__nsh_hv8, "class", "flex-row flex-wrap items-center");
-				prop(__nsh_hv8, "style", { gap: 6 });
-				insert(__nsh_hv8, () => props.options.map((option) => component(PillButton, {
-					get key() {
-						return option.value;
-					},
-					colors,
-					get tone() {
-						return option.value === value ? "accent" : "neutral";
-					},
-					get label() {
-						return option.label;
-					},
-					onPress: () => props.onPick(option.value)
-				})));
-				return __nsh_hv8;
-			})();
-		}
-	});
-}
-/** The label column: wide enough for a two-word setting name, so a field never
-* wraps into the control's row (`Подсказка для расшифровки` is the longest). */
-const LABEL_WIDTH = 210;
 /** The values a page has typed but not sent yet, per plugin. */
 const drafts = signal({
 	id: "",
@@ -2777,6 +2891,17 @@ function PluginPage(props) {
 	};
 	const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
 	const shown = manifest();
+	/** The choice whose list is open, if any: `picking` holds its key. */
+	const pickingField = () => {
+		const key = picking().key;
+		const field = shown?.settings.find((row) => row.key === key);
+		if (!field || field.kind.type !== "choice") return null;
+		return {
+			key: field.key,
+			label: field.label,
+			options: field.kind.options
+		};
+	};
 	if (!shown) return component(Page, {
 		get colors() {
 			return props.colors;
@@ -2809,7 +2934,7 @@ function PluginPage(props) {
 			});
 		}
 	});
-	return component(Page, {
+	return [component(Page, {
 		get colors() {
 			return props.colors;
 		},
@@ -2818,9 +2943,9 @@ function PluginPage(props) {
 		},
 		get actions() {
 			return dirty() ? (() => {
-				const __nsh_hv9 = element("view");
-				prop(__nsh_hv9, "style", { marginLeft: 12 });
-				insert(__nsh_hv9, component(PillButton, {
+				const __nsh_hv8 = element("view");
+				prop(__nsh_hv8, "style", { marginLeft: 12 });
+				insert(__nsh_hv8, component(PillButton, {
 					get colors() {
 						return props.colors;
 					},
@@ -2828,13 +2953,13 @@ function PluginPage(props) {
 					label: "Сохранить",
 					onPress: save
 				}));
-				return __nsh_hv9;
+				return __nsh_hv8;
 			})() : null;
 		},
 		get children() {
 			return [(() => {
-				const __nsh_hv10 = element("view");
-				insert(__nsh_hv10, [component(SectionLabel, {
+				const __nsh_hv9 = element("view");
+				insert(__nsh_hv9, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2866,9 +2991,9 @@ function PluginPage(props) {
 							last: true,
 							get right() {
 								return (() => {
-									const __nsh_hv11 = element("view");
-									prop(__nsh_hv11, "class", "flex-row items-center gap-2");
-									insert(__nsh_hv11, [() => plugin()?.running ? component(StatusDot, { get colors() {
+									const __nsh_hv10 = element("view");
+									prop(__nsh_hv10, "class", "flex-row items-center gap-2");
+									insert(__nsh_hv10, [() => plugin()?.running ? component(StatusDot, { get colors() {
 										return props.colors;
 									} }) : null, component(PillButton, {
 										get colors() {
@@ -2878,16 +3003,16 @@ function PluginPage(props) {
 										label: "Открыть",
 										onPress: () => props.onCommand("plugins.launch", { id: props.id })
 									})]);
-									return __nsh_hv11;
+									return __nsh_hv10;
 								})();
 							}
 						});
 					}
 				})]);
-				return __nsh_hv10;
+				return __nsh_hv9;
 			})(), (() => {
-				const __nsh_hv12 = element("view");
-				insert(__nsh_hv12, [
+				const __nsh_hv11 = element("view");
+				insert(__nsh_hv11, [
 					component(SectionLabel, {
 						get colors() {
 							return props.colors;
@@ -2933,25 +3058,71 @@ function PluginPage(props) {
 										});
 									}
 								});
-								if (field.kind.type === "choice") return component(ChoiceRow, {
+								const kind = field.kind;
+								if (kind.type === "switch") return component(CardRow, {
 									get key() {
 										return field.key;
-									},
-									get label() {
-										return field.label;
-									},
-									get options() {
-										return field.kind.options;
-									},
-									get value() {
-										return String(value ?? "");
 									},
 									get colors() {
 										return props.colors;
 									},
+									get title() {
+										return field.label;
+									},
+									get subtitle() {
+										return field.hint;
+									},
 									last,
-									onPick: (next) => send(field.key, next)
+									get right() {
+										return component(Switch, {
+											get colors() {
+												return props.colors;
+											},
+											get value() {
+												return !same(kind.off, value) && Boolean(value);
+											},
+											get accessibilityLabel() {
+												return field.label;
+											},
+											onChange: (on) => send(field.key, on ? kind.on : kind.off)
+										});
+									}
 								});
+								if (kind.type === "choice") {
+									const options = kind.options;
+									if (options.length > 6) return component(PickerRow, {
+										get key() {
+											return field.key;
+										},
+										get fieldKey() {
+											return field.key;
+										},
+										get label() {
+											return field.label;
+										},
+										options,
+										value,
+										get colors() {
+											return props.colors;
+										},
+										last
+									});
+									return component(ChoiceRow, {
+										get key() {
+											return field.key;
+										},
+										get label() {
+											return field.label;
+										},
+										options,
+										value,
+										get colors() {
+											return props.colors;
+										},
+										last,
+										onPick: (next) => send(field.key, next)
+									});
+								}
 								const numeric = field.kind.type === "number";
 								return component(FieldRow, {
 									get key() {
@@ -2964,7 +3135,7 @@ function PluginPage(props) {
 										return field.label;
 									},
 									last,
-									labelWidth: LABEL_WIDTH,
+									labelWidth: 210,
 									get children() {
 										return component(TextInput, {
 											get colors() {
@@ -2994,10 +3165,27 @@ function PluginPage(props) {
 					}),
 					() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
 				]);
-				return __nsh_hv12;
+				return __nsh_hv11;
 			})()];
 		}
-	});
+	}), () => (() => {
+		const picked = pickingField();
+		return picked ? component(PickerModal, {
+			get title() {
+				return picked.label;
+			},
+			get options() {
+				return picked.options;
+			},
+			get value() {
+				return valueOf(picked.key);
+			},
+			get colors() {
+				return props.colors;
+			},
+			onPick: (next) => send(picked.key, next)
+		}) : null;
+	})()];
 }
 
 //#endregion

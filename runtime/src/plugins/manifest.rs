@@ -33,6 +33,12 @@ pub struct PluginManifest {
     /// What the person can change, in the order the page shows it.
     #[serde(default)]
     pub settings: Vec<SettingField>,
+    /// The Engine operation the settings are applied through, for every field
+    /// that does not name one of its own: `dictation.update_config` turns a
+    /// patch into live state and writes the file the plugin reads. A manifest
+    /// without it only has its file written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings_op: Option<String>,
     /// Where the settings are kept, as a plain file name in the Engine's data
     /// directory. A plugin that had a config file before it was a plugin names
     /// it here (`dictation-config.json`); everything else gets
@@ -77,6 +83,28 @@ pub struct SettingField {
     /// A line under the field: what it does, or what it costs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
+    /// The Engine operation this one field goes through, when the plugin's own
+    /// op does not take it — a model picker is not a config patch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub apply: Option<FieldApply>,
+}
+
+/// One field's own Engine operation, and the parameter name it takes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FieldApply {
+    pub op: String,
+    /// The parameter the value is sent as; the field's key by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param: Option<String>,
+}
+
+/// One Engine call the Engine makes after storing settings: `op` with the
+/// values of every field that names it, gathered into one `params`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Apply {
+    pub op: String,
+    pub params: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -93,14 +121,26 @@ pub enum SettingKind {
         #[serde(default)]
         max: f64,
     },
-    /// One of `options`, stored as its `value`.
+    /// One of `options`, stored as its `value` — a string, a number, or null
+    /// for a setting that means "never".
     Choice { options: Vec<Choice> },
+    /// An on/off row whose two sides are values rather than `true`/`false`.
+    Switch {
+        #[serde(default = "on_value")]
+        on: Value,
+        #[serde(default)]
+        off: Value,
+    },
+}
+
+fn on_value() -> Value {
+    Value::Bool(true)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Choice {
-    pub value: String,
+    pub value: Value,
     pub label: String,
 }
 
@@ -125,6 +165,11 @@ impl PluginManifest {
                 return Err(PluginError::Manifest(format!("settings_file «{file}»")));
             }
         }
+        if let Some(op) = self.settings_op.as_deref() {
+            if !valid_op(op) {
+                return Err(PluginError::Manifest(format!("операция настроек «{op}»")));
+            }
+        }
         let mut keys = std::collections::HashSet::new();
         for field in &self.settings {
             if !valid_key(&field.key) {
@@ -135,6 +180,14 @@ impl PluginManifest {
                     "ключ «{}» объявлен дважды",
                     field.key
                 )));
+            }
+            if let Some(apply) = field.apply.as_ref() {
+                if !valid_op(&apply.op) {
+                    return Err(PluginError::Manifest(format!(
+                        "операция настройки «{}»",
+                        apply.op
+                    )));
+                }
             }
         }
         match &self.source {
@@ -151,6 +204,36 @@ impl PluginManifest {
             PluginSource::Builtin => {}
         }
         Ok(())
+    }
+
+    /// The Engine calls `values` turn into, in the manifest's own order: one
+    /// call per operation, carrying every field that names it. Empty when the
+    /// manifest names no operation — then the settings only live in the file.
+    pub fn applies(&self, values: &Map<String, Value>) -> Vec<Apply> {
+        let mut applies: Vec<Apply> = Vec::new();
+        for field in &self.settings {
+            let Some(value) = values.get(&field.key) else {
+                continue;
+            };
+            let (op, param) = match field.apply.as_ref() {
+                Some(apply) => (Some(apply.op.clone()), apply.param.as_deref()),
+                None => (self.settings_op.clone(), None),
+            };
+            let Some(op) = op else { continue };
+            let param = param.unwrap_or(&field.key);
+            let params = match applies.iter_mut().find(|apply| apply.op == op) {
+                Some(apply) => &mut apply.params,
+                None => {
+                    applies.push(Apply {
+                        op: op.clone(),
+                        params: Map::new(),
+                    });
+                    &mut applies.last_mut().expect("just pushed").params
+                }
+            };
+            params.insert(param.to_owned(), value.clone());
+        }
+        applies
     }
 
     /// The settings of `values` that the manifest declares, each coerced to its
@@ -198,15 +281,26 @@ impl SettingField {
                     self.key
                 ))),
             },
-            SettingKind::Choice { options } => match value {
-                Value::String(text) if options.iter().any(|option| &option.value == text) => {
+            SettingKind::Choice { options } => {
+                if options.iter().any(|option| &option.value == value) {
                     Ok(value.clone())
+                } else {
+                    Err(PluginError::Settings(format!(
+                        "«{}» — не один из вариантов",
+                        self.key
+                    )))
                 }
-                _ => Err(PluginError::Settings(format!(
-                    "«{}» — не один из вариантов",
-                    self.key
-                ))),
-            },
+            }
+            SettingKind::Switch { on, off } => {
+                if value == on || value == off {
+                    Ok(value.clone())
+                } else {
+                    Err(PluginError::Settings(format!(
+                        "«{}» — не одно из двух положений",
+                        self.key
+                    )))
+                }
+            }
         }
     }
 }
@@ -236,6 +330,17 @@ pub fn valid_file_name(value: &str) -> bool {
         && !value.ends_with(' ')
 }
 
+/// An Engine operation name: `plugins.settings.set`, `dictation.update_config`.
+/// A manifest may only name one, never build one.
+fn valid_op(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.contains('.')
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_')
+        })
+}
+
 /// A settings key: what the plugin's own config calls the field.
 fn valid_key(value: &str) -> bool {
     !value.is_empty()
@@ -260,115 +365,5 @@ fn valid_repository(value: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn manifest() -> PluginManifest {
-        serde_json::from_value(json!({
-            "schema_version": 1,
-            "id": "com.kosmos.dictation",
-            "name": "Диктовка",
-            "summary": "Речь в текст по горячей клавише",
-            "source": {
-                "kind": "release",
-                "repository": "makekosmos/dictation",
-                "tag_prefix": "gpui-v",
-                "asset": "dictation-gpui"
-            },
-            "settings_file": "dictation-config.json",
-            "settings": [
-                {
-                    "key": "hotkey", "label": "Клавиша",
-                    "kind": { "type": "text" }, "value": "Ctrl+Shift+;"
-                },
-                { "key": "language", "label": "Язык", "kind": { "type": "choice", "options": [
-                    { "value": "auto", "label": "Автоматически" },
-                    { "value": "ru", "label": "Русский" }
-                ] }, "value": "auto" }
-            ]
-        }))
-        .expect("manifest")
-    }
-
-    #[test]
-    fn a_manifest_round_trips_through_json() {
-        let parsed = manifest();
-        parsed.validate().expect("valid");
-        let text = serde_json::to_string(&parsed).unwrap();
-        let again: PluginManifest = serde_json::from_str(&text).unwrap();
-        assert_eq!(again, parsed);
-        assert_eq!(again.source.target().unwrap().tag_prefix, "gpui-v");
-    }
-
-    #[test]
-    fn a_newer_format_is_refused() {
-        let mut parsed = manifest();
-        parsed.schema_version = MANIFEST_VERSION + 1;
-        assert!(parsed.validate().is_err());
-    }
-
-    #[test]
-    fn an_id_that_could_name_a_path_is_refused() {
-        for id in ["", "..", "a/b", "Com.Mundus", "nodot", ".hidden", "a b"] {
-            let mut parsed = manifest();
-            parsed.id = id.to_owned();
-            assert!(parsed.validate().is_err(), "id {id:?} should be refused");
-        }
-    }
-
-    #[test]
-    fn a_settings_file_with_a_path_is_refused() {
-        for file in ["../x.json", "sub/x.json", "", ".hidden", "C:x.json"] {
-            let mut parsed = manifest();
-            parsed.settings_file = Some(file.to_owned());
-            assert!(
-                parsed.validate().is_err(),
-                "file {file:?} should be refused"
-            );
-        }
-        let mut parsed = manifest();
-        parsed.settings_file = Some("dictation-config.json".to_owned());
-        parsed.validate().expect("a plain file name is fine");
-    }
-
-    #[test]
-    fn duplicate_setting_keys_are_refused() {
-        let mut parsed = manifest();
-        parsed.settings.push(parsed.settings[0].clone());
-        assert!(parsed.validate().is_err());
-    }
-
-    #[test]
-    fn settings_are_coerced_to_their_field() {
-        let parsed = manifest();
-        let mut values = Map::new();
-        values.insert("hotkey".into(), json!("Ctrl+Alt+D"));
-        values.insert("language".into(), json!("ru"));
-        let checked = parsed.check_settings(&values).unwrap();
-        assert_eq!(checked["hotkey"], json!("Ctrl+Alt+D"));
-
-        values.insert("language".into(), json!("klingon"));
-        assert!(parsed.check_settings(&values).is_err());
-        values.remove("language");
-        values.insert("unknown".into(), json!("x"));
-        assert!(parsed.check_settings(&values).is_err());
-    }
-
-    #[test]
-    fn a_number_field_keeps_its_range() {
-        let field = SettingField {
-            key: "sample_rate".into(),
-            label: "Частота".into(),
-            kind: SettingKind::Number {
-                min: 8_000.0,
-                max: 48_000.0,
-            },
-            value: json!(16_000),
-            hint: None,
-        };
-        assert_eq!(field.coerce(&json!(16_000)).unwrap(), json!(16_000));
-        assert!(field.coerce(&json!(4_000)).is_err());
-        assert!(field.coerce(&json!("16000")).is_err());
-    }
-}
+#[path = "manifest_tests.rs"]
+mod tests;

@@ -40,7 +40,7 @@ test(
       `exit ${result.status} ${result.error?.code ?? ""}\n${result.stderr}\n${result.stdout.slice(-3000)}`,
     );
 
-    for (const name of ["mundus", "memoria", "agenda", "dictation"])
+    for (const name of ["mundus", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
     // Only Manager is staged as a bundled component — assert on the staged
     // tree, not on the script text.

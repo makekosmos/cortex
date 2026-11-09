@@ -208,7 +208,7 @@ test("always starts the Engine at the end of install; Manager only via finish pa
 // build-desktop.mjs staged under resources\components (see the e2e test),
 // and the installer itself must never write or shortcut an app component.
 test("the Install section never writes or shortcuts a bundled app component", () => {
-  for (const component of ["agenda", "memoria", "dictation"]) {
+  for (const component of ["memoria", "dictation"]) {
     // Component dirs may legitimately appear in RecordLegacyComponents
     // probes (read-only IfFileExists) — but never in a payload or shortcut
     // statement.

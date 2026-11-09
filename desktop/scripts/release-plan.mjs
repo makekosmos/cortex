@@ -96,7 +96,7 @@ export function latestPublishedRelease(releases) {
   return best;
 }
 
-// Same rules as agenda-gpui's release.py: never release a version at or below
+// Same rules every app's release script follows: never release a version at or below
 // the published one; reuse an already-bumped version; otherwise bump patch.
 export function nextReleaseVersion(current, previous, changed) {
   const currentParts = parseStableVersion(current);

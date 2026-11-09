@@ -12,8 +12,17 @@ import {
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { PluginRow, SettingValue } from "../state";
+import {
+  CHIPS,
+  ChoiceRow,
+  LABEL_WIDTH,
+  PickerModal,
+  PickerRow,
+  picking,
+  same,
+} from "./plugin-fields";
 import { Page } from "../page";
-import { note } from "../modal";
+import { Modal, note } from "../modal";
 
 function versionLine(plugin: PluginRow): string {
   const parts: string[] = [];
@@ -175,37 +184,6 @@ export function PluginsPage(props: PageProps) {
   );
 }
 
-/** A choice as a row of buttons: one is on, the rest ask to be. */
-function ChoiceRow(props: {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  colors: ApplicationTheme;
-  last: boolean;
-  onPick: (value: string) => void;
-}) {
-  const { colors, value } = props;
-  return (
-    <FieldRow colors={colors} label={props.label} last={props.last} labelWidth={LABEL_WIDTH}>
-      <View class="flex-row flex-wrap items-center" style={{ gap: 6 }}>
-        {props.options.map((option) => (
-          <PillButton
-            key={option.value}
-            colors={colors}
-            tone={option.value === value ? "accent" : "neutral"}
-            label={option.label}
-            onPress={() => props.onPick(option.value)}
-          />
-        ))}
-      </View>
-    </FieldRow>
-  );
-}
-
-/** The label column: wide enough for a two-word setting name, so a field never
- * wraps into the control's row (`Подсказка для расшифровки` is the longest). */
-const LABEL_WIDTH = 210;
-
 /** The values a page has typed but not sent yet, per plugin. */
 const drafts = signal<{ id: string; values: Record<string, SettingValue> }>({
   id: "",
@@ -243,6 +221,13 @@ export function PluginPage(props: PageProps & { id: string }) {
 
   const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
   const shown = manifest();
+  /** The choice whose list is open, if any: `picking` holds its key. */
+  const pickingField = () => {
+    const key = picking().key;
+    const field = shown?.settings.find((row) => row.key === key);
+    if (!field || field.kind.type !== "choice") return null;
+    return { key: field.key, label: field.label, options: field.kind.options };
+  };
 
   if (!shown) {
     return (
@@ -263,108 +248,160 @@ export function PluginPage(props: PageProps & { id: string }) {
   }
 
   return (
-    <Page
-      colors={props.colors}
-      title={shown.name}
-      actions={
-        dirty() ? (
-          <View style={{ marginLeft: 12 }}>
-            <PillButton colors={props.colors} tone="accent" label="Сохранить" onPress={save} />
-          </View>
-        ) : null
-      }
-    >
-      <View>
-        <SectionLabel colors={props.colors}>Плагин</SectionLabel>
-        <Card colors={props.colors}>
-          <CardRow
-            colors={props.colors}
-            icon="plug"
-            accent={props.colors.accent}
-            accentTo={props.colors.accent}
-            title={shown.name}
-            subtitle={shown.summary}
-            last
-            right={
-              <View class="flex-row items-center gap-2">
-                {plugin()?.running ? <StatusDot colors={props.colors} /> : null}
-                <PillButton
-                  colors={props.colors}
-                  tone="neutral"
-                  label="Открыть"
-                  onPress={() => props.onCommand("plugins.launch", { id: props.id })}
-                />
-              </View>
-            }
-          />
-        </Card>
-      </View>
+    <>
+      <Page
+        colors={props.colors}
+        title={shown.name}
+        actions={
+          dirty() ? (
+            <View style={{ marginLeft: 12 }}>
+              <PillButton colors={props.colors} tone="accent" label="Сохранить" onPress={save} />
+            </View>
+          ) : null
+        }
+      >
+        <View>
+          <SectionLabel colors={props.colors}>Плагин</SectionLabel>
+          <Card colors={props.colors}>
+            <CardRow
+              colors={props.colors}
+              icon="plug"
+              accent={props.colors.accent}
+              accentTo={props.colors.accent}
+              title={shown.name}
+              subtitle={shown.summary}
+              last
+              right={
+                <View class="flex-row items-center gap-2">
+                  {plugin()?.running ? <StatusDot colors={props.colors} /> : null}
+                  <PillButton
+                    colors={props.colors}
+                    tone="neutral"
+                    label="Открыть"
+                    onPress={() => props.onCommand("plugins.launch", { id: props.id })}
+                  />
+                </View>
+              }
+            />
+          </Card>
+        </View>
 
-      <View>
-        <SectionLabel colors={props.colors}>Настройки</SectionLabel>
-        <Card colors={props.colors}>
-          {shown.settings.map((field, index) => {
-            const last = index === shown.settings.length - 1;
-            const value = valueOf(field.key);
-            if (field.kind.type === "toggle") {
-              return (
-                <CardRow
-                  key={field.key}
-                  colors={props.colors}
-                  title={field.label}
-                  subtitle={field.hint}
-                  last={last}
-                  right={
-                    <Switch
+        <View>
+          <SectionLabel colors={props.colors}>Настройки</SectionLabel>
+          <Card colors={props.colors}>
+            {shown.settings.map((field, index) => {
+              const last = index === shown.settings.length - 1;
+              const value = valueOf(field.key);
+              if (field.kind.type === "toggle") {
+                return (
+                  <CardRow
+                    key={field.key}
+                    colors={props.colors}
+                    title={field.label}
+                    subtitle={field.hint}
+                    last={last}
+                    right={
+                      <Switch
+                        colors={props.colors}
+                        value={Boolean(value)}
+                        accessibilityLabel={field.label}
+                        onChange={(on) => send(field.key, on)}
+                      />
+                    }
+                  />
+                );
+              }
+              const kind = field.kind;
+              if (kind.type === "switch") {
+                // One switch, two stored values: the app's "insert automatically"
+                // is `auto_paste` or `clipboard_only`, not `true`/`false`.
+                return (
+                  <CardRow
+                    key={field.key}
+                    colors={props.colors}
+                    title={field.label}
+                    subtitle={field.hint}
+                    last={last}
+                    right={
+                      <Switch
+                        colors={props.colors}
+                        value={!same(kind.off, value) && Boolean(value)}
+                        accessibilityLabel={field.label}
+                        onChange={(on) => send(field.key, on ? kind.on : kind.off)}
+                      />
+                    }
+                  />
+                );
+              }
+              if (kind.type === "choice") {
+                const options = kind.options;
+                if (options.length > CHIPS) {
+                  return (
+                    <PickerRow
+                      key={field.key}
+                      fieldKey={field.key}
+                      label={field.label}
+                      options={options}
+                      value={value}
                       colors={props.colors}
-                      value={Boolean(value)}
-                      accessibilityLabel={field.label}
-                      onChange={(on) => send(field.key, on)}
+                      last={last}
                     />
-                  }
-                />
-              );
-            }
-            if (field.kind.type === "choice") {
+                  );
+                }
+                return (
+                  <ChoiceRow
+                    key={field.key}
+                    label={field.label}
+                    options={options}
+                    value={value}
+                    colors={props.colors}
+                    last={last}
+                    onPick={(next) => send(field.key, next)}
+                  />
+                );
+              }
+              const numeric = field.kind.type === "number";
               return (
-                <ChoiceRow
+                <FieldRow
                   key={field.key}
+                  colors={props.colors}
                   label={field.label}
-                  options={field.kind.options}
-                  value={String(value ?? "")}
-                  colors={props.colors}
                   last={last}
-                  onPick={(next) => send(field.key, next)}
-                />
+                  labelWidth={LABEL_WIDTH}
+                >
+                  <TextInput
+                    colors={props.colors}
+                    value={String(value ?? "")}
+                    placeholder={numeric ? "Число" : "Не задано"}
+                    accessibilityLabel={field.label}
+                    onChange={(text) => draft(field.key, numeric ? Number(text) : text)}
+                    onSubmit={() => {
+                      const next = valueOf(field.key);
+                      if (next !== undefined) send(field.key, next);
+                      drafts.set({ id: props.id, values: {} });
+                    }}
+                  />
+                </FieldRow>
               );
-            }
-            const numeric = field.kind.type === "number";
-            return (
-              <FieldRow
-                key={field.key}
-                colors={props.colors}
-                label={field.label}
-                last={last}
-                labelWidth={LABEL_WIDTH}
-              >
-                <TextInput
-                  colors={props.colors}
-                  value={String(value ?? "")}
-                  placeholder={numeric ? "Число" : "Не задано"}
-                  accessibilityLabel={field.label}
-                  onChange={(text) => draft(field.key, numeric ? Number(text) : text)}
-                  onSubmit={() => {
-                    const next = valueOf(field.key);
-                    if (next !== undefined) send(field.key, next);
-                    drafts.set({ id: props.id, values: {} });
-                  }}
-                />
-              </FieldRow>
-            );
-          })}
-        </Card>
-        {shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")}
-      </View>
-    </Page>
+            })}
+          </Card>
+          {shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")}
+        </View>
+      </Page>
+      {(() => {
+        // The key is captured here: the pick closes the list first, and a
+        // handler that read `picking()` afterwards would send it nowhere.
+        const picked = pickingField();
+        return picked ? (
+          <PickerModal
+            title={picked.label}
+            options={picked.options}
+            value={valueOf(picked.key)}
+            colors={props.colors}
+            onPick={(next) => send(picked.key, next)}
+          />
+        ) : null;
+      })()}
+    </>
   );
 }

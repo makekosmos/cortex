@@ -57,7 +57,6 @@ installer does not bundle them.
 
 | App          | Repository                                                                  |
 | ------------ | --------------------------------------------------------------------------- |
-| 📅 Agenda    | [`makekosmos/agenda-unified`](https://github.com/makekosmos/agenda-unified) |
 | 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui)     |
 | 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)           |
 
@@ -96,7 +95,6 @@ copying the app to /Applications.
 ```mermaid
 flowchart LR
     subgraph apps["Native apps (sibling repos)"]
-        agenda["Agenda"]
         memoria["Memoria"]
         dictation["Dictation"]
     end
@@ -114,7 +112,7 @@ flowchart LR
     peers(["Other devices"])
     feed(["GitHub Releases<br/><sub>manifest.json</sub>"])
 
-    agenda & memoria & dictation --> api
+    memoria & dictation --> api
     manager --> api
     api --> host & priv & ark
     ark <-. "iroh · relay · beacon" .-> peers

@@ -173,8 +173,14 @@ fn settings_set(params: &Value) -> Result<Value> {
         .get("values")
         .and_then(Value::as_object)
         .ok_or_else(|| PluginError::Settings("нет значений".into()))?;
-    let values = store.set_settings(&manifest, values)?;
-    Ok(serde_json::json!({ "id": id, "values": values }))
+    let values = manifest.check_settings(values)?;
+    let applies = manifest.applies(&values);
+    let values = store.set_settings(&manifest, &values)?;
+    let applies: Vec<Value> = applies
+        .into_iter()
+        .map(|apply| serde_json::json!({ "op": apply.op, "params": apply.params }))
+        .collect();
+    Ok(serde_json::json!({ "id": id, "values": values, "applies": applies }))
 }
 
 fn param_id(params: &Value) -> Result<String> {

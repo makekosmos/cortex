@@ -5,7 +5,6 @@
 //! dependencies (docs/experiments/2026-09-30-build-speed.md in Cortex). Every
 //! test here shares one process, so process-wide state needs a shared guard.
 
-mod agenda_write_payload_contract;
 mod ark_api_wire_baseline;
 mod canonical_validation;
 mod fatsecret_type_registration;
