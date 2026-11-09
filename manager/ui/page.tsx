@@ -2,7 +2,7 @@ import { Scroll, Text, View } from "nsh";
 import { titleBar } from "nsh/desktop";
 import { settingsMetrics as M } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
-import { captionStrip } from "./chrome";
+import { captionStrip, TITLEBAR_HEIGHT } from "./chrome";
 import { dragWindow } from "./host";
 
 /**
@@ -27,19 +27,19 @@ export function Page(props: {
         style={{
           paddingLeft: M.pageGutter,
           paddingRight: M.pageGutter,
-          paddingTop: M.pageTop,
+          paddingTop: 0,
           paddingBottom: M.pageBottom,
         }}
       >
-        {/* The heading is the window's title row — and it stops where the
-            caption buttons start: this row spans the whole column, so without
-            the reserve a press on a button would land in a drag area and the
-            button would never see it. A press here moves the window, which only
-            the host can do (`dragWindow`). */}
+        {/* The heading is the window's title row — the band the caption buttons
+            are in — and it stops where those buttons start: this row spans the
+            whole column, so without the reserve a press on a button would land
+            in a drag area and the button would never see it. A press here moves
+            the window, which only the host can do (`dragWindow`). */}
         <View
           class="flex-row items-center"
           style={{
-            height: M.headerHeight,
+            height: TITLEBAR_HEIGHT,
             paddingLeft: controls.left,
             marginRight: captionStrip(),
           }}

@@ -1271,13 +1271,13 @@ function Page(props) {
 		bindProp(__nsh_hv1, "style", () => ({
 			paddingLeft: settingsMetrics.pageGutter,
 			paddingRight: settingsMetrics.pageGutter,
-			paddingTop: settingsMetrics.pageTop,
+			paddingTop: 0,
 			paddingBottom: settingsMetrics.pageBottom
 		}));
 		const __nsh_hv2 = element("view");
 		prop(__nsh_hv2, "class", "flex-row items-center");
 		bindProp(__nsh_hv2, "style", () => ({
-			height: settingsMetrics.headerHeight,
+			height: 36,
 			paddingLeft: controls.left,
 			marginRight: captionStrip()
 		}));
@@ -2893,52 +2893,22 @@ function command(name, args = {}) {
 	}
 }
 /**
-* A window with no system bar of its own: the page heading is the top row, and
-* `titleBar()` reports the caption area so the sidebar can inset below it.
+* A window with no system bar of its own: the first row of the content is the
+* band the caption buttons sit in, and `titleBar()` reports the caption area so
+* the sidebar can inset below it.
 */
-const TITLEBAR_HEIGHT = 36;
 function useHiddenChrome() {
 	effect(() => Window.setTitleBar({
 		style: "hidden",
-		height: TITLEBAR_HEIGHT
+		height: 36
 	}));
 }
 /**
-* Whether the strip on the right of the band belongs to the window's caption
-* buttons (see `./chrome`).
+* How far the sidebar's own top padding has to come up for its search field to
+* sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
+* it, and the field is centred in the band.
 */
-function TitleBar(props) {
-	const macos = platform() === "darwin";
-	return (() => {
-		const __nsh_hv0 = element("view");
-		prop(__nsh_hv0, "class", "w-full shrink-0 flex-row");
-		prop(__nsh_hv0, "style", { height: TITLEBAR_HEIGHT });
-		const __nsh_hv1 = element("view");
-		prop(__nsh_hv1, "onPressDown", () => dragWindow());
-		prop(__nsh_hv1, "class", "h-full");
-		bindProp(__nsh_hv1, "style", () => ({
-			width: settingsMetrics.sidebarWidth,
-			backgroundColor: props.colors.shell,
-			paddingLeft: macos ? 80 : 0
-		}));
-		const __nsh_hv2 = element("view");
-		prop(__nsh_hv2, "onPressDown", () => dragWindow());
-		prop(__nsh_hv2, "class", "h-full flex-1");
-		bindProp(__nsh_hv2, "style", () => ({ backgroundColor: props.colors.background }));
-		append(__nsh_hv0, __nsh_hv1);
-		append(__nsh_hv0, __nsh_hv2);
-		insert(__nsh_hv0, () => reservesCaptions() ? (() => {
-			const __nsh_hv3 = element("view");
-			bindProp(__nsh_hv3, "style", () => ({
-				width: captionStrip(),
-				height: TITLEBAR_HEIGHT,
-				backgroundColor: props.colors.background
-			}));
-			return __nsh_hv3;
-		})() : null);
-		return __nsh_hv0;
-	})();
-}
+const SIDEBAR_LIFT = settingsMetrics.sidebarTop - (36 - settingsMetrics.searchHeight) / 2;
 function renderPage(page) {
 	const props = {
 		colors: colors(),
@@ -2997,14 +2967,14 @@ function PairingModal(props) {
 		get children() {
 			return [
 				(() => {
-					const __nsh_hv4 = element("text");
-					bindProp(__nsh_hv4, "style", () => ({
+					const __nsh_hv0 = element("text");
+					bindProp(__nsh_hv0, "style", () => ({
 						fontSize: 13,
 						lineHeight: 19,
 						color: props.colors.foreground
 					}));
-					insert(__nsh_hv4, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
-					return __nsh_hv4;
+					insert(__nsh_hv0, () => `«${request.name}» хочет подключиться к этому компьютеру.`);
+					return __nsh_hv0;
 				})(),
 				() => who ? note(props.colors, who) : null,
 				() => note(props.colors, "Устройство получит доступ к задачам, заметкам и истории. Подключайте только то, что узнаёте.")
@@ -3015,18 +2985,25 @@ function PairingModal(props) {
 function App() {
 	useHiddenChrome();
 	return (() => {
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "class", "h-full w-full");
+		bindProp(__nsh_hv1, "style", () => ({ backgroundColor: colors().background }));
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "class", "min-h-0 flex-1 flex-row");
+		const __nsh_hv3 = element("view");
+		prop(__nsh_hv3, "class", "h-full relative overflow-hidden");
+		bindProp(__nsh_hv3, "style", () => ({
+			width: settingsMetrics.sidebarWidth,
+			backgroundColor: colors().shell
+		}));
+		prop(__nsh_hv3, "onPressDown", () => dragWindow());
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "class", "absolute inset-0");
+		prop(__nsh_hv4, "onPressDown", () => dragWindow());
 		const __nsh_hv5 = element("view");
-		prop(__nsh_hv5, "class", "h-full w-full");
-		bindProp(__nsh_hv5, "style", () => ({ backgroundColor: colors().background }));
-		const __nsh_hv6 = element("view");
-		prop(__nsh_hv6, "class", "min-h-0 flex-1 flex-row");
-		const __nsh_hv7 = element("view");
-		prop(__nsh_hv7, "class", "h-full flex-col relative");
-		const __nsh_hv8 = element("view");
-		prop(__nsh_hv8, "class", "absolute inset-0");
-		prop(__nsh_hv8, "onPressDown", () => dragWindow());
-		append(__nsh_hv7, __nsh_hv8);
-		insert(__nsh_hv7, component(SettingsSidebar, {
+		prop(__nsh_hv5, "class", "h-full");
+		prop(__nsh_hv5, "style", { marginTop: -SIDEBAR_LIFT });
+		insert(__nsh_hv5, component(SettingsSidebar, {
 			get colors() {
 				return colors();
 			},
@@ -3040,10 +3017,12 @@ function App() {
 			onSearch: (value) => search.set(value),
 			onNavigate: (next) => route.set(next)
 		}));
-		append(__nsh_hv6, __nsh_hv7);
-		insert(__nsh_hv6, () => renderPage(route()));
-		append(__nsh_hv5, __nsh_hv6);
-		insert(__nsh_hv5, [component(Bridge, {
+		append(__nsh_hv3, __nsh_hv4);
+		append(__nsh_hv3, __nsh_hv5);
+		append(__nsh_hv2, __nsh_hv3);
+		insert(__nsh_hv2, () => renderPage(route()));
+		append(__nsh_hv1, __nsh_hv2);
+		insert(__nsh_hv1, component(Bridge, {
 			ref: (node) => {
 				session = { command: (name, args) => node.command(name, args) };
 				connectHost((name) => node.command(name, {}));
@@ -3053,10 +3032,8 @@ function App() {
 			},
 			onState: (next) => state.set(next),
 			onNavigate: (event) => route.set(event.route)
-		}), component(TitleBar, { get colors() {
-			return colors();
-		} })], __nsh_hv6);
-		insert(__nsh_hv5, [
+		}), __nsh_hv2);
+		insert(__nsh_hv1, [
 			component(PairingModal, { get colors() {
 				return colors();
 			} }),
@@ -3184,7 +3161,7 @@ function App() {
 				}
 			}) : null
 		]);
-		return __nsh_hv5;
+		return __nsh_hv1;
 	})();
 }
 mount(App);

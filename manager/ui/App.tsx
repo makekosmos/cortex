@@ -1,6 +1,5 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
 import { Window as DesktopWindow } from "nsh/desktop";
-import { platform } from "os";
 import {
   SettingsSidebar,
   TextInput,
@@ -11,7 +10,7 @@ import {
 } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
-import { captionStrip, reservesCaptions } from "./chrome";
+import { TITLEBAR_HEIGHT } from "./chrome";
 import { connectHost, dragWindow } from "./host";
 import { demoState } from "./state";
 import type { ManagerState } from "./state";
@@ -116,56 +115,21 @@ function command(name: string, args: CommandArgs = {}) {
 }
 
 /**
- * A window with no system bar of its own: the page heading is the top row, and
- * `titleBar()` reports the caption area so the sidebar can inset below it.
+ * A window with no system bar of its own: the first row of the content is the
+ * band the caption buttons sit in, and `titleBar()` reports the caption area so
+ * the sidebar can inset below it.
  */
-const TITLEBAR_HEIGHT = 36;
-
 function useHiddenChrome() {
   effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
 }
 
 /**
- * Whether the strip on the right of the band belongs to the window's caption
- * buttons (see `./chrome`).
+ * How far the sidebar's own top padding has to come up for its search field to
+ * sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
+ * it, and the field is centred in the band.
  */
-function TitleBar(props: { colors: ApplicationTheme }) {
-  // macOS keeps AppKit's traffic lights in this band's left corner.
-  const macos = platform() === "darwin";
-  return (
-    <View class="w-full shrink-0 flex-row" style={{ height: TITLEBAR_HEIGHT }}>
-      {/* Each half carries the colour of what stands under it, so the band reads
-          as the top of the sidebar and the top of the page, not as a third bar.
-          No name on it: the window's title is in the taskbar, and the sidebar
-          already says what this is. `paddingLeft` keeps macOS's traffic lights
-          off the band's edge. A press here moves the window, which only the
-          host can do (`dragWindow`). */}
-      <View
-        onPressDown={() => dragWindow()}
-        class="h-full"
-        style={{
-          width: settingsMetrics.sidebarWidth,
-          backgroundColor: props.colors.shell,
-          paddingLeft: macos ? 80 : 0,
-        }}
-      />
-      <View
-        onPressDown={() => dragWindow()}
-        class="h-full flex-1"
-        style={{ backgroundColor: props.colors.background }}
-      />
-      {reservesCaptions() ? (
-        <View
-          style={{
-            width: captionStrip(),
-            height: TITLEBAR_HEIGHT,
-            backgroundColor: props.colors.background,
-          }}
-        />
-      ) : null}
-    </View>
-  );
-}
+const SIDEBAR_LIFT =
+  settingsMetrics.sidebarTop - (TITLEBAR_HEIGHT - settingsMetrics.searchHeight) / 2;
 
 function renderPage(page: string) {
   const props = { colors: colors(), state: () => state(), onCommand: command };
@@ -251,23 +215,28 @@ function App() {
         onState={(next: ManagerState) => state.set(next)}
         onNavigate={(event: { route: string }) => route.set(event.route)}
       />
-      <TitleBar colors={colors()} />
 
       <View class="min-h-0 flex-1 flex-row">
-        {/* The sidebar is the window's other titlebar: an empty stretch of it
-            drags, and a row that takes a press stays a row — which is why the
-            drag area is a background of its own under the rows, not a handler on
-            their parent (a handler there would fire for the rows' presses too). */}
-        <View class="h-full flex-col relative">
+        {/* The sidebar is the window's other titlebar: its search field sits in
+            the band, and an empty stretch of it drags — the drag is a
+            background of its own under the rows, because a handler on their
+            parent would fire for the rows' presses too. */}
+        <View
+          class="h-full relative overflow-hidden"
+          style={{ width: settingsMetrics.sidebarWidth, backgroundColor: colors().shell }}
+          onPressDown={() => dragWindow()}
+        >
           <View class="absolute inset-0" onPressDown={() => dragWindow()} />
-          <SettingsSidebar
-            colors={colors()}
-            groups={navigation}
-            current={route()}
-            search={search()}
-            onSearch={(value) => search.set(value)}
-            onNavigate={(next) => route.set(next)}
-          />
+          <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
+            <SettingsSidebar
+              colors={colors()}
+              groups={navigation}
+              current={route()}
+              search={search()}
+              onSearch={(value) => search.set(value)}
+              onNavigate={(next) => route.set(next)}
+            />
+          </View>
         </View>
         {renderPage(route())}
       </View>

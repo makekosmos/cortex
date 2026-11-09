@@ -9,6 +9,12 @@ import { platform } from "os";
  */
 export const CAPTION_BUTTON_WIDTH = 46;
 
+/**
+ * The band the caption buttons sit in, which the page heading and the sidebar's
+ * search field share with them: the first row of the window is the titlebar.
+ */
+export const TITLEBAR_HEIGHT = 36;
+
 export function reservesCaptions(): boolean {
   const host = platform();
   return host === "win32" || host === "windows";
