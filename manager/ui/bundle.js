@@ -780,6 +780,29 @@ const configuration = {
 };
 
 //#endregion
+//#region host.ts
+/**
+* The host's own window: things the pages ask for and only the shell can do.
+*
+* A press that drags the window is one of them, and *who* moves it depends on
+* whose window it is. The dev host (`nsh dev`) owns its window — it draws the
+* caption buttons, reports their strip in `titleBar().right`, hit-tests the
+* `windowDrag` areas itself and lets Windows move the window from them. An
+* embedding host (`manager.exe`) reports nothing reserved and swallows the
+* press in its surface before Windows can act on it (`Window::start_window_move`
+* is an empty default on Windows), so the press has to ask the host's own Win32
+* code over the bridge.
+*/
+let command$1;
+function connectHost(send) {
+	command$1 = send;
+}
+/** A press here moves the window, by whichever of the two means applies. */
+function dragBinding() {
+	return titleBar().right > 0 ? { desktop: { windowDrag: true } } : { onPressDown: () => command$1?.("window.drag") };
+}
+
+//#endregion
 //#region sidebar.tsx
 /** The grey the product's own tile wears: almost black, never a colour. */
 const HEAD_TILE = "#1a1a1a";
@@ -861,27 +884,31 @@ function Sidebar(props) {
 		prop(__nsh_hv4, "class", "h-full shrink-0 flex-col");
 		bindProp(__nsh_hv4, "style", () => ({
 			width: settingsMetrics.sidebarWidth,
-			backgroundColor: props.colors.shell,
-			paddingTop: props.top,
+			backgroundColor: props.colors.shell
+		}));
+		const __nsh_hv5 = element("view");
+		bindProp(__nsh_hv5, "style", () => ({ height: props.top }));
+		spread(__nsh_hv5, dragBinding());
+		const __nsh_hv6 = element("view");
+		prop(__nsh_hv6, "class", "min-h-0 flex-1 flex-col");
+		bindProp(__nsh_hv6, "style", () => ({
+			gap: settingsMetrics.searchGap,
 			paddingBottom: settingsMetrics.sidebarTop,
 			paddingLeft: settingsMetrics.sidebarPadding,
 			paddingRight: settingsMetrics.sidebarPadding
 		}));
-		const __nsh_hv5 = element("view");
-		prop(__nsh_hv5, "class", "min-h-0 flex-1 flex-col");
-		bindProp(__nsh_hv5, "style", () => ({ gap: settingsMetrics.searchGap }));
-		const __nsh_hv6 = element("scroll");
-		prop(__nsh_hv6, "class", "min-h-0 flex-1");
-		const __nsh_hv7 = element("view");
-		bindProp(__nsh_hv7, "style", () => ({ gap: settingsMetrics.navGroupGap }));
-		insert(__nsh_hv7, () => props.sections.map((section) => {
+		const __nsh_hv7 = element("scroll");
+		prop(__nsh_hv7, "class", "min-h-0 flex-1");
+		const __nsh_hv8 = element("view");
+		bindProp(__nsh_hv8, "style", () => ({ gap: settingsMetrics.navGroupGap }));
+		insert(__nsh_hv8, () => props.sections.map((section) => {
 			const rows = section.rows.filter(matches);
 			if (!rows.length) return null;
 			return (() => {
-				const __nsh_hv8 = element("view");
-				bindProp(__nsh_hv8, "key", () => section.id);
-				bindProp(__nsh_hv8, "style", () => ({ gap: settingsMetrics.navEntryGap }));
-				insert(__nsh_hv8, () => rows.map((row) => component(SidebarRow, {
+				const __nsh_hv9 = element("view");
+				bindProp(__nsh_hv9, "key", () => section.id);
+				bindProp(__nsh_hv9, "style", () => ({ gap: settingsMetrics.navEntryGap }));
+				insert(__nsh_hv9, () => rows.map((row) => component(SidebarRow, {
 					get key() {
 						return row.route;
 					},
@@ -894,12 +921,12 @@ function Sidebar(props) {
 					},
 					onPress: () => props.onNavigate(row.route)
 				})));
-				return __nsh_hv8;
+				return __nsh_hv9;
 			})();
 		}));
+		append(__nsh_hv7, __nsh_hv8);
 		append(__nsh_hv6, __nsh_hv7);
-		append(__nsh_hv5, __nsh_hv6);
-		insert(__nsh_hv5, component(SearchField, {
+		insert(__nsh_hv6, component(SearchField, {
 			get value() {
 				return props.search;
 			},
@@ -910,8 +937,9 @@ function Sidebar(props) {
 			get onChange() {
 				return props.onSearch;
 			}
-		}), __nsh_hv6);
+		}), __nsh_hv7);
 		append(__nsh_hv4, __nsh_hv5);
+		append(__nsh_hv4, __nsh_hv6);
 		return __nsh_hv4;
 	})();
 }
@@ -925,29 +953,6 @@ function reservesCaptions() {
 /** The width of the strip the caption buttons take, in points. */
 function captionStrip() {
 	return reservesCaptions() ? 138 : 0;
-}
-
-//#endregion
-//#region host.ts
-/**
-* The host's own window: things the pages ask for and only the shell can do.
-*
-* A press that drags the window is one of them, and *who* moves it depends on
-* whose window it is. The dev host (`nsh dev`) owns its window — it draws the
-* caption buttons, reports their strip in `titleBar().right`, hit-tests the
-* `windowDrag` areas itself and lets Windows move the window from them. An
-* embedding host (`manager.exe`) reports nothing reserved and swallows the
-* press in its surface before Windows can act on it (`Window::start_window_move`
-* is an empty default on Windows), so the press has to ask the host's own Win32
-* code over the bridge.
-*/
-let command$1;
-function connectHost(send) {
-	command$1 = send;
-}
-/** A press here moves the window, by whichever of the two means applies. */
-function dragBinding() {
-	return titleBar().right > 0 ? { desktop: { windowDrag: true } } : { onPressDown: () => command$1?.("window.drag") };
 }
 
 //#endregion

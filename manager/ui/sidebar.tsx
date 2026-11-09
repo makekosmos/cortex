@@ -1,5 +1,6 @@
 import { Scroll, Text, View } from "nsh";
 import { Icon, SearchField, settingsMetrics } from "@makekosmos/imago-nsh";
+import { dragBinding } from "./host";
 import type { ApplicationTheme, IconName } from "@makekosmos/imago-nsh";
 import type { NavRow, NavSection } from "./navigation";
 
@@ -93,13 +94,21 @@ export function Sidebar(props: {
       style={{
         width: settingsMetrics.sidebarWidth,
         backgroundColor: props.colors.shell,
-        paddingTop: props.top,
-        paddingBottom: settingsMetrics.sidebarTop,
-        paddingLeft: settingsMetrics.sidebarPadding,
-        paddingRight: settingsMetrics.sidebarPadding,
       }}
     >
-      <View class="min-h-0 flex-1 flex-col" style={{ gap: settingsMetrics.searchGap }}>
+      {/* The band the caption buttons sit in: it drags the window, and the
+          field below it starts clear of the edge instead of being pulled into
+          it. */}
+      <View style={{ height: props.top }} {...dragBinding()} />
+      <View
+        class="min-h-0 flex-1 flex-col"
+        style={{
+          gap: settingsMetrics.searchGap,
+          paddingBottom: settingsMetrics.sidebarTop,
+          paddingLeft: settingsMetrics.sidebarPadding,
+          paddingRight: settingsMetrics.sidebarPadding,
+        }}
+      >
         <SearchField
           value={props.search}
           placeholder="Поиск настроек"
