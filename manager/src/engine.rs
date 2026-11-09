@@ -165,6 +165,12 @@ pub fn data_home() -> Option<PathBuf> {
     pick_data_home(data_dirs(), config_root())
 }
 
+/// The dir the Engine resolves when nothing overrides it — its own default,
+/// before any lock file or environment variable: the roaming `Mundus`.
+pub fn default_data_home() -> Option<PathBuf> {
+    config_root().map(|base| base.join("Mundus"))
+}
+
 /// The choice `data_home` makes, split out from the environment so it can be
 /// tested: the dir holding a lock wins, otherwise the most specific candidate.
 fn pick_data_home(mut candidates: Vec<PathBuf>, root: Option<PathBuf>) -> Option<PathBuf> {

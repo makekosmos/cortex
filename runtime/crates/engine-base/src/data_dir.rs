@@ -150,9 +150,18 @@ pub fn mundus_local_dir() -> Option<PathBuf> {
 }
 
 /// Product-local base for installer-owned payloads (native apps live under
-/// `<dir>/Apps`): env override first, then the Mundus local dir — or the
+/// `<dir>/Apps`): `MUNDUS_APPS_DIR` first, then the data-dir override (a dev
+/// slot keeps its apps inside the slot), then the Mundus local dir — or the
 /// legacy local dir while roaming stayed on legacy this session.
+///
+/// The data-dir override also moves this root, which is why the Manager only
+/// exports `MUNDUS_DATA_DIR` when it points somewhere other than the default:
+/// pointing it at the default would send the Engine looking for apps under
+/// `%APPDATA%\Mundus\Apps` instead of the installer's `%LOCALAPPDATA%`.
 pub fn mundus_local_data_dir() -> Option<PathBuf> {
+    if let Some(dir) = brand::env_os("APPS_DIR") {
+        return Some(PathBuf::from(dir));
+    }
     if let Some(dir) = env_data_dir_override() {
         return Some(dir);
     }

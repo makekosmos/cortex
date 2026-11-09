@@ -31,6 +31,70 @@ export type ModelRow = {
 
 export type BackupRow = { id: string; size: string; modified: number };
 
+/** One plugin, from the catalog or from the installed list: the page compares
+ * the two by `id`, so both sides carry the same fields. */
+export type PluginRow = {
+  id: string;
+  name: string;
+  summary: string;
+  /** The installed version; empty for a catalog entry, which has none yet. */
+  version: string;
+  running: boolean;
+  /** Whether the plugin brought a program of its own (a builtin has none). */
+  executable: boolean;
+};
+
+/** What a plugin setting holds: a key, a switch, a number, a choice — or
+ * nothing yet. One owner claims it (`PluginSetting`), so the pages never pass
+ * around "some JSON". */
+export type SettingValue = string | number | boolean | null;
+
+/** A setting as the plugin's manifest declares it. The Engine validates
+ * against these, so a page can render any plugin without knowing it. */
+export type PluginSetting =
+  | { key: string; label: string; hint?: string; kind: { type: "text" }; value: SettingValue }
+  | { key: string; label: string; hint?: string; kind: { type: "toggle" }; value: SettingValue }
+  | {
+      key: string;
+      label: string;
+      hint?: string;
+      kind: { type: "number"; min: number; max: number };
+      value: SettingValue;
+    }
+  | {
+      key: string;
+      label: string;
+      hint?: string;
+      kind: { type: "choice"; options: { value: SettingValue; label: string }[] };
+      value: SettingValue;
+    }
+  | {
+      key: string;
+      label: string;
+      hint?: string;
+      kind: { type: "switch"; on: SettingValue; off: SettingValue };
+      value: SettingValue;
+    };
+
+export type PluginManifest = {
+  id: string;
+  name: string;
+  summary?: string;
+  settings: PluginSetting[];
+};
+
+export type PluginsState = {
+  /** What can be installed. `stale` says the Engine kept yesterday's copy. */
+  catalog: { available: PluginRow[]; stale: boolean; url: string };
+  installed: PluginRow[];
+  /** The plugin whose page is open: its manifest and stored settings. */
+  current: {
+    id: string;
+    manifest: PluginManifest | null;
+    values: Record<string, SettingValue>;
+  } | null;
+};
+
 export type ConnectorRow = {
   id: string;
   name: string;
@@ -56,6 +120,7 @@ export type ManagerState = {
   storage: { dataDir: string; size: string };
   backups: BackupRow[];
   connectors: ConnectorRow[];
+  plugins: PluginsState;
   updates: {
     state: string;
     currentVersion: string;
@@ -147,6 +212,33 @@ export const demoState: ManagerState = {
       detail: "Не подключено",
     },
   ],
+  plugins: {
+    catalog: {
+      available: [
+        {
+          id: "com.kosmos.dictation",
+          name: "Диктовка",
+          summary: "Речь в текст по горячей клавише",
+          version: "",
+          running: false,
+          executable: false,
+        },
+      ],
+      stale: false,
+      url: "https://raw.githubusercontent.com/makekosmos/cortex/main/plugins/catalog.json",
+    },
+    installed: [
+      {
+        id: "com.kosmos.dictation",
+        name: "Диктовка",
+        summary: "Речь в текст по горячей клавише",
+        version: "0.5.2",
+        running: false,
+        executable: true,
+      },
+    ],
+    current: null,
+  },
   updates: {
     state: "available",
     currentVersion: "0.10.26",

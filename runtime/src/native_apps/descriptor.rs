@@ -19,20 +19,80 @@ pub struct NativeAppDescriptor {
     /// unix targets).
     pub asset_stem: &'static str,
     /// Dev-only env override naming an executable to launch instead of the
-    /// installed one (`MUNDUS_AGENDA_EXECUTABLE` etc., via `brand::env`).
+    /// installed one (`MUNDUS_MEMORIA_EXECUTABLE` etc., via `brand::env`).
     pub env_override: &'static str,
+}
+
+/// The naming rules a release and its install agree on: which repository
+/// publishes the assets, the tag prefix in front of the version, the asset name
+/// stem, and the bundle name a darwin tarball ships.
+///
+/// Everything that reads a repository's releases works from this, so a plugin
+/// from a catalog and a shipped app from [`NATIVE_APPS`] are described by the
+/// same three strings rather than by a descriptor the code has to know.
+#[derive(Debug, Clone, Copy)]
+pub struct ReleaseTarget<'a> {
+    pub repository: &'a str,
+    pub tag_prefix: &'a str,
+    pub asset_stem: &'a str,
+    /// Darwin tarballs ship `<bundle_name>.app/Contents/MacOS/<asset_stem>`.
+    pub bundle_name: &'a str,
+}
+
+impl<'a> ReleaseTarget<'a> {
+    /// `v1.2.3` / `gpui-v1.2.3` release tag for a bare semver.
+    pub fn release_tag(&self, version: &str) -> String {
+        format!("{}{}", self.tag_prefix, version)
+    }
+
+    /// Strip the tag prefix back to a bare semver, if `tag` is one of ours.
+    pub fn version_from_tag(&self, tag: &str) -> Option<String> {
+        let version = tag.strip_prefix(self.tag_prefix)?;
+        semver::Version::parse(version)
+            .ok()
+            .map(|_| version.to_owned())
+    }
+
+    /// Archive extension for a target: zip on Windows, tar.gz elsewhere.
+    pub fn asset_extension(target: &str) -> &'static str {
+        if is_windows_target(target) {
+            "zip"
+        } else {
+            "tar.gz"
+        }
+    }
+
+    /// Expected asset filename, e.g. `memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
+    pub fn asset_name(&self, version: &str, target: &str) -> String {
+        format!(
+            "{}-{}-{}.{}",
+            self.asset_stem,
+            version,
+            target,
+            Self::asset_extension(target)
+        )
+    }
+
+    /// Executable path inside the archive for `target`. Darwin tarballs ship a
+    /// signed `<Name>.app` bundle at the root — the launchable file is its
+    /// `Contents/MacOS` binary, and launching it directly still registers the
+    /// app with LaunchServices.
+    pub fn executable(&self, target: &str) -> String {
+        if is_windows_target(target) {
+            format!("{}.exe", self.asset_stem)
+        } else if target.ends_with("-apple-darwin") {
+            format!(
+                "{}.app/Contents/MacOS/{}",
+                self.bundle_name, self.asset_stem
+            )
+        } else {
+            self.asset_stem.to_owned()
+        }
+    }
 }
 
 /// The store's app list — the whole catalog, hardcoded.
 pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
-    NativeAppDescriptor {
-        id: "com.kosmos.agenda",
-        name: "Agenda",
-        repository: "makekosmos/agenda-unified",
-        tag_prefix: "v",
-        asset_stem: "agenda-gpui",
-        env_override: "AGENDA_EXECUTABLE",
-    },
     NativeAppDescriptor {
         id: "com.kosmos.memoria",
         name: "Memoria",
@@ -72,51 +132,39 @@ pub fn host_app_target() -> Option<&'static str> {
 }
 
 impl NativeAppDescriptor {
+    /// This app's naming rules, for the release and install paths.
+    pub fn target(&self) -> ReleaseTarget<'_> {
+        ReleaseTarget {
+            repository: self.repository,
+            tag_prefix: self.tag_prefix,
+            asset_stem: self.asset_stem,
+            bundle_name: self.name,
+        }
+    }
+
     /// `v1.2.3` / `gpui-v1.2.3` release tag for a bare semver.
     pub fn release_tag(&self, version: &str) -> String {
-        format!("{}{}", self.tag_prefix, version)
+        self.target().release_tag(version)
     }
 
     /// Strip the tag prefix back to a bare semver, if `tag` is one of ours.
     pub fn version_from_tag(&self, tag: &str) -> Option<String> {
-        let version = tag.strip_prefix(self.tag_prefix)?;
-        semver::Version::parse(version)
-            .ok()
-            .map(|_| version.to_owned())
+        self.target().version_from_tag(tag)
     }
 
     /// Archive extension for a target: zip on Windows, tar.gz elsewhere.
     pub fn asset_extension(target: &str) -> &'static str {
-        if is_windows_target(target) {
-            "zip"
-        } else {
-            "tar.gz"
-        }
+        ReleaseTarget::asset_extension(target)
     }
 
-    /// Expected asset filename, e.g. `agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
+    /// Expected asset filename, e.g. `memoria-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
     pub fn asset_name(&self, version: &str, target: &str) -> String {
-        format!(
-            "{}-{}-{}.{}",
-            self.asset_stem,
-            version,
-            target,
-            Self::asset_extension(target)
-        )
+        self.target().asset_name(version, target)
     }
 
-    /// Executable path inside the archive for `target`. Darwin tarballs ship
-    /// a signed `<Name>.app` bundle at the root — the launchable file is its
-    /// `Contents/MacOS` binary, and launching it directly still registers
-    /// the app with LaunchServices.
+    /// Executable path inside the archive for `target`.
     pub fn executable(&self, target: &str) -> String {
-        if is_windows_target(target) {
-            format!("{}.exe", self.asset_stem)
-        } else if target.ends_with("-apple-darwin") {
-            format!("{}.app/Contents/MacOS/{}", self.name, self.asset_stem)
-        } else {
-            self.asset_stem.to_owned()
-        }
+        self.target().executable(target)
     }
 }
 

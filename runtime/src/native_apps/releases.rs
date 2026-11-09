@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
-use super::NativeAppDescriptor;
+use super::descriptor::ReleaseTarget;
 use crate::native_apps::MAX_ARCHIVE;
 
 const MAX_SUMS: usize = 64 * 1024;
@@ -234,13 +234,13 @@ async fn get_sums(
 /// cached tag; a moved redirect refetches unconditionally.
 pub async fn fetch_latest(
     probe: &ReleaseProbe,
-    desc: &NativeAppDescriptor,
+    release: ReleaseTarget<'_>,
     target: &str,
     cached: Option<&CachedReleaseMeta>,
 ) -> Result<ReleaseCheck, ReleaseError> {
     let response = probe
         .probe
-        .get(latest_sums_url(&probe.base, desc.repository))
+        .get(latest_sums_url(&probe.base, release.repository))
         .send()
         .await
         .map_err(|error| {
@@ -257,11 +257,11 @@ pub async fn fetch_latest(
         .get(reqwest::header::LOCATION)
         .and_then(|value| value.to_str().ok())
         .ok_or(ReleaseError::Invalid("redirect location"))?;
-    let tag = tag_from_location(&probe.base, desc.repository, location)
+    let tag = tag_from_location(&probe.base, release.repository, location)
         .ok_or(ReleaseError::Invalid("redirect location"))?;
     let sums = get_sums(
         &probe.http,
-        &tagged_sums_url(&probe.base, desc.repository, &tag),
+        &tagged_sums_url(&probe.base, release.repository, &tag),
         cached.map(|cached| cached.etag.as_str()),
     )
     .await?;
@@ -275,20 +275,20 @@ pub async fn fetch_latest(
         SumsGet::NotModified => {
             match get_sums(
                 &probe.http,
-                &tagged_sums_url(&probe.base, desc.repository, &tag),
+                &tagged_sums_url(&probe.base, release.repository, &tag),
                 None,
             )
             .await?
             {
                 SumsGet::NotModified => Err(ReleaseError::Invalid("etag without body")),
                 SumsGet::Body { text, etag } => Ok(ReleaseCheck::Fresh {
-                    info: info_from_sums(desc, &tag, &text, target)?,
+                    info: info_from_sums(release, &tag, &text, target)?,
                     etag,
                 }),
             }
         }
         SumsGet::Body { text, etag } => Ok(ReleaseCheck::Fresh {
-            info: info_from_sums(desc, &tag, &text, target)?,
+            info: info_from_sums(release, &tag, &text, target)?,
             etag,
         }),
     }
@@ -369,18 +369,18 @@ pub async fn download(
 /// and tests). Same sums contract as `fetch_latest`, without the redirect.
 pub async fn fetch_tagged(
     probe: &ReleaseProbe,
-    desc: &NativeAppDescriptor,
+    release: ReleaseTarget<'_>,
     tag: &str,
     target: &str,
 ) -> Result<ReleaseInfo, ReleaseError> {
     match get_sums(
         &probe.http,
-        &tagged_sums_url(&probe.base, desc.repository, tag),
+        &tagged_sums_url(&probe.base, release.repository, tag),
         None,
     )
     .await?
     {
         SumsGet::NotModified => Err(ReleaseError::Invalid("etag without body")),
-        SumsGet::Body { text, .. } => info_from_sums(desc, tag, &text, target),
+        SumsGet::Body { text, .. } => info_from_sums(release, tag, &text, target),
     }
 }

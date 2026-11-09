@@ -8,7 +8,7 @@ use tempfile::TempDir;
 #[path = "tests_race.rs"]
 mod tests_race;
 
-pub(super) const APP: &str = "com.kosmos.agenda";
+pub(super) const APP: &str = "com.kosmos.memoria";
 
 pub(super) fn roots() -> (TempDir, UserDataRoots, String) {
     let dir = tempfile::tempdir().unwrap();

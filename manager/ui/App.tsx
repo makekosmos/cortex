@@ -8,7 +8,7 @@ import {
   lightThemes,
   settingsMetrics,
 } from "@makekosmos/imago-nsh";
-import type { ApplicationTheme } from "@makekosmos/imago-nsh";
+import type { ApplicationTheme, NavGroup } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
 import { TITLEBAR_HEIGHT } from "./chrome";
 import { connectHost, dragBinding } from "./host";
@@ -19,7 +19,8 @@ import { Cancel, Confirm, Modal, note } from "./modal";
 import { ServerPage } from "./pages/server";
 import { AppearancePage } from "./pages/appearance";
 import { AboutPage, ActivityPage, PreferencesPage, StoragePage } from "./pages/system";
-import { AppsPage, KeysPage, ModelsPage } from "./pages/library";
+import { KeysPage, ModelsPage } from "./pages/library";
+import { PluginPage, PluginsPage } from "./pages/plugins";
 import { BrowserPage, DevicesPage, IntegrationsPage } from "./pages/network";
 
 const state = signal<ManagerState>(globalThis.__MUNDUS_MANAGER_INITIAL__ ?? demoState);
@@ -138,8 +139,8 @@ function renderPage(page: string) {
       return <AboutPage {...props} />;
     case "appearance":
       return <AppearancePage {...props} />;
-    case "apps":
-      return <AppsPage {...props} />;
+    case "plugins":
+      return <PluginsPage {...props} />;
     case "integrations":
       return <IntegrationsPage {...props} />;
     case "storage":
@@ -156,9 +157,37 @@ function renderPage(page: string) {
       return <ModelsPage {...props} />;
     case "settings":
       return <PreferencesPage {...props} />;
-    default:
+    default: {
+      // A plugin's own page: `plugin/<id>` is the only route built from data.
+      const id = page.startsWith("plugin/") ? page.slice("plugin/".length) : "";
+      if (id) return <PluginPage {...props} id={id} />;
       return <ServerPage {...props} />;
+    }
   }
+}
+
+/**
+ * The sidebar: the product's own groups, then the plugins that are installed.
+ * A plugin is not a page the Manager was built around — it sits below the
+ * machine's settings because it is the person's addition, and it disappears
+ * with the plugin.
+ */
+function sidebarGroups(): NavGroup[] {
+  const installed = state().plugins.installed;
+  if (!installed.length) return navigation;
+  return [
+    ...navigation,
+    {
+      id: "plugins-installed",
+      entries: installed.map((plugin) => ({
+        route: `plugin/${plugin.id}`,
+        label: plugin.name,
+        icon: "plug" as const,
+        accent: "#15b8a4",
+        accentTo: "#1784fc",
+      })),
+    },
+  ];
 }
 
 /**
@@ -230,7 +259,7 @@ function App() {
           <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
             <SettingsSidebar
               colors={colors()}
-              groups={navigation}
+              groups={sidebarGroups()}
               current={route()}
               search={search()}
               onSearch={(value) => search.set(value)}

@@ -1,4 +1,4 @@
-import type { ManagerState } from "./state";
+import type { ManagerState, SettingValue } from "./state";
 
 /**
  * A press, as the pages hand it to the app: the operation's name and the few
@@ -24,6 +24,8 @@ export type CommandArgs = {
   mode?: "light" | "dark";
   /** A theme key. */
   key?: string;
+  /** A plugin's settings, as its manifest names them (`plugins.settings.set`). */
+  values?: Record<string, SettingValue>;
   /** The Engine's `appearance.set` patch, already named. */
   patch?: { dark_theme?: string; light_theme?: string; follow_apps?: boolean };
 };

@@ -902,8 +902,8 @@ const navigation = [
 		id: "running",
 		entries: [
 			{
-				route: "apps",
-				label: "Приложения",
+				route: "plugins",
+				label: "Плагины",
 				icon: "apps",
 				accent: "#fa6710",
 				accentTo: "#fc2d3e"
@@ -1104,6 +1104,29 @@ const demoState = {
 		kind: "learning",
 		detail: "Не подключено"
 	}],
+	plugins: {
+		catalog: {
+			available: [{
+				id: "com.kosmos.dictation",
+				name: "Диктовка",
+				summary: "Речь в текст по горячей клавише",
+				version: "",
+				running: false,
+				executable: false
+			}],
+			stale: false,
+			url: "https://raw.githubusercontent.com/makekosmos/cortex/main/plugins/catalog.json"
+		},
+		installed: [{
+			id: "com.kosmos.dictation",
+			name: "Диктовка",
+			summary: "Речь в текст по горячей клавише",
+			version: "0.5.2",
+			running: false,
+			executable: true
+		}],
+		current: null
+	},
 	updates: {
 		state: "available",
 		currentVersion: "0.10.26",
@@ -2140,53 +2163,6 @@ function PreferencesPage(props) {
 
 //#endregion
 //#region pages/library.tsx
-/** The Engine of this branch keeps no installed-app catalog, and the Start-Menu
-* index it does keep is not one: it names programs on the system, not apps
-* Mundus installed. So the page says that much and offers nothing to press —
-* a button that opens what it cannot name is worse than no button. */
-function AppsPage(props) {
-	return component(Page, {
-		get colors() {
-			return props.colors;
-		},
-		title: "Приложения",
-		get children() {
-			return (() => {
-				const __nsh_hv0 = element("view");
-				insert(__nsh_hv0, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Установленные";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							icon: "apps",
-							get iconFill() {
-								return props.colors.raised;
-							},
-							get accent() {
-								return props.colors.muted;
-							},
-							title: "Пока ничего не установлено",
-							subtitle: "Engine не сообщает об установленных приложениях",
-							last: true
-						});
-					}
-				})]);
-				return __nsh_hv0;
-			})();
-		}
-	});
-}
 function ModelsPage(props) {
 	const models = () => props.state().models;
 	const stateOf = (model) => {
@@ -2201,8 +2177,8 @@ function ModelsPage(props) {
 		title: "Модели",
 		get children() {
 			return [(() => {
-				const __nsh_hv1 = element("view");
-				insert(__nsh_hv1, [component(SectionLabel, {
+				const __nsh_hv0 = element("view");
+				insert(__nsh_hv0, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2239,16 +2215,16 @@ function ModelsPage(props) {
 							},
 							get right() {
 								return (() => {
-									const __nsh_hv2 = element("view");
-									prop(__nsh_hv2, "class", "flex-row items-center gap-2");
-									insert(__nsh_hv2, () => model.downloading ? (() => {
-										const __nsh_hv3 = element("text");
-										bindProp(__nsh_hv3, "style", () => ({
+									const __nsh_hv1 = element("view");
+									prop(__nsh_hv1, "class", "flex-row items-center gap-2");
+									insert(__nsh_hv1, () => model.downloading ? (() => {
+										const __nsh_hv2 = element("text");
+										bindProp(__nsh_hv2, "style", () => ({
 											fontSize: 12.5,
 											color: props.colors.muted
 										}));
-										insert(__nsh_hv3, () => `${Math.round(model.percent)}%`);
-										return __nsh_hv3;
+										insert(__nsh_hv2, () => `${Math.round(model.percent)}%`);
+										return __nsh_hv2;
 									})() : model.downloaded ? [
 										() => model.selected ? component(StatusDot, { get colors() {
 											return props.colors;
@@ -2277,7 +2253,7 @@ function ModelsPage(props) {
 										label: "Скачать",
 										onPress: () => props.onCommand("models.download", { id: model.id })
 									}));
-									return __nsh_hv2;
+									return __nsh_hv1;
 								})();
 							}
 						})) : component(CardRow, {
@@ -2290,16 +2266,16 @@ function ModelsPage(props) {
 						});
 					}
 				})]);
-				return __nsh_hv1;
+				return __nsh_hv0;
 			})(), (() => {
-				const __nsh_hv4 = element("text");
-				bindProp(__nsh_hv4, "style", () => ({
+				const __nsh_hv3 = element("text");
+				bindProp(__nsh_hv3, "style", () => ({
 					fontSize: 12,
 					color: props.colors.faint
 				}));
-				const __nsh_hv5 = text("Модели распознавания живут на этом компьютере: звук не уходит в сеть.");
-				append(__nsh_hv4, __nsh_hv5);
-				return __nsh_hv4;
+				const __nsh_hv4 = text("Модели распознавания живут на этом компьютере: звук не уходит в сеть.");
+				append(__nsh_hv3, __nsh_hv4);
+				return __nsh_hv3;
 			})()];
 		}
 	});
@@ -2323,8 +2299,8 @@ function KeysPage(props) {
 		get children() {
 			return [
 				(() => {
-					const __nsh_hv6 = element("view");
-					insert(__nsh_hv6, [component(SectionLabel, {
+					const __nsh_hv5 = element("view");
+					insert(__nsh_hv5, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -2397,11 +2373,11 @@ function KeysPage(props) {
 							];
 						}
 					})]);
-					return __nsh_hv6;
+					return __nsh_hv5;
 				})(),
 				(() => {
-					const __nsh_hv7 = element("view");
-					insert(__nsh_hv7, [component(SectionLabel, {
+					const __nsh_hv6 = element("view");
+					insert(__nsh_hv6, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -2415,11 +2391,11 @@ function KeysPage(props) {
 						padded: true,
 						get children() {
 							return (() => {
+								const __nsh_hv7 = element("view");
+								prop(__nsh_hv7, "style", { gap: 10 });
 								const __nsh_hv8 = element("view");
-								prop(__nsh_hv8, "style", { gap: 10 });
-								const __nsh_hv9 = element("view");
-								prop(__nsh_hv9, "class", "flex-row items-center justify-end gap-2");
-								insert(__nsh_hv9, [component(PillButton, {
+								prop(__nsh_hv8, "class", "flex-row items-center justify-end gap-2");
+								insert(__nsh_hv8, [component(PillButton, {
 									get colors() {
 										return props.colors;
 									},
@@ -2433,8 +2409,8 @@ function KeysPage(props) {
 									label: "Сохранить",
 									onPress: save
 								})]);
-								append(__nsh_hv8, __nsh_hv9);
-								insert(__nsh_hv8, component(TextInput, {
+								append(__nsh_hv7, __nsh_hv8);
+								insert(__nsh_hv7, component(TextInput, {
 									get colors() {
 										return props.colors;
 									},
@@ -2448,26 +2424,768 @@ function KeysPage(props) {
 										verifyNote.set("");
 									},
 									onSubmit: save
-								}), __nsh_hv9);
-								return __nsh_hv8;
+								}), __nsh_hv8);
+								return __nsh_hv7;
 							})();
 						}
 					})]);
-					return __nsh_hv7;
+					return __nsh_hv6;
 				})(),
 				(() => {
-					const __nsh_hv10 = element("text");
-					bindProp(__nsh_hv10, "style", () => ({
+					const __nsh_hv9 = element("text");
+					bindProp(__nsh_hv9, "style", () => ({
 						fontSize: 12,
 						color: props.colors.faint
 					}));
-					const __nsh_hv11 = text("Ключ хранится в связке ключей Engine. Manager его не читает и нигде не показывает.");
-					append(__nsh_hv10, __nsh_hv11);
-					return __nsh_hv10;
+					const __nsh_hv10 = text("Ключ хранится в связке ключей Engine. Manager его не читает и нигде не показывает.");
+					append(__nsh_hv9, __nsh_hv10);
+					return __nsh_hv9;
 				})()
 			];
 		}
 	});
+}
+
+//#endregion
+//#region pages/plugin-fields.tsx
+/** A choice as a row of buttons: one is on, the rest ask to be. */
+function ChoiceRow(props) {
+	const { colors, value } = props;
+	return component(FieldRow, {
+		colors,
+		get label() {
+			return props.label;
+		},
+		get last() {
+			return props.last;
+		},
+		labelWidth: 210,
+		get children() {
+			return (() => {
+				const __nsh_hv0 = element("view");
+				prop(__nsh_hv0, "class", "flex-row flex-wrap items-center");
+				prop(__nsh_hv0, "style", { gap: 6 });
+				insert(__nsh_hv0, () => props.options.map((option) => component(PillButton, {
+					get key() {
+						return option.label;
+					},
+					colors,
+					get tone() {
+						return same(option.value, value) ? "accent" : "neutral";
+					},
+					get label() {
+						return option.label;
+					},
+					onPress: () => props.onPick(option.value)
+				})));
+				return __nsh_hv0;
+			})();
+		}
+	});
+}
+/** Two stored values are the same choice: `"ru"` with `"ru"`, `600000` with
+* `600000`, `null` with `null` — not `"5"` with `5`. */
+function same(option, value) {
+	return JSON.stringify(option ?? null) === JSON.stringify(value ?? null);
+}
+/** The open picker: which field, and what has been typed into it. One at a
+* time, so the page never stacks two lists on top of each other. */
+const picking = signal({
+	key: "",
+	query: ""
+});
+/** A long choice (a hundred languages) as one current value and a searchable
+* list behind it — a row of a hundred buttons is not a choice, it is a wall. */
+function PickerRow(props) {
+	const { colors } = props;
+	const selected = props.options.find((option) => same(option.value, props.value));
+	return component(FieldRow, {
+		colors,
+		get label() {
+			return props.label;
+		},
+		get last() {
+			return props.last;
+		},
+		labelWidth: 210,
+		get children() {
+			return (() => {
+				const __nsh_hv1 = element("view");
+				prop(__nsh_hv1, "class", "flex-row");
+				insert(__nsh_hv1, component(PillButton, {
+					colors,
+					tone: "neutral",
+					get label() {
+						return selected?.label ?? "Не выбрано";
+					},
+					onPress: () => picking.set({
+						key: props.fieldKey,
+						query: ""
+					})
+				}));
+				return __nsh_hv1;
+			})();
+		}
+	});
+}
+/** The list a `PickerRow` opens: drawn beside the page, not inside the row, so
+* it covers the window the way every other modal of the Manager does. */
+function PickerModal(props) {
+	const { colors } = props;
+	const close = () => picking.set({
+		key: "",
+		query: ""
+	});
+	const matching = () => {
+		const needle = picking().query.trim().toLowerCase();
+		if (!needle) return props.options;
+		return props.options.filter((option) => option.label.toLowerCase().includes(needle));
+	};
+	return component(Modal, {
+		get title() {
+			return props.title;
+		},
+		colors,
+		onDismiss: close,
+		width: 380,
+		get children() {
+			return [component(SearchField, {
+				colors,
+				get value() {
+					return picking().query;
+				},
+				placeholder: "Поиск",
+				onChange: (next) => picking.set({
+					key: picking().key,
+					query: next
+				})
+			}), (() => {
+				const __nsh_hv2 = element("scroll");
+				prop(__nsh_hv2, "class", "min-h-0");
+				prop(__nsh_hv2, "style", { height: 320 });
+				insert(__nsh_hv2, () => matching().map((option) => (() => {
+					const __nsh_hv3 = element("view");
+					bindProp(__nsh_hv3, "key", () => option.label);
+					prop(__nsh_hv3, "role", "button");
+					bindProp(__nsh_hv3, "accessibilityLabel", () => option.label);
+					prop(__nsh_hv3, "onPress", () => {
+						close();
+						props.onPick(option.value);
+					});
+					prop(__nsh_hv3, "class", "h-9 flex-row items-center justify-between rounded-md px-2");
+					bindProp(__nsh_hv3, "hoverStyle", () => ({ backgroundColor: colors.background }));
+					const __nsh_hv4 = element("text");
+					prop(__nsh_hv4, "class", "text-[13px]");
+					bindProp(__nsh_hv4, "style", () => ({ color: colors.foreground }));
+					insert(__nsh_hv4, () => option.label);
+					append(__nsh_hv3, __nsh_hv4);
+					insert(__nsh_hv3, () => same(option.value, props.value) ? (() => {
+						const __nsh_hv5 = element("text");
+						prop(__nsh_hv5, "class", "text-[13px]");
+						bindProp(__nsh_hv5, "style", () => ({ color: colors.accent }));
+						const __nsh_hv6 = text("✓");
+						append(__nsh_hv5, __nsh_hv6);
+						return __nsh_hv5;
+					})() : null);
+					return __nsh_hv3;
+				})()));
+				return __nsh_hv2;
+			})()];
+		}
+	});
+}
+/** The label column: wide enough for a two-word setting name, so a field never
+* wraps into the control's row (`Подсказка для расшифровки` is the longest). */
+const LABEL_WIDTH = 210;
+
+//#endregion
+//#region pages/plugins.tsx
+function versionLine(plugin) {
+	const parts = [];
+	if (plugin.version) parts.push(`Версия ${plugin.version}`);
+	if (plugin.running) parts.push("запущен");
+	return parts.join(" · ");
+}
+/** A row of the installed list: open it, change its settings, remove it. */
+function InstalledRow(props) {
+	const { colors, plugin } = props;
+	return component(CardRow, {
+		colors,
+		icon: "plug",
+		get accent() {
+			return colors.accent;
+		},
+		get accentTo() {
+			return colors.accent;
+		},
+		get title() {
+			return plugin.name;
+		},
+		get subtitle() {
+			return versionLine(plugin) || plugin.summary;
+		},
+		get last() {
+			return props.last;
+		},
+		get right() {
+			return (() => {
+				const __nsh_hv0 = element("view");
+				prop(__nsh_hv0, "class", "flex-row items-center gap-2");
+				insert(__nsh_hv0, [
+					component(PillButton, {
+						colors,
+						label: "Настроить",
+						get onPress() {
+							return props.onConfigure;
+						}
+					}),
+					() => plugin.executable ? component(PillButton, {
+						colors,
+						tone: "neutral",
+						label: "Открыть",
+						get onPress() {
+							return props.onOpen;
+						}
+					}) : null,
+					component(PillButton, {
+						colors,
+						tone: "danger",
+						label: "Удалить",
+						get onPress() {
+							return props.onRemove;
+						}
+					})
+				]);
+				return __nsh_hv0;
+			})();
+		}
+	});
+}
+/** One catalog entry the Engine has not installed yet. */
+function AvailableRow(props) {
+	const { colors, plugin } = props;
+	return component(CardRow, {
+		colors,
+		icon: "apps",
+		get accent() {
+			return colors.muted;
+		},
+		get accentTo() {
+			return colors.muted;
+		},
+		get title() {
+			return plugin.name;
+		},
+		get subtitle() {
+			return plugin.summary;
+		},
+		get last() {
+			return props.last;
+		},
+		get right() {
+			return component(PillButton, {
+				colors,
+				tone: "accent",
+				label: "Установить",
+				get onPress() {
+					return props.onInstall;
+				}
+			});
+		}
+	});
+}
+/**
+* What Mundus can gain and what it already has.
+*
+* The catalog is the Engine's (`plugins.catalog`), the install is its too
+* (`plugins.install`), and this page only names what it is told — a new plugin
+* appears here because it is in the catalog, not because the Manager was built
+* knowing it.
+*/
+function PluginsPage(props) {
+	const state = () => props.state().plugins;
+	const installed = () => state().installed;
+	const available = () => state().catalog.available;
+	const isInstalled = (id) => installed().some((plugin) => plugin.id === id);
+	const rest = () => available().filter((plugin) => !isInstalled(plugin.id));
+	return component(Page, {
+		get colors() {
+			return props.colors;
+		},
+		title: "Плагины",
+		get children() {
+			return [(() => {
+				const __nsh_hv1 = element("view");
+				insert(__nsh_hv1, [component(SectionLabel, {
+					get colors() {
+						return props.colors;
+					},
+					get children() {
+						return "Установленные";
+					}
+				}), component(Card, {
+					get colors() {
+						return props.colors;
+					},
+					get children() {
+						return installed().length ? installed().map((plugin, index) => component(InstalledRow, {
+							get key() {
+								return plugin.id;
+							},
+							plugin,
+							get colors() {
+								return props.colors;
+							},
+							get last() {
+								return index === installed().length - 1;
+							},
+							onOpen: () => props.onCommand("plugins.launch", { id: plugin.id }),
+							onConfigure: () => props.onCommand("route", { route: `plugin/${plugin.id}` }),
+							onRemove: () => props.onCommand("plugins.remove", { id: plugin.id })
+						})) : component(CardRow, {
+							get colors() {
+								return props.colors;
+							},
+							icon: "plug",
+							get iconFill() {
+								return props.colors.raised;
+							},
+							get accent() {
+								return props.colors.muted;
+							},
+							title: "Пока ничего не установлено",
+							subtitle: "Выберите плагин из списка ниже",
+							last: true
+						});
+					}
+				})]);
+				return __nsh_hv1;
+			})(), (() => {
+				const __nsh_hv2 = element("view");
+				insert(__nsh_hv2, [
+					component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get right() {
+							return state().catalog.stale ? (() => {
+								const __nsh_hv3 = element("text");
+								bindProp(__nsh_hv3, "style", () => ({
+									fontSize: 12,
+									color: props.colors.muted
+								}));
+								const __nsh_hv4 = text("Список сохранён: Engine не смог обновить его");
+								append(__nsh_hv3, __nsh_hv4);
+								return __nsh_hv3;
+							})() : null;
+						},
+						get children() {
+							return "Доступные";
+						}
+					}),
+					component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return rest().length ? rest().map((plugin, index) => component(AvailableRow, {
+								get key() {
+									return plugin.id;
+								},
+								plugin,
+								get colors() {
+									return props.colors;
+								},
+								get last() {
+									return index === rest().length - 1;
+								},
+								onInstall: () => props.onCommand("plugins.install", { id: plugin.id })
+							})) : component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								icon: "check",
+								get iconFill() {
+									return props.colors.raised;
+								},
+								get accent() {
+									return props.colors.muted;
+								},
+								get title() {
+									return available().length ? "Всё установлено" : "Список пуст";
+								},
+								get subtitle() {
+									return available().length ? "Новые плагины появятся здесь сами" : "Engine не получил каталог плагинов";
+								},
+								last: true
+							});
+						}
+					}),
+					() => rest().length ? (() => {
+						const __nsh_hv5 = element("view");
+						prop(__nsh_hv5, "style", {
+							marginTop: 8,
+							paddingLeft: 12
+						});
+						const __nsh_hv6 = element("text");
+						bindProp(__nsh_hv6, "style", () => ({
+							fontSize: 12,
+							lineHeight: 16,
+							color: props.colors.muted
+						}));
+						const __nsh_hv7 = text("Загрузка идёт в фоне — плагин появится в списке выше, когда Engine его установит.");
+						append(__nsh_hv6, __nsh_hv7);
+						append(__nsh_hv5, __nsh_hv6);
+						return __nsh_hv5;
+					})() : null
+				]);
+				return __nsh_hv2;
+			})()];
+		}
+	});
+}
+/** The values a page has typed but not sent yet, per plugin. */
+const drafts = signal({
+	id: "",
+	values: {}
+});
+/**
+* One plugin's page, drawn from its manifest: the Engine stores the settings,
+* the plugin reads them from the file the manifest names, and this page writes
+* nothing the manifest does not declare.
+*/
+function PluginPage(props) {
+	const current = () => props.state().plugins.current;
+	const manifest = () => {
+		const plugin = current();
+		return plugin && plugin.id === props.id ? plugin.manifest : null;
+	};
+	const stored = () => {
+		const plugin = current();
+		return plugin && plugin.id === props.id ? plugin.values : {};
+	};
+	const typed = () => drafts().id === props.id ? drafts().values : {};
+	const dirty = () => Object.keys(typed()).length > 0;
+	const valueOf = (key) => key in typed() ? typed()[key] : stored()[key];
+	const draft = (key, value) => drafts.set({
+		id: props.id,
+		values: {
+			...typed(),
+			[key]: value
+		}
+	});
+	const send = (key, value) => props.onCommand("plugins.set", {
+		id: props.id,
+		values: { [key]: value }
+	});
+	const save = () => {
+		if (!dirty()) return;
+		props.onCommand("plugins.set", {
+			id: props.id,
+			values: typed()
+		});
+		drafts.set({
+			id: props.id,
+			values: {}
+		});
+	};
+	const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+	const shown = manifest();
+	/** The choice whose list is open, if any: `picking` holds its key. */
+	const pickingField = () => {
+		const key = picking().key;
+		const field = shown?.settings.find((row) => row.key === key);
+		if (!field || field.kind.type !== "choice") return null;
+		return {
+			key: field.key,
+			label: field.label,
+			options: field.kind.options
+		};
+	};
+	if (!shown) return component(Page, {
+		get colors() {
+			return props.colors;
+		},
+		get title() {
+			return plugin()?.name ?? "Плагин";
+		},
+		get children() {
+			return component(Card, {
+				get colors() {
+					return props.colors;
+				},
+				get children() {
+					return component(CardRow, {
+						get colors() {
+							return props.colors;
+						},
+						icon: "plug",
+						get iconFill() {
+							return props.colors.raised;
+						},
+						get accent() {
+							return props.colors.muted;
+						},
+						title: "Настройки недоступны",
+						subtitle: "Engine не сообщил описание плагина",
+						last: true
+					});
+				}
+			});
+		}
+	});
+	return [component(Page, {
+		get colors() {
+			return props.colors;
+		},
+		get title() {
+			return shown.name;
+		},
+		get actions() {
+			return dirty() ? (() => {
+				const __nsh_hv8 = element("view");
+				prop(__nsh_hv8, "style", { marginLeft: 12 });
+				insert(__nsh_hv8, component(PillButton, {
+					get colors() {
+						return props.colors;
+					},
+					tone: "accent",
+					label: "Сохранить",
+					onPress: save
+				}));
+				return __nsh_hv8;
+			})() : null;
+		},
+		get children() {
+			return [(() => {
+				const __nsh_hv9 = element("view");
+				insert(__nsh_hv9, [component(SectionLabel, {
+					get colors() {
+						return props.colors;
+					},
+					get children() {
+						return "Плагин";
+					}
+				}), component(Card, {
+					get colors() {
+						return props.colors;
+					},
+					get children() {
+						return component(CardRow, {
+							get colors() {
+								return props.colors;
+							},
+							icon: "plug",
+							get accent() {
+								return props.colors.accent;
+							},
+							get accentTo() {
+								return props.colors.accent;
+							},
+							get title() {
+								return shown.name;
+							},
+							get subtitle() {
+								return shown.summary;
+							},
+							last: true,
+							get right() {
+								return (() => {
+									const __nsh_hv10 = element("view");
+									prop(__nsh_hv10, "class", "flex-row items-center gap-2");
+									insert(__nsh_hv10, [() => plugin()?.running ? component(StatusDot, { get colors() {
+										return props.colors;
+									} }) : null, component(PillButton, {
+										get colors() {
+											return props.colors;
+										},
+										tone: "neutral",
+										label: "Открыть",
+										onPress: () => props.onCommand("plugins.launch", { id: props.id })
+									})]);
+									return __nsh_hv10;
+								})();
+							}
+						});
+					}
+				})]);
+				return __nsh_hv9;
+			})(), (() => {
+				const __nsh_hv11 = element("view");
+				insert(__nsh_hv11, [
+					component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Настройки";
+						}
+					}),
+					component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return shown.settings.map((field, index) => {
+								const last = index === shown.settings.length - 1;
+								const value = valueOf(field.key);
+								if (field.kind.type === "toggle") return component(CardRow, {
+									get key() {
+										return field.key;
+									},
+									get colors() {
+										return props.colors;
+									},
+									get title() {
+										return field.label;
+									},
+									get subtitle() {
+										return field.hint;
+									},
+									last,
+									get right() {
+										return component(Switch, {
+											get colors() {
+												return props.colors;
+											},
+											get value() {
+												return Boolean(value);
+											},
+											get accessibilityLabel() {
+												return field.label;
+											},
+											onChange: (on) => send(field.key, on)
+										});
+									}
+								});
+								const kind = field.kind;
+								if (kind.type === "switch") return component(CardRow, {
+									get key() {
+										return field.key;
+									},
+									get colors() {
+										return props.colors;
+									},
+									get title() {
+										return field.label;
+									},
+									get subtitle() {
+										return field.hint;
+									},
+									last,
+									get right() {
+										return component(Switch, {
+											get colors() {
+												return props.colors;
+											},
+											get value() {
+												return !same(kind.off, value) && Boolean(value);
+											},
+											get accessibilityLabel() {
+												return field.label;
+											},
+											onChange: (on) => send(field.key, on ? kind.on : kind.off)
+										});
+									}
+								});
+								if (kind.type === "choice") {
+									const options = kind.options;
+									if (options.length > 6) return component(PickerRow, {
+										get key() {
+											return field.key;
+										},
+										get fieldKey() {
+											return field.key;
+										},
+										get label() {
+											return field.label;
+										},
+										options,
+										value,
+										get colors() {
+											return props.colors;
+										},
+										last
+									});
+									return component(ChoiceRow, {
+										get key() {
+											return field.key;
+										},
+										get label() {
+											return field.label;
+										},
+										options,
+										value,
+										get colors() {
+											return props.colors;
+										},
+										last,
+										onPick: (next) => send(field.key, next)
+									});
+								}
+								const numeric = field.kind.type === "number";
+								return component(FieldRow, {
+									get key() {
+										return field.key;
+									},
+									get colors() {
+										return props.colors;
+									},
+									get label() {
+										return field.label;
+									},
+									last,
+									labelWidth: 210,
+									get children() {
+										return component(TextInput, {
+											get colors() {
+												return props.colors;
+											},
+											get value() {
+												return String(value ?? "");
+											},
+											placeholder: numeric ? "Число" : "Не задано",
+											get accessibilityLabel() {
+												return field.label;
+											},
+											onChange: (text) => draft(field.key, numeric ? Number(text) : text),
+											onSubmit: () => {
+												const next = valueOf(field.key);
+												if (next !== void 0) send(field.key, next);
+												drafts.set({
+													id: props.id,
+													values: {}
+												});
+											}
+										});
+									}
+								});
+							});
+						}
+					}),
+					() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
+				]);
+				return __nsh_hv11;
+			})()];
+		}
+	}), () => (() => {
+		const picked = pickingField();
+		return picked ? component(PickerModal, {
+			get title() {
+				return picked.label;
+			},
+			get options() {
+				return picked.options;
+			},
+			get value() {
+				return valueOf(picked.key);
+			},
+			get colors() {
+				return props.colors;
+			},
+			onPick: (next) => send(picked.key, next)
+		}) : null;
+	})()];
 }
 
 //#endregion
@@ -2922,7 +3640,7 @@ function renderPage(page) {
 	switch (page) {
 		case "about": return component(AboutPage, props);
 		case "appearance": return component(AppearancePage, props);
-		case "apps": return component(AppsPage, props);
+		case "plugins": return component(PluginsPage, props);
 		case "integrations": return component(IntegrationsPage, props);
 		case "storage": return component(StoragePage, props);
 		case "activity": return component(ActivityPage, props);
@@ -2931,8 +3649,32 @@ function renderPage(page) {
 		case "keys": return component(KeysPage, props);
 		case "models": return component(ModelsPage, props);
 		case "settings": return component(PreferencesPage, props);
-		default: return component(ServerPage, props);
+		default: {
+			const id = page.startsWith("plugin/") ? page.slice(7) : "";
+			if (id) return component(PluginPage, merge(props, { id }));
+			return component(ServerPage, props);
+		}
 	}
+}
+/**
+* The sidebar: the product's own groups, then the plugins that are installed.
+* A plugin is not a page the Manager was built around — it sits below the
+* machine's settings because it is the person's addition, and it disappears
+* with the plugin.
+*/
+function sidebarGroups() {
+	const installed = state().plugins.installed;
+	if (!installed.length) return navigation;
+	return [...navigation, {
+		id: "plugins-installed",
+		entries: installed.map((plugin) => ({
+			route: `plugin/${plugin.id}`,
+			label: plugin.name,
+			icon: "plug",
+			accent: "#15b8a4",
+			accentTo: "#1784fc"
+		}))
+	}];
 }
 /**
 * The pairing request the Engine is holding, if there is one to answer. The
@@ -3011,7 +3753,9 @@ function App() {
 			get colors() {
 				return colors();
 			},
-			groups: navigation,
+			get groups() {
+				return sidebarGroups();
+			},
 			get current() {
 				return route();
 			},

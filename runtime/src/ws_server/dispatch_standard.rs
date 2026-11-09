@@ -75,6 +75,21 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
+    } else if let Some(rest) = operation.strip_prefix("plugins.") {
+        let mut result = crate::plugins::handle_plugin_op(rest, params).await;
+        if rest == "settings.set" && result.ok {
+            // The settings are stored; the plugin's own operations apply them
+            // to whatever is running, so the page and the app never disagree.
+            if let Err(error) = apply_plugin_settings(&result.data, &dictation_host).await {
+                result.ok = false;
+                result.error = Some(error);
+            }
+        }
+        LocalResponse {
+            ok: result.ok,
+            data: result.data,
+            error: result.error,
+        }
     } else if crate::hosts::is_hosts_operation(&operation) {
         crate::hosts::sync(&params)
             .map(LocalResponse::ok)
@@ -216,4 +231,30 @@ pub(super) async fn dispatch_standard(
         }
     };
     response
+}
+
+/// Run the Engine operations a plugin's settings name (`plugins.settings.set`
+/// answers with them). A plugin tells the Engine *what* applies it; the Engine
+/// still decides *which* operations exist.
+async fn apply_plugin_settings(
+    data: &Value,
+    dictation_host: &Arc<DictationHost>,
+) -> Result<(), String> {
+    let Some(applies) = data.get("applies").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    for apply in applies {
+        let op = apply.get("op").and_then(Value::as_str).unwrap_or_default();
+        let params = apply.get("params").cloned().unwrap_or(Value::Null);
+        let Some(rest) = op.strip_prefix("dictation.") else {
+            return Err(format!("движок не умеет применять настройку через «{op}»"));
+        };
+        let result = handle_dictation_op(rest, params, dictation_host).await;
+        if !result.ok {
+            return Err(result
+                .error
+                .unwrap_or_else(|| format!("{op}: настройка не применилась")));
+        }
+    }
+    Ok(())
 }

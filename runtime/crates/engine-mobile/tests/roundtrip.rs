@@ -1,5 +1,5 @@
 //! Host-side proof for unit 2 and open a temp data dir, upsert
-//! an agenda task object in the `core.task` 0.1.0 shape agenda writes, list it
+//! a task object in the `core.task` 0.1.0 shape the apps write, list it
 //! back, receive the `object_upserted` event through a `ChangeListener`, then
 //! drop and reopen and still see the task. Legacy `core.task` writes are
 //! refused after the cutover, so this test writes the new shape only.
@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 const TASK_ID: &str = "task-mobile-roundtrip";
 
-/// The object shape `agenda-gpui` writes: state and planning at `propsJson`
+/// The object shape the task apps write: state and planning at `propsJson`
 /// top level, UI-local fields under `propsJson.extensions`, notes duplicated
 /// into `contentJson`.
 fn task_object() -> Value {

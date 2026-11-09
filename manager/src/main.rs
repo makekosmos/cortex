@@ -11,6 +11,7 @@ mod chrome;
 mod data;
 mod engine;
 mod identity;
+mod plugins;
 
 use gpui::prelude::*;
 use gpui::{px, size, App, AppContext, Bounds, WindowBounds, WindowOptions};
