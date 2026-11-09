@@ -391,10 +391,15 @@ fn the_command_line_survives_a_manifest_that_forgot_it() {
     assert_eq!(store.start_args(&parsed.id), None);
 
     super::autostart::set(&store, &parsed.id, false).expect("off");
+    assert!(
+        !store.installed()[0].autostart,
+        "a switched-off plugin does not report itself as starting"
+    );
     super::autostart::set(&store, &parsed.id, true).expect("on again");
     assert_eq!(
         super::autostart::load(&data)[0].args,
         ["--background"],
         "the pill is still started the way it was answered"
     );
+    assert!(store.installed()[0].autostart);
 }

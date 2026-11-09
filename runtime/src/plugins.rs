@@ -164,7 +164,9 @@ impl PluginStore {
             .list()
             .into_iter()
             .map(|record| {
-                let starts = list.iter().any(|entry| entry.id == record.id);
+                let starts = list
+                    .iter()
+                    .any(|entry| entry.id == record.id && entry.enabled);
                 self.describe(&record, starts)
             })
             .collect()
@@ -195,7 +197,8 @@ impl PluginStore {
         let manifest = self.manifest(&record.id);
         // Offered when the Engine can start it as described — the manifest says
         // how, or an earlier answer already wrote the command line.
-        let startable = manifest.as_ref().is_some_and(|m| m.start.is_some()) || autostart;
+        let startable = manifest.as_ref().is_some_and(|m| m.start.is_some())
+            || autostart::knows(&self.data_dir, &record.id);
         let settings = manifest
             .as_ref()
             .and_then(|manifest| self.settings(manifest).ok())
