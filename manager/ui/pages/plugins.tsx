@@ -221,6 +221,9 @@ export function PluginPage(props: PageProps & { id: string }) {
   };
 
   const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+  /** A program is needed to start, and a start already answered stays
+   * answerable even while the manifest beside the install lags behind. */
+  const canAutostart = () => Boolean(plugin()?.executable && plugin()?.startable);
   const shown = manifest();
   /** The choice whose list is open, if any: `picking` holds its key. */
   const pickingField = () => {
@@ -287,7 +290,7 @@ export function PluginPage(props: PageProps & { id: string }) {
           </Card>
         </View>
 
-        {plugin()?.startable ? (
+        {canAutostart() ? (
           <View>
             <SectionLabel colors={props.colors}>Запуск</SectionLabel>
             <Card colors={props.colors}>

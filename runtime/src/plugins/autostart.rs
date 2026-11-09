@@ -30,13 +30,21 @@ const FILE: &str = "plugins-autostart.json";
 /// The format of that file.
 const LIST_VERSION: u32 = 1;
 
-/// One plugin on the list: which, and with what.
+/// One plugin on the list: which, with what, and whether it still starts. A
+/// switched-off entry keeps its command line, so turning it back on does not
+/// depend on a manifest that may have forgotten the line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
     #[serde(default)]
     pub args: Vec<String>,
+    #[serde(default = "yes")]
+    pub enabled: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// The list as it stands. A missing file reads as an empty list; a damaged one
@@ -74,8 +82,15 @@ pub fn save(data_dir: &Path, entries: &[Entry]) -> Result<()> {
         .map_err(|error| PluginError::Settings(error.to_string()))
 }
 
-/// Is `id` on the list?
+/// Is `id` on the list, and starting?
 pub fn starts_with_engine(data_dir: &Path, id: &str) -> bool {
+    load(data_dir)
+        .iter()
+        .any(|entry| entry.id == id && entry.enabled)
+}
+
+/// Has this plugin ever been answered for (on or off)?
+pub fn knows(data_dir: &Path, id: &str) -> bool {
     load(data_dir).iter().any(|entry| entry.id == id)
 }
 
@@ -85,17 +100,31 @@ pub fn starts_with_engine(data_dir: &Path, id: &str) -> bool {
 pub fn set(store: &PluginStore, id: &str, enabled: bool) -> Result<Vec<String>> {
     let data_dir = store.data_dir().to_path_buf();
     let mut entries = load(&data_dir);
+    // The manifest beside the install may lag behind (an older catalog, an
+    // offline cache): a command line already answered for stays, and a plugin
+    // that never had one may only be switched on when its manifest says how.
+    let known = entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .map(|entry| entry.args.clone());
     entries.retain(|entry| entry.id != id);
     if enabled {
         if !store.installed().iter().any(|plugin| plugin.id == id) {
             return Err(PluginError::NotInstalled);
         }
-        let args = store.start_args(id).ok_or_else(|| {
+        let args = store.start_args(id).or(known).ok_or_else(|| {
             PluginError::Manifest(format!("у плагина «{id}» не сказано, как его запускать"))
         })?;
         entries.push(Entry {
             id: id.to_owned(),
             args,
+            enabled: true,
+        });
+    } else if let Some(args) = known {
+        entries.push(Entry {
+            id: id.to_owned(),
+            args,
+            enabled: false,
         });
     }
     save(&data_dir, &entries)?;
@@ -140,7 +169,7 @@ pub async fn on_boot() {
         return;
     }
     let installed = store.installed();
-    for entry in &entries {
+    for entry in entries.iter().filter(|entry| entry.enabled) {
         let Some(plugin) = installed.iter().find(|plugin| plugin.id == entry.id) else {
             log(&format!("{}: not installed", entry.id));
             continue;
@@ -173,6 +202,7 @@ async fn seed(store: &PluginStore) {
         .map(|plugin| Entry {
             id: plugin.id,
             args: Vec::new(),
+            enabled: true,
         })
         .collect();
     if entries.is_empty() {
@@ -193,7 +223,11 @@ async fn seed(store: &PluginStore) {
 }
 
 fn ids(entries: &[Entry]) -> Vec<String> {
-    entries.iter().map(|entry| entry.id.clone()).collect()
+    entries
+        .iter()
+        .filter(|entry| entry.enabled)
+        .map(|entry| entry.id.clone())
+        .collect()
 }
 
 /// A boot in a test process must not start anybody's programs.

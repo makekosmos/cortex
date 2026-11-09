@@ -2895,6 +2895,9 @@ function PluginPage(props) {
 		});
 	};
 	const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+	/** A program is needed to start, and a start already answered stays
+	* answerable even while the manifest beside the install lags behind. */
+	const canAutostart = () => Boolean(plugin()?.executable && plugin()?.startable);
 	const shown = manifest();
 	/** The choice whose list is open, if any: `picking` holds its key. */
 	const pickingField = () => {
@@ -3017,7 +3020,7 @@ function PluginPage(props) {
 					})]);
 					return __nsh_hv9;
 				})(),
-				() => plugin()?.startable ? (() => {
+				() => canAutostart() ? (() => {
 					const __nsh_hv11 = element("view");
 					insert(__nsh_hv11, [component(SectionLabel, {
 						get colors() {

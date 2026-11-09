@@ -348,3 +348,53 @@ fn the_catalog_says_the_dictation_pill_starts_in_the_background() {
     let start = dictation.start.as_ref().expect("a start line");
     assert_eq!(start.args, ["--background"]);
 }
+
+/// A manifest can lag behind (an older catalog, an offline cache) — the
+/// command line already answered for is not lost by switching the switch off
+/// and on again.
+#[test]
+fn the_command_line_survives_a_manifest_that_forgot_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir);
+    let data = dir.path().join("data");
+    let mut parsed = manifest(None);
+    parsed.start = Some(super::PluginStart {
+        args: vec!["--background".into()],
+    });
+    store.save_manifest(&parsed).expect("manifest");
+    let apps = dir.path().join("Apps").join(&parsed.id);
+    std::fs::create_dir_all(apps.join("0.5.2")).unwrap();
+    std::fs::write(
+        apps.join("install.json"),
+        json!({
+            "schema_version": 1,
+            "id": parsed.id,
+            "version": "0.5.2",
+            "executable": "dictation-gpui.exe",
+            "sha256": "0".repeat(64),
+            "size": 4_200_000,
+            "repository": "makekosmos/dictation",
+            "release_tag": "gpui-v0.5.2",
+            "installed_at": 1_794_000_000_000u64,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(apps.join("0.5.2").join("dictation-gpui.exe"), b"MZ").unwrap();
+    super::autostart::set(&store, &parsed.id, true).expect("on");
+
+    // The catalog this machine can reach says less than the manifest did.
+    parsed.start = None;
+    store
+        .save_manifest(&parsed)
+        .expect("manifest without start");
+    assert_eq!(store.start_args(&parsed.id), None);
+
+    super::autostart::set(&store, &parsed.id, false).expect("off");
+    super::autostart::set(&store, &parsed.id, true).expect("on again");
+    assert_eq!(
+        super::autostart::load(&data)[0].args,
+        ["--background"],
+        "the pill is still started the way it was answered"
+    );
+}
