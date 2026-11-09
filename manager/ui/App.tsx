@@ -11,7 +11,7 @@ import {
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
 import { TITLEBAR_HEIGHT } from "./chrome";
-import { connectHost, dragWindow } from "./host";
+import { connectHost, dragBinding } from "./host";
 import { demoState } from "./state";
 import type { ManagerState } from "./state";
 import type { CommandArgs } from "./commands";
@@ -224,9 +224,9 @@ function App() {
         <View
           class="h-full relative overflow-hidden"
           style={{ width: settingsMetrics.sidebarWidth, backgroundColor: colors().shell }}
-          onPressDown={() => dragWindow()}
+          {...dragBinding()}
         >
-          <View class="absolute inset-0" onPressDown={() => dragWindow()} />
+          <View class="absolute inset-0" {...dragBinding()} />
           <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
             <SettingsSidebar
               colors={colors()}

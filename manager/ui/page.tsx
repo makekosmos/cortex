@@ -3,7 +3,7 @@ import { titleBar } from "nsh/desktop";
 import { settingsMetrics as M } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { captionStrip, TITLEBAR_HEIGHT } from "./chrome";
-import { dragWindow } from "./host";
+import { dragBinding } from "./host";
 
 /**
  * The frame every page sits in: the scroll area, its gutter, the heading row the
@@ -35,7 +35,7 @@ export function Page(props: {
             are in — and it stops where those buttons start: this row spans the
             whole column, so without the reserve a press on a button would land
             in a drag area and the button would never see it. A press here moves
-            the window, which only the host can do (`dragWindow`). */}
+            the window, which only the shell can do (`dragBinding`). */}
         <View
           class="flex-row items-center"
           style={{
@@ -43,7 +43,7 @@ export function Page(props: {
             paddingLeft: controls.left,
             marginRight: captionStrip(),
           }}
-          onPressDown={() => dragWindow()}
+          {...dragBinding()}
         >
           {props.title ? (
             <Text
