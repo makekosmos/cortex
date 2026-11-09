@@ -39,7 +39,9 @@ fn calls(route: &str) -> Vec<Call> {
             json!({ "range_days": 21, "top_apps_limit": 8 }),
         )],
         "integrations" => vec![("connectors", "integrations.list", json!({}))],
-        "about" => vec![("updates", "updater.status", json!({}))],
+        // The product's own page also answers "what can be updated": a version
+        // is a fact about this computer, and it has no page of its own.
+        "server" => vec![("updates", "updater.status", json!({}))],
         "appearance" => vec![("appearance", "appearance.get", json!({}))],
         "plugins" => vec![
             ("plugins.catalog", "plugins.catalog", json!({})),
