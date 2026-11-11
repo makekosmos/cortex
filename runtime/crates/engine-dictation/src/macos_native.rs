@@ -19,6 +19,18 @@ use super::config::TriggerMode;
 static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
 static CAPTURE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+/// The Manager watches the keyboard itself now: it is the program the person
+/// grants Input Monitoring to. Two listeners fire one key twice, and two
+/// toggles cancel out, so the Engine drops its helper on request — and does not
+/// start another one when the setting changes later.
+pub fn release_listeners() {
+    MANAGER_OWNS_HOTKEY.store(true, Ordering::SeqCst);
+    WATCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+    CAPTURE_GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
+static MANAGER_OWNS_HOTKEY: AtomicBool = AtomicBool::new(false);
+
 #[derive(Debug, Error)]
 pub enum NativeHelperError {
     #[error("helper '{name}' not found in candidates: {candidates:?}")]
@@ -33,6 +45,10 @@ pub fn set_hotkey_active(
     mode: TriggerMode,
     tx: broadcast::Sender<Value>,
 ) -> Result<(), NativeHelperError> {
+    if MANAGER_OWNS_HOTKEY.load(Ordering::SeqCst) {
+        WATCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+        return Ok(());
+    }
     let spec = match parse_hotkey(hotkey) {
         Some(spec) => spec,
         None => {
@@ -41,6 +57,7 @@ pub fn set_hotkey_active(
         }
     };
     let helper = resolve_helper("hotkey-hold-monitor")?;
+    prompt_microphone();
     let generation = WATCH_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
     thread::spawn(move || {
@@ -57,6 +74,19 @@ pub fn set_hotkey_active(
     });
 
     Ok(())
+}
+
+/// The mic dialog belongs to this app. A new signature has no grant, and a
+/// capture that times out looks the same as a hotkey that did nothing.
+fn prompt_microphone() {
+    let Ok(helper) = resolve_helper("microphone-access") else {
+        return;
+    };
+    let _ = Command::new(helper)
+        .arg("--prompt")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
 }
 
 fn watch_hotkey_once(
@@ -243,7 +273,7 @@ fn run_capture_once(
 /// Конвертирует `captured`-payload helper'а в accelerator-строку. Возвращает
 /// `None` если keyCode неизвестен — тогда capture молча игнорится (как
 /// Windows-ветка при невалидной клавише).
-fn capture_value_to_accelerator(value: &Value) -> Option<String> {
+pub(crate) fn capture_value_to_accelerator(value: &Value) -> Option<String> {
     // Дабл-тап Fn — особый хоткей "FnFn" (нет real keyCode-пары).
     if value.get("doubleFn").and_then(|v| v.as_bool()) == Some(true) {
         return Some("FnFn".into());

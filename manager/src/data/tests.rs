@@ -1,6 +1,9 @@
 //! The mappings above, exercised on the answers a live Engine gave.
 
-use super::*;
+use serde_json::json;
+
+use super::rows::size;
+use super::{apply, shape, write};
 
 #[test]
 fn sizes_read_as_the_page_wants() {

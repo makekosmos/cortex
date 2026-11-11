@@ -26,12 +26,19 @@ fn xml_escape(value: &str) -> String {
 
 /// KeepAlive stays off: the supervisor restarts its own core worker, and a
 /// user who quits the Engine must not see launchd respawn it.
+///
+/// The header is a `const` rather than part of the template: its DOCTYPE line
+/// alone is longer than the 100 characters `rustfmt` works within.
+const PLIST_HEADER: &str = concat!(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+    "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" ",
+    "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n",
+    "<plist version=\"1.0\">\n<dict>"
+);
+
 fn render_plist(executable: &Path) -> String {
     format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
+        r#"{PLIST_HEADER}
 	<key>Label</key>
 	<string>{label}</string>
 	<key>ProgramArguments</key>
@@ -99,8 +106,11 @@ mod tests {
 
         assert!(enabled_in(&agents));
         let plist = std::fs::read_to_string(plist_path(&agents)).unwrap();
-        assert!(plist.contains("<string>com.kazui.mundus.engine</string>"));
-        assert!(plist.contains("<string>/Applications/A &amp; B.app/Contents/MacOS/mundus-engine</string>\n\t\t<string>--start</string>"));
+        assert!(plist.contains("<string>computer.mundus.engine</string>"));
+        assert!(plist.contains(concat!(
+            "<string>/Applications/A &amp; B.app/Contents/MacOS/mundus-engine</string>",
+            "\n\t\t<string>--start</string>"
+        )));
         assert!(plist.contains("<key>RunAtLoad</key>\n\t<true/>"));
         assert!(plist.contains("<key>KeepAlive</key>\n\t<false/>"));
         let lint = std::process::Command::new("plutil")

@@ -4668,17 +4668,21 @@ dependencies = [
 name = "manager"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "gpui-component",
  "gpui-fast",
  "gpui-kit",
+ "image",
  "imago-nsh",
  "nsh-platform-gpui",
  "pe-version-info",
+ "pollster",
  "raw-window-handle",
  "serde",
  "serde_json",
  "tracing",
  "ureq 2.12.1",
+ "wgpu 29.0.4",
 ]
 
 [[package]]

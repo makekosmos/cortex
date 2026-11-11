@@ -1,4 +1,4 @@
-import { signal, Text, View } from "nsh";
+import { effect, signal, Text, View } from "nsh";
 import {
   Card,
   CardRow,
@@ -9,9 +9,9 @@ import {
   Switch,
   TextInput,
 } from "@makekosmos/imago-nsh";
-import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
-import type { PluginRow, SettingValue } from "../state";
+import type { SettingValue } from "../state";
+import { hotkeyCaptured } from "../state";
 import {
   CHIPS,
   ChoiceRow,
@@ -23,69 +23,9 @@ import {
 } from "./plugin-fields";
 import { Page } from "../page";
 import { Modal, note } from "../modal";
-
-function versionLine(plugin: PluginRow): string {
-  const parts: string[] = [];
-  if (plugin.version) parts.push(`Версия ${plugin.version}`);
-  if (plugin.running) parts.push("запущен");
-  return parts.join(" · ");
-}
-
-/** A row of the installed list: open it, change its settings, remove it. */
-function InstalledRow(props: {
-  plugin: PluginRow;
-  colors: ApplicationTheme;
-  last: boolean;
-  onOpen: () => void;
-  onConfigure: () => void;
-  onRemove: () => void;
-}) {
-  const { colors, plugin } = props;
-  return (
-    <CardRow
-      colors={colors}
-      icon="plug"
-      accent={colors.accent}
-      accentTo={colors.accent}
-      title={plugin.name}
-      subtitle={versionLine(plugin) || plugin.summary}
-      last={props.last}
-      right={
-        <View class="flex-row items-center gap-2">
-          <PillButton colors={colors} label="Настроить" onPress={props.onConfigure} />
-          {plugin.executable ? (
-            <PillButton colors={colors} tone="neutral" label="Открыть" onPress={props.onOpen} />
-          ) : null}
-          <PillButton colors={colors} tone="danger" label="Удалить" onPress={props.onRemove} />
-        </View>
-      }
-    />
-  );
-}
-
-/** One catalog entry the Engine has not installed yet. */
-function AvailableRow(props: {
-  plugin: PluginRow;
-  colors: ApplicationTheme;
-  last: boolean;
-  onInstall: () => void;
-}) {
-  const { colors, plugin } = props;
-  return (
-    <CardRow
-      colors={colors}
-      icon="apps"
-      accent={colors.muted}
-      accentTo={colors.muted}
-      title={plugin.name}
-      subtitle={plugin.summary}
-      last={props.last}
-      right={
-        <PillButton colors={colors} tone="accent" label="Установить" onPress={props.onInstall} />
-      }
-    />
-  );
-}
+import { HotkeyRecorder } from "./plugin-hotkey";
+import { AvailableRow, InstalledRow } from "./plugin-rows";
+import { StatsBlock } from "./plugin-stats";
 
 /**
  * What Mundus can gain and what it already has.
@@ -219,7 +159,20 @@ export function PluginPage(props: PageProps & { id: string }) {
     drafts.set({ id: props.id, values: {} });
   };
 
+  // The tap in the Manager reads the combination, not this window: it arrives
+  // as an event and is stored the same way a typed setting is.
+  effect(() => {
+    const captured = hotkeyCaptured();
+    if (!captured) return;
+    hotkeyCaptured.set("");
+    send("hotkey", captured);
+  });
+
   const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+  const stats = () => {
+    const row = current();
+    return row && row.id === props.id ? (row.stats ?? null) : null;
+  };
   const shown = manifest();
   /** The choice whose list is open, if any: `picking` holds its key. */
   const pickingField = () => {
@@ -274,17 +227,21 @@ export function PluginPage(props: PageProps & { id: string }) {
               right={
                 <View class="flex-row items-center gap-2">
                   {plugin()?.running ? <StatusDot colors={props.colors} /> : null}
-                  <PillButton
-                    colors={props.colors}
-                    tone="neutral"
-                    label="Открыть"
-                    onPress={() => props.onCommand("plugins.launch", { id: props.id })}
-                  />
+                  {plugin()?.executable ? (
+                    <PillButton
+                      colors={props.colors}
+                      tone="neutral"
+                      label="Открыть"
+                      onPress={() => props.onCommand("plugins.launch", { id: props.id })}
+                    />
+                  ) : null}
                 </View>
               }
             />
           </Card>
         </View>
+
+        {stats() ? <StatsBlock stats={stats()!} colors={props.colors} /> : null}
 
         <View>
           <SectionLabel colors={props.colors}>Настройки</SectionLabel>
@@ -335,7 +292,7 @@ export function PluginPage(props: PageProps & { id: string }) {
               }
               if (kind.type === "choice") {
                 const options = kind.options;
-                if (options.length > CHIPS) {
+                if (field.key === "localModel" || options.length > CHIPS) {
                   return (
                     <PickerRow
                       key={field.key}
@@ -361,6 +318,28 @@ export function PluginPage(props: PageProps & { id: string }) {
                 );
               }
               const numeric = field.kind.type === "number";
+              if (field.key === "hotkey") {
+                const hotkey = () => props.state().hotkey;
+                return (
+                  <FieldRow
+                    key={field.key}
+                    colors={props.colors}
+                    label={field.label}
+                    last={last}
+                    labelWidth={LABEL_WIDTH}
+                  >
+                    <HotkeyRecorder
+                      value={String(value ?? "")}
+                      colors={props.colors}
+                      capturing={hotkey().capturing}
+                      held={hotkey().held}
+                      listenAccess={hotkey().listenAccess}
+                      onStart={() => props.onCommand("hotkey.capture")}
+                      onOpenSettings={() => props.onCommand("hotkey.settings")}
+                    />
+                  </FieldRow>
+                );
+              }
               return (
                 <FieldRow
                   key={field.key}

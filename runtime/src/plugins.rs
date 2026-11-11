@@ -156,14 +156,18 @@ impl PluginStore {
             .as_ref()
             .and_then(|manifest| self.settings(manifest).ok())
             .unwrap_or_default();
+        // A builtin plugin is a page of this app. An exe left from an
+        // earlier release is not something to open.
+        let executable = manifest
+            .as_ref()
+            .filter(|manifest| !matches!(manifest.source, PluginSource::Builtin))
+            .and_then(|_| self.apps.executable_path(&record.id))
+            .map(|path| path.to_string_lossy().into_owned());
         InstalledPlugin {
             id: record.id.clone(),
             manifest,
             version: record.version.clone(),
-            executable: self
-                .apps
-                .executable_path(&record.id)
-                .map(|path| path.to_string_lossy().into_owned()),
+            executable,
             installed_at: record.installed_at,
             running: self.apps.app_is_running(&record.id).unwrap_or(false),
             settings,

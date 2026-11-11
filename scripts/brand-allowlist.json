@@ -62,7 +62,7 @@
       "reason": "Legacy standalone-Engine uninstall key, Run value, and Start Menu shortcut names handled by the installer migration."
     },
     {
-      "pattern": "com\\.kazui\\.|electron\\.app\\.Kosmos|KeplerKosmos|KosmosKepler",
+      "pattern": "electron\\.app\\.Kosmos|KeplerKosmos|KosmosKepler",
       "reason": "Legacy HKCU Run value names / Electron app ids from earlier installer generations."
     },
     {

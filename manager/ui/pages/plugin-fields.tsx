@@ -57,7 +57,7 @@ export function PickerRow(props: {
     <FieldRow colors={colors} label={props.label} last={props.last} labelWidth={LABEL_WIDTH}>
       {/* A pill hugs its text: the field column is a stretch column, so the
           trigger has to say so itself. */}
-      <View class="flex-row">
+      <View class="w-full flex-row justify-end">
         <PillButton
           colors={colors}
           tone="neutral"

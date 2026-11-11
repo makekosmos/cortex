@@ -293,33 +293,6 @@ function tileGradient(accent, accentTo) {
 		return `${sheen >= 0 ? mix(base, "#ffffff", sheen) : mix(base, "#000000", -sheen)} ${Math.round(t * 100)}%`;
 	}).join(", ")})`;
 }
-/** A 24pt gradient tile with a white glyph — the sidebar's colour language. */
-function IconTile(props) {
-	const size = props.size ?? settingsMetrics.tileSize;
-	return (() => {
-		const __nsh_hv0 = element("view");
-		prop(__nsh_hv0, "class", "items-center justify-center");
-		bindProp(__nsh_hv0, "style", () => ({
-			width: size,
-			height: size,
-			borderRadius: props.radius ?? settingsMetrics.tileRadius,
-			backgroundImage: tileGradient(props.accent, props.accentTo),
-			borderWidth: 1,
-			borderColor: "rgba(255,255,255,0.20)",
-			boxShadow: "0 1px 2px rgba(0,0,0,0.32)"
-		}));
-		insert(__nsh_hv0, component(Icon, {
-			get name() {
-				return props.icon;
-			},
-			get size() {
-				return Math.round(size * .72);
-			},
-			color: "#ffffff"
-		}));
-		return __nsh_hv0;
-	})();
-}
 /** The Mundus mark in a pill of its own — the running server's avatar. */
 function LogoTile(props) {
 	const size = props.size ?? settingsMetrics.logoTileSize;
@@ -342,62 +315,6 @@ function LogoTile(props) {
 			color: "#ffffff"
 		}));
 		return __nsh_hv1;
-	})();
-}
-/** Sidebar row: accent tile, label and an optional caption under it. */
-function NavTile(props) {
-	return (() => {
-		const __nsh_hv2 = element("view");
-		bindProp(__nsh_hv2, "onPress", () => props.onPress);
-		prop(__nsh_hv2, "role", "button");
-		bindProp(__nsh_hv2, "accessibilityLabel", () => props.label);
-		bindProp(__nsh_hv2, "accessibilityState", () => ({ selected: props.selected }));
-		prop(__nsh_hv2, "class", "flex-row items-center gap-2.5 rounded-[10px]");
-		bindProp(__nsh_hv2, "style", () => ({
-			height: props.logo ? settingsMetrics.logoRowHeight : settingsMetrics.navRowHeight,
-			paddingLeft: settingsMetrics.cardPaddingX,
-			paddingRight: settingsMetrics.cardPaddingX,
-			backgroundColor: props.selected ? props.colors.raised : "transparent"
-		}));
-		const __nsh_hv3 = element("view");
-		bindProp(__nsh_hv3, "style", () => ({ marginTop: props.logo ? 0 : -1 }));
-		insert(__nsh_hv3, () => props.logo ? component(LogoTile, {}) : component(IconTile, {
-			get icon() {
-				return props.icon;
-			},
-			get accent() {
-				return props.accent;
-			},
-			get accentTo() {
-				return props.accentTo;
-			}
-		}));
-		const __nsh_hv4 = element("view");
-		prop(__nsh_hv4, "class", "flex-1");
-		prop(__nsh_hv4, "style", { gap: 4 });
-		const __nsh_hv5 = element("text");
-		bindProp(__nsh_hv5, "style", () => ({
-			fontSize: 14,
-			fontWeight: "500",
-			lineHeight: 20,
-			color: props.colors.foreground
-		}));
-		insert(__nsh_hv5, () => props.label);
-		append(__nsh_hv4, __nsh_hv5);
-		insert(__nsh_hv4, () => props.caption ? (() => {
-			const __nsh_hv6 = element("text");
-			bindProp(__nsh_hv6, "style", () => ({
-				fontSize: 12,
-				lineHeight: 16,
-				fontWeight: "500",
-				color: props.colors.muted
-			}));
-			insert(__nsh_hv6, () => props.caption);
-			return __nsh_hv6;
-		})() : null);
-		append(__nsh_hv2, __nsh_hv3);
-		append(__nsh_hv2, __nsh_hv4);
-		return __nsh_hv2;
 	})();
 }
 function SearchField(props) {
@@ -427,89 +344,6 @@ function SearchField(props) {
 			}
 		}), __nsh_hv8);
 		return __nsh_hv7;
-	})();
-}
-function SettingsSidebar(props) {
-	const matches = (entry) => !props.search.trim() || entry.label.toLowerCase().includes(props.search.trim().toLowerCase());
-	const lights = titleBar();
-	const top = lights.left > 0 ? lights.height + 4 : settingsMetrics.sidebarTop;
-	return (() => {
-		const __nsh_hv9 = element("view");
-		prop(__nsh_hv9, "class", "h-full shrink-0 flex-col");
-		bindProp(__nsh_hv9, "style", () => ({
-			width: settingsMetrics.sidebarWidth,
-			backgroundColor: props.colors.shell,
-			paddingTop: top,
-			paddingBottom: settingsMetrics.sidebarTop,
-			paddingLeft: settingsMetrics.sidebarPadding,
-			paddingRight: settingsMetrics.sidebarPadding
-		}));
-		const __nsh_hv10 = element("view");
-		prop(__nsh_hv10, "class", "min-h-0 flex-1 flex-col");
-		bindProp(__nsh_hv10, "style", () => ({ gap: settingsMetrics.searchGap }));
-		const __nsh_hv11 = element("scroll");
-		prop(__nsh_hv11, "class", "min-h-0 flex-1");
-		const __nsh_hv12 = element("view");
-		bindProp(__nsh_hv12, "style", () => ({ gap: settingsMetrics.navGroupGap }));
-		insert(__nsh_hv12, () => props.groups.map((group, index) => {
-			const entries = group.entries.filter(matches);
-			if (!entries.length) return null;
-			return (() => {
-				const __nsh_hv13 = element("view");
-				bindProp(__nsh_hv13, "key", () => group.id);
-				bindProp(__nsh_hv13, "style", () => ({
-					gap: settingsMetrics.navEntryGap,
-					marginBottom: index === 0 ? -1 : 0
-				}));
-				insert(__nsh_hv13, () => entries.map((entry) => component(NavTile, {
-					get key() {
-						return entry.route;
-					},
-					get label() {
-						return entry.label;
-					},
-					get icon() {
-						return entry.icon;
-					},
-					get accent() {
-						return entry.accent;
-					},
-					get accentTo() {
-						return entry.accentTo;
-					},
-					get caption() {
-						return entry.caption;
-					},
-					get logo() {
-						return entry.route === "server";
-					},
-					get selected() {
-						return props.current === entry.route;
-					},
-					get colors() {
-						return props.colors;
-					},
-					onPress: () => props.onNavigate(entry.route)
-				})));
-				return __nsh_hv13;
-			})();
-		}));
-		append(__nsh_hv11, __nsh_hv12);
-		append(__nsh_hv10, __nsh_hv11);
-		insert(__nsh_hv10, component(SearchField, {
-			get value() {
-				return props.search;
-			},
-			placeholder: "Поиск настроек",
-			get colors() {
-				return props.colors;
-			},
-			get onChange() {
-				return props.onSearch;
-			}
-		}), __nsh_hv11);
-		append(__nsh_hv9, __nsh_hv10);
-		return __nsh_hv9;
 	})();
 }
 function SectionLabel(props) {
@@ -755,114 +589,6 @@ function StatusDot(props) {
 		return __nsh_hv37;
 	})();
 }
-/** A theme preview: the palette painted as a mini app, plus swatch circles. */
-function ThemeCard(props) {
-	const swatches = [
-		props.colors.shell,
-		props.colors.danger,
-		"#c9b45a",
-		"#7eae4d",
-		props.colors.success,
-		"#3aa6b9",
-		props.colors.accent,
-		"#6f7ff2",
-		"#b07cff",
-		"#d970b8",
-		props.colors.muted
-	];
-	return (() => {
-		const __nsh_hv38 = element("view");
-		bindProp(__nsh_hv38, "onPress", () => props.onPress);
-		prop(__nsh_hv38, "role", "button");
-		bindProp(__nsh_hv38, "accessibilityLabel", () => props.name);
-		bindProp(__nsh_hv38, "accessibilityState", () => ({ selected: props.selected }));
-		prop(__nsh_hv38, "style", {
-			width: 182,
-			gap: 9
-		});
-		const __nsh_hv39 = element("view");
-		prop(__nsh_hv39, "class", "w-full overflow-hidden");
-		bindProp(__nsh_hv39, "style", () => ({
-			height: 74,
-			borderRadius: 10,
-			borderWidth: props.selected ? 2 : 1,
-			borderColor: props.selected ? props.colors.accent : props.colors.border,
-			backgroundColor: props.colors.background,
-			paddingLeft: 11,
-			paddingRight: 11,
-			paddingTop: 10,
-			paddingBottom: 9,
-			justifyContent: "space-between"
-		}));
-		const __nsh_hv40 = element("view");
-		prop(__nsh_hv40, "class", "flex-row items-center justify-between");
-		const __nsh_hv41 = element("text");
-		bindProp(__nsh_hv41, "style", () => ({
-			fontSize: 16,
-			fontWeight: "600",
-			color: props.colors.foreground
-		}));
-		const __nsh_hv42 = text("Aa");
-		append(__nsh_hv41, __nsh_hv42);
-		const __nsh_hv43 = element("view");
-		prop(__nsh_hv43, "class", "flex-row items-center");
-		prop(__nsh_hv43, "style", { gap: 5 });
-		const __nsh_hv44 = element("view");
-		prop(__nsh_hv44, "class", "items-center justify-center");
-		bindProp(__nsh_hv44, "style", () => ({
-			height: 19,
-			paddingLeft: 5,
-			paddingRight: 5,
-			borderRadius: 5,
-			backgroundColor: props.colors.dangerFill
-		}));
-		const __nsh_hv45 = element("text");
-		bindProp(__nsh_hv45, "style", () => ({
-			fontSize: 10,
-			color: props.colors.danger
-		}));
-		const __nsh_hv46 = text("~/");
-		append(__nsh_hv45, __nsh_hv46);
-		append(__nsh_hv44, __nsh_hv45);
-		const __nsh_hv47 = element("view");
-		bindProp(__nsh_hv47, "style", () => ({
-			width: 11,
-			height: 19,
-			borderRadius: 5,
-			backgroundColor: props.colors.accent
-		}));
-		append(__nsh_hv43, __nsh_hv44);
-		append(__nsh_hv43, __nsh_hv47);
-		append(__nsh_hv40, __nsh_hv41);
-		append(__nsh_hv40, __nsh_hv43);
-		const __nsh_hv48 = element("view");
-		prop(__nsh_hv48, "class", "flex-row items-center");
-		prop(__nsh_hv48, "style", { gap: 4 });
-		insert(__nsh_hv48, () => swatches.map((swatch, index) => (() => {
-			const __nsh_hv49 = element("view");
-			prop(__nsh_hv49, "key", `${swatch}-${index}`);
-			prop(__nsh_hv49, "style", {
-				width: 9,
-				height: 9,
-				borderRadius: 5,
-				backgroundColor: swatch
-			});
-			return __nsh_hv49;
-		})()));
-		append(__nsh_hv39, __nsh_hv40);
-		append(__nsh_hv39, __nsh_hv48);
-		const __nsh_hv50 = element("text");
-		bindProp(__nsh_hv50, "style", () => ({
-			fontSize: 12,
-			fontWeight: props.selected ? "600" : "500",
-			color: props.captionColor ?? (props.selected ? props.colors.foreground : props.colors.muted)
-		}));
-		insert(__nsh_hv50, () => props.name);
-		append(__nsh_hv38, __nsh_hv39);
-		append(__nsh_hv38, __nsh_hv50);
-		return __nsh_hv38;
-	})();
-}
 
 //#endregion
 //#region navigation.ts
@@ -880,22 +606,6 @@ const navigation = [
 			icon: "server",
 			accent: "#3b82f6",
 			accentTo: "#359ecb"
-		}]
-	},
-	{
-		id: "app",
-		entries: [{
-			route: "about",
-			label: "О приложении",
-			icon: "info",
-			accent: "#1784fc",
-			accentTo: "#915bfc"
-		}, {
-			route: "appearance",
-			label: "Внешний вид",
-			icon: "palette",
-			accent: "#f79411",
-			accentTo: "spectrum"
 		}]
 	},
 	{
@@ -976,7 +686,41 @@ const navigation = [
 ];
 
 //#endregion
+//#region history.ts
+/**
+* Where the pages have been, so the header's anchors can walk back and forth.
+*
+* The sidebar and the Engine's `navigate` event both land here: a page reached
+* from either place is a step the anchors can undo. A route that equals the
+* current one is not a step — pressing the sidebar row you are already on must
+* not fill the history with the same page.
+*/
+const initial = globalThis.__MUNDUS_MANAGER_ROUTE__ ?? "server";
+const stack = signal([initial]);
+const at = signal(0);
+const currentRoute = () => stack()[at()];
+const canBack = () => at() > 0;
+const canForward = () => at() < stack().length - 1;
+function go(route) {
+	if (route === currentRoute()) return;
+	const kept = stack().slice(0, at() + 1);
+	stack.set([...kept, route]);
+	at.set(kept.length);
+}
+function back() {
+	if (canBack()) at.set(at() - 1);
+}
+function forward() {
+	if (canForward()) at.set(at() + 1);
+}
+
+//#endregion
 //#region chrome.ts
+/**
+* The band the caption buttons sit in, which the page heading and the sidebar's
+* search field share with them: the first row of the window is the titlebar.
+*/
+const TITLEBAR_HEIGHT = 36;
 function reservesCaptions() {
 	const host = platform();
 	return host === "win32" || host === "windows";
@@ -984,6 +728,270 @@ function reservesCaptions() {
 /** The width of the strip the caption buttons take, in points. */
 function captionStrip() {
 	return reservesCaptions() ? 138 : 0;
+}
+/** Below the lights: the three buttons, then air, so the two bands read apart. */
+const MAC_LIGHTS_INSET = 48;
+/**
+* The page header's height. macOS puts the traffic lights a shade lower than
+* the band a Windows caption sits in, so the title needs a taller row to line
+* up with them; the window's own titlebar is not resized.
+*/
+function headerHeight() {
+	const host = platform();
+	if (host === "darwin" || host === "macos") return 48;
+	return 36;
+}
+/**
+* The space above the sidebar's search field. Windows draws its caption
+* buttons on the right, so the field shares the title band there; macOS draws
+* the lights on the left, over the field, so the field starts under them.
+*/
+function sidebarTopInset(searchHeight) {
+	const host = platform();
+	if (host === "win32" || host === "windows") return (36 - searchHeight) / 2;
+	if (host === "darwin" || host === "macos") return MAC_LIGHTS_INSET;
+	return 16;
+}
+
+//#endregion
+//#region sidebar.tsx
+/**
+* A colour moved toward black or white.
+*
+* The kit's tiles are gradient plates with a white sheen — the colour language
+* of a launcher. Mundus wears one flat plate per row, a shade darker than the
+* page, so the glyph carries the meaning and the sidebar stays quiet. NSH
+* paints a gradient, so the plate is a single solid colour here.
+*/
+function shade(hex, amount, toward = "black") {
+	const parse = (value) => {
+		const clean = value.replace("#", "");
+		return [
+			0,
+			2,
+			4
+		].map((index) => parseInt(clean.slice(index, index + 2), 16));
+	};
+	const from = parse(hex);
+	const target = toward === "black" ? [
+		0,
+		0,
+		0
+	] : [
+		255,
+		255,
+		255
+	];
+	const channel = (index) => {
+		const value = Math.round(from[index] + (target[index] - from[index]) * amount);
+		return Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0");
+	};
+	return `#${[
+		0,
+		1,
+		2
+	].map(channel).join("")}`;
+}
+/** The sidebar's own rhythm: roomier than the kit's, which packs rows tight. */
+const GAP = {
+	padX: 12,
+	rowPadX: 12,
+	rowHeight: 36,
+	logoRowHeight: 48,
+	searchGap: 10,
+	groupGap: 14,
+	entryGap: 2,
+	tileLabel: 10
+};
+/** The tile is smaller than the kit's: a plate, not a badge. */
+const TILE = 22;
+/** The plate every row's glyph sits on: the page colour, a shade deeper. */
+function plateColor(colors) {
+	return shade(colors.background, .22);
+}
+/** The Mundus mark in a pill of its own — the running server's avatar. */
+function MarkTile(props) {
+	const size = props.size ?? settingsMetrics.logoTileSize;
+	return (() => {
+		const __nsh_hv0 = element("view");
+		prop(__nsh_hv0, "class", "items-center justify-center");
+		prop(__nsh_hv0, "style", {
+			width: size,
+			height: size,
+			borderRadius: size / 2,
+			backgroundImage: "linear-gradient(135deg, #93aeea 0%, #5b83d6 34%, #359ecb 100%)",
+			borderWidth: 1,
+			borderColor: "rgba(255,255,255,0.22)"
+		});
+		insert(__nsh_hv0, component(Icon, {
+			name: "mundus",
+			get size() {
+				return Math.round(size * .56);
+			},
+			color: "#ffffff"
+		}));
+		return __nsh_hv0;
+	})();
+}
+/** One glyph on a flat plate: no sheen, no hue, the page's own colour. */
+function SidebarTile(props) {
+	return (() => {
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "class", "items-center justify-center");
+		bindProp(__nsh_hv1, "style", () => ({
+			width: TILE,
+			height: TILE,
+			borderRadius: 6,
+			backgroundColor: plateColor(props.colors),
+			borderWidth: 1,
+			borderColor: "rgba(255,255,255,0.045)"
+		}));
+		insert(__nsh_hv1, component(Icon, {
+			get name() {
+				return props.icon;
+			},
+			get size() {
+				return Math.round(TILE * .7);
+			},
+			get color() {
+				return props.colors.foreground;
+			}
+		}));
+		return __nsh_hv1;
+	})();
+}
+function SidebarRow(props) {
+	return (() => {
+		const __nsh_hv2 = element("view");
+		bindProp(__nsh_hv2, "onPress", () => props.onPress);
+		prop(__nsh_hv2, "role", "button");
+		bindProp(__nsh_hv2, "accessibilityLabel", () => props.label);
+		bindProp(__nsh_hv2, "accessibilityState", () => ({ selected: props.selected }));
+		prop(__nsh_hv2, "class", "flex-row items-center rounded-[10px]");
+		bindProp(__nsh_hv2, "style", () => ({
+			height: props.caption ? GAP.logoRowHeight : GAP.rowHeight,
+			gap: GAP.tileLabel,
+			paddingLeft: GAP.rowPadX,
+			paddingRight: GAP.rowPadX,
+			backgroundColor: props.selected ? props.colors.raised : "transparent"
+		}));
+		const __nsh_hv3 = element("view");
+		bindProp(__nsh_hv3, "style", () => ({ marginTop: props.caption || props.logo ? 0 : -1 }));
+		insert(__nsh_hv3, () => props.logo ? component(MarkTile, {}) : component(SidebarTile, {
+			get icon() {
+				return props.icon;
+			},
+			get colors() {
+				return props.colors;
+			}
+		}));
+		const __nsh_hv4 = element("view");
+		prop(__nsh_hv4, "class", "flex-1");
+		prop(__nsh_hv4, "style", { gap: 2 });
+		const __nsh_hv5 = element("text");
+		bindProp(__nsh_hv5, "style", () => ({
+			fontSize: 14,
+			fontWeight: "500",
+			lineHeight: 20,
+			color: props.colors.foreground
+		}));
+		insert(__nsh_hv5, () => props.label);
+		append(__nsh_hv4, __nsh_hv5);
+		insert(__nsh_hv4, () => props.caption ? (() => {
+			const __nsh_hv6 = element("text");
+			bindProp(__nsh_hv6, "style", () => ({
+				fontSize: 12,
+				lineHeight: 16,
+				fontWeight: "500",
+				color: props.colors.muted
+			}));
+			insert(__nsh_hv6, () => props.caption);
+			return __nsh_hv6;
+		})() : null);
+		append(__nsh_hv2, __nsh_hv3);
+		append(__nsh_hv2, __nsh_hv4);
+		return __nsh_hv2;
+	})();
+}
+/**
+* The sidebar. Its own column, so the window can keep the search field clear of
+* the traffic lights: macOS puts them over the top-left corner, and a field
+* starting at the very top sits under them.
+*/
+function Sidebar(props) {
+	const query = props.search.trim().toLowerCase();
+	return (() => {
+		const __nsh_hv7 = element("view");
+		prop(__nsh_hv7, "class", "h-full shrink-0 flex-col");
+		bindProp(__nsh_hv7, "style", () => ({
+			width: settingsMetrics.sidebarWidth,
+			backgroundColor: props.colors.shell,
+			paddingTop: props.topInset,
+			paddingBottom: settingsMetrics.sidebarTop,
+			paddingLeft: GAP.padX,
+			paddingRight: GAP.padX
+		}));
+		const __nsh_hv8 = element("view");
+		prop(__nsh_hv8, "class", "min-h-0 flex-1 flex-col");
+		bindProp(__nsh_hv8, "style", () => ({ gap: GAP.searchGap }));
+		const __nsh_hv9 = element("scroll");
+		prop(__nsh_hv9, "class", "min-h-0 flex-1");
+		const __nsh_hv10 = element("view");
+		bindProp(__nsh_hv10, "style", () => ({ gap: GAP.groupGap }));
+		insert(__nsh_hv10, () => props.groups.map((group, index) => {
+			const entries = group.entries.filter((entry) => !query || entry.label.toLowerCase().includes(query));
+			if (!entries.length) return null;
+			return (() => {
+				const __nsh_hv11 = element("view");
+				bindProp(__nsh_hv11, "key", () => group.id);
+				bindProp(__nsh_hv11, "style", () => ({
+					gap: GAP.entryGap,
+					marginBottom: index === 0 ? 0 : 0
+				}));
+				insert(__nsh_hv11, () => entries.map((entry) => component(SidebarRow, {
+					get key() {
+						return entry.route;
+					},
+					get label() {
+						return entry.label;
+					},
+					get icon() {
+						return entry.icon;
+					},
+					get caption() {
+						return entry.caption;
+					},
+					get logo() {
+						return entry.route === "server";
+					},
+					get selected() {
+						return props.current === entry.route;
+					},
+					get colors() {
+						return props.colors;
+					},
+					onPress: () => props.onNavigate(entry.route)
+				})));
+				return __nsh_hv11;
+			})();
+		}));
+		append(__nsh_hv9, __nsh_hv10);
+		append(__nsh_hv8, __nsh_hv9);
+		insert(__nsh_hv8, component(SearchField, {
+			get value() {
+				return props.search;
+			},
+			placeholder: "Поиск настроек",
+			get colors() {
+				return props.colors;
+			},
+			get onChange() {
+				return props.onSearch;
+			}
+		}), __nsh_hv9);
+		append(__nsh_hv7, __nsh_hv8);
+		return __nsh_hv7;
+	})();
 }
 
 //#endregion
@@ -1011,6 +1019,16 @@ function dragBinding() {
 
 //#endregion
 //#region state.ts
+/**
+* The Manager's mirror of what the host pushes into the page. `manager.bridge`
+* fills it from the Engine (`/v1/health`, `/v1/info`, `/v1/rpc`); without the
+* host — `nsh dev`, `nsh test`, a browser — `demoState` keeps every page
+* readable instead of blank.
+*/
+/** The combination the Manager's event tap read, handed to the page that asked
+* for it: the widget shows nothing of its own while the keys are held, and the
+* page stores the result as a setting. */
+const hotkeyCaptured = signal("");
 const demoState = {
 	engine: {
 		status: "running",
@@ -1019,7 +1037,7 @@ const demoState = {
 		port: 47321
 	},
 	client: { name: "Этот компьютер" },
-	product: { bundleId: "com.kazui.mundus.manager" },
+	product: { bundleId: "computer.mundus.app" },
 	sync: {
 		running: true,
 		incoming: [],
@@ -1080,7 +1098,8 @@ const demoState = {
 	},
 	storage: {
 		dataDir: "C:\\Users\\you\\AppData\\Roaming\\Mundus",
-		size: "1.8 ГБ"
+		size: "1.8 ГБ",
+		parts: []
 	},
 	backups: [{
 		id: "ark.db.backup-2026-11-07-201738",
@@ -1104,6 +1123,12 @@ const demoState = {
 		kind: "learning",
 		detail: "Не подключено"
 	}],
+	hotkey: {
+		running: true,
+		listenAccess: true,
+		capturing: false,
+		held: []
+	},
 	plugins: {
 		catalog: {
 			available: [{
@@ -1138,13 +1163,6 @@ const demoState = {
 	settings: {
 		autostart: true,
 		telemetry: false
-	},
-	appearance: {
-		mode: "dark",
-		light: "merino-light",
-		dark: "cobalt-foundry",
-		followApps: false,
-		accentSource: "theme"
 	}
 };
 function statusLabel(status) {
@@ -1279,6 +1297,74 @@ function Confirm(props) {
 
 //#endregion
 //#region page.tsx
+/** One half of the anchors' pill: a chevron, dimmed when there is no step. */
+function Anchor(props) {
+	return (() => {
+		const __nsh_hv0 = element("view");
+		prop(__nsh_hv0, "onPress", () => props.enabled ? props.onPress() : void 0);
+		prop(__nsh_hv0, "role", "button");
+		bindProp(__nsh_hv0, "accessibilityLabel", () => props.direction === "back" ? "Назад" : "Вперёд");
+		prop(__nsh_hv0, "class", "items-center justify-center");
+		bindProp(__nsh_hv0, "style", () => ({
+			width: 34,
+			height: 30,
+			opacity: props.enabled ? 1 : .32
+		}));
+		const __nsh_hv1 = element("view");
+		bindProp(__nsh_hv1, "style", () => props.direction === "back" ? { rotate: 180 } : void 0);
+		insert(__nsh_hv1, component(Icon, {
+			name: "chevron",
+			size: 15,
+			get color() {
+				return props.colors.foreground;
+			}
+		}));
+		append(__nsh_hv0, __nsh_hv1);
+		return __nsh_hv0;
+	})();
+}
+/** Back and forward, in one pill: the two halves share a fill and a radius. */
+function Anchors(props) {
+	return (() => {
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "class", "flex-row items-center");
+		bindProp(__nsh_hv2, "style", () => ({
+			height: 30,
+			borderRadius: 8,
+			overflow: "hidden",
+			backgroundColor: props.colors.raised,
+			marginRight: 12
+		}));
+		const __nsh_hv3 = element("view");
+		bindProp(__nsh_hv3, "style", () => ({
+			width: 1,
+			height: 18,
+			backgroundColor: props.colors.border
+		}));
+		append(__nsh_hv2, __nsh_hv3);
+		insert(__nsh_hv2, component(Anchor, {
+			direction: "back",
+			get enabled() {
+				return canBack();
+			},
+			get colors() {
+				return props.colors;
+			},
+			onPress: back
+		}), __nsh_hv3);
+		insert(__nsh_hv2, component(Anchor, {
+			direction: "forward",
+			get enabled() {
+				return canForward();
+			},
+			get colors() {
+				return props.colors;
+			},
+			onPress: forward
+		}));
+		return __nsh_hv2;
+	})();
+}
 /**
 * The frame every page sits in: the scroll area, its gutter, the heading row the
 * window is dragged by, and the column the sections stack in.
@@ -1290,50 +1376,108 @@ function Confirm(props) {
 function Page(props) {
 	const controls = titleBar();
 	return (() => {
-		const __nsh_hv0 = element("scroll");
-		prop(__nsh_hv0, "class", "min-h-0 flex-1");
-		bindProp(__nsh_hv0, "style", () => ({ backgroundColor: props.colors.background }));
-		const __nsh_hv1 = element("view");
-		prop(__nsh_hv1, "class", "w-full");
-		bindProp(__nsh_hv1, "style", () => ({
+		const __nsh_hv4 = element("scroll");
+		prop(__nsh_hv4, "class", "min-h-0 flex-1");
+		bindProp(__nsh_hv4, "style", () => ({ backgroundColor: props.colors.background }));
+		const __nsh_hv5 = element("view");
+		prop(__nsh_hv5, "class", "w-full");
+		bindProp(__nsh_hv5, "style", () => ({
 			paddingLeft: settingsMetrics.pageGutter,
 			paddingRight: settingsMetrics.pageGutter,
 			paddingTop: 0,
 			paddingBottom: settingsMetrics.pageBottom
 		}));
-		const __nsh_hv2 = element("view");
-		prop(__nsh_hv2, "class", "flex-row items-center");
-		bindProp(__nsh_hv2, "style", () => ({
-			height: 36,
+		const __nsh_hv6 = element("view");
+		prop(__nsh_hv6, "class", "flex-row items-center");
+		bindProp(__nsh_hv6, "style", () => ({
+			height: headerHeight(),
 			paddingLeft: controls.left,
 			marginRight: captionStrip()
 		}));
-		spread(__nsh_hv2, dragBinding());
-		const __nsh_hv4 = element("view");
-		prop(__nsh_hv4, "class", "flex-1");
-		append(__nsh_hv2, __nsh_hv4);
-		insert(__nsh_hv2, [() => props.title ? (() => {
-			const __nsh_hv3 = element("text");
-			bindProp(__nsh_hv3, "style", () => ({
-				fontSize: 13,
-				lineHeight: 19,
-				fontWeight: "500",
-				color: props.colors.foreground
-			}));
-			insert(__nsh_hv3, () => props.title);
-			return __nsh_hv3;
-		})() : null, () => props.actions ?? null], __nsh_hv4);
-		const __nsh_hv5 = element("view");
-		bindProp(__nsh_hv5, "style", () => ({
+		spread(__nsh_hv6, dragBinding());
+		const __nsh_hv8 = element("view");
+		prop(__nsh_hv8, "class", "flex-1");
+		append(__nsh_hv6, __nsh_hv8);
+		insert(__nsh_hv6, [
+			component(Anchors, { get colors() {
+				return props.colors;
+			} }),
+			() => props.title ? (() => {
+				const __nsh_hv7 = element("text");
+				bindProp(__nsh_hv7, "style", () => ({
+					fontSize: 13,
+					lineHeight: 19,
+					fontWeight: "500",
+					color: props.colors.foreground
+				}));
+				insert(__nsh_hv7, () => props.title);
+				return __nsh_hv7;
+			})() : null,
+			() => props.actions ?? null
+		], __nsh_hv8);
+		const __nsh_hv9 = element("view");
+		bindProp(__nsh_hv9, "style", () => ({
 			gap: settingsMetrics.sectionGap,
 			marginTop: settingsMetrics.headerGap
 		}));
-		insert(__nsh_hv5, () => props.children);
-		append(__nsh_hv1, __nsh_hv2);
-		append(__nsh_hv1, __nsh_hv5);
-		append(__nsh_hv0, __nsh_hv1);
+		insert(__nsh_hv9, () => props.children);
+		append(__nsh_hv5, __nsh_hv6);
+		append(__nsh_hv5, __nsh_hv9);
+		append(__nsh_hv4, __nsh_hv5);
+		return __nsh_hv4;
+	})();
+}
+
+//#endregion
+//#region pages/updates.tsx
+/** The update card's one button: check, download, or install. Nothing is
+* downloaded without this press.
+*
+* A plain function, not a component: the host compares a child component's props
+* by identity, and the Engine patches one state object in place — a component
+* boundary here would keep the first button on screen after the state moved. */
+function updateAction(props) {
+	const { updates } = props;
+	if (updates.percent > 0 && updates.percent < 100) return (() => {
+		const __nsh_hv0 = element("text");
+		bindProp(__nsh_hv0, "style", () => ({
+			fontSize: 12.5,
+			color: props.colors.muted
+		}));
+		insert(__nsh_hv0, () => `${Math.round(updates.percent)}%`);
 		return __nsh_hv0;
 	})();
+	if (updates.canInstall) return component(PillButton, {
+		get colors() {
+			return props.colors;
+		},
+		tone: "accent",
+		label: "Установить",
+		onPress: () => props.onCommand("updates.install")
+	});
+	if (updates.newVersion) return component(PillButton, {
+		get colors() {
+			return props.colors;
+		},
+		tone: "accent",
+		label: "Скачать",
+		onPress: () => props.onCommand("updates.download")
+	});
+	return component(PillButton, {
+		get colors() {
+			return props.colors;
+		},
+		label: "Проверить",
+		onPress: () => props.onCommand("updates.check")
+	});
+}
+function updateSubtitle(updates) {
+	if (updates.percent > 0 && updates.percent < 100) return `Загружается · ${Math.round(updates.percent)}%`;
+	if (updates.canInstall) return updates.newVersion ? `Версия ${updates.newVersion} готова к установке` : "Обновление готово к установке";
+	if (updates.newVersion) return `Доступна версия ${updates.newVersion}`;
+	if (updates.state === "checking") return "Проверяем…";
+	if (updates.state === "error") return "Не удалось проверить обновления";
+	return "Установлена последняя версия";
 }
 
 //#endregion
@@ -1361,9 +1505,11 @@ function ServerPage(props) {
 								return props.colors;
 							},
 							logo: true,
-							title: "Mundus",
+							get title() {
+								return productVersion(state()) ? `Mundus ${productVersion(state())}` : "Mundus";
+							},
 							get subtitle() {
-								return statusLabel(state().engine.status);
+								return productVersion(state()) ? `${statusLabel(state().engine.status)} · канал ${state().engine.channel}` : statusLabel(state().engine.status);
 							},
 							last: true,
 							get right() {
@@ -1383,6 +1529,58 @@ function ServerPage(props) {
 				(() => {
 					const __nsh_hv0 = element("view");
 					insert(__nsh_hv0, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Программа";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return [component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								title: "Обновления",
+								get subtitle() {
+									return updateSubtitle(state().updates);
+								},
+								get right() {
+									return updateAction({
+										...props,
+										updates: state().updates
+									});
+								}
+							}), component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								title: "Engine",
+								get subtitle() {
+									return state().engine.version ? `${statusLabel(state().engine.status)} · ${state().engine.version}` : statusLabel(state().engine.status);
+								},
+								get right() {
+									return component(StatusDot, {
+										get colors() {
+											return props.colors;
+										},
+										get tone() {
+											return state().engine.status === "running" ? "success" : "muted";
+										}
+									});
+								},
+								last: true
+							})];
+						}
+					})]);
+					return __nsh_hv0;
+				})(),
+				(() => {
+					const __nsh_hv1 = element("view");
+					insert(__nsh_hv1, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1439,13 +1637,13 @@ function ServerPage(props) {
 									label: "Код",
 									get children() {
 										return (() => {
-											const __nsh_hv1 = element("text");
-											bindProp(__nsh_hv1, "style", () => ({
+											const __nsh_hv2 = element("text");
+											bindProp(__nsh_hv2, "style", () => ({
 												fontSize: 11.5,
 												color: props.colors.muted
 											}));
-											insert(__nsh_hv1, code);
-											return __nsh_hv1;
+											insert(__nsh_hv2, code);
+											return __nsh_hv2;
 										})();
 									}
 								}) : null,
@@ -1472,11 +1670,11 @@ function ServerPage(props) {
 							];
 						}
 					})]);
-					return __nsh_hv0;
+					return __nsh_hv1;
 				})(),
 				(() => {
-					const __nsh_hv2 = element("view");
-					insert(__nsh_hv2, [component(SectionLabel, {
+					const __nsh_hv3 = element("view");
+					insert(__nsh_hv3, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1495,13 +1693,13 @@ function ServerPage(props) {
 								label: "Имя",
 								get children() {
 									return (() => {
-										const __nsh_hv3 = element("text");
-										bindProp(__nsh_hv3, "style", () => ({
+										const __nsh_hv4 = element("text");
+										bindProp(__nsh_hv4, "style", () => ({
 											fontSize: 13,
 											color: props.colors.foreground
 										}));
-										insert(__nsh_hv3, () => state().client.name);
-										return __nsh_hv3;
+										insert(__nsh_hv4, () => state().client.name);
+										return __nsh_hv4;
 									})();
 								}
 							}), component(CardRow, {
@@ -1513,205 +1711,19 @@ function ServerPage(props) {
 								last: true,
 								get right() {
 									return (() => {
-										const __nsh_hv4 = element("text");
-										bindProp(__nsh_hv4, "style", () => ({
+										const __nsh_hv5 = element("text");
+										bindProp(__nsh_hv5, "style", () => ({
 											fontSize: 12.5,
 											color: props.colors.muted
 										}));
-										insert(__nsh_hv4, () => state().engine.port || "—");
-										return __nsh_hv4;
+										insert(__nsh_hv5, () => state().engine.port || "—");
+										return __nsh_hv5;
 									})();
 								}
 							})];
 						}
 					})]);
-					return __nsh_hv2;
-				})()
-			];
-		}
-	});
-}
-
-//#endregion
-//#region pages/appearance.tsx
-function ThemeRow(props) {
-	return (() => {
-		const __nsh_hv0 = element("view");
-		const __nsh_hv1 = element("view");
-		prop(__nsh_hv1, "class", "flex-row flex-wrap");
-		prop(__nsh_hv1, "style", { gap: 14 });
-		insert(__nsh_hv1, () => props.themes.map((theme) => component(ThemeCard, {
-			get key() {
-				return theme.key;
-			},
-			get name() {
-				return theme.name;
-			},
-			get colors() {
-				return theme.colors;
-			},
-			get selected() {
-				return props.selected === theme.key;
-			},
-			get active() {
-				return props.selected === theme.key;
-			},
-			get captionColor() {
-				return props.selected === theme.key ? props.colors.foreground : props.colors.muted;
-			},
-			onPress: () => props.onPick(theme.key)
-		})));
-		append(__nsh_hv0, __nsh_hv1);
-		insert(__nsh_hv0, component(SectionLabel, {
-			get colors() {
-				return props.colors;
-			},
-			get children() {
-				return props.title;
-			}
-		}), __nsh_hv1);
-		return __nsh_hv0;
-	})();
-}
-/**
-* Themes and palette. The choice is device-wide and lives in the Engine
-* (`appearance.get`/`appearance.set`), so every Mundus window on this computer
-* wears the same one — the pages only read it and ask for a change.
-*/
-function AppearancePage(props) {
-	const state = () => props.state();
-	const follow = () => state().appearance.followApps;
-	return component(Page, {
-		get colors() {
-			return props.colors;
-		},
-		title: "Внешний вид",
-		get children() {
-			return [
-				component(ThemeRow, {
-					get title() {
-						return `Светлая тема${state().appearance.mode === "light" ? " — активна" : ""}`;
-					},
-					themes: lightThemes,
-					get selected() {
-						return state().appearance.light;
-					},
-					get colors() {
-						return props.colors;
-					},
-					onPick: (key) => props.onCommand("appearance.theme", {
-						mode: "light",
-						key
-					})
-				}),
-				component(ThemeRow, {
-					get title() {
-						return `Тёмная тема${state().appearance.mode === "dark" ? " — активна" : ""}`;
-					},
-					themes: darkThemes,
-					get selected() {
-						return state().appearance.dark;
-					},
-					get colors() {
-						return props.colors;
-					},
-					onPick: (key) => props.onCommand("appearance.theme", {
-						mode: "dark",
-						key
-					})
-				}),
-				(() => {
-					const __nsh_hv2 = element("view");
-					insert(__nsh_hv2, component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Следовать теме приложений",
-								get subtitle() {
-									return follow() ? "Mundus берёт светлую или тёмную тему из системы" : "Тема выбирается здесь, независимо от системы";
-								},
-								last: true,
-								get right() {
-									return component(Switch, {
-										get colors() {
-											return props.colors;
-										},
-										get value() {
-											return follow();
-										},
-										accessibilityLabel: "Следовать теме приложений",
-										onChange: (value) => props.onCommand("appearance.followApps", { value })
-									});
-								}
-							});
-						}
-					}));
-					return __nsh_hv2;
-				})(),
-				(() => {
-					const __nsh_hv3 = element("view");
-					insert(__nsh_hv3, [component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Интерфейс";
-						}
-					}), component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Акцентный цвет",
-								get subtitle() {
-									return state().appearance.accentSource === "wallpaper" ? "Взят с обоев" : "Взят из темы";
-								},
-								get right() {
-									return (() => {
-										const __nsh_hv4 = element("view");
-										bindProp(__nsh_hv4, "style", () => ({
-											width: 26,
-											height: 26,
-											borderRadius: 13,
-											backgroundColor: props.colors.accent
-										}));
-										return __nsh_hv4;
-									})();
-								},
-								last: true
-							});
-						}
-					})]);
 					return __nsh_hv3;
-				})(),
-				(() => {
-					const __nsh_hv5 = element("view");
-					prop(__nsh_hv5, "class", "flex-row items-center gap-1.5");
-					const __nsh_hv6 = element("text");
-					bindProp(__nsh_hv6, "style", () => ({
-						fontSize: 12,
-						color: props.colors.faint
-					}));
-					const __nsh_hv7 = text("Тема применяется ко всем окнам Mundus на этом компьютере.");
-					append(__nsh_hv6, __nsh_hv7);
-					append(__nsh_hv5, __nsh_hv6);
-					insert(__nsh_hv5, component(Icon, {
-						name: "palette",
-						size: 13,
-						get color() {
-							return props.colors.faint;
-						}
-					}), __nsh_hv6);
-					return __nsh_hv5;
 				})()
 			];
 		}
@@ -1720,291 +1732,6 @@ function AppearancePage(props) {
 
 //#endregion
 //#region pages/system.tsx
-/** When a backup was taken, as a list row reads it. */
-function stamp(milliseconds) {
-	if (!milliseconds) return "";
-	const date = new Date(milliseconds);
-	const day = String(date.getDate()).padStart(2, "0");
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const hours = String(date.getHours()).padStart(2, "0");
-	const rest = String(date.getMinutes()).padStart(2, "0");
-	return `${day}.${month}.${date.getFullYear()} · ${hours}:${rest}`;
-}
-/** The update card's one button: check, download, or install. Nothing is
-* downloaded without this press. */
-function UpdateAction(props) {
-	const { updates } = props;
-	if (updates.percent > 0 && updates.percent < 100) return (() => {
-		const __nsh_hv0 = element("text");
-		bindProp(__nsh_hv0, "style", () => ({
-			fontSize: 12.5,
-			color: props.colors.muted
-		}));
-		insert(__nsh_hv0, () => `${Math.round(updates.percent)}%`);
-		return __nsh_hv0;
-	})();
-	if (updates.canInstall) return component(PillButton, {
-		get colors() {
-			return props.colors;
-		},
-		tone: "accent",
-		label: "Установить",
-		onPress: () => props.onCommand("updates.install")
-	});
-	if (updates.newVersion) return component(PillButton, {
-		get colors() {
-			return props.colors;
-		},
-		tone: "accent",
-		label: "Скачать",
-		onPress: () => props.onCommand("updates.download")
-	});
-	return component(PillButton, {
-		get colors() {
-			return props.colors;
-		},
-		label: "Проверить",
-		onPress: () => props.onCommand("updates.check")
-	});
-}
-function updateSubtitle(updates) {
-	if (updates.percent > 0 && updates.percent < 100) return `Загружается · ${Math.round(updates.percent)}%`;
-	if (updates.canInstall) return `Версия ${updates.newVersion} готова к установке`;
-	if (updates.newVersion) return `Доступна версия ${updates.newVersion}`;
-	if (updates.state === "checking") return "Проверяем…";
-	if (updates.state === "error") return "Не удалось проверить обновления";
-	return "Установлена последняя версия";
-}
-function AboutPage(props) {
-	const state = () => props.state();
-	const version = productVersion(state());
-	return component(Page, {
-		get colors() {
-			return props.colors;
-		},
-		title: "О приложении",
-		get children() {
-			return [component(Card, {
-				get colors() {
-					return props.colors;
-				},
-				get children() {
-					return [
-						component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							icon: "server",
-							get iconFill() {
-								return props.colors.raised;
-							},
-							get accent() {
-								return props.colors.accent;
-							},
-							title: version ? `Mundus ${version}` : "Mundus",
-							get subtitle() {
-								return version ? `канал ${state().engine.channel}` : statusLabel(state().engine.status);
-							},
-							get right() {
-								return component(StatusDot, {
-									get colors() {
-										return props.colors;
-									},
-									get tone() {
-										return state().engine.status === "running" ? "success" : "muted";
-									}
-								});
-							}
-						}),
-						component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Engine",
-							get subtitle() {
-								return state().engine.version ? `${statusLabel(state().engine.status)} · ${state().engine.version}` : statusLabel(state().engine.status);
-							},
-							get right() {
-								return state().engine.port ? (() => {
-									const __nsh_hv1 = element("text");
-									bindProp(__nsh_hv1, "style", () => ({
-										fontSize: 12.5,
-										color: props.colors.muted
-									}));
-									const __nsh_hv2 = text("порт ");
-									append(__nsh_hv1, __nsh_hv2);
-									insert(__nsh_hv1, () => state().engine.port);
-									return __nsh_hv1;
-								})() : null;
-							}
-						}),
-						component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Обновления",
-							get subtitle() {
-								return updateSubtitle(state().updates);
-							},
-							get right() {
-								return component(UpdateAction, merge(props, { get updates() {
-									return state().updates;
-								} }));
-							}
-						}),
-						component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Mundus Manager",
-							get subtitle() {
-								return state().product.bundleId ?? "";
-							},
-							get right() {
-								return (() => {
-									const __nsh_hv3 = element("text");
-									bindProp(__nsh_hv3, "style", () => ({
-										fontSize: 12.5,
-										color: props.colors.muted
-									}));
-									const __nsh_hv4 = text("менеджер");
-									append(__nsh_hv3, __nsh_hv4);
-									return __nsh_hv3;
-								})();
-							},
-							last: true
-						})
-					];
-				}
-			}), (() => {
-				const __nsh_hv5 = element("text");
-				bindProp(__nsh_hv5, "style", () => ({
-					fontSize: 12,
-					color: props.colors.faint
-				}));
-				const __nsh_hv6 = text("© Yoso Industries 2025–2026");
-				append(__nsh_hv5, __nsh_hv6);
-				return __nsh_hv5;
-			})()];
-		}
-	});
-}
-function StoragePage(props) {
-	const state = () => props.state();
-	const backups = () => state().backups;
-	return component(Page, {
-		get colors() {
-			return props.colors;
-		},
-		title: "Хранилище",
-		get children() {
-			return [(() => {
-				const __nsh_hv7 = element("view");
-				insert(__nsh_hv7, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Данные";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return [component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Папка данных",
-							get subtitle() {
-								return state().storage.dataDir;
-							}
-						}), component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Размер базы",
-							get subtitle() {
-								return state().storage.size || "неизвестен";
-							},
-							last: true
-						})];
-					}
-				})]);
-				return __nsh_hv7;
-			})(), (() => {
-				const __nsh_hv8 = element("view");
-				insert(__nsh_hv8, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Резервные копии";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return [() => backups().length ? backups().map((backup, index, list) => component(CardRow, {
-							get key() {
-								return backup.id;
-							},
-							get colors() {
-								return props.colors;
-							},
-							get title() {
-								return backup.id;
-							},
-							get subtitle() {
-								return [stamp(backup.modified), backup.size].filter(Boolean).join(" · ");
-							},
-							get last() {
-								return index === list.length - 1;
-							},
-							get right() {
-								return component(PillButton, {
-									get colors() {
-										return props.colors;
-									},
-									tone: "danger",
-									label: "Восстановить",
-									onPress: () => props.onCommand("backups.restore", { id: backup.id })
-								});
-							}
-						})) : component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Копий нет",
-							subtitle: "Engine ещё не сделал ни одной",
-							last: true
-						}), component(CardRow, {
-							get colors() {
-								return props.colors;
-							},
-							title: "Сделать копию сейчас",
-							subtitle: "Снимок базы рядом с данными Engine",
-							last: true,
-							get right() {
-								return component(PillButton, {
-									get colors() {
-										return props.colors;
-									},
-									tone: "accent",
-									label: "Создать",
-									onPress: () => props.onCommand("backups.create")
-								});
-							}
-						})];
-					}
-				})]);
-				return __nsh_hv8;
-			})()];
-		}
-	});
-}
 function ActivityPage(props) {
 	const usage = () => props.state().usage;
 	return component(Page, {
@@ -2014,8 +1741,8 @@ function ActivityPage(props) {
 		title: "Активность",
 		get children() {
 			return [(() => {
-				const __nsh_hv9 = element("view");
-				insert(__nsh_hv9, [component(SectionLabel, {
+				const __nsh_hv0 = element("view");
+				insert(__nsh_hv0, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2047,10 +1774,10 @@ function ActivityPage(props) {
 						})];
 					}
 				})]);
-				return __nsh_hv9;
+				return __nsh_hv0;
 			})(), (() => {
-				const __nsh_hv10 = element("view");
-				insert(__nsh_hv10, [component(SectionLabel, {
+				const __nsh_hv1 = element("view");
+				insert(__nsh_hv1, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2083,12 +1810,14 @@ function ActivityPage(props) {
 								return props.colors;
 							},
 							title: "Пока нечего показать",
-							subtitle: "Учёт активности выключен или пуст",
+							get subtitle() {
+								return platform() === "darwin" ? "Движок пока считает активность только на Windows" : "Учёт активности выключен или пуст";
+							},
 							last: true
 						});
 					}
 				})]);
-				return __nsh_hv10;
+				return __nsh_hv1;
 			})()];
 		}
 	});
@@ -2102,8 +1831,8 @@ function PreferencesPage(props) {
 		title: "Настройки",
 		get children() {
 			return (() => {
-				const __nsh_hv11 = element("view");
-				insert(__nsh_hv11, [component(SectionLabel, {
+				const __nsh_hv2 = element("view");
+				insert(__nsh_hv2, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2155,8 +1884,426 @@ function PreferencesPage(props) {
 						})];
 					}
 				})]);
-				return __nsh_hv11;
+				return __nsh_hv2;
 			})();
+		}
+	});
+}
+
+//#endregion
+//#region pages/storage.tsx
+/**
+* The storage overview of the old Manager: one bar, one row per part, and a
+* press that opens a part to show what is inside it. The bar is the page's
+* index — the same colour marks a segment and its row.
+*/
+/** One colour per part, as the old Manager had them. Stable by id, so a part
+* keeps its colour when the sizes move. */
+function partColor(id) {
+	switch (id) {
+		case "database":
+		case "objects": return "#f09c0e";
+		case "backups":
+		case "sqlite_reserved":
+		case "free_pages": return "#d9b852";
+		case "dictation_models":
+		case "types": return "#9b87db";
+		case "packages":
+		case "sync": return "#659bc8";
+		case "updates": return "#80ab73";
+		case "file_index":
+		case "search_index": return "#65b9b0";
+		case "app_index":
+		case "migrations": return "#b79a7e";
+		case "installations":
+		case "links": return "#ce8293";
+		case "cache":
+		case "local_state": return "#88acbe";
+		case "logs": return "#a7a7a7";
+		case "settings":
+		case "integrations": return "#ab9cb8";
+		case "runtime_state":
+		case "schema": return "#8f9b7a";
+		case "recordings":
+		case "usage_tracker": return "#d79067";
+		default: return id.startsWith("database_file") ? "#88acbe" : "#89919b";
+	}
+}
+/** When a backup was taken, as a list row reads it. */
+function stamp(milliseconds) {
+	if (!milliseconds) return "";
+	const date = new Date(milliseconds);
+	const day = String(date.getDate()).padStart(2, "0");
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const hours = String(date.getHours()).padStart(2, "0");
+	const rest = String(date.getMinutes()).padStart(2, "0");
+	return `${day}.${month}.${date.getFullYear()} · ${hours}:${rest}`;
+}
+/** Bytes as a row reads them: a decimal unit and one significance step. */
+function sizeText(bytes) {
+	const units = [
+		"Б",
+		"КБ",
+		"МБ",
+		"ГБ",
+		"ТБ"
+	];
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1e3 && unit < units.length - 1) {
+		value /= 1e3;
+		unit += 1;
+	}
+	if (unit === 0) return `${bytes} Б`;
+	return value >= 10 ? `${Math.round(value)} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
+}
+/** Biggest first, so the bar leads with what fills the disk. */
+function sorted(parts) {
+	return [...parts].sort((left, right) => right.bytes - left.bytes);
+}
+/** The bar's segments. In the database scope the bar shows the database's own
+* files instead of the database as one part. */
+function segments(parts, databaseOnly) {
+	if (!databaseOnly) return sorted(parts);
+	const database = parts.find((part) => part.id === "database");
+	if (!database) return [];
+	const items = (database.detail ?? []).map((item, index) => ({
+		...item,
+		id: item.id || `database_file_${index}`
+	}));
+	if (items.length === 0) return [database];
+	const attributed = items.reduce((sum, item) => sum + item.bytes, 0);
+	const remainder = database.bytes - attributed;
+	if (remainder > 0) items.push({
+		id: "sqlite_reserved",
+		label: "Журнал и резерв SQLite",
+		description: "Журнал изменений, память координации и свободные страницы SQLite.",
+		bytes: remainder,
+		size: sizeText(remainder)
+	});
+	return sorted(items);
+}
+const databaseOnly = signal(false);
+const openIds = signal([]);
+function toggle(id) {
+	const open = openIds();
+	openIds.set(open.includes(id) ? open.filter((entry) => entry !== id) : [...open, id]);
+}
+function StoragePage(props) {
+	const state = () => props.state();
+	const parts = () => segments(state().storage.parts, databaseOnly());
+	const total = () => parts().reduce((sum, part) => sum + part.bytes, 0);
+	const open = (id) => openIds().includes(id);
+	return component(Page, {
+		get colors() {
+			return props.colors;
+		},
+		title: "Хранилище",
+		get children() {
+			return [
+				(() => {
+					const __nsh_hv0 = element("view");
+					prop(__nsh_hv0, "class", "flex-row");
+					prop(__nsh_hv0, "style", { gap: 8 });
+					insert(__nsh_hv0, [component(PillButton, {
+						get colors() {
+							return props.colors;
+						},
+						get tone() {
+							return databaseOnly() ? void 0 : "accent";
+						},
+						label: "Все",
+						onPress: () => databaseOnly.set(false)
+					}), component(PillButton, {
+						get colors() {
+							return props.colors;
+						},
+						get tone() {
+							return databaseOnly() ? "accent" : void 0;
+						},
+						label: "База данных",
+						onPress: () => databaseOnly.set(true)
+					})]);
+					return __nsh_hv0;
+				})(),
+				component(Card, {
+					get colors() {
+						return props.colors;
+					},
+					padded: true,
+					get children() {
+						return [
+							(() => {
+								const __nsh_hv1 = element("view");
+								prop(__nsh_hv1, "style", {
+									gap: 4,
+									marginBottom: 12
+								});
+								const __nsh_hv2 = element("text");
+								bindProp(__nsh_hv2, "style", () => ({
+									fontSize: 28,
+									lineHeight: 34,
+									fontWeight: 600,
+									color: props.colors.foreground
+								}));
+								insert(__nsh_hv2, () => sizeText(total()));
+								const __nsh_hv3 = element("text");
+								bindProp(__nsh_hv3, "style", () => ({
+									fontSize: 12,
+									lineHeight: 16,
+									color: props.colors.muted
+								}));
+								insert(__nsh_hv3, () => databaseOnly() ? "Содержимое рабочей базы ARK и журнал SQLite" : "Установки, данные и локальные ИИ-модели Mundus");
+								append(__nsh_hv1, __nsh_hv2);
+								append(__nsh_hv1, __nsh_hv3);
+								return __nsh_hv1;
+							})(),
+							(() => {
+								const __nsh_hv4 = element("view");
+								prop(__nsh_hv4, "class", "flex-row");
+								prop(__nsh_hv4, "style", {
+									height: 27,
+									gap: 2,
+									marginBottom: 14
+								});
+								insert(__nsh_hv4, () => parts().map((part) => (() => {
+									const __nsh_hv5 = element("view");
+									bindProp(__nsh_hv5, "key", () => part.id);
+									bindProp(__nsh_hv5, "style", () => ({
+										flexGrow: total() > 0 ? part.bytes / total() * 100 : 1,
+										minWidth: 4,
+										height: 27,
+										borderRadius: 5,
+										backgroundColor: partColor(part.id)
+									}));
+									prop(__nsh_hv5, "hoverStyle", { opacity: .72 });
+									bindProp(__nsh_hv5, "tooltip", () => (() => {
+										const __nsh_hv6 = element("text");
+										prop(__nsh_hv6, "style", {
+											fontSize: 12,
+											color: "#ffffff"
+										});
+										insert(__nsh_hv6, () => `${part.label}: ${sizeText(part.bytes)}`);
+										return __nsh_hv6;
+									})());
+									prop(__nsh_hv5, "onPress", () => {
+										const id = part.id;
+										if (!open(id) && part.detail?.length) toggle(id);
+									});
+									return __nsh_hv5;
+								})()));
+								return __nsh_hv4;
+							})(),
+							(() => {
+								const __nsh_hv7 = element("view");
+								insert(__nsh_hv7, () => parts().map((part) => (() => {
+									const __nsh_hv8 = element("view");
+									bindProp(__nsh_hv8, "key", () => part.id);
+									const __nsh_hv9 = element("view");
+									prop(__nsh_hv9, "class", "flex-row items-center");
+									prop(__nsh_hv9, "style", {
+										gap: 10,
+										paddingVertical: 9,
+										borderRadius: 8,
+										paddingHorizontal: 6
+									});
+									prop(__nsh_hv9, "hoverStyle", { backgroundColor: "rgba(255,255,255,0.05)" });
+									prop(__nsh_hv9, "onPress", () => {
+										if (part.detail?.length) toggle(part.id);
+									});
+									const __nsh_hv10 = element("view");
+									bindProp(__nsh_hv10, "style", () => ({
+										width: 16,
+										height: 16,
+										borderRadius: 8,
+										backgroundColor: partColor(part.id)
+									}));
+									const __nsh_hv11 = element("view");
+									prop(__nsh_hv11, "style", {
+										flexGrow: 1,
+										flexShrink: 1,
+										minWidth: 0
+									});
+									const __nsh_hv12 = element("text");
+									bindProp(__nsh_hv12, "style", () => ({
+										fontSize: 13,
+										lineHeight: 18,
+										color: props.colors.foreground
+									}));
+									insert(__nsh_hv12, () => part.label);
+									append(__nsh_hv11, __nsh_hv12);
+									const __nsh_hv13 = element("text");
+									prop(__nsh_hv13, "class", "font-mono");
+									bindProp(__nsh_hv13, "style", () => ({
+										fontSize: 12.5,
+										color: props.colors.muted
+									}));
+									insert(__nsh_hv13, () => sizeText(part.bytes));
+									append(__nsh_hv9, __nsh_hv10);
+									append(__nsh_hv9, __nsh_hv11);
+									append(__nsh_hv9, __nsh_hv13);
+									append(__nsh_hv8, __nsh_hv9);
+									insert(__nsh_hv8, () => open(part.id) && part.detail?.length ? (() => {
+										const __nsh_hv14 = element("view");
+										prop(__nsh_hv14, "style", {
+											paddingLeft: 32,
+											paddingBottom: 8
+										});
+										insert(__nsh_hv14, () => part.detail.map((item, index) => (() => {
+											const __nsh_hv15 = element("view");
+											bindProp(__nsh_hv15, "key", () => `${part.id}-${item.id}-${index}`);
+											prop(__nsh_hv15, "class", "flex-row items-center");
+											prop(__nsh_hv15, "style", {
+												gap: 10,
+												paddingVertical: 4
+											});
+											const __nsh_hv16 = element("view");
+											prop(__nsh_hv16, "style", {
+												flexGrow: 1,
+												flexShrink: 1,
+												minWidth: 0
+											});
+											const __nsh_hv17 = element("text");
+											bindProp(__nsh_hv17, "style", () => ({
+												fontSize: 12,
+												lineHeight: 16,
+												color: props.colors.muted
+											}));
+											insert(__nsh_hv17, () => item.label || item.id);
+											append(__nsh_hv16, __nsh_hv17);
+											const __nsh_hv18 = element("text");
+											prop(__nsh_hv18, "class", "font-mono");
+											bindProp(__nsh_hv18, "style", () => ({
+												fontSize: 12,
+												color: props.colors.muted
+											}));
+											insert(__nsh_hv18, () => sizeText(item.bytes));
+											append(__nsh_hv15, __nsh_hv16);
+											append(__nsh_hv15, __nsh_hv18);
+											return __nsh_hv15;
+										})()));
+										return __nsh_hv14;
+									})() : null);
+									return __nsh_hv8;
+								})()));
+								return __nsh_hv7;
+							})()
+						];
+					}
+				}),
+				(() => {
+					const __nsh_hv19 = element("view");
+					insert(__nsh_hv19, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Данные";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return (() => {
+								const __nsh_hv20 = element("view");
+								prop(__nsh_hv20, "style", {
+									paddingVertical: 10,
+									gap: 2
+								});
+								const __nsh_hv21 = element("text");
+								bindProp(__nsh_hv21, "style", () => ({
+									fontSize: 13,
+									lineHeight: 18,
+									color: props.colors.foreground
+								}));
+								const __nsh_hv22 = text("Папка данных");
+								append(__nsh_hv21, __nsh_hv22);
+								const __nsh_hv23 = element("text");
+								bindProp(__nsh_hv23, "style", () => ({
+									fontSize: 11.5,
+									lineHeight: 16,
+									color: props.colors.muted
+								}));
+								insert(__nsh_hv23, () => state().storage.dataDir);
+								append(__nsh_hv20, __nsh_hv21);
+								append(__nsh_hv20, __nsh_hv23);
+								return __nsh_hv20;
+							})();
+						}
+					})]);
+					return __nsh_hv19;
+				})(),
+				(() => {
+					const __nsh_hv24 = element("view");
+					insert(__nsh_hv24, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Резервные копии";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return [() => state().backups.length ? state().backups.map((backup, index, list) => component(CardRow, {
+								get key() {
+									return backup.id;
+								},
+								get colors() {
+									return props.colors;
+								},
+								get title() {
+									return backup.id;
+								},
+								get subtitle() {
+									return [stamp(backup.modified), backup.size].filter(Boolean).join(" · ");
+								},
+								get last() {
+									return index === list.length - 1;
+								},
+								get right() {
+									return component(PillButton, {
+										get colors() {
+											return props.colors;
+										},
+										tone: "danger",
+										label: "Восстановить",
+										onPress: () => props.onCommand("backups.restore", { id: backup.id })
+									});
+								}
+							})) : component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								title: "Копий нет",
+								subtitle: "Engine ещё не сделал ни одной",
+								last: true
+							}), component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								title: "Сделать копию сейчас",
+								subtitle: "Снимок базы рядом с данными Engine",
+								last: true,
+								get right() {
+									return component(PillButton, {
+										get colors() {
+											return props.colors;
+										},
+										tone: "accent",
+										label: "Создать",
+										onPress: () => props.onCommand("backups.create")
+									});
+								}
+							})];
+						}
+					})]);
+					return __nsh_hv24;
+				})()
+			];
 		}
 	});
 }
@@ -2511,7 +2658,7 @@ function PickerRow(props) {
 		get children() {
 			return (() => {
 				const __nsh_hv1 = element("view");
-				prop(__nsh_hv1, "class", "flex-row");
+				prop(__nsh_hv1, "class", "w-full flex-row justify-end");
 				insert(__nsh_hv1, component(PillButton, {
 					colors,
 					tone: "neutral",
@@ -2599,7 +2746,141 @@ function PickerModal(props) {
 const LABEL_WIDTH = 210;
 
 //#endregion
-//#region pages/plugins.tsx
+//#region pages/plugin-hotkey.tsx
+/** `FnFn` is a double tap, shown as one block: `Fn + Fn`. */
+function hotkeyLabel(value) {
+	const text = value.trim();
+	if (!text) return "Не задано";
+	if (text.includes("+")) return text.split("+").map((part) => part.trim()).filter(Boolean).join(" + ");
+	const half = Math.floor(text.length / 2);
+	if (text.length >= 2 && text.length % 2 === 0 && text.slice(0, half) === text.slice(half)) return `${text.slice(0, half)} + ${text.slice(half)}`;
+	return text;
+}
+/** The glyph of each modifier the Engine names in a hotkey string. */
+const KEYCAPS = /* @__PURE__ */ new Map([
+	["ctrl", "⌃"],
+	["alt", "⌥"],
+	["shift", "⇧"],
+	["cmd", "⌘"],
+	["fn", "Fn"]
+]);
+/** A modifier's glyph, or the name itself when it has none. */
+function keycap(name) {
+	return KEYCAPS.get(name) ?? name;
+}
+function Keycap(props) {
+	return (() => {
+		const __nsh_hv0 = element("view");
+		prop(__nsh_hv0, "class", "items-center justify-center");
+		bindProp(__nsh_hv0, "style", () => ({
+			minWidth: 26,
+			height: 26,
+			paddingLeft: 6,
+			paddingRight: 6,
+			borderRadius: 7,
+			backgroundColor: props.dim ? props.colors.card : props.colors.background,
+			borderWidth: 1,
+			borderColor: props.colors.border
+		}));
+		const __nsh_hv1 = element("text");
+		bindProp(__nsh_hv1, "style", () => ({
+			fontSize: 13,
+			color: props.dim ? props.colors.faint : props.colors.foreground
+		}));
+		insert(__nsh_hv1, () => props.label);
+		append(__nsh_hv0, __nsh_hv1);
+		return __nsh_hv0;
+	})();
+}
+/**
+* The hotkey picker, the way Raycast shows one: a chip that becomes a small
+* keycap panel while the person presses a combination. Nothing is typed — the
+* Manager's own event tap reads the keys, so the result is the same whether
+* this window has the focus or not.
+*/
+function HotkeyRecorder(props) {
+	if (props.capturing) return (() => {
+		const __nsh_hv2 = element("view");
+		prop(__nsh_hv2, "class", "w-full flex-col items-end");
+		prop(__nsh_hv2, "style", { rowGap: 6 });
+		const __nsh_hv3 = element("view");
+		prop(__nsh_hv3, "class", "flex-row items-center");
+		bindProp(__nsh_hv3, "style", () => ({
+			columnGap: 6,
+			padding: 6,
+			borderRadius: 10,
+			backgroundColor: props.colors.raised,
+			borderWidth: 1,
+			borderColor: props.colors.accent
+		}));
+		insert(__nsh_hv3, () => props.held.length ? props.held.map((key) => component(Keycap, {
+			key,
+			get label() {
+				return keycap(key);
+			},
+			get colors() {
+				return props.colors;
+			}
+		})) : (() => {
+			const __nsh_hv4 = element("text");
+			bindProp(__nsh_hv4, "style", () => ({
+				fontSize: 12,
+				color: props.colors.muted,
+				paddingLeft: 6,
+				paddingRight: 6
+			}));
+			const __nsh_hv5 = text("Нажми сочетание");
+			append(__nsh_hv4, __nsh_hv5);
+			return __nsh_hv4;
+		})());
+		const __nsh_hv6 = element("text");
+		bindProp(__nsh_hv6, "style", () => ({
+			fontSize: 11,
+			color: props.colors.muted
+		}));
+		const __nsh_hv7 = text("Esc — отмена");
+		append(__nsh_hv6, __nsh_hv7);
+		append(__nsh_hv2, __nsh_hv3);
+		append(__nsh_hv2, __nsh_hv6);
+		return __nsh_hv2;
+	})();
+	return (() => {
+		const __nsh_hv8 = element("view");
+		prop(__nsh_hv8, "class", "w-full flex-col items-end");
+		prop(__nsh_hv8, "style", { rowGap: 4 });
+		const __nsh_hv9 = element("text");
+		bindProp(__nsh_hv9, "onPress", () => props.onStart);
+		bindProp(__nsh_hv9, "style", () => ({
+			fontSize: 12,
+			color: props.colors.foreground,
+			backgroundColor: props.colors.raised,
+			paddingLeft: 10,
+			paddingRight: 10,
+			paddingTop: 4,
+			paddingBottom: 4,
+			borderRadius: 8,
+			borderWidth: 1,
+			borderColor: props.colors.border
+		}));
+		insert(__nsh_hv9, () => hotkeyLabel(props.value));
+		append(__nsh_hv8, __nsh_hv9);
+		insert(__nsh_hv8, () => props.listenAccess ? null : (() => {
+			const __nsh_hv10 = element("text");
+			bindProp(__nsh_hv10, "onPress", () => props.onOpenSettings);
+			bindProp(__nsh_hv10, "style", () => ({
+				fontSize: 11,
+				color: props.colors.muted
+			}));
+			const __nsh_hv11 = text("Хоткей молчит: нет «Мониторинга ввода» — открыть настройки");
+			append(__nsh_hv10, __nsh_hv11);
+			return __nsh_hv10;
+		})());
+		return __nsh_hv8;
+	})();
+}
+
+//#endregion
+//#region pages/plugin-rows.tsx
 function versionLine(plugin) {
 	const parts = [];
 	if (plugin.version) parts.push(`Версия ${plugin.version}`);
@@ -2694,6 +2975,83 @@ function AvailableRow(props) {
 		}
 	});
 }
+
+//#endregion
+//#region pages/plugin-stats.tsx
+/** Thousands separated by a space: `13 205`, not `13205`. */
+function grouped(value) {
+	const digits = String(Math.abs(Math.round(value)));
+	let out = "";
+	for (let at = 0; at < digits.length; at += 1) {
+		if (at > 0 && (digits.length - at) % 3 === 0) out += " ";
+		out += digits[at];
+	}
+	return value < 0 ? `-${out}` : out;
+}
+/** Seconds as time the way a person reads it: «2 ч 5 мин», «40 сек». */
+function asDuration(seconds) {
+	const total = Math.max(0, Math.round(seconds));
+	const hours = Math.floor(total / 3600);
+	const minutes = Math.floor(total % 3600 / 60);
+	if (hours > 0) return `${grouped(hours)} ч ${minutes} мин`;
+	if (minutes > 0) return `${minutes} мин`;
+	return `${total} сек`;
+}
+/** One number as the manifest asked for it to be printed. */
+function statValue(field) {
+	if (field.value === null || field.value === void 0) return "—";
+	const number = Number(field.value);
+	if (!Number.isFinite(number)) return String(field.value);
+	if (field.format === "duration") return asDuration(number);
+	return grouped(number);
+}
+/** The numbers a plugin reports, resolved by the Engine: a page that names no
+* operation can still show any plugin's statistics. */
+function StatsBlock(props) {
+	const { colors, stats } = props;
+	if (!stats.fields.length) return null;
+	return (() => {
+		const __nsh_hv0 = element("view");
+		insert(__nsh_hv0, [component(SectionLabel, {
+			colors,
+			get children() {
+				return stats.title || "Статистика";
+			}
+		}), component(Card, {
+			colors,
+			get children() {
+				return stats.fields.map((field, index) => component(FieldRow, {
+					get key() {
+						return field.key;
+					},
+					colors,
+					get label() {
+						return field.label;
+					},
+					labelWidth: 210,
+					get last() {
+						return index === stats.fields.length - 1;
+					},
+					get children() {
+						return (() => {
+							const __nsh_hv1 = element("text");
+							bindProp(__nsh_hv1, "style", () => ({
+								fontSize: 15,
+								color: colors.foreground
+							}));
+							insert(__nsh_hv1, () => statValue(field));
+							return __nsh_hv1;
+						})();
+					}
+				}));
+			}
+		})]);
+		return __nsh_hv0;
+	})();
+}
+
+//#endregion
+//#region pages/plugins.tsx
 /**
 * What Mundus can gain and what it already has.
 *
@@ -2715,8 +3073,8 @@ function PluginsPage(props) {
 		title: "Плагины",
 		get children() {
 			return [(() => {
-				const __nsh_hv1 = element("view");
-				insert(__nsh_hv1, [component(SectionLabel, {
+				const __nsh_hv0 = element("view");
+				insert(__nsh_hv0, [component(SectionLabel, {
 					get colors() {
 						return props.colors;
 					},
@@ -2759,24 +3117,24 @@ function PluginsPage(props) {
 						});
 					}
 				})]);
-				return __nsh_hv1;
+				return __nsh_hv0;
 			})(), (() => {
-				const __nsh_hv2 = element("view");
-				insert(__nsh_hv2, [
+				const __nsh_hv1 = element("view");
+				insert(__nsh_hv1, [
 					component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
 						get right() {
 							return state().catalog.stale ? (() => {
-								const __nsh_hv3 = element("text");
-								bindProp(__nsh_hv3, "style", () => ({
+								const __nsh_hv2 = element("text");
+								bindProp(__nsh_hv2, "style", () => ({
 									fontSize: 12,
 									color: props.colors.muted
 								}));
-								const __nsh_hv4 = text("Список сохранён: Engine не смог обновить его");
-								append(__nsh_hv3, __nsh_hv4);
-								return __nsh_hv3;
+								const __nsh_hv3 = text("Список сохранён: Engine не смог обновить его");
+								append(__nsh_hv2, __nsh_hv3);
+								return __nsh_hv2;
 							})() : null;
 						},
 						get children() {
@@ -2822,24 +3180,24 @@ function PluginsPage(props) {
 						}
 					}),
 					() => rest().length ? (() => {
-						const __nsh_hv5 = element("view");
-						prop(__nsh_hv5, "style", {
+						const __nsh_hv4 = element("view");
+						prop(__nsh_hv4, "style", {
 							marginTop: 8,
 							paddingLeft: 12
 						});
-						const __nsh_hv6 = element("text");
-						bindProp(__nsh_hv6, "style", () => ({
+						const __nsh_hv5 = element("text");
+						bindProp(__nsh_hv5, "style", () => ({
 							fontSize: 12,
 							lineHeight: 16,
 							color: props.colors.muted
 						}));
-						const __nsh_hv7 = text("Загрузка идёт в фоне — плагин появится в списке выше, когда Engine его установит.");
-						append(__nsh_hv6, __nsh_hv7);
+						const __nsh_hv6 = text("Загрузка идёт в фоне — плагин появится в списке выше, когда Engine его установит.");
 						append(__nsh_hv5, __nsh_hv6);
-						return __nsh_hv5;
+						append(__nsh_hv4, __nsh_hv5);
+						return __nsh_hv4;
 					})() : null
 				]);
-				return __nsh_hv2;
+				return __nsh_hv1;
 			})()];
 		}
 	});
@@ -2889,7 +3247,17 @@ function PluginPage(props) {
 			values: {}
 		});
 	};
+	effect(() => {
+		const captured = hotkeyCaptured();
+		if (!captured) return;
+		hotkeyCaptured.set("");
+		send("hotkey", captured);
+	});
 	const plugin = () => props.state().plugins.installed.find((row) => row.id === props.id);
+	const stats = () => {
+		const row = current();
+		return row && row.id === props.id ? row.stats ?? null : null;
+	};
 	const shown = manifest();
 	/** The choice whose list is open, if any: `picking` holds its key. */
 	const pickingField = () => {
@@ -2943,9 +3311,9 @@ function PluginPage(props) {
 		},
 		get actions() {
 			return dirty() ? (() => {
-				const __nsh_hv8 = element("view");
-				prop(__nsh_hv8, "style", { marginLeft: 12 });
-				insert(__nsh_hv8, component(PillButton, {
+				const __nsh_hv7 = element("view");
+				prop(__nsh_hv7, "style", { marginLeft: 12 });
+				insert(__nsh_hv7, component(PillButton, {
 					get colors() {
 						return props.colors;
 					},
@@ -2953,220 +3321,268 @@ function PluginPage(props) {
 					label: "Сохранить",
 					onPress: save
 				}));
-				return __nsh_hv8;
+				return __nsh_hv7;
 			})() : null;
 		},
 		get children() {
-			return [(() => {
-				const __nsh_hv9 = element("view");
-				insert(__nsh_hv9, [component(SectionLabel, {
+			return [
+				(() => {
+					const __nsh_hv8 = element("view");
+					insert(__nsh_hv8, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Плагин";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								icon: "plug",
+								get accent() {
+									return props.colors.accent;
+								},
+								get accentTo() {
+									return props.colors.accent;
+								},
+								get title() {
+									return shown.name;
+								},
+								get subtitle() {
+									return shown.summary;
+								},
+								last: true,
+								get right() {
+									return (() => {
+										const __nsh_hv9 = element("view");
+										prop(__nsh_hv9, "class", "flex-row items-center gap-2");
+										insert(__nsh_hv9, [() => plugin()?.running ? component(StatusDot, { get colors() {
+											return props.colors;
+										} }) : null, () => plugin()?.executable ? component(PillButton, {
+											get colors() {
+												return props.colors;
+											},
+											tone: "neutral",
+											label: "Открыть",
+											onPress: () => props.onCommand("plugins.launch", { id: props.id })
+										}) : null]);
+										return __nsh_hv9;
+									})();
+								}
+							});
+						}
+					})]);
+					return __nsh_hv8;
+				})(),
+				() => stats() ? component(StatsBlock, {
+					get stats() {
+						return stats();
+					},
 					get colors() {
 						return props.colors;
-					},
-					get children() {
-						return "Плагин";
 					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return component(CardRow, {
+				}) : null,
+				(() => {
+					const __nsh_hv10 = element("view");
+					insert(__nsh_hv10, [
+						component(SectionLabel, {
 							get colors() {
 								return props.colors;
 							},
-							icon: "plug",
-							get accent() {
-								return props.colors.accent;
-							},
-							get accentTo() {
-								return props.colors.accent;
-							},
-							get title() {
-								return shown.name;
-							},
-							get subtitle() {
-								return shown.summary;
-							},
-							last: true,
-							get right() {
-								return (() => {
-									const __nsh_hv10 = element("view");
-									prop(__nsh_hv10, "class", "flex-row items-center gap-2");
-									insert(__nsh_hv10, [() => plugin()?.running ? component(StatusDot, { get colors() {
-										return props.colors;
-									} }) : null, component(PillButton, {
-										get colors() {
-											return props.colors;
-										},
-										tone: "neutral",
-										label: "Открыть",
-										onPress: () => props.onCommand("plugins.launch", { id: props.id })
-									})]);
-									return __nsh_hv10;
-								})();
+							get children() {
+								return "Настройки";
 							}
-						});
-					}
-				})]);
-				return __nsh_hv9;
-			})(), (() => {
-				const __nsh_hv11 = element("view");
-				insert(__nsh_hv11, [
-					component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Настройки";
-						}
-					}),
-					component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return shown.settings.map((field, index) => {
-								const last = index === shown.settings.length - 1;
-								const value = valueOf(field.key);
-								if (field.kind.type === "toggle") return component(CardRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get title() {
-										return field.label;
-									},
-									get subtitle() {
-										return field.hint;
-									},
-									last,
-									get right() {
-										return component(Switch, {
-											get colors() {
-												return props.colors;
-											},
-											get value() {
-												return Boolean(value);
-											},
-											get accessibilityLabel() {
-												return field.label;
-											},
-											onChange: (on) => send(field.key, on)
-										});
-									}
-								});
-								const kind = field.kind;
-								if (kind.type === "switch") return component(CardRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get title() {
-										return field.label;
-									},
-									get subtitle() {
-										return field.hint;
-									},
-									last,
-									get right() {
-										return component(Switch, {
-											get colors() {
-												return props.colors;
-											},
-											get value() {
-												return !same(kind.off, value) && Boolean(value);
-											},
-											get accessibilityLabel() {
-												return field.label;
-											},
-											onChange: (on) => send(field.key, on ? kind.on : kind.off)
-										});
-									}
-								});
-								if (kind.type === "choice") {
-									const options = kind.options;
-									if (options.length > 6) return component(PickerRow, {
+						}),
+						component(Card, {
+							get colors() {
+								return props.colors;
+							},
+							get children() {
+								return shown.settings.map((field, index) => {
+									const last = index === shown.settings.length - 1;
+									const value = valueOf(field.key);
+									if (field.kind.type === "toggle") return component(CardRow, {
 										get key() {
 											return field.key;
 										},
-										get fieldKey() {
-											return field.key;
-										},
-										get label() {
-											return field.label;
-										},
-										options,
-										value,
 										get colors() {
 											return props.colors;
 										},
-										last
-									});
-									return component(ChoiceRow, {
-										get key() {
-											return field.key;
-										},
-										get label() {
+										get title() {
 											return field.label;
 										},
-										options,
-										value,
-										get colors() {
-											return props.colors;
+										get subtitle() {
+											return field.hint;
 										},
 										last,
-										onPick: (next) => send(field.key, next)
+										get right() {
+											return component(Switch, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return Boolean(value);
+												},
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (on) => send(field.key, on)
+											});
+										}
 									});
-								}
-								const numeric = field.kind.type === "number";
-								return component(FieldRow, {
-									get key() {
-										return field.key;
-									},
-									get colors() {
-										return props.colors;
-									},
-									get label() {
-										return field.label;
-									},
-									last,
-									labelWidth: 210,
-									get children() {
-										return component(TextInput, {
+									const kind = field.kind;
+									if (kind.type === "switch") return component(CardRow, {
+										get key() {
+											return field.key;
+										},
+										get colors() {
+											return props.colors;
+										},
+										get title() {
+											return field.label;
+										},
+										get subtitle() {
+											return field.hint;
+										},
+										last,
+										get right() {
+											return component(Switch, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return !same(kind.off, value) && Boolean(value);
+												},
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (on) => send(field.key, on ? kind.on : kind.off)
+											});
+										}
+									});
+									if (kind.type === "choice") {
+										const options = kind.options;
+										if (field.key === "localModel" || options.length > 6) return component(PickerRow, {
+											get key() {
+												return field.key;
+											},
+											get fieldKey() {
+												return field.key;
+											},
+											get label() {
+												return field.label;
+											},
+											options,
+											value,
 											get colors() {
 												return props.colors;
 											},
-											get value() {
-												return String(value ?? "");
+											last
+										});
+										return component(ChoiceRow, {
+											get key() {
+												return field.key;
 											},
-											placeholder: numeric ? "Число" : "Не задано",
-											get accessibilityLabel() {
+											get label() {
 												return field.label;
 											},
-											onChange: (text) => draft(field.key, numeric ? Number(text) : text),
-											onSubmit: () => {
-												const next = valueOf(field.key);
-												if (next !== void 0) send(field.key, next);
-												drafts.set({
-													id: props.id,
-													values: {}
+											options,
+											value,
+											get colors() {
+												return props.colors;
+											},
+											last,
+											onPick: (next) => send(field.key, next)
+										});
+									}
+									const numeric = field.kind.type === "number";
+									if (field.key === "hotkey") {
+										const hotkey = () => props.state().hotkey;
+										return component(FieldRow, {
+											get key() {
+												return field.key;
+											},
+											get colors() {
+												return props.colors;
+											},
+											get label() {
+												return field.label;
+											},
+											last,
+											labelWidth: 210,
+											get children() {
+												return component(HotkeyRecorder, {
+													get value() {
+														return String(value ?? "");
+													},
+													get colors() {
+														return props.colors;
+													},
+													get capturing() {
+														return hotkey().capturing;
+													},
+													get held() {
+														return hotkey().held;
+													},
+													get listenAccess() {
+														return hotkey().listenAccess;
+													},
+													onStart: () => props.onCommand("hotkey.capture"),
+													onOpenSettings: () => props.onCommand("hotkey.settings")
 												});
 											}
 										});
 									}
+									return component(FieldRow, {
+										get key() {
+											return field.key;
+										},
+										get colors() {
+											return props.colors;
+										},
+										get label() {
+											return field.label;
+										},
+										last,
+										labelWidth: 210,
+										get children() {
+											return component(TextInput, {
+												get colors() {
+													return props.colors;
+												},
+												get value() {
+													return String(value ?? "");
+												},
+												placeholder: numeric ? "Число" : "Не задано",
+												get accessibilityLabel() {
+													return field.label;
+												},
+												onChange: (text) => draft(field.key, numeric ? Number(text) : text),
+												onSubmit: () => {
+													const next = valueOf(field.key);
+													if (next !== void 0) send(field.key, next);
+													drafts.set({
+														id: props.id,
+														values: {}
+													});
+												}
+											});
+										}
+									});
 								});
-							});
-						}
-					}),
-					() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
-				]);
-				return __nsh_hv11;
-			})()];
+							}
+						}),
+						() => shown.settings.length ? null : note(props.colors, "У этого плагина нет настроек.")
+					]);
+					return __nsh_hv10;
+				})()
+			];
 		}
 	}), () => (() => {
 		const picked = pickingField();
@@ -3538,7 +3954,6 @@ function BrowserPage(props) {
 //#region App.tsx
 setup(null, "{\n  \"cssVars\": {\n    \"theme\": {\n      \"font-sans\": \"Inter\",\n      \"font-size-body\": \"13px\",\n      \"font-size-label\": \"12px\"\n    }\n  }\n}\n", null, null);
 const state = signal(globalThis.__MUNDUS_MANAGER_INITIAL__ ?? demoState);
-const route = signal(globalThis.__MUNDUS_MANAGER_ROUTE__ ?? "server");
 const search = signal("");
 const confirmStop = signal(false);
 const confirmInstall = signal(false);
@@ -3547,16 +3962,17 @@ const connectOpen = signal(false);
 const connectCode = signal("");
 const Bridge = nativeComponent("manager.bridge", {
 	props: ["route"],
-	events: ["state", "navigate"]
+	events: [
+		"state",
+		"navigate",
+		"hotkey",
+		"hotkeyState"
+	]
 });
 let session;
-/** The palette the pages wear: whichever pair of themes the Engine says is on.
-* A light mode must not paint a dark card set, or the pages would say «светлая
-* тема» over dark cards. */
-const colors = () => {
-	const { mode, light, dark } = state().appearance;
-	return (mode === "light" ? lightThemes : darkThemes).find((theme) => theme.key === (mode === "light" ? light : dark))?.colors ?? cobaltFoundry;
-};
+/** The palette the pages wear. Mundus keeps one: themes belong to the apps the
+* person runs inside it, not to the Manager's own window. */
+const colors = () => cobaltFoundry;
 function patch(next) {
 	state.set({
 		...state(),
@@ -3571,8 +3987,8 @@ function dispatch(name, args = {}) {
 	} catch {}
 }
 /**
-* What a press means. Irreversible Engine operations ask first, appearance is
-* a device-wide setting on the Engine, and everything else is a plain call.
+* What a press means. Irreversible Engine operations ask first, and everything
+* else is a plain call.
 */
 function command(name, args = {}) {
 	switch (name) {
@@ -3588,28 +4004,14 @@ function command(name, args = {}) {
 		case "connect.open":
 			connectOpen.set(true);
 			return;
-		case "appearance.theme":
-			dispatch("appearance.set", { patch: args.mode === "light" ? { light_theme: args.key } : { dark_theme: args.key } });
-			patch({ appearance: {
-				...state().appearance,
-				[args.mode === "light" ? "light" : "dark"]: String(args.key)
-			} });
-			return;
 		case "pairing.hide":
 			patch({ sync: {
 				...state().sync,
 				ownCode: ""
 			} });
 			return;
-		case "appearance.followApps":
-			dispatch("appearance.set", { patch: { follow_apps: Boolean(args.value) } });
-			patch({ appearance: {
-				...state().appearance,
-				followApps: Boolean(args.value)
-			} });
-			return;
 		case "route":
-			route.set(String(args.route));
+			go(String(args.route));
 			return;
 		default: dispatch(name, args);
 	}
@@ -3625,12 +4027,6 @@ function useHiddenChrome() {
 		height: 36
 	}));
 }
-/**
-* How far the sidebar's own top padding has to come up for its search field to
-* sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
-* it, and the field is centred in the band.
-*/
-const SIDEBAR_LIFT = settingsMetrics.sidebarTop - (36 - settingsMetrics.searchHeight) / 2;
 function renderPage(page) {
 	const props = {
 		colors: colors(),
@@ -3638,8 +4034,6 @@ function renderPage(page) {
 		onCommand: command
 	};
 	switch (page) {
-		case "about": return component(AboutPage, props);
-		case "appearance": return component(AppearancePage, props);
 		case "plugins": return component(PluginsPage, props);
 		case "integrations": return component(IntegrationsPage, props);
 		case "storage": return component(StoragePage, props);
@@ -3664,8 +4058,17 @@ function renderPage(page) {
 */
 function sidebarGroups() {
 	const installed = state().plugins.installed;
-	if (!installed.length) return navigation;
-	return [...navigation, {
+	const status = state().engine.status;
+	const caption = status === "running" ? "Работает" : status === "starting" ? "Запускается" : status === "stopping" ? "Останавливается" : "Не отвечает";
+	const groups = navigation.map((group) => ({
+		...group,
+		entries: group.entries.map((entry) => entry.route === "server" ? {
+			...entry,
+			caption
+		} : entry)
+	}));
+	if (!installed.length) return groups;
+	return [...groups, {
 		id: "plugins-installed",
 		entries: installed.map((plugin) => ({
 			route: `plugin/${plugin.id}`,
@@ -3746,10 +4149,8 @@ function App() {
 		const __nsh_hv4 = element("view");
 		prop(__nsh_hv4, "class", "absolute inset-0");
 		spread(__nsh_hv4, dragBinding());
-		const __nsh_hv5 = element("view");
-		prop(__nsh_hv5, "class", "h-full");
-		prop(__nsh_hv5, "style", { marginTop: -SIDEBAR_LIFT });
-		insert(__nsh_hv5, component(SettingsSidebar, {
+		append(__nsh_hv3, __nsh_hv4);
+		insert(__nsh_hv3, component(Sidebar, {
 			get colors() {
 				return colors();
 			},
@@ -3757,18 +4158,19 @@ function App() {
 				return sidebarGroups();
 			},
 			get current() {
-				return route();
+				return currentRoute();
 			},
 			get search() {
 				return search();
 			},
+			get topInset() {
+				return sidebarTopInset(settingsMetrics.searchHeight);
+			},
 			onSearch: (value) => search.set(value),
-			onNavigate: (next) => route.set(next)
+			onNavigate: (next) => go(next)
 		}));
-		append(__nsh_hv3, __nsh_hv4);
-		append(__nsh_hv3, __nsh_hv5);
 		append(__nsh_hv2, __nsh_hv3);
-		insert(__nsh_hv2, () => renderPage(route()));
+		insert(__nsh_hv2, () => renderPage(currentRoute()));
 		append(__nsh_hv1, __nsh_hv2);
 		insert(__nsh_hv1, component(Bridge, {
 			ref: (node) => {
@@ -3776,10 +4178,23 @@ function App() {
 				connectHost((name) => node.command(name, {}));
 			},
 			get route() {
-				return route();
+				return currentRoute();
 			},
 			onState: (next) => state.set(next),
-			onNavigate: (event) => route.set(event.route)
+			onNavigate: (event) => go(event.route),
+			onHotkey: (event) => {
+				if (event.accelerator) hotkeyCaptured.set(event.accelerator);
+			},
+			onHotkeyState: (event) => {
+				const now = state();
+				state.set({
+					...now,
+					hotkey: {
+						...now.hotkey,
+						...event
+					}
+				});
+			}
 		}), __nsh_hv2);
 		insert(__nsh_hv1, [
 			component(PairingModal, { get colors() {

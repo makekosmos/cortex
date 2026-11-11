@@ -85,6 +85,12 @@ pub(super) async fn dispatch_standard(
                 result.error = Some(error);
             }
         }
+        if rest == "settings.get" && result.ok {
+            // The numbers its page shows arrive with the manifest, already
+            // resolved: the page names no operation of its own.
+            plugin_stats(&mut result.data, &dictation_host).await;
+            plugin_model_options(&mut result.data, &dictation_host).await;
+        }
         LocalResponse {
             ok: result.ok,
             data: result.data,
@@ -257,4 +263,118 @@ async fn apply_plugin_settings(
         }
     }
     Ok(())
+}
+
+/// A model picker is not a fixed list. The field that applies through
+/// `dictation.use_local_model` gets the models the Engine can actually run:
+/// downloaded, and able to transcribe.
+async fn plugin_model_options(data: &mut Value, dictation_host: &Arc<DictationHost>) {
+    let Some(settings) = data
+        .pointer("/manifest/settings")
+        .and_then(Value::as_array)
+        .cloned()
+    else {
+        return;
+    };
+    let mut next = settings;
+    let mut changed = false;
+    for field in &mut next {
+        if field.pointer("/apply/op").and_then(Value::as_str) != Some("dictation.use_local_model") {
+            continue;
+        }
+        let answer =
+            handle_dictation_op("list_local_models", serde_json::json!({}), dictation_host).await;
+        if !answer.ok {
+            continue;
+        }
+        let command = answer
+            .data
+            .get("commandInstalled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let options: Vec<Value> = answer
+            .data
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|models| {
+                models
+                    .iter()
+                    .filter(|model| {
+                        let id = model.get("id").and_then(Value::as_str).unwrap_or("");
+                        model.get("downloaded").and_then(Value::as_bool) == Some(true)
+                            && model.get("transcriptionSupported").and_then(Value::as_bool)
+                                == Some(true)
+                            && (id.starts_with("parakeet") || command)
+                    })
+                    .map(|model| {
+                        serde_json::json!({
+                            "value": model.get("id").cloned().unwrap_or(Value::Null),
+                            "label": model.get("name").and_then(Value::as_str).unwrap_or(""),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(kind) = field.get_mut("kind") {
+            kind["options"] = Value::Array(options);
+            changed = true;
+        }
+    }
+    if changed {
+        if let Some(settings) = data.pointer_mut("/manifest/settings") {
+            *settings = Value::Array(next);
+        }
+    }
+}
+
+/// The numbers a plugin's page shows. The manifest names the operation and the
+/// fields to take from its answer; the Engine calls it and hands the page ready
+/// values, so a new plugin brings its own statistics with it.
+async fn plugin_stats(data: &mut Value, dictation_host: &Arc<DictationHost>) {
+    let Some(stats) = data
+        .get("manifest")
+        .and_then(|manifest| manifest.get("stats"))
+        .cloned()
+    else {
+        return;
+    };
+    let Some(op) = stats.get("op").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(rest) = op.strip_prefix("dictation.") else {
+        tracing::warn!(
+            op,
+            "plugins: statistics name an operation the Engine does not have"
+        );
+        return;
+    };
+    let answer = handle_dictation_op(rest, serde_json::json!({}), dictation_host).await;
+    if !answer.ok {
+        return;
+    }
+    let fields: Vec<Value> = stats
+        .get("fields")
+        .and_then(Value::as_array)
+        .map(|fields| {
+            fields
+                .iter()
+                .filter_map(|field| {
+                    let key = field.get("key").and_then(Value::as_str)?;
+                    Some(serde_json::json!({
+                        "key": key,
+                        "label": field.get("label").and_then(Value::as_str).unwrap_or(key),
+                        "format": field
+                            .get("format")
+                            .and_then(Value::as_str)
+                            .unwrap_or("number"),
+                        "value": answer.data.get(key).cloned().unwrap_or(Value::Null),
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    data["stats"] = serde_json::json!({
+        "title": stats.get("title").and_then(Value::as_str).unwrap_or(""),
+        "fields": fields,
+    });
 }

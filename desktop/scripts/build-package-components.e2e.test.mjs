@@ -51,7 +51,7 @@ test(
       "components staging must contain only manager",
     );
     const managerOut = path.join(componentsDir, "manager", "win-unpacked");
-    assert.ok(existsSync(path.join(managerOut, "Mundus Manager.exe")), "manager unpackaged output");
+    assert.ok(existsSync(path.join(managerOut, "Mundus.exe")), "manager unpackaged output");
     assert.ok(
       !existsSync(path.join(managerOut, "resources")),
       "manager component must be the GPUI exe, not an Electron package",

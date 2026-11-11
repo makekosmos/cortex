@@ -71,7 +71,7 @@ async fn mac_install_stages_the_dmg_app_over_the_running_bundle_and_relaunches()
     let fixture_app = dir.path().join("fixture/Mundus Manager.app");
     write_app(
         &fixture_app,
-        "com.kazui.mundus.manager",
+        "computer.mundus.app",
         &[("NEW_VERSION_MARKER", "99.0.0")],
     );
     let open_marker = dir.path().join("opened");
@@ -101,7 +101,7 @@ async fn mac_install_stages_the_dmg_app_over_the_running_bundle_and_relaunches()
     let installed_parent = dir.path().join("Applications");
     std::fs::create_dir(&installed_parent).unwrap();
     let installed_app = installed_parent.join("Mundus Manager.app");
-    write_app(&installed_app, "com.kazui.mundus.manager", &[]);
+    write_app(&installed_app, "computer.mundus.app", &[]);
 
     std::env::set_var(
         "PATH",

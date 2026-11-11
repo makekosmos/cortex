@@ -4,6 +4,12 @@
  * host — `nsh dev`, `nsh test`, a browser — `demoState` keeps every page
  * readable instead of blank.
  */
+import { signal } from "nsh";
+
+/** The combination the Manager's event tap read, handed to the page that asked
+ * for it: the widget shows nothing of its own while the keys are held, and the
+ * page stores the result as a setting. */
+export const hotkeyCaptured = signal("");
 /** What the bridge and the poller report: a stopped Engine simply stops
  * answering, so that is `unreachable`, not a state of its own. */
 export type EngineStatus = "running" | "starting" | "stopping" | "unreachable";
@@ -27,6 +33,16 @@ export type ModelRow = {
   downloading: boolean;
   selected: boolean;
   percent: number;
+};
+
+/** One piece of the data folder. `detail` is the Engine's own split of it. */
+export type StoragePart = {
+  id: string;
+  label: string;
+  description: string;
+  size: string;
+  bytes: number;
+  detail?: StoragePart[];
 };
 
 export type BackupRow = { id: string; size: string; modified: number };
@@ -81,7 +97,22 @@ export type PluginManifest = {
   name: string;
   summary?: string;
   settings: PluginSetting[];
+  /** Where the numbers on the page come from: the Engine reads this block,
+   * calls the operation and hands back ready values. */
+  stats?: { op: string; title?: string } | null;
 };
+
+/** One number on a plugin's page, already resolved by the Engine. */
+export type PluginStat = {
+  key: string;
+  label: string;
+  /** How to print it: a count, a count of words, or seconds as time. */
+  format: string;
+  value: number | string | null;
+};
+
+/** The numbers a plugin's page shows: a heading and its rows. */
+export type PluginStats = { title: string; fields: PluginStat[] };
 
 export type PluginsState = {
   /** What can be installed. `stale` says the Engine kept yesterday's copy. */
@@ -92,6 +123,9 @@ export type PluginsState = {
     id: string;
     manifest: PluginManifest | null;
     values: Record<string, SettingValue>;
+    /** Statistics the Engine resolved for this page; absent when the plugin
+     * declares none. */
+    stats?: PluginStats | null;
   } | null;
 };
 
@@ -117,10 +151,15 @@ export type ManagerState = {
   models: ModelRow[];
   keys: { hasApiKey: boolean; engine: string; language: string; model: string };
   usage: { todayMinutes: number; weekMinutes: number; top: { name: string; minutes: number }[] };
-  storage: { dataDir: string; size: string };
+  /** `parts` is the Engine's own list of what the data folder holds. */
+  storage: { dataDir: string; size: string; parts: StoragePart[] };
   backups: BackupRow[];
   connectors: ConnectorRow[];
   plugins: PluginsState;
+  /** The global hotkey: the Manager's own event tap, and whether macOS lets it
+   * watch the keyboard. The Engine cannot answer this — the grant belongs to
+   * the program the person toggled in System Settings. */
+  hotkey: { running: boolean; listenAccess: boolean; capturing: boolean; held: string[] };
   updates: {
     state: string;
     currentVersion: string;
@@ -130,13 +169,6 @@ export type ManagerState = {
     percent: number;
   };
   settings: { autostart: boolean; telemetry: boolean };
-  appearance: {
-    mode: string;
-    light: string;
-    dark: string;
-    followApps: boolean;
-    accentSource: string;
-  };
 };
 
 export const demoState: ManagerState = {
@@ -148,7 +180,7 @@ export const demoState: ManagerState = {
     port: 47_321,
   },
   client: { name: "Этот компьютер" },
-  product: { bundleId: "com.kazui.mundus.manager" },
+  product: { bundleId: "computer.mundus.app" },
   sync: {
     running: true,
     incoming: [],
@@ -190,6 +222,7 @@ export const demoState: ManagerState = {
   storage: {
     dataDir: "C:\\Users\\you\\AppData\\Roaming\\Mundus",
     size: "1.8 ГБ",
+    parts: [],
   },
   // The Engine's database is `ark.db`, so its backups carry that name.
   backups: [
@@ -212,6 +245,7 @@ export const demoState: ManagerState = {
       detail: "Не подключено",
     },
   ],
+  hotkey: { running: true, listenAccess: true, capturing: false, held: [] },
   plugins: {
     catalog: {
       available: [
@@ -248,13 +282,6 @@ export const demoState: ManagerState = {
     percent: 0,
   },
   settings: { autostart: true, telemetry: false },
-  appearance: {
-    mode: "dark",
-    light: "merino-light",
-    dark: "cobalt-foundry",
-    followApps: false,
-    accentSource: "theme",
-  },
 };
 
 export function statusLabel(status: EngineStatus): string {

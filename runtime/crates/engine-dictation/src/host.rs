@@ -60,6 +60,14 @@ pub async fn handle_dictation_op(
         "set_api_key" => op_set_api_key(params, host).await,
         "capture_foreground_window" => op_capture_foreground(host).await,
         "start_recording" => op_start_recording(host).await,
+        "toggle" => {
+            capture::handle_engine_trigger(
+                host,
+                &json!({"event": "dictation.trigger", "kind": "toggle", "phase": "down"}),
+            )
+            .await;
+            DictationResponse::ok(host.current_state().await)
+        }
         "cancel" => op_cancel(host).await,
         "submit_audio" => op_submit_audio(params, host).await,
         "test_connectivity" => op_test_connectivity(host).await,
@@ -69,6 +77,34 @@ pub async fn handle_dictation_op(
         "discard" => op_discard(params, host).await,
         "discard_all" => op_discard_all(host).await,
         "retry_all" => op_retry_all(host).await,
+        // The pill is on screen only while a session runs. The scope's own
+        // thread keeps the last frame after the fade, so the state decides.
+        "pill_frame" => {
+            let state = host.current_state().await;
+            let name = state
+                .get("state")
+                .and_then(Value::as_str)
+                .unwrap_or("idle")
+                .to_owned();
+            let running = matches!(name.as_str(), "recording" | "transcribing" | "pending");
+            DictationResponse::ok(json!({
+                "active": running && host.pill.is_active(),
+                "frame": host.pill.last_frame().unwrap_or(Value::Null),
+                // The meter the scope is riding: without it a pill that never
+                // moves looks like a drawing bug rather than a silent meter.
+                "loudness": host.pill.loudness(),
+            }))
+        }
+        // The Manager's own event tap reads key codes; this turns one into the
+        // accelerator string the config stores, so the two tables cannot drift.
+        "accelerator" => DictationResponse::ok(json!({
+            "accelerator": op_accelerator(&params),
+        })),
+        "release_hotkey" => {
+            #[cfg(target_os = "macos")]
+            crate::macos_native::release_listeners();
+            DictationResponse::ok(json!({}))
+        }
         "get_stats" => op_get_stats(host).await,
         "reset_stats" => op_reset_stats(host).await,
         "begin_hotkey_capture" => op_begin_hotkey_capture(host).await,

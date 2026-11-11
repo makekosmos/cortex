@@ -172,10 +172,14 @@ pub(super) async fn op_capture_start(
         let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
         let events_tx = host.events_tx.clone();
         let level_capture_id = capture_id.clone();
+        // The pill's dot scope rides the same meter: the plugin draws what
+        // the engine's simulation settles on.
+        let pill = Arc::clone(&host.pill);
         std::thread::Builder::new()
             .name("mundus-dictation-levels".into())
             .spawn(move || {
                 for level in level_rx {
+                    pill.set_level(level);
                     let _ = events_tx.send(json!({
                         "event": "dictation_audio_level",
                         "captureId": level_capture_id,
@@ -651,6 +655,13 @@ pub(super) async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) ->
             return DictationResponse::err(format!("submit_audio: битое аудио ({e})"));
         }
     };
+    // `speech.transcribe` идёт без `durationSec`, а статистике нужны секунды
+    // записи: берём их из самого WAV, иначе «слов в минуту» остаётся нулём.
+    let record_seconds = if record_seconds > 0.0 {
+        record_seconds
+    } else {
+        wav_seconds(&wav_bytes)
+    };
     tracing::info!(
         bytes = wav_bytes.len(),
         duration_sec = record_seconds,
@@ -876,4 +887,36 @@ pub(super) async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) ->
             "deliveryReason": reason,
         })),
     }
+}
+
+/// Длительность WAV в секундах: длина блока `data` делённая на размер одного
+/// отсчёта. Вызывающий не всегда говорит длительность, а статистике она нужна.
+fn wav_seconds(wav: &[u8]) -> f32 {
+    if wav.len() < 12 {
+        return 0.0;
+    }
+    let chunk_size = |at: usize| -> Option<usize> {
+        let bytes = wav.get(at..at + 4)?;
+        Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize)
+    };
+    let (mut channels, mut rate, mut bits, mut data_len) = (0u16, 0u32, 0u16, 0usize);
+    let mut at = 12usize;
+    while at + 8 <= wav.len() {
+        let id = &wav[at..at + 4];
+        let size = chunk_size(at + 4).unwrap_or(0);
+        let body = at + 8;
+        if id == b"fmt " && body + 16 <= wav.len() {
+            let fmt = &wav[body..body + 16];
+            channels = u16::from_le_bytes([fmt[2], fmt[3]]);
+            rate = u32::from_le_bytes([fmt[4], fmt[5], fmt[6], fmt[7]]);
+            bits = u16::from_le_bytes([fmt[14], fmt[15]]);
+        } else if id == b"data" {
+            data_len = size.min(wav.len().saturating_sub(body));
+        }
+        // Блоки выровнены по чётной границе.
+        at = body + size + (size & 1);
+    }
+    let sample = u32::from(channels.max(1)) * u32::from((bits.max(8)) / 8);
+    let byte_rate = rate.max(1) * sample;
+    data_len as f32 / byte_rate as f32
 }

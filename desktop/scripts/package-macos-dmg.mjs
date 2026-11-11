@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// KOS-349: stage Engine + Manager (+ Swift helpers) into Mundus Manager.app
+// KOS-349: stage Engine + Manager (+ Swift helpers) into Mundus.app
 // (ad-hoc signed; icon + Info.plist wired) and wrap it in Mundus-<ver>.dmg
 // via dmgbuild with a drag-to-Applications layout over a hidpi background.
 //
@@ -13,15 +13,24 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import path from "node:path";
+import { homedir } from "node:os";
+import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dmgName, ENGINE_BINARY_UNIX, MANAGER_MAC_BIN, PRODUCT_NAME } from "./brand.mjs";
 import {
+  dmgName,
+  ENGINE_BINARY_UNIX,
+  LOCAL_STT_BINARY,
+  MANAGER_MAC_BIN,
+  PRODUCT_NAME,
+} from "./brand.mjs";
+import {
+  BUNDLE_ID,
   logGatekeeperAssessment,
   signMacosApp,
   verifyMacosAppSignature,
@@ -50,6 +59,18 @@ function engineBinaryCandidates() {
   return [
     path.join(targetDir, "release", ENGINE_BINARY_UNIX),
     path.join(cortexRoot, "target", "release", ENGINE_BINARY_UNIX),
+  ];
+}
+
+/** The local speech-to-text sidecar the Engine spawns; its absence is the
+ * difference between a transcript and silence. */
+function localSttCandidates() {
+  const targetDir = process.env.CARGO_TARGET_DIR
+    ? path.resolve(process.env.CARGO_TARGET_DIR)
+    : path.join(cortexRoot, "target");
+  return [
+    path.join(targetDir, "release", LOCAL_STT_BINARY),
+    path.join(cortexRoot, "target", "release", LOCAL_STT_BINARY),
   ];
 }
 
@@ -111,11 +132,11 @@ function writeInfoPlist(appContents, version) {
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>${PRODUCT_NAME} Manager</string>
+  <string>${PRODUCT_NAME}</string>
   <key>CFBundleDisplayName</key>
-  <string>${PRODUCT_NAME} Manager</string>
+  <string>${PRODUCT_NAME}</string>
   <key>CFBundleIdentifier</key>
-  <string>com.kazui.mundus.manager</string>
+  <string>computer.mundus.app</string>
   <key>CFBundleVersion</key>
   <string>${version}</string>
   <key>CFBundleShortVersionString</key>
@@ -130,6 +151,13 @@ function writeInfoPlist(appContents, version) {
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <!-- TCC refuses microphone access to a process whose bundle carries no
+       usage string, so without this the Engine's capture helper is denied
+       silently and dictation never records (KOS-MAC-MIC). -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>${PRODUCT_NAME} записывает голос, чтобы превратить его в текст.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>${PRODUCT_NAME} распознаёт записанную речь.</string>
 </dict>
 </plist>
 `;
@@ -137,15 +165,16 @@ function writeInfoPlist(appContents, version) {
 }
 
 /**
- * Stage Mundus Manager.app under `stageDir` and return the .app path.
+ * Stage Mundus.app under `stageDir` and return the .app path.
  * Layout matches Manager's engine_candidates + Engine's native helper lookup:
- *   Contents/MacOS/Mundus Manager
+ *   Contents/MacOS/Mundus
  *   Contents/MacOS/mundus-engine
+ *   Contents/MacOS/mundus-local-stt
  *   Contents/MacOS/native/macos/<helpers>
  */
 export function stageMacosApp({ version, stageDir }) {
   rmSync(stageDir, { recursive: true, force: true });
-  const appName = `${PRODUCT_NAME} Manager.app`;
+  const appName = `${PRODUCT_NAME}.app`;
   const appRoot = path.join(stageDir, appName);
   const contents = path.join(appRoot, "Contents");
   const macos = path.join(contents, "MacOS");
@@ -161,6 +190,12 @@ export function stageMacosApp({ version, stageDir }) {
   copyFileSync(managerSrc, managerDst);
   chmodSync(engineDst, 0o755);
   chmodSync(managerDst, 0o755);
+
+  // Local dictation: without this file the Engine transcribes into nothing.
+  const sttSrc = findBinary(localSttCandidates(), LOCAL_STT_BINARY);
+  const sttDst = path.join(macos, LOCAL_STT_BINARY);
+  copyFileSync(sttSrc, sttDst);
+  chmodSync(sttDst, 0o755);
 
   const helpersSrc = path.join(desktopRoot, ".tmp", "native", "macos");
   if (existsSync(helpersSrc)) {
@@ -182,12 +217,57 @@ export function stageMacosApp({ version, stageDir }) {
     // TODO(KOS-349): entitlements + notarytool once the Apple secrets land in
     // the macOS nightly job. CODESIGN_IDENTITY already switches the plan to
     // hardened runtime + secure timestamp inside-out signing.
+    const local = localIdentity();
     signMacosApp(appRoot, {
       mainExecutableName: MANAGER_MAC_BIN,
-      identity: process.env.CODESIGN_IDENTITY,
+      identity: process.env.CODESIGN_IDENTITY ?? local.identity,
+      keychain: process.env.CODESIGN_KEYCHAIN ?? local.keychain,
+      // A local self-signed identity has no Apple timestamp server: the secure
+      // timestamp stays for a Developer ID and is skipped otherwise.
+      timestamp: process.env.CODESIGN_TIMESTAMP ?? local.timestamp,
+      // No entitlements file yet, and the hardened runtime would refuse the
+      // microphone without one.
+      hardened: Boolean(process.env.CODESIGN_IDENTITY) && !local.identity,
+      requirement: local.requirement,
     });
   }
   return appRoot;
+}
+
+/**
+ * The developer's own signing identity, when one was made on this Mac:
+ * `~/Library/Keychains/mundus-signing.keychain-db`. macOS remembers an Input
+ * Monitoring, Microphone or Accessibility grant by the certificate, so a
+ * rebuild keeps them — an ad-hoc signature changes with every build and loses
+ * all three. CI has no such keychain and stays on the ad-hoc path.
+ */
+function localIdentity() {
+  const keychain = join(homedir(), "Library", "Keychains", "mundus-signing.keychain-db");
+  const passwordFile = join(homedir(), ".mundus-signing.keychain-password");
+  if (!existsSync(keychain) || !existsSync(passwordFile)) return {};
+  const password = readFileSync(passwordFile, "utf8").trim();
+  // codesign cannot read a locked keychain, and a fresh login locks it.
+  spawnSync("security", ["unlock-keychain", "-p", password, keychain], { stdio: "ignore" });
+  // A self-signed certificate is trusted only for this user, and macOS checks
+  // privacy grants against the system trust store: a requirement that names
+  // the certificate leaf verifies without it, where the default `certificate
+  // root` one does not. tccd logs the mismatch as «Failed to match existing
+  // code requirement».
+  const found = spawnSync(
+    "security",
+    ["find-certificate", "-c", "Mundus Local Signing", "-Z", keychain],
+    { encoding: "utf8" },
+  );
+  const sha1 = /SHA-1 hash: ([0-9A-F]+)/.exec(found.stdout ?? "")?.[1];
+  const requirement = sha1
+    ? `designated => identifier "${BUNDLE_ID}" and certificate leaf = H"${sha1}"`
+    : undefined;
+  return {
+    identity: "Mundus Local Signing",
+    keychain,
+    timestamp: "--timestamp=none",
+    requirement,
+  };
 }
 
 function ensureDmgbuild() {
@@ -289,7 +369,7 @@ export function createUnsignedDmg({ appPath, dmgPath, volumeName }) {
  * read-only and re-verify the sealed .app inside. hdiutil output goes to the
  * build log; the codesign verdict is the fail-closed gate.
  */
-export function verifyDmgSignature(dmgPath, appName = `${PRODUCT_NAME} Manager.app`) {
+export function verifyDmgSignature(dmgPath, appName = `${PRODUCT_NAME}.app`) {
   if (process.platform !== "darwin") {
     die("DMG signature verification requires macOS (darwin)");
   }

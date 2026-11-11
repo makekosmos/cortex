@@ -16,10 +16,8 @@ use crate::data::Loader;
 use crate::engine::{self, Engine};
 
 /// Which page the sidebar is on. The pages ask for it and mirror what we say.
-const ROUTES: [&str; 12] = [
+const ROUTES: [&str; 10] = [
     "server",
-    "about",
-    "appearance",
     "plugins",
     "integrations",
     "storage",
@@ -33,7 +31,7 @@ const ROUTES: [&str; 12] = [
 
 /// Routes whose data keeps moving while a job runs (a download, an update):
 /// the page is re-read until the job says it is done.
-const FOLLOW: [&str; 2] = ["models", "about"];
+const FOLLOW: [&str; 1] = ["models"];
 
 pub struct ManagerBridge {
     context: ComponentContext,
@@ -58,6 +56,9 @@ impl ManagerBridge {
         // The sidebar lists installed plugins on every page, not only on the
         // one that installs them, so that is read from the start.
         loader.open("plugins");
+        // The global hotkey is heard by this process, so the tap reports what
+        // it sees to these pages.
+        crate::hotkey::attach(context.clone());
         Self {
             context,
             state,
@@ -68,7 +69,14 @@ impl ManagerBridge {
     }
 
     fn publish(&self) {
-        let state = self.state.lock().expect("the state lock").clone();
+        let hotkey = crate::hotkey::status();
+        let state = {
+            let mut state = self.state.lock().expect("the state lock");
+            if let Some(object) = state.as_object_mut() {
+                object.insert("hotkey".into(), hotkey);
+            }
+            state.clone()
+        };
         self.context.emit("state", state);
     }
 
@@ -146,7 +154,7 @@ fn is_busy(route: &str, state: &Arc<Mutex<Value>>) -> bool {
                 .iter()
                 .any(|model| model["downloading"] == json!(true))
         }),
-        "about" => {
+        "server" => {
             let percent = state["updates"]["percent"].as_f64().unwrap_or(0.0);
             let downloading = state["updates"]["state"]
                 .as_str()
@@ -296,19 +304,13 @@ impl NativeComponent for ManagerBridge {
 
             // Updates: status is read, the download and the install need a
             // click each — nothing downloads behind the user's back.
-            "updates.check" => loader.then_reload("updates", "updater.check", json!({}), "about"),
+            "updates.check" => loader.then_reload("updates", "updater.check", json!({}), "server"),
             "updates.download" => {
-                loader.then_reload("updates", "updater.download", json!({}), "about");
-                self.follow("about", loader.clone(), self.state.clone());
+                loader.then_reload("updates", "updater.download", json!({}), "server");
+                self.follow("server", loader.clone(), self.state.clone());
             }
             "updates.install" => {
-                loader.then_reload("updates", "updater.install", json!({}), "about")
-            }
-
-            // Appearance is device-wide and Engine-owned.
-            "appearance.set" => {
-                let patch = args.get("patch").cloned().unwrap_or_else(|| json!({}));
-                loader.then_reload("appearance", "appearance.set", patch, "appearance");
+                loader.then_reload("updates", "updater.install", json!({}), "server")
             }
 
             // Switches the Engine owns: ask it, then show what it says.
@@ -372,6 +374,28 @@ impl NativeComponent for ManagerBridge {
             // The window's bar and its sidebar: a press there moves the window,
             // which the host has to start itself (`chrome::start_move`).
             "window.drag" => crate::chrome::start_move(window, cx),
+            // The settings page asks for a combination and the tap reads the
+            // next press. A cancel leaves the stored hotkey as it was.
+            "hotkey.capture" => {
+                crate::hotkey::arm();
+                self.publish();
+            }
+            "hotkey.cancel" => {
+                crate::hotkey::disarm();
+                self.publish();
+            }
+            // macOS keeps the grant in the Input Monitoring pane; the page
+            // cannot open it, so the Manager does — and asks again, because a
+            // row appears there only after the app requests the access.
+            "hotkey.settings" => {
+                crate::hotkey::request_access();
+                #[cfg(target_os = "macos")]
+                const INPUT_MONITORING: &str =
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent";
+                let _ = std::process::Command::new("open")
+                    .arg(INPUT_MONITORING)
+                    .spawn();
+            }
             _ => {}
         }
     }
@@ -394,6 +418,14 @@ fn snapshot() -> Value {
         // never stands in for it.
         "product": { "bundleId": crate::identity::BUNDLE_ID },
         "sync": { "running": false, "incoming": [], "peers": [] },
+        // The global hotkey: what the Manager's own event tap can do, which
+        // macOS decides in System Settings, not the Manager.
+        "hotkey": {
+            "running": false,
+            "listenAccess": false,
+            "capturing": false,
+            "held": [],
+        },
         "models": [],
         "keys": { "hasApiKey": false, "engine": "", "language": "", "model": "" },
         "usage": { "todayMinutes": 0, "weekMinutes": 0, "top": [] },
@@ -416,13 +448,6 @@ fn snapshot() -> Value {
             "percent": 0.0,
         },
         "settings": { "autostart": false, "telemetry": false },
-        "appearance": {
-            "mode": "dark",
-            "light": "merino-light",
-            "dark": "cobalt-foundry",
-            "followApps": false,
-            "accentSource": "theme",
-        },
     })
 }
 

@@ -71,13 +71,25 @@ impl From<Result<Value>> for OpResponse {
 async fn list() -> Result<Value> {
     let store = PluginStore::new()?;
     let mut installed = store.installed();
-    if installed.iter().any(|plugin| plugin.manifest.is_none()) {
-        if let Ok(answer) = catalog::fetch().await {
-            for plugin in installed.iter_mut().filter(|p| p.manifest.is_none()) {
-                if let Some(manifest) = adopt(&store, &answer.catalog, &plugin.id) {
-                    plugin.settings = store.settings(&manifest).unwrap_or_default();
-                    plugin.manifest = Some(manifest);
-                }
+    // A plugin installed earlier still gets what the catalog says now, so a
+    // release that adds an overlay reaches the copy already on disk. Settings
+    // stay: only the description is replaced.
+    if let Ok(answer) = catalog::fetch().await {
+        for plugin in installed.iter_mut() {
+            let Some(fresh) = answer
+                .catalog
+                .plugins
+                .iter()
+                .find(|item| item.id == plugin.id)
+            else {
+                continue;
+            };
+            if plugin.manifest.as_ref() == Some(fresh) {
+                continue;
+            }
+            if store.save_manifest(fresh).is_ok() {
+                plugin.settings = store.settings(fresh).unwrap_or_default();
+                plugin.manifest = Some(fresh.clone());
             }
         }
     }
@@ -158,7 +170,7 @@ async fn settings_get(params: &Value) -> Result<Value> {
     let store = PluginStore::new()?;
     let id = param_id(params)?;
     let manifest = match store.manifest(&id) {
-        Some(manifest) => manifest,
+        Some(stored) => refresh(&store, &id, stored).await,
         // An install from before the catalog: ask the catalog who it is.
         None => {
             store.record(&id)?.ok_or(PluginError::NotInstalled)?;
@@ -168,6 +180,23 @@ async fn settings_get(params: &Value) -> Result<Value> {
     };
     let values = store.settings(&manifest)?;
     Ok(serde_json::json!({ "id": id, "manifest": manifest, "values": values }))
+}
+
+/// A plugin installed earlier still gets what the catalog says about it now.
+/// A release that adds settings or statistics must reach the page of the copy
+/// already on disk; otherwise the manifest is frozen at install time forever.
+/// Store settings are kept: only the description is replaced.
+async fn refresh(store: &PluginStore, id: &str, stored: PluginManifest) -> PluginManifest {
+    let Ok(answer) = catalog::fetch().await else {
+        return stored;
+    };
+    match answer.catalog.plugins.iter().find(|plugin| plugin.id == id) {
+        Some(fresh) if *fresh != stored => {
+            let _ = store.save_manifest(fresh);
+            fresh.clone()
+        }
+        _ => stored,
+    }
 }
 
 fn settings_set(params: &Value) -> Result<Value> {

@@ -12,6 +12,13 @@ use serde_json::{json, Map, Value};
 
 use crate::engine::Engine;
 
+/// The page shapes live beside the loader: the loader fetches, `rows` narrows.
+#[path = "data/rows.rs"]
+pub(crate) mod rows;
+pub use rows::sync_view;
+use rows::*;
+pub(crate) use rows::{array, text};
+
 /// One Engine call and where its result goes in the state.
 type Call = (&'static str, &'static str, Value);
 
@@ -35,12 +42,14 @@ fn calls(route: &str) -> Vec<Call> {
         ],
         "activity" => vec![(
             "usage",
-            "get_usage_analytics",
+            // `usage.analytics` is the Engine's own name for the daily trend
+            // and the top apps; the page reads both from one answer.
+            "usage.analytics",
             json!({ "range_days": 21, "top_apps_limit": 8 }),
         )],
         "integrations" => vec![("connectors", "integrations.list", json!({}))],
-        "about" => vec![("updates", "updater.status", json!({}))],
-        "appearance" => vec![("appearance", "appearance.get", json!({}))],
+        // The server page owns the update card, so it reads the status too.
+        "server" => vec![("updates", "updater.status", json!({}))],
         "plugins" => vec![
             ("plugins.catalog", "plugins.catalog", json!({})),
             ("plugins.installed", "plugins.list", json!({})),
@@ -244,7 +253,6 @@ fn shape(key: &str, data: Value) -> Value {
                 .collect(),
         ),
         "updates" => updates(&data),
-        "appearance" => appearance(&data),
         "usage" => usage(&data),
         "storage" => storage(&data),
         "settings" => settings(&data),
@@ -254,213 +262,4 @@ fn shape(key: &str, data: Value) -> Value {
 
 /// The whole sync surface: peers for the Devices page and the pairing requests
 /// the modal shows on whatever page the user is on.
-fn sync(data: &Value) -> Value {
-    json!({
-        "running": data.get("running").and_then(Value::as_bool).unwrap_or(false),
-        "incoming": array(data, &["/incoming_pairing_requests"]).iter().map(|request| json!({
-            "id": text(request, &["/device_id"]).unwrap_or_default(),
-            "name": text(request, &["/device_name"])
-                .unwrap_or_else(|| "Новое устройство".into()),
-            "platform": text(request, &["/platform"]).unwrap_or_default(),
-            "appVersion": text(request, &["/app_version"]).unwrap_or_default(),
-        })).collect::<Vec<_>>(),
-        "peers": array(data, &["/peers"]).iter().map(device_row).collect::<Vec<_>>(),
-    })
-}
-
-/// The sync snapshot, as the poller writes it: peers and incoming requests
-/// together, under the one `sync` key the pages read them from.
-pub fn sync_view(snapshot: &Value) -> Value {
-    sync(snapshot)
-}
-
-pub(crate) fn array(data: &Value, paths: &[&str]) -> Vec<Value> {
-    if let Some(items) = data.as_array() {
-        return items.clone();
-    }
-    for path in paths {
-        if let Some(items) = data.pointer(path).and_then(Value::as_array) {
-            return items.clone();
-        }
-    }
-    Vec::new()
-}
-
-pub(crate) fn text(value: &Value, paths: &[&str]) -> Option<String> {
-    paths
-        .iter()
-        .find_map(|path| value.pointer(path).and_then(Value::as_str))
-        .map(str::to_owned)
-}
-
-fn first(value: &Value, paths: &[&str]) -> Option<Value> {
-    paths.iter().find_map(|path| value.pointer(path)).cloned()
-}
-
-fn bool_at(value: &Value, paths: &[&str]) -> bool {
-    paths
-        .iter()
-        .find_map(|path| value.pointer(path).and_then(Value::as_bool))
-        .unwrap_or(false)
-}
-
-fn model_row(model: &Value) -> Value {
-    // The Engine states a model's weight in megabytes (`sizeMb`), not bytes.
-    let megabytes = first(model, &["/sizeMb", "/size_mb"]).and_then(|value| value.as_f64());
-    json!({
-        "id": text(model, &["/id", "/name", "/model_id"]).unwrap_or_default(),
-        "name": text(model, &["/name", "/display_name", "/id"]).unwrap_or_default(),
-        "size": match megabytes {
-            Some(megabytes) => size((megabytes * 1_000_000.0) as u64),
-            None => text(model, &["/size_label"]).unwrap_or_default(),
-        },
-        "downloaded": bool_at(model, &["/downloaded"]),
-        "downloading": bool_at(model, &["/downloading"]),
-        "selected": bool_at(model, &["/selected"]),
-        "percent": model.get("downloadPercent").and_then(Value::as_f64).unwrap_or(0.0),
-    })
-}
-
-/// `dictation.get_config` exposes no secrets — only whether one is stored.
-fn keys(data: &Value) -> Value {
-    json!({
-        "hasApiKey": bool_at(data, &["/hasApiKey", "/has_api_key"]),
-        "engine": text(data, &["/config/localEngine"]).unwrap_or_default(),
-        "language": text(data, &["/config/language"]).unwrap_or_default(),
-        "model": text(data, &["/config/localModelId", "/config/localModel"]).unwrap_or_default(),
-    })
-}
-
-fn device_row(peer: &Value) -> Value {
-    json!({
-        "id": text(peer, &["/device_id", "/id"]).unwrap_or_default(),
-        "name": text(peer, &["/device_name", "/name"])
-            .unwrap_or_else(|| "Без имени".into()),
-        "status": match text(peer, &["/status"]).as_deref() {
-            Some("online") => "online",
-            _ => "offline",
-        },
-        "platform": text(peer, &["/platform"]).unwrap_or_default(),
-        "current": peer.get("current").and_then(Value::as_bool).unwrap_or(false),
-    })
-}
-
-fn connector_row(provider: &Value) -> Value {
-    json!({
-        "id": text(provider, &["/id", "/provider", "/name"]).unwrap_or_default(),
-        "name": text(provider, &["/name", "/display_name", "/label"]).unwrap_or_default(),
-        "connected": bool_at(provider, &["/connected", "/authorized", "/has_credential"]),
-        "kind": text(provider, &["/kind", "/type", "/category"]).unwrap_or_default(),
-        "detail": text(provider, &["/status", "/detail", "/account"]).unwrap_or_default(),
-    })
-}
-
-fn backup_row(backup: &Value) -> Value {
-    let bytes = first(backup, &["/size_bytes", "/bytes"]).and_then(|value| value.as_u64());
-    json!({
-        "id": text(backup, &["/id"]).unwrap_or_default(),
-        "size": bytes.map(size).unwrap_or_default(),
-        "modified": backup.get("modified_ms").and_then(Value::as_u64).unwrap_or_default(),
-    })
-}
-
-/// `updater.status`: what the release channel offers and how far a download is.
-fn updates(data: &Value) -> Value {
-    json!({
-        "state": text(data, &["/state"]).unwrap_or_else(|| "idle".into()),
-        "currentVersion": text(data, &["/currentVersion", "/current_version"]).unwrap_or_default(),
-        "newVersion": text(data, &["/newVersion", "/new_version"]).unwrap_or_default(),
-        "channel": text(data, &["/channel"]).unwrap_or_default(),
-        "canInstall": bool_at(data, &["/canInstall", "/can_install"]),
-        "percent": data.get("percent").and_then(Value::as_f64).unwrap_or(0.0),
-    })
-}
-
-/// `appearance.get` answers `{settings, capabilities, wallpaper_accent}`; the
-/// settings are device-wide and live in the Engine.
-fn appearance(data: &Value) -> Value {
-    let settings = data.get("settings").unwrap_or(data);
-    json!({
-        "mode": text(settings, &["/mode"]).unwrap_or_else(|| "dark".into()),
-        "light": text(settings, &["/light_theme", "/lightTheme"])
-            .unwrap_or_else(|| "merino-light".into()),
-        "dark": text(settings, &["/dark_theme", "/darkTheme"])
-            .unwrap_or_else(|| "cobalt-foundry".into()),
-        "followApps": bool_at(settings, &["/follow_apps", "/followApps"]),
-        "accentSource": text(settings, &["/accent_source"]).unwrap_or_else(|| "theme".into()),
-    })
-}
-
-fn settings(data: &Value) -> Value {
-    // `autostart` is deliberately absent: `engine.settings.get` does not carry
-    // it, and a `false` invented here would overwrite the real position the
-    // `engine.autostart.get` call writes under `settings.autostart`.
-    json!({
-        "telemetry": data
-            .pointer("/usage_tracker/enabled")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-    })
-}
-
-/// `get_usage_analytics` answers a snapshot with a per-day trend and the
-/// busiest programs; milliseconds become minutes here.
-fn usage(data: &Value) -> Value {
-    let minutes = |milliseconds: u64| milliseconds / 60_000;
-    let trend = array(data, &["/dailyTrend", "/daily_trend"]);
-    let day_ms = |row: &Value| {
-        first(row, &["/foregroundMs", "/foreground_ms"])
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0)
-    };
-    let today = trend.last().map(day_ms).unwrap_or_default();
-    let week: u64 = trend.iter().rev().take(7).map(&day_ms).sum();
-    let top: Vec<Value> = array(data, &["/topApps", "/top_apps"])
-        .iter()
-        .filter_map(|row| {
-            let name = text(row, &["/displayName", "/name", "/app_name"])?;
-            let milliseconds = first(row, &["/foregroundMs", "/foreground_ms"])
-                .and_then(|value| value.as_u64())?;
-            Some(json!({ "name": name, "minutes": minutes(milliseconds) }))
-        })
-        .collect();
-    json!({
-        "todayMinutes": minutes(today),
-        "weekMinutes": minutes(week),
-        "top": top,
-    })
-}
-
-fn storage(data: &Value) -> Value {
-    let bytes = first(data, &["/size_bytes", "/total_bytes", "/bytes"]).and_then(|v| v.as_u64());
-    json!({
-        "dataDir": text(data, &["/data_dir", "/path", "/root"])
-            .unwrap_or_else(crate::bridge::data_directory),
-        "size": match bytes {
-            Some(bytes) => size(bytes),
-            None => text(data, &["/size_label"]).unwrap_or_default(),
-        },
-    })
-}
-
-/// Bytes as the page shows them: a decimal unit and one significance step.
-fn size(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1000.0 && unit < UNITS.len() - 1 {
-        value /= 1000.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} Б")
-    } else if value >= 10.0 {
-        // Half up: 24.5 GB is nearer 25 than 24, and `{:.0}` would say 24.
-        format!("{:.0} {}", (value + 0.5).floor(), UNITS[unit])
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
-    }
-}
-
-#[cfg(test)]
 mod tests;

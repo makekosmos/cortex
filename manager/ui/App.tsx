@@ -1,30 +1,27 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
 import { Window as DesktopWindow } from "nsh/desktop";
-import {
-  SettingsSidebar,
-  TextInput,
-  cobaltFoundry,
-  darkThemes,
-  lightThemes,
-  settingsMetrics,
-} from "@makekosmos/imago-nsh";
+import { TextInput, cobaltFoundry, settingsMetrics } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme, NavGroup } from "@makekosmos/imago-nsh";
 import { navigation } from "./navigation";
-import { TITLEBAR_HEIGHT } from "./chrome";
+import { currentRoute as route, go } from "./history";
+import { TITLEBAR_HEIGHT, sidebarTopInset } from "./chrome";
+import { Sidebar } from "./sidebar";
 import { connectHost, dragBinding } from "./host";
 import { demoState } from "./state";
+import { hotkeyCaptured } from "./state";
 import type { ManagerState } from "./state";
 import type { CommandArgs } from "./commands";
 import { Cancel, Confirm, Modal, note } from "./modal";
 import { ServerPage } from "./pages/server";
-import { AppearancePage } from "./pages/appearance";
-import { AboutPage, ActivityPage, PreferencesPage, StoragePage } from "./pages/system";
+import { ActivityPage, PreferencesPage } from "./pages/system";
+import { StoragePage } from "./pages/storage";
 import { KeysPage, ModelsPage } from "./pages/library";
 import { PluginPage, PluginsPage } from "./pages/plugins";
 import { BrowserPage, DevicesPage, IntegrationsPage } from "./pages/network";
 
 const state = signal<ManagerState>(globalThis.__MUNDUS_MANAGER_INITIAL__ ?? demoState);
-const route = signal<string>(globalThis.__MUNDUS_MANAGER_ROUTE__ ?? "server");
+// The history owns the route: the sidebar and the Engine's `navigate` push
+// onto it, and the header's anchors walk it (`history.ts`).
 const search = signal("");
 
 /// The two questions the Manager asks before doing something irreversible:
@@ -38,24 +35,22 @@ const connectCode = signal("");
 
 const Bridge = nativeComponent<
   { route: string },
-  { state: ManagerState; navigate: { route: string } }
+  {
+    state: ManagerState;
+    navigate: { route: string };
+    hotkey: { accelerator?: string };
+    hotkeyState: { capturing: boolean; held: string[] };
+  }
 >("manager.bridge", {
   props: ["route"],
-  events: ["state", "navigate"],
+  events: ["state", "navigate", "hotkey", "hotkeyState"],
 });
 
 let session: { command: (name: string, args?: CommandArgs) => void } | undefined;
 
-/** The palette the pages wear: whichever pair of themes the Engine says is on.
- * A light mode must not paint a dark card set, or the pages would say «светлая
- * тема» over dark cards. */
-const colors = (): ApplicationTheme => {
-  const { mode, light, dark } = state().appearance;
-  const themes = mode === "light" ? lightThemes : darkThemes;
-  return (
-    themes.find((theme) => theme.key === (mode === "light" ? light : dark))?.colors ?? cobaltFoundry
-  );
-};
+/** The palette the pages wear. Mundus keeps one: themes belong to the apps the
+ * person runs inside it, not to the Manager's own window. */
+const colors = (): ApplicationTheme => cobaltFoundry;
 
 function patch(next: Partial<ManagerState>) {
   state.set({ ...state(), ...next });
@@ -72,8 +67,8 @@ function dispatch(name: string, args: CommandArgs = {}) {
 }
 
 /**
- * What a press means. Irreversible Engine operations ask first, appearance is
- * a device-wide setting on the Engine, and everything else is a plain call.
+ * What a press means. Irreversible Engine operations ask first, and everything
+ * else is a plain call.
  */
 function command(name: string, args: CommandArgs = {}) {
   switch (name) {
@@ -89,26 +84,11 @@ function command(name: string, args: CommandArgs = {}) {
     case "connect.open":
       connectOpen.set(true);
       return;
-    case "appearance.theme":
-      dispatch("appearance.set", {
-        patch: args.mode === "light" ? { light_theme: args.key } : { dark_theme: args.key },
-      });
-      patch({
-        appearance: {
-          ...state().appearance,
-          [args.mode === "light" ? "light" : "dark"]: String(args.key),
-        },
-      });
-      return;
     case "pairing.hide":
       patch({ sync: { ...state().sync, ownCode: "" } });
       return;
-    case "appearance.followApps":
-      dispatch("appearance.set", { patch: { follow_apps: Boolean(args.value) } });
-      patch({ appearance: { ...state().appearance, followApps: Boolean(args.value) } });
-      return;
     case "route":
-      route.set(String(args.route));
+      go(String(args.route));
       return;
     default:
       dispatch(name, args);
@@ -124,21 +104,9 @@ function useHiddenChrome() {
   effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
 }
 
-/**
- * How far the sidebar's own top padding has to come up for its search field to
- * sit in the band the caption buttons are in: the kit leaves `sidebarTop` above
- * it, and the field is centred in the band.
- */
-const SIDEBAR_LIFT =
-  settingsMetrics.sidebarTop - (TITLEBAR_HEIGHT - settingsMetrics.searchHeight) / 2;
-
 function renderPage(page: string) {
   const props = { colors: colors(), state: () => state(), onCommand: command };
   switch (page) {
-    case "about":
-      return <AboutPage {...props} />;
-    case "appearance":
-      return <AppearancePage {...props} />;
     case "plugins":
       return <PluginsPage {...props} />;
     case "integrations":
@@ -174,9 +142,24 @@ function renderPage(page: string) {
  */
 function sidebarGroups(): NavGroup[] {
   const installed = state().plugins.installed;
-  if (!installed.length) return navigation;
+  const status = state().engine.status;
+  const caption =
+    status === "running"
+      ? "Работает"
+      : status === "starting"
+        ? "Запускается"
+        : status === "stopping"
+          ? "Останавливается"
+          : "Не отвечает";
+  const groups = navigation.map((group) => ({
+    ...group,
+    entries: group.entries.map((entry) =>
+      entry.route === "server" ? { ...entry, caption } : entry,
+    ),
+  }));
+  if (!installed.length) return groups;
   return [
-    ...navigation,
+    ...groups,
     {
       id: "plugins-installed",
       entries: installed.map((plugin) => ({
@@ -242,7 +225,14 @@ function App() {
         }}
         route={route()}
         onState={(next: ManagerState) => state.set(next)}
-        onNavigate={(event: { route: string }) => route.set(event.route)}
+        onNavigate={(event: { route: string }) => go(event.route)}
+        onHotkey={(event: { accelerator?: string }) => {
+          if (event.accelerator) hotkeyCaptured.set(event.accelerator);
+        }}
+        onHotkeyState={(event: { capturing: boolean; held: string[] }) => {
+          const now = state();
+          state.set({ ...now, hotkey: { ...now.hotkey, ...event } });
+        }}
       />
 
       <View class="min-h-0 flex-1 flex-row">
@@ -252,20 +242,22 @@ function App() {
             parent would fire for the rows' presses too. */}
         <View
           class="h-full relative overflow-hidden"
-          style={{ width: settingsMetrics.sidebarWidth, backgroundColor: colors().shell }}
+          style={{
+            width: settingsMetrics.sidebarWidth,
+            backgroundColor: colors().shell,
+          }}
           {...dragBinding()}
         >
           <View class="absolute inset-0" {...dragBinding()} />
-          <View class="h-full" style={{ marginTop: -SIDEBAR_LIFT }}>
-            <SettingsSidebar
-              colors={colors()}
-              groups={sidebarGroups()}
-              current={route()}
-              search={search()}
-              onSearch={(value) => search.set(value)}
-              onNavigate={(next) => route.set(next)}
-            />
-          </View>
+          <Sidebar
+            colors={colors()}
+            groups={sidebarGroups()}
+            current={route()}
+            search={search()}
+            topInset={sidebarTopInset(settingsMetrics.searchHeight)}
+            onSearch={(value) => search.set(value)}
+            onNavigate={(next) => go(next)}
+          />
         </View>
         {renderPage(route())}
       </View>

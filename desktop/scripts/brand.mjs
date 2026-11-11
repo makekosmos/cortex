@@ -14,10 +14,12 @@ export const installerName = (version) => `${PRODUCT_NAME}-Setup-${version}.exe`
 export const dmgName = (version) => `${PRODUCT_NAME}-${version}.dmg`;
 
 /** Packaged Manager binary name inside the macOS .app (no .exe). */
-export const MANAGER_MAC_BIN = "Mundus Manager";
+export const MANAGER_MAC_BIN = "Mundus";
 
 /** Engine binary stem on Unix hosts. */
 export const ENGINE_BINARY_UNIX = "mundus-engine";
+/** Local speech-to-text sidecar: the Engine spawns it, so it sits beside it. */
+export const LOCAL_STT_BINARY = "mundus-local-stt";
 
 /** Per-user install dir: `%LOCALAPPDATA%\Programs\Mundus`. */
 export const PROGRAMS_DIR_NAME = PRODUCT_NAME;
@@ -29,7 +31,7 @@ export const LOCAL_DIR_NAME = PRODUCT_NAME;
 export const ENGINE_BINARY = "mundus-engine.exe";
 export const ENGINE_MANIFEST_PRODUCT = "mundus-engine";
 /** Packaged Manager executable name (GPUI binary is renamed on stage). */
-export const MANAGER_EXE = "Mundus Manager.exe";
+export const MANAGER_EXE = "Mundus.exe";
 export const AUTOSTART_RUN_VALUE = "Mundus Engine";
 export const UNINSTALL_KEY_NAME = "Mundus";
 

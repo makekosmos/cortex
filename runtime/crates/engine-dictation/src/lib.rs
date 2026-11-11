@@ -66,6 +66,8 @@ pub mod native_capture;
 mod native_capture_windows;
 pub mod network;
 pub mod pending;
+pub mod pill_frame;
+pub mod pill_scope;
 pub mod retry;
 pub mod stats;
 

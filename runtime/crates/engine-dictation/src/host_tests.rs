@@ -896,6 +896,37 @@ async fn get_state_idle_initially() {
     assert_eq!(resp.data["state"], "idle", "resp: {:?}", resp.data);
 }
 
+/// Пилюля живёт на тех же переходах состояния: первая запись запускает
+/// поток кадров, и в шину приходит `dictation_pill_frame` с полным гридом.
+#[tokio::test]
+async fn start_recording_broadcasts_pill_frames() {
+    let (_data, host) = isolated_host();
+    let mut events = host.subscribe();
+    let resp = handle_dictation_op("start_recording", Value::Null, &host).await;
+    assert!(resp.ok, "start_recording failed: {:?}", resp.error);
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match events.recv().await {
+                Ok(value) if value["event"] == "dictation_pill_frame" => break value,
+                Ok(_) => continue,
+                Err(error) => panic!("events channel failed: {error}"),
+            }
+        }
+    })
+    .await
+    .expect("a pill frame within 5s");
+    assert_eq!(frame["columns"], 43);
+    assert_eq!(frame["rows"], 9);
+    assert_eq!(
+        frame["dots"].as_array().map(Vec::len),
+        Some(43 * 9 * 2),
+        "every dot of the grid"
+    );
+    assert!(frame["opacity"].as_f64().is_some_and(|o| o > 0.0));
+    // Cancel settles the scope; the frame thread ends on its own.
+    let _ = handle_dictation_op("cancel", Value::Null, &host).await;
+}
+
 #[tokio::test]
 async fn start_recording_transitions_to_recording() {
     let (_data, host) = isolated_host();
@@ -1609,6 +1640,7 @@ async fn production_host_loads_config_and_stats_from_explicit_data_dir() {
             total_words: 12,
             total_record_seconds: 4,
             total_sessions: 1,
+            ..Default::default()
         },
     )
     .expect("save stats");

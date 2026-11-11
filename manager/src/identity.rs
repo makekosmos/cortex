@@ -6,10 +6,10 @@
 //! accepts it next to the class managers installed before 0.10.27 send.
 
 /// Window title, About heading and the packaged binary's description.
-pub const PRODUCT_NAME: &str = "Mundus Manager";
+pub const PRODUCT_NAME: &str = "Mundus";
 
 /// Identity the pages and the platform use (nsh.json carries the same id).
-pub const BUNDLE_ID: &str = "com.kazui.mundus.manager";
+pub const BUNDLE_ID: &str = "computer.mundus.app";
 
 /// The header the class travels in. Neutral like the class itself: the Engine
 /// reads the same name from `engine_base::brand::CLIENT_CLASS_HEADER`.

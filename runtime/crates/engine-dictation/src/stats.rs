@@ -4,6 +4,7 @@
 // неизвестные поля игнорируются, отсутствующие принимают default.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::config::data_dir;
@@ -23,6 +24,18 @@ pub struct DictationStats {
     pub total_record_seconds: u64,
     /// Сколько успешных сессий распознавания было.
     pub total_sessions: u64,
+    /// По дням, ключ — дата `YYYY-MM-DD` в UTC: из неё плагин рисует
+    /// хит-мапу активности. Старые записи без этого поля читаются как пустые.
+    pub days: BTreeMap<String, DayStats>,
+}
+
+/// Один день активности: слова, секунды записи, сессии.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DayStats {
+    pub words: u64,
+    pub seconds: u64,
+    pub sessions: u64,
 }
 
 impl DictationStats {
@@ -49,10 +62,36 @@ impl DictationStats {
     /// Учесть результат успешной транскрипции. Считаем words как whitespace-
     /// разделённые токены (грубо но достаточно для агрегата).
     pub fn record_session(&mut self, transcript: &str, record_seconds: u64) {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        self.record_session_on(transcript, record_seconds, &today);
+    }
+
+    /// То же, но с явной датой: тесты не зависят от часов машины.
+    pub fn record_session_on(&mut self, transcript: &str, record_seconds: u64, day: &str) {
         let words = count_words(transcript);
         self.total_words = self.total_words.saturating_add(words);
         self.total_record_seconds = self.total_record_seconds.saturating_add(record_seconds);
         self.total_sessions = self.total_sessions.saturating_add(1);
+        let bucket = self.days.entry(day.to_owned()).or_default();
+        bucket.words = bucket.words.saturating_add(words);
+        bucket.seconds = bucket.seconds.saturating_add(record_seconds);
+        bucket.sessions = bucket.sessions.saturating_add(1);
+        self.prune_days();
+    }
+
+    /// Хит-мапа показывает год; всё старше не храним, иначе файл растёт
+    /// бесконечно. Ключи сортированы, поэтому старые — в начале.
+    fn prune_days(&mut self) {
+        const KEEP_DAYS: usize = 400;
+        while self.days.len() > KEEP_DAYS {
+            let oldest = self.days.keys().next().cloned();
+            match oldest {
+                Some(key) => {
+                    self.days.remove(&key);
+                }
+                None => break,
+            }
+        }
     }
 }
 
@@ -119,6 +158,7 @@ mod tests {
             total_words: 200,
             total_record_seconds: 60,
             total_sessions: 1,
+            ..Default::default()
         };
         assert!((s.wpm() - 200.0).abs() < 0.01);
     }
@@ -131,6 +171,7 @@ mod tests {
             total_words: 200,
             total_record_seconds: 60,
             total_sessions: 1,
+            ..Default::default()
         };
         assert_eq!(s.time_saved_seconds(), 240);
     }
@@ -143,8 +184,59 @@ mod tests {
             total_words: 10,
             total_record_seconds: 60,
             total_sessions: 1,
+            ..Default::default()
         };
         assert_eq!(s.time_saved_seconds(), 0);
+    }
+
+    #[test]
+    fn days_accumulate_per_date() {
+        let mut s = DictationStats::default();
+        s.record_session_on("один два", 4, "2026-11-10");
+        s.record_session_on("три", 2, "2026-11-10");
+        s.record_session_on("четыре пять шесть", 9, "2026-11-11");
+        assert_eq!(
+            s.days["2026-11-10"],
+            DayStats {
+                words: 3,
+                seconds: 6,
+                sessions: 2
+            }
+        );
+        assert_eq!(
+            s.days["2026-11-11"],
+            DayStats {
+                words: 3,
+                seconds: 9,
+                sessions: 1
+            }
+        );
+        assert_eq!(s.total_sessions, 3);
+    }
+
+    #[test]
+    fn old_days_are_pruned() {
+        let mut s = DictationStats::default();
+        for day in 1..=420 {
+            s.record_session_on("слово", 1, &format!("2025-01-{day:03}"));
+        }
+        assert_eq!(s.days.len(), 400);
+        assert!(!s.days.contains_key("2025-01-001"));
+        assert_eq!(s.total_sessions, 420);
+    }
+
+    #[test]
+    fn stats_without_days_load_as_empty() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let path = tmp.path().join("stats.json");
+        std::fs::write(
+            &path,
+            r#"{"totalWords":12,"totalRecordSeconds":30,"totalSessions":2}"#,
+        )
+        .expect("write");
+        let loaded = load_from(&path);
+        assert_eq!(loaded.total_words, 12);
+        assert!(loaded.days.is_empty());
     }
 
     #[test]

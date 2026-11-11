@@ -45,6 +45,74 @@ pub struct PluginManifest {
     /// `<plugin dir>/config.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_file: Option<String>,
+    /// The numbers its page shows: an Engine operation and the fields to take
+    /// from its answer. The page names no operation of its own; a plugin
+    /// without this block simply has no statistics to show.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stats: Option<PluginStats>,
+    /// A floating plate the Manager draws while this plugin is working.
+    /// Installing the plugin is what brings the plate: the Manager names no
+    /// plugin, it only hosts the overlay a manifest asks for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlay: Option<PluginOverlay>,
+}
+
+/// A plate the Manager draws for a plugin. `pill` is the hotkey plate: the
+/// keys on top, the action and Close underneath, shown while a session runs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginOverlay {
+    /// `pill` is the only kind the Manager draws.
+    pub kind: String,
+    /// The Engine operation that answers `{state}`: `recording` and
+    /// `transcribing` show the plate, `idle` hides it.
+    pub state_op: String,
+    /// The Engine operation that answers `{hotkey}`, so the plate can show
+    /// the keys as badges instead of a line of text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_op: Option<String>,
+    /// The Engine operation Close runs, when the plate has a Close.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_op: Option<String>,
+    /// The word beside the mark. The plugin's name when this is empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// What a plugin counts, as its page shows it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginStats {
+    /// The Engine operation that answers, e.g. `dictation.get_stats`.
+    pub op: String,
+    /// The heading over the numbers; empty means «Статистика».
+    #[serde(default)]
+    pub title: String,
+    /// The numbers, in the order the page shows them.
+    #[serde(default)]
+    pub fields: Vec<StatField>,
+}
+
+/// One number: where it comes from and how to print it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StatField {
+    /// The key in the operation's answer.
+    pub key: String,
+    pub label: String,
+    /// How the page prints the value. A number is a count, a duration is
+    /// seconds shown as time, words are a count with a thousands separator.
+    #[serde(default)]
+    pub format: StatFormat,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatFormat {
+    #[default]
+    Number,
+    Words,
+    Duration,
 }
 
 /// Where a plugin's code comes from.
@@ -168,6 +236,25 @@ impl PluginManifest {
         if let Some(op) = self.settings_op.as_deref() {
             if !valid_op(op) {
                 return Err(PluginError::Manifest(format!("операция настроек «{op}»")));
+            }
+        }
+        if let Some(overlay) = self.overlay.as_ref() {
+            if overlay.kind != "pill" {
+                return Err(PluginError::Manifest(format!("оверлей «{}»", overlay.kind)));
+            }
+            if !valid_op(&overlay.state_op) {
+                return Err(PluginError::Manifest(format!(
+                    "операция оверлея «{}»",
+                    overlay.state_op
+                )));
+            }
+            for op in [&overlay.config_op, &overlay.cancel_op]
+                .into_iter()
+                .flatten()
+            {
+                if !valid_op(op) {
+                    return Err(PluginError::Manifest(format!("операция оверлея «{op}»")));
+                }
             }
         }
         let mut keys = std::collections::HashSet::new();

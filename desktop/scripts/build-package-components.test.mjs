@@ -32,7 +32,7 @@ test("the component build produces exactly a manager stage", () => {
   expect(source).toContain('"--locked"');
   expect(source).toContain("x86_64-pc-windows-msvc");
   expect(source).toContain("MANAGER_EXE");
-  expect(MANAGER_EXE).toBe("Mundus Manager.exe");
+  expect(MANAGER_EXE).toBe("Mundus.exe");
   // A missing build product fails the script instead of shipping nothing.
   expect(source).toMatch(/missing \$\{?managerExe|missing.*manager\.exe/i);
 });

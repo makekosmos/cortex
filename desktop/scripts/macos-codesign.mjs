@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { openSync, readSync, closeSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
-export const BUNDLE_ID = "com.kazui.mundus.manager";
+export const BUNDLE_ID = "computer.mundus.app";
 
 const MACHO_MAGICS = new Set([0xfeedface, 0xfeedfacf, 0xcafebabe, 0xcafebabf]);
 
@@ -51,9 +51,27 @@ export function listMachOFiles(appRoot) {
  * executable and writes CodeResources) is always last so no file can change
  * after the seal exists. `identity` undefined selects the ad-hoc path.
  */
-export function signingCommands({ appRoot, machos, mainExecutableName, identity }) {
+export function signingCommands({
+  appRoot,
+  machos,
+  mainExecutableName,
+  identity,
+  keychain,
+  timestamp,
+  hardened = true,
+  requirement,
+}) {
   const mainExe = path.join(appRoot, "Contents", "MacOS", mainExecutableName);
-  const flags = identity ? ["--options", "runtime", "--timestamp"] : ["--timestamp=none"];
+  const stamp = timestamp ?? (identity ? "--timestamp" : "--timestamp=none");
+  // The hardened runtime refuses the microphone without an audio-input
+  // entitlement, and this build carries no entitlements file yet. A local
+  // identity therefore signs without it; a Developer ID (KOS-349) brings
+  // both.
+  const runtime = identity && hardened ? ["--options", "runtime"] : [];
+  const flags = identity ? [...runtime, stamp] : ["--timestamp=none"];
+  // A signing identity kept outside the login keychain is passed explicitly:
+  // codesign searches only the keychains in the user's search list.
+  const store = keychain ? ["--keychain", keychain] : [];
   const sign = identity ?? "-";
   const commands = machos
     .filter((file) => file !== mainExe)
@@ -61,12 +79,35 @@ export function signingCommands({ appRoot, machos, mainExecutableName, identity 
       const name = path.basename(target).replace(/[^A-Za-z0-9.-]/g, "-");
       return {
         target,
-        args: ["--force", ...flags, "--sign", sign, "--identifier", `${BUNDLE_ID}.${name}`, target],
+        args: [
+          "--force",
+          ...flags,
+          ...store,
+          "--sign",
+          sign,
+          "--identifier",
+          `${BUNDLE_ID}.${name}`,
+          target,
+        ],
       };
     });
   commands.push({
     target: appRoot,
-    args: ["--force", ...flags, "--sign", sign, "--identifier", BUNDLE_ID, appRoot],
+    args: [
+      "--force",
+      ...flags,
+      ...store,
+      // macOS remembers a privacy grant by this requirement, so naming the
+      // certificate itself keeps the grant across rebuilds.
+      // One argument: codesign reads a space-separated requirement as a file
+      // name and answers «invalid requirement specification».
+      ...(requirement ? [`-r=${requirement}`] : []),
+      "--sign",
+      sign,
+      "--identifier",
+      BUNDLE_ID,
+      appRoot,
+    ],
   });
   return commands;
 }
@@ -77,13 +118,15 @@ function run(cmd, args) {
     throw new Error(`${cmd} ${args[0] ?? ""} failed (exit ${result.status})`);
   }
 }
-
 /**
  * Sign `appRoot` inside-out and prove the seal before returning. Detritus
  * xattrs are stripped first: FinderInfo/resource-fork leftovers make
  * `codesign --strict` fail with "detritus not allowed".
  */
-export function signMacosApp(appRoot, { mainExecutableName, identity } = {}) {
+export function signMacosApp(
+  appRoot,
+  { mainExecutableName, identity, keychain, timestamp, hardened, requirement } = {},
+) {
   const probe = spawnSync("xattr", ["-cr", appRoot], { stdio: "ignore" });
   if ((probe.status ?? 1) !== 0) throw new Error(`xattr -cr failed on ${appRoot}`);
   for (const { args } of signingCommands({
@@ -91,6 +134,10 @@ export function signMacosApp(appRoot, { mainExecutableName, identity } = {}) {
     machos: listMachOFiles(appRoot),
     mainExecutableName,
     identity,
+    keychain,
+    timestamp,
+    hardened,
+    requirement,
   })) {
     run("codesign", args);
   }

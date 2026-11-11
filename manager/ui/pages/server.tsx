@@ -1,8 +1,16 @@
 import { Text, View } from "nsh";
-import { Card, CardRow, FieldRow, PillButton, SectionLabel } from "@makekosmos/imago-nsh";
+import {
+  Card,
+  CardRow,
+  FieldRow,
+  PillButton,
+  SectionLabel,
+  StatusDot,
+} from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
-import { statusLabel } from "../state";
+import { productVersion, statusLabel } from "../state";
 import { Page } from "../page";
+import { updateAction, updateSubtitle } from "./updates";
 
 /** The page of the reference: what the Engine is doing right now. */
 export function ServerPage(props: PageProps) {
@@ -16,8 +24,12 @@ export function ServerPage(props: PageProps) {
         <CardRow
           colors={props.colors}
           logo
-          title="Mundus"
-          subtitle={statusLabel(state().engine.status)}
+          title={productVersion(state()) ? `Mundus ${productVersion(state())}` : "Mundus"}
+          subtitle={
+            productVersion(state())
+              ? `${statusLabel(state().engine.status)} · канал ${state().engine.channel}`
+              : statusLabel(state().engine.status)
+          }
           last
           right={
             <PillButton
@@ -30,6 +42,34 @@ export function ServerPage(props: PageProps) {
           }
         />
       </Card>
+
+      <View>
+        <SectionLabel colors={props.colors}>Программа</SectionLabel>
+        <Card colors={props.colors}>
+          <CardRow
+            colors={props.colors}
+            title="Обновления"
+            subtitle={updateSubtitle(state().updates)}
+            right={updateAction({ ...props, updates: state().updates })}
+          />
+          <CardRow
+            colors={props.colors}
+            title="Engine"
+            subtitle={
+              state().engine.version
+                ? `${statusLabel(state().engine.status)} · ${state().engine.version}`
+                : statusLabel(state().engine.status)
+            }
+            right={
+              <StatusDot
+                colors={props.colors}
+                tone={state().engine.status === "running" ? "success" : "muted"}
+              />
+            }
+            last
+          />
+        </Card>
+      </View>
 
       <View>
         <SectionLabel colors={props.colors}>Коннектор</SectionLabel>

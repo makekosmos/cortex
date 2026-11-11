@@ -669,6 +669,18 @@ pub(super) async fn op_get_stats(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(stats_to_value(&s))
 }
 
+pub(super) fn op_accelerator(params: &Value) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_native::capture_value_to_accelerator(params)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = params;
+        None
+    }
+}
+
 pub(super) async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
     let mut s = host.stats.lock().await;
     *s = DictationStats::default();

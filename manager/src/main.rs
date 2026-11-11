@@ -10,7 +10,11 @@ mod bridge;
 mod chrome;
 mod data;
 mod engine;
+mod gpu_scope;
+mod hotkey;
 mod identity;
+mod log;
+mod pill;
 mod plugins;
 
 use gpui::prelude::*;
@@ -88,7 +92,11 @@ fn main() {
             titlebar: Some(gpui::TitlebarOptions {
                 title: None,
                 appears_transparent: true,
-                ..Default::default()
+                // Down and in from the corner, the way Chrome and System
+                // Settings place them: AppKit's default hugs the very corner
+                // and lands on the sidebar's search field. The sidebar keeps
+                // `MAC_LIGHTS_INSET` clear above its own content.
+                traffic_light_position: Some(gpui::point(px(20.), px(18.))),
             }),
             // The pages drag the window themselves (`desktop={{ windowDrag }}`)
             // from the page heading and the sidebar, so AppKit must not drag the
@@ -96,6 +104,8 @@ fn main() {
             app_owns_titlebar_drag: true,
             ..Default::default()
         };
+        pill::start(cx);
+        hotkey::start();
         cx.open_window(options, |window, cx| {
             window.set_window_title(WINDOW_TITLE);
             let view = cx.new(|cx| {

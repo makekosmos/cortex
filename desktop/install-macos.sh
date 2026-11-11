@@ -12,7 +12,7 @@
 # same-volume staging dir with rollback, relaunch.
 set -euo pipefail
 
-APP_NAME="Mundus Manager.app"
+APP_NAME="Mundus.app"
 DEST="${MUNDUS_INSTALL_DIR:-/Applications}/$APP_NAME"
 FEED="https://github.com/makekosmos/cortex/releases/latest/download"
 

@@ -21,25 +21,6 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
-    id: "app",
-    entries: [
-      {
-        route: "about",
-        label: "О приложении",
-        icon: "info",
-        accent: "#1784fc",
-        accentTo: "#915bfc",
-      },
-      {
-        route: "appearance",
-        label: "Внешний вид",
-        icon: "palette",
-        accent: "#f79411",
-        accentTo: "spectrum",
-      },
-    ],
-  },
-  {
     id: "running",
     entries: [
       { route: "plugins", label: "Плагины", icon: "apps", accent: "#fa6710", accentTo: "#fc2d3e" },
