@@ -208,6 +208,14 @@ export function stageMacosApp({ version, stageDir }) {
     }
   }
 
+  // The menu bar mark. It ships on every host: the Engine looks for it inside
+  // the bundle and finds it or not, and a missing file only leaves the helper
+  // with its fallback letter.
+  const traySrc = path.join(desktopRoot, "build", "app-icons", "tray-template.png");
+  const trayDst = path.join(contents, "Resources", "tray-template.png");
+  mkdirSync(path.dirname(trayDst), { recursive: true });
+  copyFileSync(traySrc, trayDst);
+
   writeInfoPlist(contents, version);
 
   // Icon + signature are macOS-only steps; staging on other hosts still

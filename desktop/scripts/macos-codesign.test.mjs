@@ -38,12 +38,18 @@ test("listMachOFiles finds every binary under the bundle, not plist/icns", async
     await writeFile(path.join(macos, "Mundus Manager"), macho);
     await writeFile(path.join(macos, "mundus-engine"), macho);
     await writeFile(path.join(helpers, "paste-text"), macho);
+    await writeFile(path.join(helpers, "engine-menu-bar"), macho);
     await writeFile(path.join(root, "Contents", "Info.plist"), "<plist/>");
     await writeFile(path.join(root, "Contents", "Resources", "mundus.icns"), "icns");
     const found = listMachOFiles(root)
       .map((f) => path.relative(macos, f).split(path.sep).join("/"))
       .sort();
-    assert.deepEqual(found, ["Mundus Manager", "mundus-engine", "native/macos/paste-text"]);
+    assert.deepEqual(found, [
+      "Mundus Manager",
+      "mundus-engine",
+      "native/macos/engine-menu-bar",
+      "native/macos/paste-text",
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

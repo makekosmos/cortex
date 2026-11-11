@@ -264,6 +264,7 @@ async fn run_core_worker() -> ExitCode {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => break None,
                 event = tray_events.recv() => match event {
+                    Some(backend_tray::TrayEvent::OpenManager) => backend_tray::open_manager(),
                     Some(backend_tray::TrayEvent::Exit) => {
                         tray_exit_requested = true;
                         break Some(ControlMessage::ShutdownRequested);
@@ -298,16 +299,18 @@ async fn run_core_worker() -> ExitCode {
             }
         }
     } else {
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => None,
-            event = tray_events.recv() => match event {
-                Some(backend_tray::TrayEvent::Exit) => {
-                    tray_exit_requested = true;
-                    Some(ControlMessage::ShutdownRequested)
-                }
-                None => None,
-            },
-
+        loop {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => break None,
+                event = tray_events.recv() => match event {
+                    Some(backend_tray::TrayEvent::OpenManager) => backend_tray::open_manager(),
+                    Some(backend_tray::TrayEvent::Exit) => {
+                        tray_exit_requested = true;
+                        break Some(ControlMessage::ShutdownRequested);
+                    }
+                    None => break None,
+                },
+            }
         }
     };
     eprintln!("[mundus-engine] shutdown signal received, cleaning up");

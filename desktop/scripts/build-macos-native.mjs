@@ -26,6 +26,11 @@ mkdirSync(moduleCacheDir, { recursive: true });
 
 const helpers = [
   {
+    out: "engine-menu-bar",
+    sources: ["engine-menu-bar.swift"],
+    frameworks: ["AppKit", "Foundation"],
+  },
+  {
     out: "hotkey-hold-monitor",
     sources: ["hotkey-hold-monitor.swift"],
     frameworks: ["CoreGraphics", "AppKit", "Carbon"],

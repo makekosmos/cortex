@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { dmgName, MANAGER_MAC_BIN, ENGINE_BINARY_UNIX } from "./brand.mjs";
+import { dmgName, MANAGER_MAC_BIN, ENGINE_BINARY_UNIX, PRODUCT_NAME } from "./brand.mjs";
 
 test("dmgName is Mundus-<ver>.dmg", () => {
   assert.equal(dmgName("1.2.3"), "Mundus-1.2.3.dmg");
@@ -40,14 +40,22 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     const helper = path.join(helpersDir, "hotkey-hold-monitor");
     const createdHelper = !existsSync(helper);
     if (createdHelper) await writeFakeBinary(helper, "helper");
+    const trayHelper = path.join(helpersDir, "engine-menu-bar");
+    const createdTrayHelper = !existsSync(trayHelper);
+    if (createdTrayHelper) await writeFakeBinary(trayHelper, "tray-helper");
 
     const stageDir = path.join(root, "stage");
     const appPath = stageMacosApp({ version: "1.2.3", stageDir });
-    assert.ok(appPath.endsWith("Mundus Manager.app"));
+    // The app carries the product name alone: "Mundus.app".
+    assert.ok(appPath.endsWith(`${PRODUCT_NAME}.app`));
     assert.equal(existsSync(path.join(appPath, "Contents", "MacOS", MANAGER_MAC_BIN)), true);
     assert.equal(existsSync(path.join(appPath, "Contents", "MacOS", ENGINE_BINARY_UNIX)), true);
     assert.equal(
       existsSync(path.join(appPath, "Contents", "MacOS", "native", "macos", "hotkey-hold-monitor")),
+      true,
+    );
+    assert.equal(
+      existsSync(path.join(appPath, "Contents", "MacOS", "native", "macos", "engine-menu-bar")),
       true,
     );
     const plist = await readFile(path.join(appPath, "Contents", "Info.plist"), "utf8");
@@ -56,6 +64,7 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
       assert.equal(existsSync(path.join(appPath, "Contents", "Resources", "mundus.icns")), true);
     }
     if (createdHelper) await rm(helper, { force: true });
+    if (createdTrayHelper) await rm(trayHelper, { force: true });
   } finally {
     if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
     else process.env.CARGO_TARGET_DIR = previous;
