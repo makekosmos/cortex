@@ -126,6 +126,8 @@ export type PluginsState = {
     /** Statistics the Engine resolved for this page; absent when the plugin
      * declares none. */
     stats?: PluginStats | null;
+    /** True until the Engine answers for this page. */
+    loading: boolean;
   } | null;
 };
 

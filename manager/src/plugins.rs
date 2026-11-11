@@ -28,6 +28,9 @@ pub(crate) fn shape(key: &str, data: &Value) -> Option<Value> {
             "id": text(data, &["/id"]).unwrap_or_default(),
             "manifest": data.get("manifest").cloned().unwrap_or(Value::Null),
             "values": data.get("values").cloned().unwrap_or_else(|| json!({})),
+            // The answer replaces the placeholder `data::pending` wrote, so the
+            // page can tell a slow Engine from one with no such plugin.
+            "loading": false,
         }),
         _ => return None,
     })

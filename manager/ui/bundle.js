@@ -3276,38 +3276,42 @@ function PluginPage(props) {
 			options: field.kind.options
 		};
 	};
-	if (!shown) return component(Page, {
-		get colors() {
-			return props.colors;
-		},
-		get title() {
-			return plugin()?.name ?? "Плагин";
-		},
-		get children() {
-			return component(Card, {
-				get colors() {
-					return props.colors;
-				},
-				get children() {
-					return component(CardRow, {
-						get colors() {
-							return props.colors;
-						},
-						icon: "plug",
-						get iconFill() {
-							return props.colors.raised;
-						},
-						get accent() {
-							return props.colors.muted;
-						},
-						title: "Настройки недоступны",
-						subtitle: "Engine не сообщил описание плагина",
-						last: true
-					});
-				}
-			});
-		}
-	});
+	if (!shown) {
+		const waiting = current()?.id === props.id && current()?.loading;
+		return component(Page, {
+			get colors() {
+				return props.colors;
+			},
+			get title() {
+				return plugin()?.name ?? "Плагин";
+			},
+			get children() {
+				return component(Card, {
+					get colors() {
+						return props.colors;
+					},
+					get children() {
+						return component(CardRow, {
+							get colors() {
+								return props.colors;
+							},
+							icon: "plug",
+							get iconFill() {
+								return props.colors.raised;
+							},
+							get accent() {
+								return props.colors.muted;
+							},
+							title: waiting ? "Загружаем настройки" : "Настройки недоступны",
+							subtitle: waiting ? "Ждём ответа Engine" : "Engine не сообщил описание плагина — нажмите, чтобы повторить",
+							onPress: waiting ? void 0 : () => props.onCommand("route.reload", {}),
+							last: true
+						});
+					}
+				});
+			}
+		});
+	}
 	return [component(Page, {
 		get colors() {
 			return props.colors;

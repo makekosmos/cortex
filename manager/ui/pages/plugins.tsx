@@ -183,6 +183,9 @@ export function PluginPage(props: PageProps & { id: string }) {
   };
 
   if (!shown) {
+    // The answer takes a moment; until it lands the page says so, and a page
+    // that stays empty offers a reload rather than a dead end.
+    const waiting = current()?.id === props.id && current()?.loading;
     return (
       <Page colors={props.colors} title={plugin()?.name ?? "Плагин"}>
         <Card colors={props.colors}>
@@ -191,8 +194,13 @@ export function PluginPage(props: PageProps & { id: string }) {
             icon="plug"
             iconFill={props.colors.raised}
             accent={props.colors.muted}
-            title="Настройки недоступны"
-            subtitle="Engine не сообщил описание плагина"
+            title={waiting ? "Загружаем настройки" : "Настройки недоступны"}
+            subtitle={
+              waiting
+                ? "Ждём ответа Engine"
+                : "Engine не сообщил описание плагина — нажмите, чтобы повторить"
+            }
+            onPress={waiting ? undefined : () => props.onCommand("route.reload", {})}
             last
           />
         </Card>

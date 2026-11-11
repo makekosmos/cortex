@@ -89,6 +89,7 @@ impl Loader {
             for job in queue {
                 match job {
                     Job::Route(route) => {
+                        note_pending(&context, &state, &route);
                         for (key, op, params) in calls(&route) {
                             run(&engine, &context, &state, key, op, params, None);
                         }
@@ -139,6 +140,24 @@ impl Loader {
             reload: Some(route.to_owned()),
         });
     }
+}
+
+/// Says «loading» where a page would otherwise read «nothing to show»: the
+/// Engine's answer takes a moment, and a plugin's page has no other way to tell
+/// that moment from a plugin it does not know.
+fn note_pending(context: &ComponentContext, state: &Arc<Mutex<Value>>, route: &str) {
+    let Some(id) = route.strip_prefix("plugin/") else {
+        return;
+    };
+    let Ok(mut state) = state.lock() else {
+        return;
+    };
+    write(
+        &mut state,
+        "plugins.current",
+        json!({ "id": id, "manifest": Value::Null, "values": json!({}), "loading": true }),
+    );
+    context.emit("state", state.clone());
 }
 
 fn run(

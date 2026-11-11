@@ -360,6 +360,8 @@ impl NativeComponent for ManagerBridge {
                 json!({ "id": Self::id(args) }),
                 "plugins",
             ),
+            // A page whose answer never came asks for it again.
+            "route.reload" => loader.open(&self.route),
             // The page that sent this is the plugin's own (`plugin/<id>`).
             "plugins.set" => loader.then_reload(
                 "plugins.current",
