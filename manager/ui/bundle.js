@@ -1297,6 +1297,14 @@ function Confirm(props) {
 
 //#endregion
 //#region page.tsx
+/**
+* The same chevron as the kit's, mirrored. The kit draws one glyph pointing
+* right and this renderer has no `rotate`, so the back arrow is its own path:
+* the shape is symmetric about the middle of the box.
+*/
+const CHEVRON_LEFT = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14.5%206l-6%206%206%206%22%2F%3E%3C%2Fsvg%3E";
+/** The kit's own chevron, pointing right: the forward arrow. */
+const CHEVRON_RIGHT = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9.5%206l6%206-6%206%22%2F%3E%3C%2Fsvg%3E";
 /** One half of the anchors' pill: a chevron, dimmed when there is no step. */
 function Anchor(props) {
 	return (() => {
@@ -1310,14 +1318,12 @@ function Anchor(props) {
 			height: 30,
 			opacity: props.enabled ? 1 : .32
 		}));
-		const __nsh_hv1 = element("view");
-		bindProp(__nsh_hv1, "style", () => props.direction === "back" ? { rotate: 180 } : void 0);
-		insert(__nsh_hv1, component(Icon, {
-			name: "chevron",
-			size: 15,
-			get color() {
-				return props.colors.foreground;
-			}
+		const __nsh_hv1 = element("image");
+		bindProp(__nsh_hv1, "src", () => props.direction === "back" ? CHEVRON_LEFT : CHEVRON_RIGHT);
+		bindProp(__nsh_hv1, "style", () => ({
+			width: 15,
+			height: 15,
+			tintColor: props.colors.foreground
 		}));
 		append(__nsh_hv0, __nsh_hv1);
 		return __nsh_hv0;

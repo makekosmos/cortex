@@ -262,4 +262,5 @@ fn shape(key: &str, data: Value) -> Value {
 
 /// The whole sync surface: peers for the Devices page and the pairing requests
 /// the modal shows on whatever page the user is on.
+#[cfg(test)]
 mod tests;

@@ -24,8 +24,10 @@ use gpui_fast_backend as _;
 use imago_nsh::{Bundle, NshApp};
 
 const WINDOW_TITLE: &str = identity::PRODUCT_NAME;
-const WINDOW_WIDTH: f32 = 1180.;
-const WINDOW_HEIGHT: f32 = 820.;
+// A control panel, not a workspace: a small window is enough, and the person
+// resizes it when a page wants more room.
+const WINDOW_WIDTH: f32 = 800.;
+const WINDOW_HEIGHT: f32 = 600.;
 
 /// The window's content: the NSH surface inside gpui-component's Root, with the
 /// window's own caption buttons over it.

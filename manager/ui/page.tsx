@@ -1,10 +1,21 @@
-import { Scroll, Text, View } from "nsh";
+import { Image, Scroll, Text, View } from "nsh";
 import { titleBar } from "nsh/desktop";
-import { Icon, settingsMetrics as M } from "@makekosmos/imago-nsh";
+import { settingsMetrics as M } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { captionStrip, headerHeight } from "./chrome";
 import { dragBinding } from "./host";
 import { back, canBack, canForward, forward } from "./history";
+
+/**
+ * The same chevron as the kit's, mirrored. The kit draws one glyph pointing
+ * right and this renderer has no `rotate`, so the back arrow is its own path:
+ * the shape is symmetric about the middle of the box.
+ */
+const CHEVRON_LEFT =
+  "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M14.5%206l-6%206%206%206%22%2F%3E%3C%2Fsvg%3E";
+/** The kit's own chevron, pointing right: the forward arrow. */
+const CHEVRON_RIGHT =
+  "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9.5%206l6%206-6%206%22%2F%3E%3C%2Fsvg%3E";
 
 /** One half of the anchors' pill: a chevron, dimmed when there is no step. */
 function Anchor(props: {
@@ -25,11 +36,10 @@ function Anchor(props: {
         opacity: props.enabled ? 1 : 0.32,
       }}
     >
-      {/* The kit's chevron points right; the back arrow is the same glyph
-          turned half round: the shape is symmetric about its middle. */}
-      <View style={props.direction === "back" ? { rotate: 180 } : undefined}>
-        <Icon name="chevron" size={15} color={props.colors.foreground} />
-      </View>
+      <Image
+        src={props.direction === "back" ? CHEVRON_LEFT : CHEVRON_RIGHT}
+        style={{ width: 15, height: 15, tintColor: props.colors.foreground }}
+      />
     </View>
   );
 }
