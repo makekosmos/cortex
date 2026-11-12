@@ -289,10 +289,19 @@ mod tests {
     #[test]
     fn the_meter_maps_like_the_apps_pill() {
         let ticker = PillTicker::new();
+        // The capture helper sends `min(1, rms * 5)`, so half its meter is an
+        // RMS of 0.1 — a loud voice, -20 dBFS.
         ticker.set_level(0.5);
-        assert_eq!(*ticker.shared.loudness.lock().unwrap(), -35.0);
+        assert!((*ticker.shared.loudness.lock().unwrap() + 20.0).abs() < 0.01);
+        // Quiet speech is still above the measure: -54 dBFS, not silence.
         ticker.set_level(0.01);
-        assert_eq!(*ticker.shared.loudness.lock().unwrap(), QUIET_DBFS);
+        let quiet = *ticker.shared.loudness.lock().unwrap();
+        assert!((quiet + 54.0).abs() < 0.2, "{quiet}");
+        assert!(quiet > NOISE_FLOOR);
+        // A stopped microphone is the floor, not minus infinity: 1e-5 of RMS
+        // is -100 dBFS, under the scope's -55 and above the rail.
+        ticker.set_level(0.0);
+        assert_eq!(*ticker.shared.loudness.lock().unwrap(), -100.0);
     }
 
     #[test]
