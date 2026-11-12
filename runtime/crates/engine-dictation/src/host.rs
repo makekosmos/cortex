@@ -100,6 +100,17 @@ pub async fn handle_dictation_op(
         "accelerator" => DictationResponse::ok(json!({
             "accelerator": op_accelerator(&params),
         })),
+        // The Manager exits on Cmd+Q; the Engine takes the keyboard back so
+        // dictation keeps working with only the menu bar icon left.
+        "restore_hotkey" => {
+            #[cfg(target_os = "macos")]
+            {
+                crate::macos_native::restore_listeners();
+                let config = host.config.lock().await.clone();
+                apply_ptt_hook(&config, &host.events_tx);
+            }
+            DictationResponse::ok(json!({}))
+        }
         "release_hotkey" => {
             #[cfg(target_os = "macos")]
             crate::macos_native::release_listeners();

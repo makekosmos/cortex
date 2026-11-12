@@ -42,7 +42,7 @@ pub fn start() {
     // The Manager keeps the tap, so the Engine's helper must go at once: it
     // carries its own signature, cannot see the key, and would fire a second
     // toggle if it ever did.
-    release_engine_listener();
+    crate::handover::from_engine();
     #[cfg(target_os = "macos")]
     macos::start();
 }
@@ -181,14 +181,9 @@ fn toggle() {
     });
 }
 
-/// The Engine's own listener would fire the same key a second time, and two
-/// toggles are no toggle at all: the Manager keeps the tap and the Engine drops
-/// its helper.
-pub fn release_engine_listener() {
-    std::thread::spawn(|| {
-        let engine = crate::engine::Engine::new(crate::engine::data_dir());
-        let _ = engine.rpc("dictation.release_hotkey", json!({}));
-    });
+/// Whether this process is hearing the keyboard.
+pub fn listening() -> bool {
+    RUNNING.load(Ordering::SeqCst)
 }
 
 /// Notes what the tap does, for a person who cannot see a key do anything:

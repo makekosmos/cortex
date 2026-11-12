@@ -11,9 +11,11 @@ mod chrome;
 mod data;
 mod engine;
 mod gpu_scope;
+mod handover;
 mod hotkey;
 mod identity;
 mod log;
+mod menu;
 mod pill;
 mod plugins;
 
@@ -71,6 +73,10 @@ fn main() {
     }
     gpui::application().run(|cx: &mut App| {
         gpui_component::init(cx);
+        // The pages are embedded in this window, not in an NSH surface of their
+        // own, so the menu bar macOS expects is placed here; without it Cmd+Q
+        // answers to nothing.
+        menu::install(cx);
         cx.text_system()
             .add_fonts(assets::font_bytes())
             .expect("failed to load the design's fonts");

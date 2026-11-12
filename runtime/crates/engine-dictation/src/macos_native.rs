@@ -29,6 +29,14 @@ pub fn release_listeners() {
     CAPTURE_GENERATION.fetch_add(1, Ordering::SeqCst);
 }
 
+/// The Manager has quit: the Engine listens for the hotkey again, so dictation
+/// outlives the window it was set up in.
+pub fn restore_listeners() {
+    MANAGER_OWNS_HOTKEY.store(false, Ordering::SeqCst);
+    WATCH_GENERATION.fetch_add(1, Ordering::SeqCst);
+    CAPTURE_GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
 static MANAGER_OWNS_HOTKEY: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Error)]
