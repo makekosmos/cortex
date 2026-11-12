@@ -11,7 +11,7 @@ const installSection =
 
 test("Mundus Start Menu shortcut opens the packaged Manager GPUI", () => {
   const manager = "$INSTDIR\\resources\\components\\manager\\${MANAGER_EXE}";
-  expect(MANAGER_EXE).toBe("Mundus Manager.exe");
+  expect(MANAGER_EXE).toBe("Mundus.exe");
   expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Mundus.lnk" "${manager}"`);
   expect(installer).toContain('Delete "$DESKTOP\\Mundus.lnk"');
   expect(installer).toContain('Delete "$SMPROGRAMS\\Mundus.lnk"');
