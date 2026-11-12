@@ -410,12 +410,15 @@ impl NativeComponent for ManagerBridge {
             // row appears there only after the app requests the access.
             "hotkey.settings" => {
                 crate::hotkey::request_access();
+                // Windows has no pane to open: its hotkey is a hook, not a
+                // permission, so the request alone is the whole job.
                 #[cfg(target_os = "macos")]
-                const INPUT_MONITORING: &str =
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent";
-                let _ = std::process::Command::new("open")
-                    .arg(INPUT_MONITORING)
-                    .spawn();
+                {
+                    const INPUT_MONITORING: &str = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent";
+                    let _ = std::process::Command::new("open")
+                        .arg(INPUT_MONITORING)
+                        .spawn();
+                }
             }
             _ => {}
         }
