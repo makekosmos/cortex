@@ -31,11 +31,13 @@ static HELD: [AtomicBool; 5] = [
     AtomicBool::new(false),
 ];
 /// The moment of the last Fn press, for the double tap.
+#[cfg(target_os = "macos")]
 static LAST_FN: AtomicU64 = AtomicU64::new(0);
 /// Which wait for a combination is the current one, so an old timeout does
 /// not cancel a new attempt.
 static ATTEMPT: AtomicU64 = AtomicU64::new(0);
 /// The combination the settings hold, as `dictation-config.json` has it.
+#[cfg(target_os = "macos")]
 static TRIGGER: Mutex<String> = Mutex::new(String::new());
 
 pub fn start() {
@@ -101,6 +103,7 @@ pub fn disarm() {
 
 /// The combination the person set, read again while the app runs: the page
 /// saves it through the Engine, and the tap has to follow within a second.
+#[cfg(target_os = "macos")]
 fn trigger() -> String {
     TRIGGER
         .lock()
@@ -108,6 +111,7 @@ fn trigger() -> String {
         .unwrap_or_default()
 }
 
+#[cfg(target_os = "macos")]
 fn refresh_trigger() {
     let Some(dir) = crate::engine::data_dir() else {
         return;
@@ -146,6 +150,7 @@ fn publish() {
     emit("hotkeyState", event);
 }
 
+#[cfg(target_os = "macos")]
 fn finish(accelerator: &str) {
     ATTEMPT.fetch_add(1, Ordering::SeqCst);
     CAPTURING.store(false, Ordering::SeqCst);
@@ -174,6 +179,7 @@ fn emit(name: &str, data: Value) {
 
 /// Asks the Engine to start or stop the dictation, on a thread of its own: the
 /// tap's callback must answer at once or macOS disables it.
+#[cfg(target_os = "macos")]
 fn toggle() {
     std::thread::spawn(|| {
         let engine = crate::engine::Engine::new(crate::engine::data_dir());
