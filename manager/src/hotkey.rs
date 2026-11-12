@@ -251,7 +251,7 @@ mod macos {
             // The list in System Settings holds only apps that asked, and a
             // reset or a rename drops the row. Asking again keeps the app
             // reachable; macOS shows its dialog once.
-            if !granted && asked.map_or(true, |at| at.elapsed() > Duration::from_secs(10)) {
+            if !granted && asked.is_none_or(|at| at.elapsed() > Duration::from_secs(10)) {
                 asked = Some(Instant::now());
                 unsafe { CGRequestListenEventAccess() };
             }
