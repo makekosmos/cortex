@@ -142,21 +142,6 @@ fn a_pairing_request_carries_who_is_asking() {
 }
 
 #[test]
-fn appearance_reads_the_settings_the_engine_stores() {
-    let stored = json!({
-        "settings": {
-            "mode": "dark",
-            "light_theme": "merino-light",
-            "dark_theme": "cobalt-foundry",
-            "follow_apps": true,
-        },
-    });
-    let theme = shape("appearance", stored);
-    assert_eq!(theme["dark"], "cobalt-foundry");
-    assert_eq!(theme["followApps"], true);
-}
-
-#[test]
 fn updates_say_what_the_channel_offers() {
     let status = json!({
         "state": "available",

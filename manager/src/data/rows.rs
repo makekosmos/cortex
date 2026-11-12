@@ -131,14 +131,20 @@ pub(crate) fn updates(data: &Value) -> Value {
 /// Engine answers `{settings: {autostart, usage_tracker_enabled}}`; one call may
 /// also carry only one of them, so both are read leniently.
 pub(crate) fn settings(data: &Value) -> Value {
+    // `autostart` is not read here: `engine.autostart.get` holds that switch,
+    // and this answer does not mention it. Writing it anyway would drop the
+    // other call's answer to `false`.
     json!({
-        "autostart": bool_at(
-            data,
-            &["/settings/autostart", "/autostart", "/autostart_enabled", "/start_at_login"],
-        ),
         "telemetry": bool_at(
             data,
-            &["/settings/usage_tracker_enabled", "/usage_tracker_enabled", "/telemetry"],
+            // `engine.settings.get` answers `{"usage_tracker": {"enabled": …}}`;
+            // the flat keys are what an older file on disk holds.
+            &[
+                "/usage_tracker/enabled",
+                "/settings/usage_tracker_enabled",
+                "/usage_tracker_enabled",
+                "/telemetry",
+            ],
         ),
     })
 }
