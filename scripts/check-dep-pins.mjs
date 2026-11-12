@@ -42,6 +42,12 @@ const ALLOWED = new Map([
   // built against — a caret bump would give it a second, incompatible
   // `HasWindowHandle` implementation to resolve.
   ["manager/Cargo.toml::raw-window-handle", "=0.6.2"],
+  // wgpu =29.0.4 and image =0.25.10: the pill's shader runs on the device
+  // gpui-fast creates, and `gpu_scope` hands that device an `image` buffer.
+  // Two wgpu or image versions in one binary are two incompatible types, and
+  // the scope would not compile against gpui's own device.
+  ["manager/Cargo.toml::wgpu", "=29.0.4"],
+  ["manager/Cargo.toml::image", "=0.25.10"],
   // KOS-423 is a reproducible comparison of Automerge, Loro, and Yrs merge
   // behavior and encoded sizes. Pin all inputs, including JSON serialization,
   // so regenerating its standalone lockfile cannot silently change results.
