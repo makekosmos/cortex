@@ -93,6 +93,7 @@ impl Loader {
                         for (key, op, params) in calls(&route) {
                             run(&engine, &context, &state, key, op, params, None);
                         }
+                        resend(&context, &state);
                     }
                     Job::Rpc {
                         key,
@@ -160,6 +161,24 @@ fn note_pending(context: &ComponentContext, state: &Arc<Mutex<Value>>, route: &s
     context.emit("state", state.clone());
 }
 
+/// Sends the state once more, after the page that asked for it has mounted.
+///
+/// An answer to a fast Engine lands while the new page is still being built,
+/// and that first `state` event is lost with the page it was aimed at: the page
+/// then shows «nothing» even though the state holds the answer. A second send a
+/// quarter of a second later reaches the page that is on screen by then.
+fn resend(context: &ComponentContext, state: &Arc<Mutex<Value>>) {
+    let context = context.clone();
+    let state = Arc::clone(state);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let Ok(state) = state.lock() else {
+            return;
+        };
+        context.emit("state", state.clone());
+    });
+}
+
 fn run(
     engine: &Engine,
     context: &ComponentContext,
@@ -175,10 +194,14 @@ fn run(
         Err(_) => return,
     };
     match answer {
-        Ok(data) => apply(&mut state, key, data, transform),
+        Ok(data) => {
+            apply(&mut state, key, data, transform);
+            crate::log::append("manager", &format!("{op} ok -> {key}"));
+        }
         Err(message) => {
             // Keep what the page shows: a failed refresh is not an empty page.
             tracing::warn!(op, error = %message, "engine call failed");
+            crate::log::append("manager", &format!("{op} failed -> {key}: {message}"));
         }
     }
     context.emit("state", state.clone());

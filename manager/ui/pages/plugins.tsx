@@ -22,7 +22,7 @@ import {
   same,
 } from "./plugin-fields";
 import { Page } from "../page";
-import { Modal, note } from "../modal";
+import { note } from "../modal";
 import { HotkeyRecorder } from "./plugin-hotkey";
 import { AvailableRow, InstalledRow } from "./plugin-rows";
 import { StatsBlock } from "./plugin-stats";
@@ -53,7 +53,6 @@ export function PluginsPage(props: PageProps) {
                 plugin={plugin}
                 colors={props.colors}
                 last={index === installed().length - 1}
-                onOpen={() => props.onCommand("plugins.launch", { id: plugin.id })}
                 onConfigure={() => props.onCommand("route", { route: `plugin/${plugin.id}` })}
                 onRemove={() => props.onCommand("plugins.remove", { id: plugin.id })}
               />
@@ -235,14 +234,6 @@ export function PluginPage(props: PageProps & { id: string }) {
               right={
                 <View class="flex-row items-center gap-2">
                   {plugin()?.running ? <StatusDot colors={props.colors} /> : null}
-                  {plugin()?.executable ? (
-                    <PillButton
-                      colors={props.colors}
-                      tone="neutral"
-                      label="Открыть"
-                      onPress={() => props.onCommand("plugins.launch", { id: props.id })}
-                    />
-                  ) : null}
                 </View>
               }
             />

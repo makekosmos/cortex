@@ -52,7 +52,25 @@ impl ManagerBridge {
         let engine = Engine::new(engine::data_dir());
         engine::watch(engine.clone(), context.clone(), state.clone());
         let loader = Loader::start(engine, context.clone(), state.clone());
-        loader.open("server");
+        // `MUNDUS_MANAGER_ROUTE` opens one page at start: a screenshot run
+        // reaches any page without moving the pointer.
+        let route = std::env::var("MUNDUS_MANAGER_ROUTE")
+            .ok()
+            .filter(|route| is_route(route))
+            .unwrap_or_else(|| "server".to_owned());
+        loader.open(&route);
+        if route != "server" {
+            // The pages start on the Server and follow their own history, so
+            // they are told to open this one — after their handlers are
+            // attached, and without waiting for a frame an offscreen window
+            // may never draw.
+            let context = context.clone();
+            let asked = route.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                context.emit("navigate", json!({ "route": asked }));
+            });
+        }
         // The sidebar lists installed plugins on every page, not only on the
         // one that installs them, so that is read from the start.
         loader.open("plugins");
@@ -62,7 +80,7 @@ impl ManagerBridge {
         Self {
             context,
             state,
-            route: "server".into(),
+            route,
             loader: Some(loader),
             started: false,
         }
@@ -185,6 +203,7 @@ impl NativeComponent for ManagerBridge {
             .unwrap_or("server");
         self.route = route.to_owned();
         let route = self.route.clone();
+        crate::log::append("manager", &format!("route {route}"));
         if let Some(loader) = &self.loader {
             loader.open(&route);
         }

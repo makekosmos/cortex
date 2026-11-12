@@ -2893,7 +2893,9 @@ function versionLine(plugin) {
 	if (plugin.running) parts.push("запущен");
 	return parts.join(" · ");
 }
-/** A row of the installed list: open it, change its settings, remove it. */
+/** A row of the installed list: change its settings, remove it. A plugin is a
+* setting of this program, not a program beside it, so nothing here launches
+* one. */
 function InstalledRow(props) {
 	const { colors, plugin } = props;
 	return component(CardRow, {
@@ -2918,31 +2920,20 @@ function InstalledRow(props) {
 			return (() => {
 				const __nsh_hv0 = element("view");
 				prop(__nsh_hv0, "class", "flex-row items-center gap-2");
-				insert(__nsh_hv0, [
-					component(PillButton, {
-						colors,
-						label: "Настроить",
-						get onPress() {
-							return props.onConfigure;
-						}
-					}),
-					() => plugin.executable ? component(PillButton, {
-						colors,
-						tone: "neutral",
-						label: "Открыть",
-						get onPress() {
-							return props.onOpen;
-						}
-					}) : null,
-					component(PillButton, {
-						colors,
-						tone: "danger",
-						label: "Удалить",
-						get onPress() {
-							return props.onRemove;
-						}
-					})
-				]);
+				insert(__nsh_hv0, [component(PillButton, {
+					colors,
+					label: "Настроить",
+					get onPress() {
+						return props.onConfigure;
+					}
+				}), component(PillButton, {
+					colors,
+					tone: "danger",
+					label: "Удалить",
+					get onPress() {
+						return props.onRemove;
+					}
+				})]);
 				return __nsh_hv0;
 			})();
 		}
@@ -3103,7 +3094,6 @@ function PluginsPage(props) {
 							get last() {
 								return index === installed().length - 1;
 							},
-							onOpen: () => props.onCommand("plugins.launch", { id: plugin.id }),
 							onConfigure: () => props.onCommand("route", { route: `plugin/${plugin.id}` }),
 							onRemove: () => props.onCommand("plugins.remove", { id: plugin.id })
 						})) : component(CardRow, {
@@ -3372,16 +3362,9 @@ function PluginPage(props) {
 									return (() => {
 										const __nsh_hv9 = element("view");
 										prop(__nsh_hv9, "class", "flex-row items-center gap-2");
-										insert(__nsh_hv9, [() => plugin()?.running ? component(StatusDot, { get colors() {
+										insert(__nsh_hv9, () => plugin()?.running ? component(StatusDot, { get colors() {
 											return props.colors;
-										} }) : null, () => plugin()?.executable ? component(PillButton, {
-											get colors() {
-												return props.colors;
-											},
-											tone: "neutral",
-											label: "Открыть",
-											onPress: () => props.onCommand("plugins.launch", { id: props.id })
-										}) : null]);
+										} }) : null);
 										return __nsh_hv9;
 									})();
 								}

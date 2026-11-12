@@ -10,12 +10,13 @@ function versionLine(plugin: PluginRow): string {
   return parts.join(" · ");
 }
 
-/** A row of the installed list: open it, change its settings, remove it. */
+/** A row of the installed list: change its settings, remove it. A plugin is a
+ * setting of this program, not a program beside it, so nothing here launches
+ * one. */
 export function InstalledRow(props: {
   plugin: PluginRow;
   colors: ApplicationTheme;
   last: boolean;
-  onOpen: () => void;
   onConfigure: () => void;
   onRemove: () => void;
 }) {
@@ -32,9 +33,6 @@ export function InstalledRow(props: {
       right={
         <View class="flex-row items-center gap-2">
           <PillButton colors={colors} label="Настроить" onPress={props.onConfigure} />
-          {plugin.executable ? (
-            <PillButton colors={colors} tone="neutral" label="Открыть" onPress={props.onOpen} />
-          ) : null}
           <PillButton colors={colors} tone="danger" label="Удалить" onPress={props.onRemove} />
         </View>
       }
