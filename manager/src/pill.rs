@@ -32,10 +32,19 @@ const IDLE: Duration = Duration::from_millis(120);
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
+    /// The plate's size in points, as the Engine reported it, so the window can
+    /// be shaped to it (Windows only; the shape is what keeps DWM's own
+    /// backdrop — a rectangle the size of the whole HUD — out of sight).
+    plate: (f32, f32),
 }
 
 impl Plate {
-    fn set(&mut self, image: Arc<RenderImage>, window: &mut Window) {
+    fn set(&mut self, image: Arc<RenderImage>, plate: (f32, f32), window: &mut Window) {
+        #[cfg(target_os = "windows")]
+        if self.plate != plate {
+            self.plate = plate;
+            windows::shape(window, plate);
+        }
         if let Some(previous) = self.image.replace(image) {
             let _ = window.drop_image(previous);
         }
@@ -160,15 +169,19 @@ pub fn start(cx: &mut App) {
                 .spawn(async move { fetch(&engine) })
                 .await;
             let image = draw.as_ref().and_then(|draw| renderer.render(draw).ok());
+            let plate = draw
+                .as_ref()
+                .map_or((0., 0.), |draw| (draw.width * draw.scale, draw.height * draw.scale));
             cx.update(|app| match image {
                 Some(image) => match window {
                     Some(handle) => {
+                        let drawn = plate;
                         let _ = handle.update(app, |plate, window, cx| {
-                            plate.set(image, window);
+                            plate.set(image, drawn, window);
                             cx.notify();
                         });
                     }
-                    None => window = open(app, image),
+                    None => window = open(app, image, plate),
                 },
                 None => close(&mut window, app),
             });
@@ -195,7 +208,7 @@ fn under_pointer(_cx: &App) -> Option<std::rc::Rc<dyn gpui::PlatformDisplay>> {
     None
 }
 
-fn open(cx: &mut App, image: Arc<RenderImage>) -> Option<gpui::WindowHandle<Plate>> {
+fn open(cx: &mut App, image: Arc<RenderImage>, plate: (f32, f32)) -> Option<gpui::WindowHandle<Plate>> {
     // The person dictates where they work: a second screen gets its own pill
     // instead of one that opens on the main display.
     let display = under_pointer(cx).or_else(|| cx.primary_display())?;
@@ -226,7 +239,12 @@ fn open(cx: &mut App, image: Arc<RenderImage>) -> Option<gpui::WindowHandle<Plat
             },
             move |window, cx| {
                 overlay(window);
-                cx.new(|_| Plate { image: Some(image) })
+                #[cfg(target_os = "windows")]
+                windows::shape(window, plate);
+                cx.new(|_| Plate {
+                    image: Some(image),
+                    plate,
+                })
             },
         )
         .ok()?;
@@ -251,6 +269,83 @@ fn overlay(window: &mut Window) {
     window.set_input_region(Some(&[]));
     #[cfg(target_os = "macos")]
     macos::overlay(window);
+}
+
+/// A "transparent" window on Windows is not transparent to DWM: it paints its
+/// own backdrop across the whole HUD, which is the milky rectangle that used to
+/// hang around the pill. The renderer already draws the pill with per-pixel
+/// alpha, so the window is simply shaped to the plate — a stadium as wide as
+/// the plate plus room for its shadow, where DWM has nothing left to paint.
+#[cfg(target_os = "windows")]
+mod windows {
+    use std::ffi::c_void;
+
+    use gpui::Window;
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+    use crate::gpu_scope::{HEIGHT, WIDTH};
+
+    /// Room around the plate for the shader's drop shadow. 18 pt out the
+    /// shadow is already below 1/255, so the cut cannot be seen.
+    const MARGIN: f32 = 18.0;
+
+    fn hwnd(window: &Window) -> Option<*mut c_void> {
+        let handle = HasWindowHandle::window_handle(window).ok()?;
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return None;
+        };
+        Some(win32.hwnd.get() as *mut c_void)
+    }
+
+    pub fn shape(window: &Window, plate: (f32, f32)) {
+        let Some(hwnd) = hwnd(window) else {
+            return;
+        };
+        if plate.0 < 1.0 || plate.1 < 1.0 {
+            return;
+        }
+        let width = plate.0 + MARGIN * 2.0;
+        let height = plate.1 + MARGIN * 2.0;
+        let left = ((WIDTH as f32 - width) / 2.0).round();
+        let top = ((HEIGHT as f32 - height) / 2.0).round();
+        let (right, bottom) = (left + width.round(), top + height.round());
+        let corner = height.round();
+        unsafe {
+            let region = CreateRoundRectRgn(
+                left as i32,
+                top as i32,
+                right as i32,
+                bottom as i32,
+                corner as i32,
+                corner as i32,
+            );
+            if region == 0 {
+                return;
+            }
+            // Windows owns the region once it is set; only a failure frees it.
+            if SetWindowRgn(hwnd, region, 1) == 0 {
+                DeleteObject(region);
+            }
+        }
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn SetWindowRgn(window: *mut c_void, region: isize, redraw: i32) -> i32;
+    }
+
+    #[link(name = "gdi32")]
+    extern "system" {
+        fn CreateRoundRectRgn(
+            left: i32,
+            top: i32,
+            right: i32,
+            bottom: i32,
+            width: i32,
+            height: i32,
+        ) -> isize;
+        fn DeleteObject(object: isize) -> i32;
+    }
 }
 
 #[cfg(target_os = "macos")]
