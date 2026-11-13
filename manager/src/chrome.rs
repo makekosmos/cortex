@@ -32,8 +32,11 @@ use gpui::{
 };
 
 /// The strip `setTitleBar` takes for the app's own bar; the pages' heading row
-/// is laid out inside it.
-pub const TITLEBAR_HEIGHT: f32 = 36.;
+/// is laid out inside it. Tall enough that the heading's title and the sidebar's
+/// search field keep air above them — at 36 they hugged the top edge, while the
+/// macOS build puts both in a 48-point band. `ui/chrome.ts` carries the same
+/// number; the two must agree or the caption buttons land in the pages' row.
+pub const TITLEBAR_HEIGHT: f32 = 44.;
 /// A caption button's width, and the three together are the `138` points
 /// `titleBar()` reserves while NSH owns the window.
 const BUTTON_WIDTH: f32 = 46.;

@@ -254,7 +254,7 @@ function App() {
             groups={sidebarGroups()}
             current={route()}
             search={search()}
-            topInset={sidebarTopInset(settingsMetrics.searchHeight)}
+            topInset={sidebarTopInset()}
             onSearch={(value) => search.set(value)}
             onNavigate={(next) => go(next)}
           />

@@ -12,8 +12,13 @@ export const CAPTION_BUTTON_WIDTH = 46;
 /**
  * The band the caption buttons sit in, which the page heading and the sidebar's
  * search field share with them: the first row of the window is the titlebar.
+ *
+ * 44, not the 36 a bare caption strip needs: at 36 a 32-point search field sits
+ * one point off the window's edge and the heading's title two thirds of the way
+ * up, which reads as "no titlebar" next to the macOS build, where the same two
+ * sit in a 48-point band. Windows gets the same room for its own chrome.
  */
-export const TITLEBAR_HEIGHT = 36;
+export const TITLEBAR_HEIGHT = 44;
 
 export function reservesCaptions(): boolean {
   const host = platform();
@@ -49,13 +54,13 @@ export function headerHeight(): number {
 }
 
 /**
- * The space above the sidebar's search field. Windows draws its caption
- * buttons on the right, so the field shares the title band there; macOS draws
- * the lights on the left, over the field, so the field starts under them.
+ * The space above the sidebar's search field. macOS puts the traffic lights
+ * over the top-left corner, so the field starts below the band they sit in;
+ * Windows draws its caption buttons at the right end of the same band, and the
+ * field starts below it too — the band is the window's, not the app's, on both.
  */
-export function sidebarTopInset(searchHeight: number): number {
+export function sidebarTopInset(): number {
   const host = platform();
-  if (host === "win32" || host === "windows") return (TITLEBAR_HEIGHT - searchHeight) / 2;
   if (host === "darwin" || host === "macos") return MAC_LIGHTS_INSET;
-  return 16;
+  return TITLEBAR_HEIGHT;
 }

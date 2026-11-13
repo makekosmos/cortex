@@ -39,15 +39,18 @@ use std::thread;
 use serde_json::json;
 use tokio::sync::broadcast;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+use windows::Win32::System::Threading::{
+    GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_HIGHEST,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayout, SendInput, VkKeyScanExW, INPUT, INPUT_0, INPUT_KEYBOARD,
     KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU,
     VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetForegroundWindow, GetMessageW, GetWindowThreadProcessId, SetWindowsHookExW,
-    UnhookWindowsHookEx, HC_ACTION, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP,
-    WM_SYSKEYDOWN, WM_SYSKEYUP,
+    CallNextHookEx, GetForegroundWindow, GetMessageW, GetWindowThreadProcessId, SetTimer,
+    SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL,
+    WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +95,40 @@ struct State {
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 static HOOK_THREAD_STARTED: OnceLock<()> = OnceLock::new();
+
+/// Как часто hook переставляется заново (см. `ensure_thread_started`). Раз в
+/// 25 секунд — незаметно для нажатий: замена занимает микросекунды и не
+/// сбрасывает `pressed`/matcher, только сам hook.
+const REARM_TIMER_MS: u32 = 25_000;
+/// Идентификатор таймера в очереди hook-потока; произвольный, лишь бы не
+/// пересечься с чем-то ещё в этом потоке (а там ничего нет).
+const REARM_TIMER_ID: usize = 0x4D55;
+
+/// Windows душит фоновые процессы (EcoQoS): отдаёт им E-core'ы и режет частоту.
+/// Callback LL-hook'а от этого опаздывает, а опоздавший hook Windows молча
+/// снимает — после чего диктовка не заводится до перезапуска Engine.
+/// `ProcessPowerThrottling` с маской EXECUTION_SPEED и `StateMask: 0` — это
+/// «не душить по скорости», единственная документированная отмена.
+fn opt_out_of_power_throttling() {
+    use windows::Win32::System::Threading::{
+        GetCurrentProcess, ProcessPowerThrottling, SetProcessInformation,
+        PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        PROCESS_POWER_THROTTLING_STATE,
+    };
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    let _ = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            (&state as *const PROCESS_POWER_THROTTLING_STATE).cast(),
+            std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+    };
+}
 
 fn state_mtx() -> &'static Mutex<State> {
     STATE.get_or_init(|| {
@@ -413,6 +450,9 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
         HookMode::Toggle => {
             if fired_down {
                 if let Some(tx) = sender_opt {
+                    // Одна строка на нажатие: без неё в логе не отличить
+                    // «hook умер» от «Engine не среагировал».
+                    tracing::info!(target: "dictation::hotkey", "hotkey fired");
                     let _ = tx.send(json!({
                         "event": "dictation_toggle_trigger",
                     }));
@@ -503,16 +543,47 @@ fn ensure_thread_started() {
     HOOK_THREAD_STARTED.get_or_init(|| {
         thread::spawn(|| {
             unsafe {
-                let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), None, 0);
-                let hook = match hook {
+                // Windows отдаёт фоновым процессам E-core'ы и душит их
+                // (EcoQoS) — callback LL-hook'а от этого опаздывает, а
+                // опоздавший hook Windows молча снимает. Просим приоритет и
+                // отменяем троттлинг на весь процесс.
+                opt_out_of_power_throttling();
+                let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+                let mut hook = match SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), None, 0)
+                {
                     Ok(h) => h,
                     Err(e) => {
                         eprintln!("[dictation::hotkey_hook] SetWindowsHookExW failed: {e}");
                         return;
                     }
                 };
+                // `SetTimer(None, …)` кладёт WM_TIMER в очередь этого потока:
+                // тот самый GetMessage'евый цикл ниже его и увидит, отдельного
+                // окна/канала не нужно.
+                let _ = SetTimer(None, REARM_TIMER_ID, REARM_TIMER_MS, None);
                 let mut msg = MSG::default();
                 while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                    // Самолечение: переставить hook заново. Windows снимает
+                    // LL-hook, если его callback не успел вовремя
+                    // (LowLevelHooksTimeout), и не сообщает об этом — после
+                    // сна, под нагрузкой или в полноэкранной игре клавиатура
+                    // до нас больше не доходит до конца сессии. Порядок
+                    // (снять → поставить) выбран намеренно: два живых hook'а
+                    // дали бы двойной toggle.
+                    if msg.message == WM_TIMER && msg.hwnd.0.is_null() {
+                        if let Ok(fresh) =
+                            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), None, 0)
+                        {
+                            let _ = UnhookWindowsHookEx(hook);
+                            hook = fresh;
+                            tracing::debug!(target: "dictation::hotkey", "hotkey hook re-armed");
+                        } else {
+                            tracing::warn!(
+                                target: "dictation::hotkey",
+                                "hotkey hook re-arm failed; the old one is kept"
+                            );
+                        }
+                    }
                     // No DispatchMessageW: у нас нет window, callbacks из hook'а
                     // приходят в этот же thread автоматически через SendMessage'ы Windows.
                 }

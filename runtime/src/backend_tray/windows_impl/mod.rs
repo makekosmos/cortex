@@ -11,21 +11,19 @@ use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
     DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, PeekMessageW, PostQuitMessage,
     PostThreadMessageW, RegisterClassW, SetForegroundWindow, TrackPopupMenu, TranslateMessage,
-    MF_SEPARATOR, MF_STRING, MSG, PM_NOREMOVE, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_DESTROY,
-    WM_LBUTTONDBLCLK, WM_QUIT, WM_RBUTTONUP, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
+    CS_DBLCLKS, MF_SEPARATOR, MF_STRING, MSG, PM_NOREMOVE, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    WM_DESTROY, WM_LBUTTONDBLCLK, WM_QUIT, WM_RBUTTONUP, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
-mod components;
 mod icon;
 mod menu;
 mod paths;
 mod resolve;
 mod wide;
 
-use components::Component;
 use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
-use menu::{build_menu, MenuAction, MenuPresence};
-use resolve::resolve_component_executable;
+use menu::{build_menu, MenuAction};
+use resolve::manager_executable;
 
 /// Manager exe path for *authorization* only — in release builds this never
 /// honours the `MUNDUS_MANAGER_EXECUTABLE` env override (`resolve.rs`
@@ -56,6 +54,10 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
         hInstance: instance,
         lpszClassName: PCWSTR(class_name.as_ptr()),
         lpfnWndProc: Some(window_proc),
+        // Without CS_DBLCLKS the shell never turns the icon's second press
+        // into WM_LBUTTONDBLCLK, so "double-click opens the window" is dead
+        // on arrival: the two presses arrive as two separate ups.
+        style: CS_DBLCLKS,
         ..Default::default()
     };
     unsafe {
@@ -134,33 +136,25 @@ pub fn stop(thread_id: u32) {
     }
 }
 
-/// Launches a packaged GPUI component (Manager/Agenda/Memoria/Dictation).
-fn open_component(component: Component) {
-    if let Some(executable) = resolve_component_executable(component) {
-        if let Err(error) = Command::new(&executable).spawn() {
-            eprintln!(
-                "[mundus-engine] failed to open {} {}: {error}",
-                component.menu_label(),
-                executable.display()
-            );
-        }
+/// Launches the Manager, the Engine's control panel.
+fn open_manager() {
+    let Some(executable) = manager_executable() else {
+        eprintln!("[mundus-engine] Manager executable not found");
+        return;
+    };
+    if let Err(error) = Command::new(&executable).spawn() {
+        eprintln!(
+            "[mundus-engine] failed to open Manager {}: {error}",
+            executable.display()
+        );
     }
-}
-
-fn current_presence() -> MenuPresence {
-    MenuPresence(
-        Component::all()
-            .filter(|component| resolve_component_executable(*component).is_some())
-            .map(|component| component.command_key())
-            .collect(),
-    )
 }
 
 fn show_context_menu(window: HWND) {
     let Ok(menu) = (unsafe { CreatePopupMenu() }) else {
         return;
     };
-    let entries = build_menu(&current_presence());
+    let entries = build_menu();
     let labels: Vec<Vec<u16>> = entries
         .iter()
         .map(|entry| wide(entry.action.label()))
@@ -192,8 +186,7 @@ fn show_context_menu(window: HWND) {
         .0 as usize;
         let _ = DestroyMenu(menu);
         match MenuAction::from_command_id(command) {
-            Some(MenuAction::OpenManager) => open_component(Component::Manager),
-            Some(MenuAction::OpenComponent(component)) => open_component(component),
+            Some(MenuAction::OpenManager) => open_manager(),
             Some(MenuAction::Exit) => {
                 if let Some(events) = EVENTS.get() {
                     let _ = events.send(TrayEvent::Exit);
@@ -213,7 +206,7 @@ unsafe extern "system" fn window_proc(
     match message {
         WM_TRAY_CALLBACK => match lparam.0 as u32 {
             WM_RBUTTONUP => show_context_menu(window),
-            WM_LBUTTONDBLCLK => open_component(Component::Manager),
+            WM_LBUTTONDBLCLK => open_manager(),
             _ => {}
         },
         WM_DESTROY => {

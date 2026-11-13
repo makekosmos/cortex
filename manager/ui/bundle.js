@@ -719,8 +719,13 @@ function forward() {
 /**
 * The band the caption buttons sit in, which the page heading and the sidebar's
 * search field share with them: the first row of the window is the titlebar.
+*
+* 44, not the 36 a bare caption strip needs: at 36 a 32-point search field sits
+* one point off the window's edge and the heading's title two thirds of the way
+* up, which reads as "no titlebar" next to the macOS build, where the same two
+* sit in a 48-point band. Windows gets the same room for its own chrome.
 */
-const TITLEBAR_HEIGHT = 36;
+const TITLEBAR_HEIGHT = 44;
 function reservesCaptions() {
 	const host = platform();
 	return host === "win32" || host === "windows";
@@ -739,18 +744,18 @@ const MAC_LIGHTS_INSET = 48;
 function headerHeight() {
 	const host = platform();
 	if (host === "darwin" || host === "macos") return 48;
-	return 36;
+	return 44;
 }
 /**
-* The space above the sidebar's search field. Windows draws its caption
-* buttons on the right, so the field shares the title band there; macOS draws
-* the lights on the left, over the field, so the field starts under them.
+* The space above the sidebar's search field. macOS puts the traffic lights
+* over the top-left corner, so the field starts below the band they sit in;
+* Windows draws its caption buttons at the right end of the same band, and the
+* field starts below it too — the band is the window's, not the app's, on both.
 */
-function sidebarTopInset(searchHeight) {
+function sidebarTopInset() {
 	const host = platform();
-	if (host === "win32" || host === "windows") return (36 - searchHeight) / 2;
 	if (host === "darwin" || host === "macos") return MAC_LIGHTS_INSET;
-	return 16;
+	return 44;
 }
 
 //#endregion
@@ -4017,7 +4022,7 @@ function command(name, args = {}) {
 function useHiddenChrome() {
 	effect(() => Window.setTitleBar({
 		style: "hidden",
-		height: 36
+		height: 44
 	}));
 }
 function renderPage(page) {
@@ -4157,7 +4162,7 @@ function App() {
 				return search();
 			},
 			get topInset() {
-				return sidebarTopInset(settingsMetrics.searchHeight);
+				return sidebarTopInset();
 			},
 			onSearch: (value) => search.set(value),
 			onNavigate: (next) => go(next)

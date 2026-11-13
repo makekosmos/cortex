@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Regenerate every product icon deterministically from the committed PNG
 // sources in desktop/build/icons/ — never export .ico files by hand.
-//   product icon      icons/mundus.png    → icon.ico, tray.ico, app-icons/mundus.*
+//   product icon      icons/mundus.png    → icon.ico, app-icons/mundus.*
+//   tray mark         app-icons/tray-template.png → tray.ico (white, same mark
+//                     the macOS menu bar helper draws)
 //   bundled apps      icons/<app>.png     → app-icons/<app>.{png,ico}
 //   installer bitmaps icons/mundus.png    → installer-assets/{header,welcome}.bmp
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -113,11 +115,38 @@ async function installerAssets() {
   });
 }
 
+// The tray mark is the menu bar's, not the product icon: the comment at the
+// top of `engine-menu-bar.swift` puts it best — "the mark the menu bar draws,
+// not the app icon". Windows has no template images, so the same alpha mark is
+// painted white here, which is how it reads on the taskbar.
+const TRAY_SIZES = [16, 20, 24, 32, 40, 48, 64];
+const trayIco = async () => {
+  const source = path.join(target, "tray-template.png");
+  const { data, info } = await sharp(source)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  for (let at = 0; at < data.length; at += 4) {
+    // Alpha stays the template's; the colour becomes the taskbar's white.
+    data[at] = 255;
+    data[at + 1] = 255;
+    data[at + 2] = 255;
+  }
+  const white = sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  });
+  const variants = await Promise.all(
+    TRAY_SIZES.map((size) => white.clone().resize(size, size).png().toBuffer()),
+  );
+  writeFileSync(path.join(root, "build", "tray.ico"), await pngToIco(variants));
+};
+
 await Promise.all([
   icon("mundus", "mundus.png"),
   icon("dictation", "dictation.png"),
-  // Installer + uninstaller icon and the Engine tray icon.
+  // Installer + uninstaller icon.
   toIco("mundus.png", path.join(root, "build", "icon.ico")),
-  toIco("mundus.png", path.join(root, "build", "tray.ico")),
+  // The Engine's tray icon: the menu bar's white mark.
+  trayIco(),
   installerAssets(),
 ]);

@@ -21,6 +21,15 @@ use crate::gpu_scope::{Draw, Renderer, HEIGHT, WIDTH};
 /// The app's established vertical center, independent of the shadow canvas.
 const CENTER_FROM_BOTTOM: f32 = 163.;
 
+/// How often the Engine is asked for a frame while the pill is on screen. The
+/// Engine steps the scope per ask, so this is the animation's rate: ~60 Hz,
+/// the same cadence GPUI paints at. Asking less (it used to be 33 ms) shows on
+/// Windows as a visibly choppy pill, because every ask also costs a round trip.
+const FRAME: Duration = Duration::from_millis(16);
+/// Off screen nothing is drawn, so the Engine is only asked whether a
+/// dictation started — rarely enough to keep an idle Manager off a CPU.
+const IDLE: Duration = Duration::from_millis(120);
+
 struct Plate {
     image: Option<Arc<RenderImage>>,
 }
@@ -143,9 +152,8 @@ pub fn start(cx: &mut App) {
         };
         let mut window: Option<gpui::WindowHandle<Plate>> = None;
         loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(33))
-                .await;
+            let tick = if window.is_some() { FRAME } else { IDLE };
+            cx.background_executor().timer(tick).await;
             let engine = engine.clone();
             let draw = cx
                 .background_executor()
