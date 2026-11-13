@@ -1,4 +1,4 @@
-// One product, one version (KOS-233): the Engine no longer carries its own
+// One product, one version: the Engine no longer carries its own
 // `0.1.x` release line. `desktop/scripts/release-build-env.mjs` injects the
 // Mundus Desktop product version (`desktop/release-versions.json`) and the
 // source commit it was built from as env vars at compile time; `option_env!`
@@ -53,7 +53,7 @@ mod tests {
     fn uninjected_build_is_semver_on_the_dev_channel() {
         // This test build does not set MUNDUS_PRODUCT_VERSION: the version
         // stays the crate version (semver for the updater), while the "dev"
-        // channel keeps the UI label honest with a "(dev)" suffix (KOS-278).
+        // channel keeps the UI label honest with a "(dev)" suffix.
         assert!(semver::Version::parse(display_version()).is_ok());
         assert_eq!(channel(), "dev");
     }

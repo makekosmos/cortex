@@ -1,4 +1,4 @@
-//! Listener bind choice at boot (KOS-269)
+//! Listener bind choice at boot
 //!
 //! Windows Defender Firewall prompts — per exe path — as soon as a process
 //! listens on a non-loopback address, and the Engine exe lives under a
@@ -8,14 +8,14 @@
 //!     at the current exe (see `privileged::firewall`), and we keep the LAN
 //!     bind unconditionally;
 //!   * no privileges → bind loopback until sync is actually *on*: a paired
-//!     device exists (ark-core persists them under `sync.peers`) or the user
+//!     device exists (kernel persists them under `sync.peers`) or the user
 //!     explicitly provided a peer ticket this boot. Pairing a device through
 //!     `connect_with_pairing_code` re-binds to all interfaces inside
-//!     ark-core — that is the one moment the firewall prompt is expected.
+//!     kernel — that is the one moment the firewall prompt is expected.
 //!
 //! Tests never bind off-loopback: `SyncBind::Loopback` exists for that.
 
-use ark_core::SyncBind;
+use kernel::SyncBind;
 use serde_json::{json, Value};
 
 use crate::ark_host::ArkHost;
@@ -55,10 +55,7 @@ pub fn has_paired_peers(
 }
 
 async fn get_sync_kv(ark: &ArkHost, key: &str) -> Option<String> {
-    let resp = ark
-        .request("get_sync_kv", json!({ "key": key }))
-        .await
-        .ok()?;
+    let resp = ark.request("kv.get", json!({ "key": key })).await.ok()?;
     if !resp.ok {
         return None;
     }
@@ -115,7 +112,7 @@ pub async fn lan_bind_at_boot(ark: &ArkHost, self_device_id: &str) -> SyncBind {
 mod tests {
     use super::*;
 
-    /// KOS-269 regression: an Engine whose user never paired a device and
+    /// Regression: an Engine whose user never paired a device and
     /// has no privileged firewall rule must not ask the OS for a firewall
     /// exception at boot.
     #[test]

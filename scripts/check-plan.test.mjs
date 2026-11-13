@@ -34,11 +34,12 @@ test("Rust, native, and packaging files expand conservatively", () => {
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
+  assert.deepEqual(plan("--files", "manager/src/app.rs").json.checks, ["manager"]);
 });
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {
-  assert.deepEqual(plan("--files", "core/crates/ark-core/src/lib.rs").json.checks, [
+  assert.deepEqual(plan("--files", "core/crates/kernel/src/lib.rs").json.checks, [
+    "ark-db-writers",
     "rustfmt",
     "clippy",
     "test:rust",
@@ -48,9 +49,19 @@ test("core subtree maps crates to rust checks and inert paths to none", () => {
   assert.equal(plan("--files", "core/ark/packages/ark/package.json").json.full, true);
 });
 
-test("manager-gpui maps to its standalone crate gate", () => {
-  assert.deepEqual(plan("--files", "manager-gpui/src/app.rs").json.checks, ["manager-gpui"]);
-  assert.equal(plan("--files", "manager-gpui/Cargo.toml").json.full, true);
+test("ARK writer census runs when its scanner, baseline, or tests change", () => {
+  for (const file of [
+    "scripts/audit-db-writers.mjs",
+    "scripts/audit-db-writers.test.mjs",
+    "scripts/rust-source-scan.mjs",
+    "scripts/db-writers.allow.json",
+  ])
+    assert.ok(plan("--files", file).json.checks.includes("ark-db-writers"), file);
+});
+
+test("the Manager maps to its standalone crate gate", () => {
+  assert.deepEqual(plan("--files", "manager/src/app.rs").json.checks, ["manager"]);
+  assert.equal(plan("--files", "manager/Cargo.toml").json.full, true);
 });
 
 test("shared, lockfile, build, workflow, and unknown files fail closed", () => {
@@ -95,7 +106,11 @@ test("docs and isolated assets are a safe no-op", () => {
     assert.equal(result.full, false, file);
     assert.deepEqual(result.checks, [], file);
   }
-  for (const file of ["host/notes.txt", "runtime/native/CMakeLists.txt", "shared/requirements.txt"])
+  for (const file of [
+    "tools/notes.txt",
+    "runtime/native/CMakeLists.txt",
+    "shared/requirements.txt",
+  ])
     assert.equal(plan("--files", file).json.full, true, file);
   for (const file of ["shared/icon.svg", "packages/foo/logo.png"]) {
     assert.equal(plan("--files", file).json.full, true, file);
@@ -206,14 +221,14 @@ test("command failures aggregate instead of stopping after the first selected gr
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
-    { full: false, checks: ["desktop-contracts", "manager-gpui"], changed: [], reasons: [] },
+    { full: false, checks: ["desktop-contracts", "manager"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
       return command.name === "desktop-contracts" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager-gpui"]);
+  assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager"]);
 });
 
 test("the full gate runs the same steps pnpm run check is made of", async () => {
@@ -238,8 +253,9 @@ test("the full gate runs the same steps pnpm run check is made of", async () => 
     "clippy",
     "test:static",
     "test:rust",
-    "manager-gpui",
+    "manager",
     "runtime-staging",
+    "doc-paths",
   ]);
 });
 
@@ -259,8 +275,9 @@ test("the full gate aggregates failures instead of stopping at the first", async
     "clippy",
     "test:static",
     "test:rust",
-    "manager-gpui",
+    "manager",
     "runtime-staging",
+    "doc-paths",
   ]);
 });
 

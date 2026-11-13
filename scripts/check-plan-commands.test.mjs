@@ -16,7 +16,7 @@ test("executor commands never require Bun or a shell-resolved shim", async () =>
     createPlan({ mode: "worktree", full: true }),
     createPlan({ mode: "pre-commit", files: ["desktop/scripts/engine-distribution.mjs"] }),
     createPlan({ mode: "worktree", files: ["runtime/src/lib.rs"] }),
-    createPlan({ mode: "worktree", files: ["manager-gpui/src/app.rs"] }),
+    createPlan({ mode: "worktree", files: ["manager/src/app.rs"] }),
   ])
     executePlan(plan, (command) => (seen.push(command), 0));
   assert.ok(seen.length > 0);
@@ -51,7 +51,15 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(run(["manager-gpui/src/app.rs"]), ["brand", "test-skips", "manager-gpui"]);
+  assert.deepEqual(run(["core/crates/kernel/src/service.rs"]), [
+    "brand",
+    "test-skips",
+    "ark-db-writers",
+    "rustfmt",
+    "clippy",
+    "test:rust",
+  ]);
+  assert.deepEqual(run(["manager/src/app.rs"]), ["brand", "test-skips", "manager"]);
 });
 
 test("pre-commit emits the source-size safeguard through pnpm", async () => {
@@ -66,6 +74,21 @@ test("pre-commit emits the source-size safeguard through pnpm", async () => {
     "pnpm run check:test-skips",
     "pnpm run check:source-size",
   ]);
+});
+
+test("ARK writer census runs the classified test and baseline command", async () => {
+  const { createPlan, executePlan } = await import("./check-plan.mjs");
+  const seen = [];
+  executePlan(createPlan({ files: ["core/crates/kernel/src/service.rs"] }), (command) => {
+    seen.push(command);
+    return 0;
+  });
+  const census = seen.find(({ name }) => name === "ark-db-writers");
+  assert.deepEqual(census, {
+    name: "ark-db-writers",
+    command: "pnpm",
+    args: ["run", "test:db-writers"],
+  });
 });
 
 test("lint and format run Node tool entrypoints with verbatim file arguments", async () => {

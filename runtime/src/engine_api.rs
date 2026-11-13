@@ -21,18 +21,10 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::sync::Notify;
 
-use crate::auth;
-use crate::engine_dispatch::{DispatchClient, DispatchRequest, Operation};
-use crate::package_launch::{
-    launch_payload, resolve_payload, AssetGrant, LaunchLeaseRegistry, LaunchRequest,
-    LeaseCapacityError, DATA_GRANT_TTL, LAUNCH_LEASE_TTL, MAX_ACTIVE_LAUNCH_LEASES,
-};
-use crate::package_service::PackageService;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::protocol_version::{
     Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION,
 };
-use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 
 // 32 MiB — `dictation.speech.transcribe` ships base64 WAV in the JSON body
 // (~43 KiB/s at 16 kHz mono), so the old 1 MiB cap 413'd any recording
@@ -40,13 +32,15 @@ use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // Wire header names stay `x-kosmos-*`: pinned component builds
-// (agenda/memoria/dictation and imago's mundus-gpui-kit) send exactly these
+// (memoria/dictation and imago's mundus-gpui-kit) send exactly these
 // names — persisted contract, see docs/brand-legacy-identifiers.md.
 const CLIENT_PID_HEADER: &str = "x-kosmos-client-pid";
 const API_VERSION_HEADER: &str = "x-kosmos-api-version";
-const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
+// The class header is neutral now; the pre-rename name stays on the accepted
+// list while shipped clients still send it (`brand::MANAGER_CLIENT_CLASSES`).
+const CLIENT_CLASS_HEADER: &str = crate::brand::CLIENT_CLASS_HEADER;
+const LEGACY_CLIENT_CLASS_HEADER: &str = crate::brand::LEGACY_CLIENT_CLASS_HEADER;
 const CLIENT_VERSION_HEADER: &str = "x-kosmos-client-version";
-const APP_LAUNCH_TOKEN_HEADER: &str = "x-kosmos-launch-token";
 
 // BoxBody so the launch `events` route can answer with a long-lived SSE
 // stream while every other handler keeps returning buffered bodies.
@@ -60,19 +54,9 @@ const MAX_IN_FLIGHT_HTTP_OPERATIONS: usize = 128;
 const MAX_ACTIVE_HTTP_CONNECTIONS: usize = 128;
 const SHUTDOWN_DEADLINE: Duration = Duration::from_secs(5);
 
-include!("engine_api/lifecycle.rs");
-include!("engine_api/server.rs");
-include!("engine_api/handlers.rs");
+mod handlers;
+mod lifecycle;
+mod server;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use futures_util::{SinkExt, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    include!("engine_api/tests_core.rs");
-    include!("engine_api/tests_http.rs");
-    include!("engine_api/tests_open.rs");
-    include!("engine_api/tests_open_bootstrap.rs");
-    include!("engine_api/tests_open_events.rs");
-}
+use lifecycle::*;
+pub use server::{EngineApiError, EngineApiServer, EngineApiShutdownHandle};

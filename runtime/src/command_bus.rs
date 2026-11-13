@@ -216,14 +216,14 @@ mod tests {
             ],
         )
         .await;
-        bus.register(2, vec![manifest("delphi.open", "Open Delphi", "open")])
+        bus.register(2, vec![manifest("sample.open", "Open Sample", "open")])
             .await;
 
         bus.unregister_all(1).await;
 
         let all = bus.list().await;
         assert_eq!(all.len(), 1, "only client 2's commands must remain");
-        assert_eq!(all[0].id, "delphi.open");
+        assert_eq!(all[0].id, "sample.open");
     }
 
     #[tokio::test]

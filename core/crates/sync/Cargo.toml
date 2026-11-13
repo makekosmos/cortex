@@ -1,0 +1,25 @@
+[package]
+name = "sync"
+version = "0.1.0"
+edition.workspace = true
+description = "Transport-neutral replication protocol and direct-session runtime"
+
+[features]
+test-support = []
+
+[dependencies]
+domain = { path = "../domain" }
+async-trait.workspace = true
+chrono.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+store = { path = "../store" }
+ed25519-dalek.workspace = true
+rusqlite.workspace = true
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[lints]
+workspace = true

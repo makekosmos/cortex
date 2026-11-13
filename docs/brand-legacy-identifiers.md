@@ -11,16 +11,16 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | Identifier                                                                 | Where                                                                                                                                                           | Why it stays                                                                                     |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `makekosmos` (GitHub org/repo URLs)                                        | component pins, updater channel `makekosmos/cortex`, `imago` git deps (`imago-gpui`, `mundus-gpui-kit`), docs links | Org rename is a separate change; GitHub redirects keep old URLs valid.                           |
-| `com.kosmos.*`                                                             | signed-catalog package ids, ARK canonical type ids (`com.kosmos.note/task/game`) inside user `ark.db`                                                           | Rewriting user objects risks sync corruption; KOS-265 owns the id migration.                     |
+| `com.kosmos.*`                                                             | signed-catalog package ids                                                                                                                                    | Package ids remain part of the signed catalog contract. ARK canonical type ids moved to `core.*@0.1.0` in KOS-436. |
 | `kosmos-root-2026`, `kosmos-release-2026`                                  | `package_service` signing key id                                                                                                                                | The key id is embedded in signed catalogs and installed trust state; rotation is KOS-265.        |
-| `publisher: "kosmos"`                                                      | package manifest schema + signed manifests                                                                                                                      | Persisted contract — `package_manifest.rs` validates it.                                         |
+| `publisher: "kosmos"`                                                      | package manifests persisted by old installs                                                                                                                    | Persisted contract in already-installed package state.                                           |
 | `extensions.kosmos` / `"kosmos":` JSON keys                                | ARK object extensions in user DBs (`taskBucket` etc.)                                                                                                           | Persisted user data.                                                                             |
 | `application/vnd.kosmos.*`                                                 | media types in ARK objects                                                                                                                                      | Persisted user data.                                                                             |
 | `@kosmos/ark`, `@kosmos/visuals`                                           | npm scope of published packages, WS `client_class`                                                                                                              | Published artifacts + wire values from existing clients.                                         |
 | `x-kosmos-*` HTTP headers                                                  | Engine HTTP API + user_data handler                                                                                                                             | Pinned component builds and imago's `mundus-gpui-kit` send exactly these names.                          |
 | `packages.kosmos.dev` / `*.kosmos.dev`                                     | catalog archive URLs, test fixtures                                                                                                                             | Hosted zone; follows the domain rename.                                                          |
 | `kosmos-engine`                                                            | `engine-manifest.json` product field of installed 0.9.x Engines                                                                                                 | Installed manifests on user machines; the install script validates both ids.                     |
-| `kosmos-link-v1`                                                           | ARK deterministic link-id hash seed (`ark-core`)                                                                                                                | Hash seed — changing it changes every derived link id in user DBs.                               |
+| `kosmos-link-v1`                                                           | ARK deterministic link-id hash seed (`kernel`)                                                                                                                | Hash seed — changing it changes every derived link id in user DBs.                               |
 | `kosmos-local://richtext-image/…`, `kosmos-local-image://file/…`           | ARK `richTextImages` keys and note/vault image URLs                                                                                                             | Written into persisted note objects; renaming orphans existing references.                       |
 | `kosmos-icon://`                                                           | Electron-era icon protocol referenced by pinned component builds                                                                                                | Wire/display name already sent to and rendered by existing clients.                              |
 | `extensions.kosmos` JSON key (incl. `/props/extensions/kosmos/…` pointers) | ARK object extensions (`taskBucket` etc.)                                                                                                                       | Persisted user data.                                                                             |
@@ -28,23 +28,17 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `kosmos-desktop`                                                           | WS `client_class` sent by pinned components; usage-accounting keys                                                                                              | Pinned sibling builds report it; recorded usage keys already contain it.                         |
 | `kosmos-kepler`                                                            | `brand::KEYRING_SERVICE` — Windows Credential Manager service for user API keys + integration secrets                                                           | Renaming orphans every stored credential.                                                        |
 | `kepler-fallback`                                                          | fallback device id written into `*-device-id.txt`                                                                                                               | Existing installs persist this value in sync identity.                                           |
-| `window.kosmosApp` / `window.kepler`                                       | page globals the Engine host shim (`runtime/src/engine_api/host_shim.js`) exposes                                                                               | The persisted host API shipped `.kspkg` apps (Arcadia) call; renaming breaks installed packages. |
+| `window.kosmosApp` / `window.kepler`                                       | legacy page globals read by pinned component builds                                                                                                            | Renaming breaks already-built clients; the Engine no longer serves pages.                         |
 
-## Legacy install state (consumed by the KOS-267 migration)
+## Legacy data-dir move
 
-These names exist on machines that ran 0.9.x/Electron-era installs. The
-migration code paths that read or remove them are marked
-`MIGRATION(KOS-267): remove after 2026-11-01`.
+The only remaining install-time migration is the Kosmos→Mundus data-dir move:
+`%APPDATA%\Kosmos` and `%LOCALAPPDATA%\Kosmos` are renamed on first start so
+existing user data is not orphaned.
 
-| Identifier                                                                                                                         | Where it lives                                                                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `%APPDATA%\Kosmos`, `%LOCALAPPDATA%\Kosmos`                                                                                        | roaming/local user data roots; Engine renames them on first start.                                                                                                          |
-| `%LOCALAPPDATA%\Programs\kepler-shell`, `...\Kosmos`                                                                               | Electron-era program files; installer removes them.                                                                                                                         |
-| `Uninstall\Kosmos`, `Uninstall\KosmosEngine`, bare GUID keys `4fe2b964…`, `af85bd72…`                                              | old Apps & Features registrations; installer deletes unconditionally.                                                                                                       |
-| `Kosmos Engine`, `Kosmos`, `com.kazui.kosmos`, `electron.app.Kosmos`, `com.kazui.kepler`, `Kepler`, `KeplerKosmos`, `KosmosKepler` | HKCU Run values from every previous generation; read for the autostart decision, then deleted.                                                                              |
-| `Kosmos*.lnk`, `Kepler.lnk`, `CosCast.lnk`                                                                                         | old Start Menu/Desktop shortcuts; installer removes.                                                                                                                        |
-| `KosmosSystemSvc`, `KeplerFocusSvc`                                                                                                | Windows service registrations of previous privileged services; the new `focus-svc` still answers to them and removes them on elevated `install`.                            |
-| `\\.\pipe\kepler-focus-svc`, `\\.\pipe\kosmos-system-service`                                                                      | named pipes of installed legacy services; Engine falls back to them.                                                                                                        |
+| Identifier                                           | Where it lives                                       |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `%APPDATA%\Kosmos`, `%LOCALAPPDATA%\Kosmos`          | roaming/local user data roots; Engine renames them.  |
 | `kepler-singleton.lock.db`, `kepler-device-id.txt`, `kepler-shell-settings.json`, `engine.lock.json` under `%APPDATA%\Kosmos`      | files inside the legacy roaming dir / written by the Engine shim.                                                                                                           |
 | `Kosmos-dev`, `Mundus-dev`                                                                                                       | dev-worktree directory names recognised by the dictation local-models discovery; contributor checkouts keep pre-rename dir names                                            |
 | `kepler-backend.exe`, `Kosmos*.exe`, `Kosmos.exe`                                                                                  | process/image names of running 0.9.x builds; installer kill-list + Engine-binary detection.                                                                                 |
@@ -56,3 +50,26 @@ migration code paths that read or remove them are marked
 Changelog/release notes and decision/hand-off logs keep old names verbatim —
 they describe the past. The check allows `CHANGELOG*`/`HISTORY*`/
 `RELEASE_NOTES*` paths and a small explicit file list in the allowlist.
+
+## Neutral wire names (Manager migration)
+
+The Manager is being rewritten on the NSH/GPUI stack, and the next product
+rename must not need a repository-wide hunt again. The client *class* header
+is the first name that leaves the repository, so it is a role, not a product:
+
+| Name                             | Where it lives                                          | Why                                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `X-Client-Class`                 | `engine_base::brand::CLIENT_CLASS_HEADER`, the Manager's `identity::CLIENT_CLASS_HEADER` | Names the caller's role. A product rename never touches the wire.                                    |
+| `x-kosmos-client-class` (legacy) | `brand::LEGACY_CLIENT_CLASS_HEADER`                      | Still accepted from already-shipped clients (Atlas, agenda, memoria, dictation, imago's kit). Dropped only once they all send the new one. |
+| `manager`, `mundus-manager`      | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager's own class.                                                                              |
+| `manager-gpui` (legacy)          | `brand::MANAGER_CLIENT_CLASSES`                         | The class Managers installed before 0.10.27 send. An Engine outlives the Manager that started it, so a mixed install must keep working; drop it when no such binary can run. |
+
+`appearance.set` and the `follow_apps` writes in `runtime/src/appearance/apps.rs`
+accept every class in `MANAGER_CLIENT_CLASSES`, so a Manager from before the
+0.10.27 packaging switch keeps working against a newer Engine.
+
+Deliberately **not** renamed in this pass, because each would break installs in
+the field: `com.kosmos.*` package ids, `publisher: "kosmos"`, the `ark.db`
+extension keys and media types, the `kosmos-release-2026` signing key id, the
+`kosmos-kepler` keyring service, the `kepler-fallback` device id, and the
+`x-kosmos-*` headers pinned component builds still send.

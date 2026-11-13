@@ -48,20 +48,20 @@ fn read_bundle_id_parses_the_packaged_plist() {
         contents.join("Info.plist"),
         r#"<?xml version="1.0"?><plist version="1.0"><dict>
           <key>CFBundleName</key><string>Mundus Manager</string>
-          <key>CFBundleIdentifier</key><string>com.kazui.mundus.manager</string>
+          <key>CFBundleIdentifier</key><string>computer.mundus.app</string>
         </dict></plist>"#,
     )
     .unwrap();
     assert_eq!(
         read_bundle_id(&dir.path().join("Mundus Manager.app")).unwrap(),
-        "com.kazui.mundus.manager"
+        "computer.mundus.app"
     );
 }
 
 #[test]
 fn helper_script_quits_swaps_relaunches_and_cleans_up() {
     let plan = MacInstallPlan::for_app(Path::new("/Applications/Mundus Manager.app")).unwrap();
-    let script = helper_script(&plan, "com.kazui.mundus.manager");
+    let script = helper_script(&plan, "computer.mundus.app");
     // Ordering matters: graceful engine shutdown → wait/kill → swap →
     // relaunch → cleanup. Graceful goes through the engine's own control
     // channel, never osascript (Automation consent prompt).
@@ -112,7 +112,7 @@ fn helper_script_swaps_the_bundle_and_relaunches() {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     let marker = dir.path().join("opened");
-    let script = helper_script(&plan, "com.kazui.mundus.manager");
+    let script = helper_script(&plan, "computer.mundus.app");
     let status = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(&script)

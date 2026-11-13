@@ -1,4 +1,6 @@
-fn is_supported_engine(engine: &str) -> bool {
+use super::*;
+
+pub(super) fn is_supported_engine(engine: &str) -> bool {
     let normalized = engine.trim().to_ascii_lowercase();
     normalized.is_empty()
         || matches!(
@@ -7,11 +9,11 @@ fn is_supported_engine(engine: &str) -> bool {
         )
 }
 
-fn is_parakeet_engine(engine: &str) -> bool {
+pub(super) fn is_parakeet_engine(engine: &str) -> bool {
     engine.trim().eq_ignore_ascii_case(PARAKEET_LOCAL_ENGINE)
 }
 
-fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, LocalError> {
+pub(super) fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, LocalError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err(missing);
@@ -32,7 +34,7 @@ fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, Loca
 }
 
 #[cfg(feature = "local-dictation")]
-fn ensure_existing_model_path(path: &str) -> Result<PathBuf, LocalError> {
+pub(super) fn ensure_existing_model_path(path: &str) -> Result<PathBuf, LocalError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err(LocalError::MissingModelPath);
@@ -46,7 +48,7 @@ fn ensure_existing_model_path(path: &str) -> Result<PathBuf, LocalError> {
     })
 }
 
-fn temp_audio_paths() -> Result<(PathBuf, PathBuf), LocalError> {
+pub(super) fn temp_audio_paths() -> Result<(PathBuf, PathBuf), LocalError> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| LocalError::TempAudio(e.to_string()))?
@@ -66,7 +68,7 @@ pub(crate) fn whisper_language_arg(language: &str) -> Option<String> {
     }
 }
 
-fn cleanup_temp_outputs(wav_path: &Path, out_base: &Path) {
+pub(super) fn cleanup_temp_outputs(wav_path: &Path, out_base: &Path) {
     let _ = fs::remove_file(wav_path);
     let _ = fs::remove_file(out_base.with_extension("txt"));
     let _ = fs::remove_file(out_base.with_extension("py"));
@@ -100,7 +102,7 @@ pub(crate) fn strip_whisper_timestamps(text: &str) -> String {
         .join(" ")
 }
 
-fn collapse_exact_repeated_transcript(text: &str) -> &str {
+pub(super) fn collapse_exact_repeated_transcript(text: &str) -> &str {
     let text = text.trim();
     if text.len() < 32 {
         return text;
@@ -123,7 +125,7 @@ fn collapse_exact_repeated_transcript(text: &str) -> &str {
     text
 }
 
-fn is_known_silence_hallucination(text: &str) -> bool {
+pub(super) fn is_known_silence_hallucination(text: &str) -> bool {
     let text = text.trim().to_lowercase();
     [
         "продолжение следует",
@@ -147,7 +149,7 @@ pub(crate) fn clean_whisper_transcript(text: &str) -> Option<String> {
     }
 }
 
-fn read_transcript(stdout: &[u8], out_base: &Path) -> Result<String, LocalError> {
+pub(super) fn read_transcript(stdout: &[u8], out_base: &Path) -> Result<String, LocalError> {
     let txt_path = out_base.with_extension("txt");
     if let Ok(file_text) = fs::read_to_string(&txt_path) {
         if let Some(text) = clean_whisper_transcript(&file_text) {
@@ -175,15 +177,15 @@ fn read_transcript(stdout: &[u8], out_base: &Path) -> Result<String, LocalError>
     }
 }
 
-fn whisper_server_executable(command_path: &Path) -> PathBuf {
+pub(super) fn whisper_server_executable(command_path: &Path) -> PathBuf {
     command_path.with_file_name("whisper-server.exe")
 }
 
-fn stable_path_key(path: &Path) -> PathBuf {
+pub(super) fn stable_path_key(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn server_process_key(
+pub(super) fn server_process_key(
     command_path: &Path,
     model_path: &Path,
     accelerator: &LocalSttAccelerator,
@@ -197,7 +199,7 @@ fn server_process_key(
     }
 }
 
-fn whisper_server_port() -> Result<u16, LocalError> {
+pub(super) fn whisper_server_port() -> Result<u16, LocalError> {
     TcpListener::bind(("127.0.0.1", 0))
         .and_then(|listener| listener.local_addr())
         .map(|addr| addr.port())
@@ -206,14 +208,19 @@ fn whisper_server_port() -> Result<u16, LocalError> {
         })
 }
 
-fn lock_child<'a>(child: &'a Mutex<ProcessTree>) -> Option<std::sync::MutexGuard<'a, ProcessTree>> {
+pub(super) fn lock_child<'a>(
+    child: &'a Mutex<ProcessTree>,
+) -> Option<std::sync::MutexGuard<'a, ProcessTree>> {
     match child.lock() {
         Ok(guard) => Some(guard),
         Err(poisoned) => Some(poisoned.into_inner()),
     }
 }
 
-fn parse_server_text(body: &str, content_type: Option<&str>) -> Result<String, LocalError> {
+pub(super) fn parse_server_text(
+    body: &str,
+    content_type: Option<&str>,
+) -> Result<String, LocalError> {
     let trimmed = body.trim();
     if trimmed.is_empty() {
         return Err(LocalError::EmptyTranscript);
@@ -247,7 +254,9 @@ fn parse_server_text(body: &str, content_type: Option<&str>) -> Result<String, L
     clean_whisper_transcript(trimmed).ok_or(LocalError::EmptyTranscript)
 }
 
-fn extract_filtered_verbose_transcript(value: &Value) -> Option<Result<String, LocalError>> {
+pub(super) fn extract_filtered_verbose_transcript(
+    value: &Value,
+) -> Option<Result<String, LocalError>> {
     let segments = value.get("segments").and_then(Value::as_array)?;
     if segments.is_empty() {
         return None;
@@ -257,7 +266,7 @@ fn extract_filtered_verbose_transcript(value: &Value) -> Option<Result<String, L
     Some(clean_whisper_transcript(&text).ok_or(LocalError::EmptyTranscript))
 }
 
-fn extract_transcript_value(value: &Value) -> Option<String> {
+pub(super) fn extract_transcript_value(value: &Value) -> Option<String> {
     match value {
         Value::String(text) => clean_whisper_transcript(text),
         Value::Object(map) => {
@@ -299,7 +308,7 @@ fn extract_transcript_value(value: &Value) -> Option<String> {
 
 /// Длительность аудио в секундах из стандартного 44-байтного PCM WAV-заголовка
 /// (его пишет pill renderer). Используется для расчёта таймаута инференса.
-fn wav_duration_secs(wav_bytes: &[u8]) -> f64 {
+pub(super) fn wav_duration_secs(wav_bytes: &[u8]) -> f64 {
     if wav_bytes.len() < 44 {
         return 0.0;
     }
@@ -318,13 +327,13 @@ fn wav_duration_secs(wav_bytes: &[u8]) -> f64 {
 /// работает ~1× реального времени, поэтому фиксированные 60с обрезали длинные
 /// записи (баг на записях ~минута и более). Масштабируем от длительности с
 /// большим запасом на медленное железо, с разумным потолком.
-fn local_inference_timeout(wav_bytes: &[u8]) -> Duration {
+pub(super) fn local_inference_timeout(wav_bytes: &[u8]) -> Duration {
     let dur = wav_duration_secs(wav_bytes);
     let secs = (30.0 + dur * 8.0).ceil() as u64;
     Duration::from_secs(secs.clamp(60, 1800))
 }
 
-fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
+pub(super) fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
     let mut form = Form::new().part(
         "file",
         Part::bytes(req.wav_bytes.clone())
@@ -350,7 +359,7 @@ fn server_request_form(req: &OwnedLocalRequest) -> Result<Form, LocalError> {
         .text("no_speech_thold", "0.6"))
 }
 
-fn apply_whisper_quality_args(command: &mut TokioCommand, profile: &LocalSttProfile) {
+pub(super) fn apply_whisper_quality_args(command: &mut TokioCommand, profile: &LocalSttProfile) {
     match profile {
         LocalSttProfile::Fast => {
             command.arg("-bo").arg("1").arg("-bs").arg("1");
@@ -361,7 +370,10 @@ fn apply_whisper_quality_args(command: &mut TokioCommand, profile: &LocalSttProf
     };
 }
 
-fn apply_whisper_quality_args_blocking(command: &mut Command, profile: &LocalSttProfile) {
+pub(super) fn apply_whisper_quality_args_blocking(
+    command: &mut Command,
+    profile: &LocalSttProfile,
+) {
     match profile {
         LocalSttProfile::Fast => {
             command.arg("-bo").arg("1").arg("-bs").arg("1");
@@ -372,13 +384,16 @@ fn apply_whisper_quality_args_blocking(command: &mut Command, profile: &LocalStt
     };
 }
 
-fn apply_whisper_accelerator_args(command: &mut TokioCommand, accelerator: &LocalSttAccelerator) {
+pub(super) fn apply_whisper_accelerator_args(
+    command: &mut TokioCommand,
+    accelerator: &LocalSttAccelerator,
+) {
     if matches!(accelerator, LocalSttAccelerator::Cpu) {
         command.arg("-ng");
     }
 }
 
-fn apply_whisper_accelerator_args_blocking(
+pub(super) fn apply_whisper_accelerator_args_blocking(
     command: &mut Command,
     accelerator: &LocalSttAccelerator,
 ) {
@@ -387,7 +402,7 @@ fn apply_whisper_accelerator_args_blocking(
     }
 }
 
-fn whisper_cpp_vad_model_path(command_path: &Path) -> Option<PathBuf> {
+pub(super) fn whisper_cpp_vad_model_path(command_path: &Path) -> Option<PathBuf> {
     if let Ok(path) = env::var("MUNDUS_WHISPER_CPP_VAD_MODEL") {
         let path = PathBuf::from(path.trim());
         if path.is_file() {
@@ -400,38 +415,38 @@ fn whisper_cpp_vad_model_path(command_path: &Path) -> Option<PathBuf> {
         .filter(|path| path.is_file())
 }
 
-fn apply_whisper_vad_args(command: &mut TokioCommand, command_path: &Path) {
+pub(super) fn apply_whisper_vad_args(command: &mut TokioCommand, command_path: &Path) {
     if let Some(vad_model_path) = whisper_cpp_vad_model_path(command_path) {
         command.arg("--vad").arg("-vm").arg(vad_model_path);
     }
 }
 
-fn apply_whisper_vad_args_blocking(command: &mut Command, command_path: &Path) {
+pub(super) fn apply_whisper_vad_args_blocking(command: &mut Command, command_path: &Path) {
     if let Some(vad_model_path) = whisper_cpp_vad_model_path(command_path) {
         command.arg("--vad").arg("-vm").arg(vad_model_path);
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ServerProcessKey {
+pub(super) struct ServerProcessKey {
     command_path: PathBuf,
     model_path: PathBuf,
     accelerator: LocalSttAccelerator,
     profile: LocalSttProfile,
 }
 
-struct WhisperServerProcess {
+pub(super) struct WhisperServerProcess {
     key: ServerProcessKey,
     port: u16,
     // ProcessTree, not a bare Child: the KILL_ON_JOB_CLOSE job (Unix: process
     // group) is what kills whisper-server when the Engine dies — installer
     // kill, crash, Task Manager — instead of leaving it holding the tools dir
-    // and its port (KOS-312). Dropping it also covers our own stop path.
+    // and its port. Dropping it also covers our own stop path.
     child: Mutex<ProcessTree>,
 }
 
 impl WhisperServerProcess {
-    fn is_running(&self) -> bool {
+    pub(super) fn is_running(&self) -> bool {
         lock_child(&self.child)
             .map(|mut tree| matches!(tree.child_mut().try_wait(), Ok(None)))
             .unwrap_or(false)
@@ -439,27 +454,30 @@ impl WhisperServerProcess {
 }
 
 #[derive(Default)]
-struct WhisperServerPool {
+pub(super) struct WhisperServerPool {
     active: Option<Arc<WhisperServerProcess>>,
 }
 
-static WHISPER_SERVER_POOL: OnceLock<tokio::sync::Mutex<WhisperServerPool>> = OnceLock::new();
-static WHISPER_SERVER_CLIENT: OnceLock<Client> = OnceLock::new();
+pub(super) static WHISPER_SERVER_POOL: OnceLock<tokio::sync::Mutex<WhisperServerPool>> =
+    OnceLock::new();
+pub(super) static WHISPER_SERVER_CLIENT: OnceLock<Client> = OnceLock::new();
 /// Монотонный счётчик активности whisper-server пути. Инкрементируется в
 /// начале каждого `run_whisper_server` вызова. Idle-unload таймер проверяет,
 /// что значение не изменилось с момента его постановки — это гарантирует, что
 /// мы не выгрузим сервер пока идёт транскрипция или сразу после неё.
-static WHISPER_SERVER_ACTIVITY_ID: AtomicU64 = AtomicU64::new(0);
+pub(super) static WHISPER_SERVER_ACTIVITY_ID: AtomicU64 = AtomicU64::new(0);
 
-fn whisper_server_pool() -> &'static tokio::sync::Mutex<WhisperServerPool> {
+pub(super) fn whisper_server_pool() -> &'static tokio::sync::Mutex<WhisperServerPool> {
     WHISPER_SERVER_POOL.get_or_init(|| tokio::sync::Mutex::new(WhisperServerPool::default()))
 }
 
-fn whisper_server_client() -> &'static Client {
+pub(super) fn whisper_server_client() -> &'static Client {
     WHISPER_SERVER_CLIENT.get_or_init(Client::new)
 }
 
-async fn wait_for_whisper_server_ready(server: &WhisperServerProcess) -> Result<(), LocalError> {
+pub(super) async fn wait_for_whisper_server_ready(
+    server: &WhisperServerProcess,
+) -> Result<(), LocalError> {
     let client = whisper_server_client();
     let url = format!("http://127.0.0.1:{}/", server.port);
     let deadline = Instant::now() + local_stt_server_ready_timeout();
@@ -489,7 +507,7 @@ async fn wait_for_whisper_server_ready(server: &WhisperServerProcess) -> Result<
     )))
 }
 
-async fn start_whisper_server(
+pub(super) async fn start_whisper_server(
     model_path: &Path,
     command_path: &Path,
     accelerator: &LocalSttAccelerator,
@@ -539,7 +557,7 @@ async fn start_whisper_server(
     Ok(server)
 }
 
-async fn get_or_start_whisper_server(
+pub(super) async fn get_or_start_whisper_server(
     model_path: &Path,
     command_path: &Path,
     accelerator: &LocalSttAccelerator,
@@ -558,7 +576,9 @@ async fn get_or_start_whisper_server(
     Ok(server)
 }
 
-async fn run_whisper_server(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+pub(super) async fn run_whisper_server(
+    req: OwnedLocalRequest,
+) -> Result<TranscriptionResult, LocalError> {
     // Bump activity ID сразу — любой ранее поставленный idle-unload таймер
     // увидит другое поколение и откажется выгружать пока мы в работе.
     let generation = WHISPER_SERVER_ACTIVITY_ID.fetch_add(1, Ordering::Relaxed) + 1;
@@ -698,7 +718,7 @@ pub(crate) async fn preload_with_whisper_backend_model(
     Ok(true)
 }
 
-fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+pub(super) fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
     let _ = req.model_id;
     let model_path = ensure_existing_file(
         req.model_path
@@ -770,7 +790,7 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
 /// script) — искать/грузить dylib в рантайме не нужно. `ort::init()` лишь
 /// коммитит Env; повторный commit — no-op, так что это дёшево.
 #[cfg(feature = "local-dictation")]
-fn ensure_onnxruntime() -> Result<(), LocalError> {
+pub(super) fn ensure_onnxruntime() -> Result<(), LocalError> {
     ort::init().commit();
     Ok(())
 }
@@ -779,7 +799,7 @@ fn ensure_onnxruntime() -> Result<(), LocalError> {
 /// диктовке, поэтому модель живёт в процессе между запросами (аналог пула
 /// whisper-server). Mutex сериализует инференс — одна транскрипция за раз.
 #[cfg(feature = "local-dictation")]
-struct ParakeetCache {
+pub(super) struct ParakeetCache {
     path: PathBuf,
     model: ParakeetModel,
     last_used: Instant,
@@ -787,24 +807,24 @@ struct ParakeetCache {
 }
 
 #[cfg(feature = "local-dictation")]
-static PARAKEET: OnceLock<Mutex<Option<ParakeetCache>>> = OnceLock::new();
+pub(super) static PARAKEET: OnceLock<Mutex<Option<ParakeetCache>>> = OnceLock::new();
 
 #[cfg(feature = "local-dictation")]
-fn parakeet_slot() -> &'static Mutex<Option<ParakeetCache>> {
+pub(super) fn parakeet_slot() -> &'static Mutex<Option<ParakeetCache>> {
     PARAKEET.get_or_init(|| Mutex::new(None))
 }
 
 /// Кэш протух, если модели нет или каталог сменился. Чистая функция —
 /// покрыта тестом без модельных файлов.
 #[cfg(feature = "local-dictation")]
-fn parakeet_cache_is_stale(cached: Option<&Path>, requested: &Path) -> bool {
+pub(super) fn parakeet_cache_is_stale(cached: Option<&Path>, requested: &Path) -> bool {
     cached != Some(requested)
 }
 
 /// Блокирует кэш и гарантирует загруженную модель для `model_dir`; держать
 /// guard на время инференса — это и есть сериализация.
 #[cfg(feature = "local-dictation")]
-fn with_parakeet<R>(
+pub(super) fn with_parakeet<R>(
     model_dir: &Path,
     f: impl FnOnce(&mut ParakeetModel) -> Result<R, LocalError>,
 ) -> Result<R, LocalError> {
@@ -846,7 +866,7 @@ fn with_parakeet<R>(
 /// tokio::spawn недоступен). Выгружает только если с момента постановки не
 /// было новой генерации и last_used старше таймаута. `None`/0 — никогда.
 #[cfg(feature = "local-dictation")]
-fn schedule_parakeet_idle_unload(generation: u64) {
+pub(super) fn schedule_parakeet_idle_unload(generation: u64) {
     let Some(ms) = local_stt_idle_unload_after_ms_for_engine(PARAKEET_LOCAL_ENGINE) else {
         return;
     };
@@ -897,36 +917,36 @@ pub(crate) struct PartialTranscript {
 
 /// Активный stream-транскрибёр: join'им при остановке записи.
 #[cfg(feature = "local-dictation")]
-struct StreamingParakeet {
+pub(super) struct StreamingParakeet {
     join: thread::JoinHandle<StreamingState>,
 }
 
 #[cfg(feature = "local-dictation")]
-struct StreamingState {
+pub(super) struct StreamingState {
     samples: Vec<i16>,
     committed: usize,
     texts: Vec<String>,
 }
 
 #[cfg(feature = "local-dictation")]
-static PARAKEET_STREAM: OnceLock<Mutex<Option<StreamingParakeet>>> = OnceLock::new();
+pub(super) static PARAKEET_STREAM: OnceLock<Mutex<Option<StreamingParakeet>>> = OnceLock::new();
 #[cfg(feature = "local-dictation")]
-static STREAM_PARTIAL: OnceLock<Mutex<Option<PartialTranscript>>> = OnceLock::new();
+pub(super) static STREAM_PARTIAL: OnceLock<Mutex<Option<PartialTranscript>>> = OnceLock::new();
 
 #[cfg(feature = "local-dictation")]
-fn stream_slot() -> &'static Mutex<Option<StreamingParakeet>> {
+pub(super) fn stream_slot() -> &'static Mutex<Option<StreamingParakeet>> {
     PARAKEET_STREAM.get_or_init(|| Mutex::new(None))
 }
 
 #[cfg(feature = "local-dictation")]
-fn stream_partial_slot() -> &'static Mutex<Option<PartialTranscript>> {
+pub(super) fn stream_partial_slot() -> &'static Mutex<Option<PartialTranscript>> {
     STREAM_PARTIAL.get_or_init(|| Mutex::new(None))
 }
 
 /// i16-сэмплы из wav-байтов (16kHz mono s16 — формат capture'а). Поиск
 /// data-чанка, а не слепой offset 44 — запас на чужие wav'и.
 #[cfg(feature = "local-dictation")]
-fn wav_pcm16(wav: &[u8]) -> Option<Vec<i16>> {
+pub(super) fn wav_pcm16(wav: &[u8]) -> Option<Vec<i16>> {
     if wav.len() < 12 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
         return None;
     }
@@ -952,7 +972,7 @@ fn wav_pcm16(wav: &[u8]) -> Option<Vec<i16>> {
 /// Хэш префикса i16-сэмплов — проверка, что wav из capture.stop та же
 /// запись, что стримил транскрибёр (иначе частичный текст чужой).
 #[cfg(feature = "local-dictation")]
-fn hash_pcm16(samples: &[i16]) -> u64 {
+pub(super) fn hash_pcm16(samples: &[i16]) -> u64 {
     use std::hash::Hasher;
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for s in samples {
@@ -964,7 +984,7 @@ fn hash_pcm16(samples: &[i16]) -> u64 {
 /// Решение «reuse partial»: Some(committed) только если wav длиннее
 /// committed И хэш префикса совпал.
 #[cfg(feature = "local-dictation")]
-fn apply_partial(samples: &[i16], partial: &PartialTranscript) -> Option<usize> {
+pub(super) fn apply_partial(samples: &[i16], partial: &PartialTranscript) -> Option<usize> {
     if partial.committed == 0 || samples.len() < partial.committed {
         return None;
     }
@@ -1086,7 +1106,7 @@ pub(crate) fn discard_parakeet_partial() {
 /// центр минимального по энергии 300мс прогона 30мс RMS-фреймов. Возвращает
 /// индекс сэмпла в `samples`. Чистая функция.
 #[cfg(feature = "local-dictation")]
-fn best_cut(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> usize {
+pub(super) fn best_cut(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> usize {
     let rate = sample_rate as f64;
     let frame = (0.030 * rate) as usize;
     let run_frames = 10usize; // самое тихое окно = 10 фреймов = 300мс
@@ -1134,7 +1154,12 @@ fn best_cut(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> 
 /// режем на куски ≤ max_secs по самому тихому 300мс окну в диапазоне
 /// [min_secs, max_secs] от начала каждого куска. Чистая функция.
 #[cfg(feature = "local-dictation")]
-fn split_points(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> Vec<usize> {
+pub(super) fn split_points(
+    samples: &[f32],
+    sample_rate: u32,
+    min_secs: f64,
+    max_secs: f64,
+) -> Vec<usize> {
     let rate = sample_rate as f64;
     let max_len = (max_secs * rate) as usize;
     let mut points = Vec::new();
@@ -1154,8 +1179,8 @@ fn split_points(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64)
 /// повторённые подряд ≥3 раз, до одного экземпляра. Легитимные дубли
 /// («очень очень») не трогаем — порог именно 3+.
 #[cfg(feature = "local-dictation")]
-fn collapse_repeats(text: &str) -> String {
-    fn norm(token: &str) -> String {
+pub(super) fn collapse_repeats(text: &str) -> String {
+    pub(super) fn norm(token: &str) -> String {
         token
             .trim_end_matches(|c: char| !c.is_alphanumeric())
             .to_lowercase()
@@ -1195,7 +1220,7 @@ fn collapse_repeats(text: &str) -> String {
 }
 
 #[cfg(feature = "local-dictation")]
-fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
+pub(super) fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
     let model_path = ensure_existing_model_path(
         req.model_path
             .as_deref()
@@ -1333,7 +1358,7 @@ pub(crate) async fn transcribe_with_whisper_backend_model(
     .await
 }
 
-async fn transcribe_owned_with_whisper_backend(
+pub(super) async fn transcribe_owned_with_whisper_backend(
     owned: OwnedLocalRequest,
 ) -> Result<TranscriptionResult, LocalError> {
     if !is_supported_engine(&owned.engine) {

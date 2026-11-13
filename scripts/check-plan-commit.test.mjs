@@ -21,7 +21,7 @@ test("a commit defers the Rust compile and test checks to pre-push", () => {
   assert.deepEqual(plan.checks, ["rustfmt"]);
   assert.match(plan.reasons.at(-1), /deferred to pre-push: clippy, test:rust, runtime-staging/);
   assert.deepEqual(names(plan), ["brand", "test-skips", "source-size", "rustfmt"]);
-  const manager = commitPlan(createPlan({ mode: "pre-commit", files: ["manager-gpui/src/a.rs"] }));
+  const manager = commitPlan(createPlan({ mode: "pre-commit", files: ["manager/src/a.rs"] }));
   assert.deepEqual(manager.checks, []);
 });
 

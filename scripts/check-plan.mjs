@@ -18,11 +18,12 @@ const CHECK_ORDER = [
   "package-manager",
   "release-bom",
   "desktop-contracts",
+  "ark-db-writers",
   "rustfmt",
   "clippy",
   "test:rust",
   "runtime-staging",
-  "manager-gpui",
+  "manager",
   "lint",
   "format",
 ];
@@ -86,6 +87,11 @@ function manifestPlan(file, revisions) {
 
 function classify(file, revisions) {
   const path = file.path;
+  if (
+    /^scripts\/(?:audit-db-writers(?:\.test)?|rust-source-scan)\.mjs$/.test(path) ||
+    path === "scripts/db-writers.allow.json"
+  )
+    return ["ark-db-writers", "lint", "format"];
   if (Object.hasOwn(DOC_CONTRACTS, path)) return DOC_CONTRACTS[path];
   if (isScriptsManifest(path)) {
     const result = manifestPlan(file, revisions);
@@ -103,13 +109,15 @@ function classify(file, revisions) {
   // gates, everything else (docs, tooling) is not built by Cortex checks.
   // Manifests/lockfiles under core/ already failed
   // closed via isFullInfluence above.
+  if (/^core\/crates\/kernel\/.*\.rs$/.test(path))
+    return ["ark-db-writers", "rustfmt", "clippy", "test:rust"];
   if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
   if (/^core\//.test(path)) return [];
-  // manager-gpui is a standalone Cargo workspace (own [workspace] table), so
+  // The Manager is a standalone Cargo workspace (own [workspace] table), so
   // it stays out of the cortex `cargo fmt/clippy/test --workspace` sweep and
   // gets its own gate. Its Cargo.toml/Cargo.lock still fail closed via
   // isFullInfluence above.
-  if (/^manager-gpui\//.test(path)) return ["manager-gpui"];
+  if (/^manager\//.test(path)) return ["manager"];
   return "full";
 }
 

@@ -4,7 +4,7 @@
 // and in test builds, which carry platform-gated fixtures.
 #![cfg_attr(any(test, feature = "test-support", not(windows)), allow(dead_code))]
 // Same crate-level debt allows as `runtime/src/lib.rs` — this code moved
-// verbatim from engine; the allowlist moves with it (KOS-334).
+// verbatim from engine; the allowlist moves with it.
 #![allow(
     clippy::collapsible_if,
     clippy::derivable_impls,
@@ -28,7 +28,7 @@
 )]
 
 // Shim: engine-base paths keep resolving as `crate::<module>` exactly as they
-// did when this code lived inside the engine crate (KOS-334). Per-platform
+// did when this code lived inside the engine crate. Per-platform
 // cfg decides which names are actually used.
 #[allow(unused_imports)]
 pub(crate) use engine_base::{brand, data_dir, file_hash, process_tree};
@@ -66,6 +66,8 @@ pub mod native_capture;
 mod native_capture_windows;
 pub mod network;
 pub mod pending;
+pub mod pill_frame;
+pub mod pill_scope;
 pub mod retry;
 pub mod stats;
 
@@ -74,6 +76,6 @@ pub use config::{
     NetworkProfile, TriggerMode,
 };
 pub use host::{
-    handle_dictation_op, handle_engine_trigger, DictationHost, DictationResponse,
-    DictationStateName,
+    handle_dictation_op, handle_engine_trigger, route_trigger_event, DictationHost,
+    DictationResponse, DictationStateName,
 };

@@ -1,4 +1,4 @@
-//! Cleanup of `<data_dir>/updates/` (KOS-301).
+//! Cleanup of `<data_dir>/updates/`.
 //!
 //! The service writes exactly two shapes here: the committed installer
 //! (`downloads_dir.join(manifest file.url)`) and its in-progress sidecar

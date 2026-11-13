@@ -68,7 +68,7 @@ fn rule_specs_are_stable_inbound_allow_plus_public_block() {
     assert_eq!(allow.action, RuleAction::Allow);
 
     // The Public-profile sibling suppresses the "allow access" prompt on
-    // public networks without opening the port (KOS-269 round 1).
+    // public networks without opening the port (round 1).
     assert_eq!(block.name, BLOCK_RULE_NAME);
     assert_eq!(block.grouping, RULE_GROUPING);
     assert_eq!(block.program, EXE);

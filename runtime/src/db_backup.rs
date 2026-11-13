@@ -1,10 +1,10 @@
 // Periodic DB backup scheduler.
 //
-// Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-YYYY-MM-DD-HHMMSS`
+// Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-v1-YYYY-MM-DD-HHMMSS`
 // раз в N часов (default 24, override через MUNDUS_BACKUP_INTERVAL_HOURS).
 // Online Backup API не блокирует concurrent readers/writer — safe для live DB.
 //
-// Retention (см. `retention` модуль, KOS-300): после успешного backup'а и на
+// Retention (см. `retention` модуль,): после успешного backup'а и на
 // каждом старте Engine держим последние `MUNDUS_BACKUP_RETAIN_COUNT`
 // (default 7) backup'ов, убираем orphan SQLite sidecar'ы и stale temp файлы
 // crashed restore.
@@ -26,7 +26,9 @@ mod retention;
 
 const SYNC_KV_LAST_BACKUP: &str = "mundus.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
-const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+const BACKUP_FILE_PREFIX: &str = "ark.db.backup-v1-";
+const LEGACY_BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+const BACKUP_MANIFEST_SUFFIX: &str = ".manifest.json";
 static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
 static BACKUP_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
@@ -49,14 +51,16 @@ fn backup_filename(now: DateTime<Utc>) -> String {
 }
 
 fn parse_backup_timestamp(name: &str) -> Option<DateTime<Utc>> {
-    let stripped = name.strip_prefix(BACKUP_FILE_PREFIX)?;
+    let stripped = name
+        .strip_prefix(BACKUP_FILE_PREFIX)
+        .or_else(|| name.strip_prefix(LEGACY_BACKUP_FILE_PREFIX))?;
     let parsed = chrono::NaiveDateTime::parse_from_str(stripped, "%Y-%m-%d-%H%M%S").ok()?;
     Some(parsed.and_utc())
 }
 
 async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
     let resp = ark
-        .request("get_sync_kv", json!({ "key": SYNC_KV_LAST_BACKUP }))
+        .request("kv.get", json!({ "key": SYNC_KV_LAST_BACKUP }))
         .await
         .ok()?;
     let value = resp.data.as_str()?;
@@ -67,7 +71,7 @@ async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
 
 async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), String> {
     ark.request(
-        "set_sync_kv",
+        "kv.set",
         json!({ "key": SYNC_KV_LAST_BACKUP, "value": ts.to_rfc3339() }),
     )
     .await
@@ -120,7 +124,9 @@ fn next_backup_destination(
 ) -> Result<(DateTime<Utc>, PathBuf), String> {
     for _ in 0..86_400 {
         let path = backups_dir.join(backup_filename(now));
-        if !path.exists() {
+        let manifest =
+            backups_dir.join(format!("{}{BACKUP_MANIFEST_SUFFIX}", backup_filename(now)));
+        if !path.exists() && !manifest.exists() {
             return Ok((now, path));
         }
         now += chrono::Duration::seconds(1);
@@ -176,7 +182,7 @@ fn validated_backups_dir(data_dir: &Path, create: bool) -> Result<Option<PathBuf
 }
 
 /// Дождаться события `db_backup_result` для нашего `dest_str` (backup идёт
-/// async в ark-core service). Bounded таймаутом, чтобы не зависнуть навсегда если
+/// async в kernel service). Bounded таймаутом, чтобы не зависнуть навсегда если
 /// backup thread умер посреди копирования.
 async fn wait_for_backup_result(
     events: &mut tokio::sync::broadcast::Receiver<(String, serde_json::Value)>,
@@ -249,7 +255,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
         .ok_or("backup dest path is not UTF-8")?
         .to_string();
 
-    // Подписка ДО запроса: backup в ark-core service идёт async на отдельном
+    // Подписка ДО запроса: backup в kernel service идёт async на отдельном
     // background-priority потоке, событие завершения может прийти раньше, чем
     // мы успеем подписаться после await'а RPC.
     let mut events = ark.subscribe_events();
@@ -260,7 +266,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     // фоне, не блокируя серийный request-loop сервиса.
     BACKUP_ACTIVE.store(true, Ordering::SeqCst);
     let start_result = ark
-        .request("db_backup", json!({ "dest_path": dest_str.clone() }))
+        .request("backup.create", json!({ "dest_path": dest_str.clone() }))
         .await
         .map_err(|e| format!("db_backup RPC failed: {e}"));
     if let Err(e) = start_result {
@@ -286,7 +292,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
 }
 
 // ---------------------------------------------------------------------------
-// KOS-77: privileged Core snapshot RPCs (KOS-51: db_backup_list /
+// privileged Core snapshot RPCs (db_backup_list /
 // db_backup_validate / db_backup_restore). Manager не трогает файлы сам —
 // `<db_dir>/backups/` принадлежит Core; restore идёт Online Backup API в live
 // conn под BACKUP_GATE, без момента с отсутствующей primary DB.
@@ -326,7 +332,7 @@ async fn core_snapshot_request(
 }
 
 async fn list_snapshots(ark: &ArkHost) -> Result<serde_json::Value, String> {
-    core_snapshot_request(ark, "db_backup_list", json!({})).await
+    core_snapshot_request(ark, "backup.list", json!({})).await
 }
 
 async fn validate_snapshot(
@@ -334,7 +340,7 @@ async fn validate_snapshot(
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let id = snapshot_id(params)?;
-    core_snapshot_request(ark, "db_backup_validate", json!({ "backup_id": id })).await
+    core_snapshot_request(ark, "backup.check", json!({ "backup_id": id })).await
 }
 
 /// Атомарный restore через Core. После успеха публикует `db_restored` всем
@@ -345,8 +351,7 @@ async fn restore_snapshot(
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let id = snapshot_id(params)?;
-    let report =
-        core_snapshot_request(ark, "db_backup_restore", json!({ "backup_id": id })).await?;
+    let report = core_snapshot_request(ark, "backup.restore", json!({ "backup_id": id })).await?;
     let mut event = serde_json::Map::new();
     event.insert("event".to_string(), json!("db_restored"));
     if let Some(fields) = report.as_object() {

@@ -99,4 +99,8 @@ skip = [
     { name = "syn" },
     { name = "thiserror" },
     { name = "thiserror-impl" },
+    # toml 0.5 comes from uniffi_macros (engine-mobile proc-macro metadata);
+    # toml 1.x is pinned by embed-resource. Not controllable until uniffi
+    # moves off toml 0.5.
+    { name = "toml" },
 ]

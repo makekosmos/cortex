@@ -1,13 +1,7 @@
 // The release BOM records what one desktop release is built from. Every field
 // is derived from the checkout at HEAD — nothing is hand-written — so the BOM
-// can never drift from the source it describes. It ships next to the
-// installer as `release-bom.v2.json`.
-//
-// KOS-349: provenance and receipt no longer ride in the GitHub release. The
-// BOM is the single composition document for a cortex release. Windows and
-// macOS may each derive a platform-scoped BOM locally; the published release
-// keeps ONE `release-bom.v2.json` (the first publisher uploads it; the other
-// platform does not clobber a different digest).
+// can never drift from the source it describes. It is a build input, not a
+// release asset: `createReleaseManifest` folds it into manifest.json.
 //
 // Store packages are not part of it: the Engine reads the unsigned
 // integrations catalog at runtime and native apps come from their own
@@ -19,7 +13,6 @@ import { bytes, documentHash, fail, readJson, semver } from "./release-utils.mjs
 import { readReleaseVersion } from "./release-version.mjs";
 
 export const RELEASE_BOM_SCHEMA_VERSION = 2;
-export const RELEASE_BOM_FILE = `release-bom.v${RELEASE_BOM_SCHEMA_VERSION}.json`;
 const REPOSITORY = "makekosmos/cortex";
 const TARGETS = {
   win: "x86_64-pc-windows-msvc",

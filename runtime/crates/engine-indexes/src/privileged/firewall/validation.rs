@@ -1,4 +1,4 @@
-//! Pipe-client image validation (KOS-269): the service runs as SYSTEM, so
+//! Pipe-client image validation: the service runs as SYSTEM, so
 //! it must never take a program path from the request. The rule's program
 //! is derived from the pipe *client's* process image and must be a
 //! `mundus-engine.exe` inside the calling user's own versioned install dir.

@@ -1,27 +1,19 @@
 use super::*;
 
-fn replication_requires_authority(rest: &str) -> bool {
-    rest.starts_with("replication_")
-}
-
+#[allow(
+    clippy::too_many_arguments,
+    reason = "dispatch wiring shares the server's host handles"
+)]
 pub(super) async fn dispatch_standard(
     request: crate::engine_dispatch::DispatchRequest,
     ark_host: Arc<ArkHost>,
     command_bus: Arc<CommandBus>,
-    pomodoro_host: Arc<PomodoroHost>,
     dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
-    agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    agents_data_dir: Arc<std::path::PathBuf>,
-    agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
-    package_service: Arc<PackageService>,
-    _snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
-    grants: Arc<GrantAuthorityRegistry>,
-    _desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     manager_state: ManagerState,
     correlation_id: Arc<String>,
     client_id: ClientId,
@@ -39,9 +31,8 @@ pub(super) async fn dispatch_standard(
                 &usage_diagnostics,
                 &app_index,
                 &protocol_usage,
-                &package_service,
                 &correlation_id,
-                &agents_data_dir,
+                manager_state.data_dir(),
             )
             .await,
         )
@@ -57,34 +48,8 @@ pub(super) async fn dispatch_standard(
         result
             .map(LocalResponse::ok)
             .unwrap_or_else(LocalResponse::err)
-    } else if let Some(rest) = operation.strip_prefix("agents.") {
-        match agents
-            .get_or_try_init(|| async {
-                AgentsService::new_with_events(&agents_data_dir, agent_events.clone())
-            })
-            .await
-        {
-            Ok(service) => service
-                .handle(rest, params, client)
-                .await
-                .map(LocalResponse::ok)
-                .unwrap_or_else(LocalResponse::err),
-            Err(error) => LocalResponse::err(error.to_string()),
-        }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
-            if rest == "trigger" {
-                return match package_service
-                    .invoke_worker_operation("dictation.trigger", params)
-                    .await
-                {
-                    Ok(value) => LocalResponse::ok(value),
-                    Err(error) => LocalResponse::err(format!(
-                        "dictation.trigger: {}",
-                        package_error_code(&error)
-                    )),
-                };
-            }
             let result = if rest == "lifecycle.set_autostart" {
                 manager_state
                     .set_autostart(
@@ -110,30 +75,31 @@ pub(super) async fn dispatch_standard(
                 error: result.error,
             }
         }
-    } else if let Some(rest) = operation.strip_prefix("pomodoro.") {
-        {
-            let result = handle_pomodoro_op(rest, params, &pomodoro_host).await;
-            LocalResponse {
-                ok: result.ok,
-                data: result.data,
-                error: result.error,
+    } else if let Some(rest) = operation.strip_prefix("plugins.") {
+        let mut result = crate::plugins::handle_plugin_op(rest, params).await;
+        if rest == "settings.set" && result.ok {
+            // The settings are stored; the plugin's own operations apply them
+            // to whatever is running, so the page and the app never disagree.
+            if let Err(error) = apply_plugin_settings(&result.data, &dictation_host).await {
+                result.ok = false;
+                result.error = Some(error);
             }
         }
-    } else if let Some(rest) = operation.strip_prefix("filesystem.") {
-        handle_filesystem_op(rest, params, &client, &grants).await
-    } else if let Some(rest) = operation.strip_prefix("arrancador.") {
-        handle_games_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("games.") {
-        handle_games_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("focus.") {
-        {
-            let result = handle_focus_op(rest, params, &ark_host).await;
-            LocalResponse {
-                ok: result.ok,
-                data: result.data,
-                error: result.error,
-            }
+        if rest == "settings.get" && result.ok {
+            // The numbers its page shows arrive with the manifest, already
+            // resolved: the page names no operation of its own.
+            plugin_stats(&mut result.data, &dictation_host).await;
+            plugin_model_options(&mut result.data, &dictation_host).await;
         }
+        LocalResponse {
+            ok: result.ok,
+            data: result.data,
+            error: result.error,
+        }
+    } else if crate::hosts::is_hosts_operation(&operation) {
+        crate::hosts::sync(&params)
+            .map(LocalResponse::ok)
+            .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("updater.") {
         let result =
             crate::updater::handle_updater_op(rest, params, &manager_state.updater()).await;
@@ -144,28 +110,12 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("app_index.") {
         handle_app_index_op(rest, params, &app_index).await
-    } else if crate::app_network::is_app_network_op(&operation) {
-        handle_app_network_op(&operation, &params).await
-    } else if let Some(rest) = operation.strip_prefix("integrations.") {
-        if replication_requires_authority(rest) && !client.desktop_authorized {
-            return LocalResponse::err("integration replication authority denied");
-        }
-        integrations::handle_operation(rest, params, &ark_host, &agents_data_dir, &package_service)
-            .await
-            .map(LocalResponse::ok)
-            .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("file_index.") {
         handle_file_index_op(rest, params, &file_index).await
     } else if let Some(rest) = operation.strip_prefix("system.") {
         handle_system_op(rest, params, &client).await
     } else if let Some(rest) = operation.strip_prefix("commands.") {
         handle_command_op(rest, params, &command_bus, connection_id).await
-    } else if let Some(rest) = operation.strip_prefix("store.") {
-        handle_store_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("packages.") {
-        handle_package_op(rest, params, &package_service).await
-    } else if let Some(rest) = operation.strip_prefix("apps.") {
-        handle_apps_op(rest, params, &package_service).await
     } else if matches!(
         operation.as_str(),
         "engine.settings.get"
@@ -210,7 +160,7 @@ pub(super) async fn dispatch_standard(
                 .await
                 .map(LocalResponse::ok),
             "data.storage" => manager_state
-                .data_storage(package_service.storage_root())
+                .data_storage(manager_state.data_dir())
                 .await
                 .map(LocalResponse::ok),
             "data.quarantine.clear" => manager_state
@@ -231,12 +181,7 @@ pub(super) async fn dispatch_standard(
                 .map(LocalResponse::ok),
             "diagnostics.snapshot" => Ok(LocalResponse::ok(
                 manager_state
-                    .diagnostics_snapshot(
-                        &rpc_diagnostics,
-                        &usage_diagnostics,
-                        &protocol_usage,
-                        &package_service,
-                    )
+                    .diagnostics_snapshot(&rpc_diagnostics, &usage_diagnostics, &protocol_usage)
                     .await,
             )),
             "diagnostics.log_tail" => Ok(LocalResponse::ok(
@@ -245,12 +190,7 @@ pub(super) async fn dispatch_standard(
             "diagnostics.support_bundle.create" => manager_state
                 .create_bundle(
                     manager_state
-                        .diagnostics_snapshot(
-                            &rpc_diagnostics,
-                            &usage_diagnostics,
-                            &protocol_usage,
-                            &package_service,
-                        )
+                        .diagnostics_snapshot(&rpc_diagnostics, &usage_diagnostics, &protocol_usage)
                         .await,
                     manager_state.log_tail(&rpc_diagnostics).await,
                 )
@@ -299,6 +239,142 @@ pub(super) async fn dispatch_standard(
     response
 }
 
-#[cfg(test)]
-#[path = "dispatch_standard_tests.rs"]
-mod tests;
+/// Run the Engine operations a plugin's settings name (`plugins.settings.set`
+/// answers with them). A plugin tells the Engine *what* applies it; the Engine
+/// still decides *which* operations exist.
+async fn apply_plugin_settings(
+    data: &Value,
+    dictation_host: &Arc<DictationHost>,
+) -> Result<(), String> {
+    let Some(applies) = data.get("applies").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    for apply in applies {
+        let op = apply.get("op").and_then(Value::as_str).unwrap_or_default();
+        let params = apply.get("params").cloned().unwrap_or(Value::Null);
+        let Some(rest) = op.strip_prefix("dictation.") else {
+            return Err(format!("движок не умеет применять настройку через «{op}»"));
+        };
+        let result = handle_dictation_op(rest, params, dictation_host).await;
+        if !result.ok {
+            return Err(result
+                .error
+                .unwrap_or_else(|| format!("{op}: настройка не применилась")));
+        }
+    }
+    Ok(())
+}
+
+/// A model picker is not a fixed list. The field that applies through
+/// `dictation.use_local_model` gets the models the Engine can actually run:
+/// downloaded, and able to transcribe.
+async fn plugin_model_options(data: &mut Value, dictation_host: &Arc<DictationHost>) {
+    let Some(settings) = data
+        .pointer("/manifest/settings")
+        .and_then(Value::as_array)
+        .cloned()
+    else {
+        return;
+    };
+    let mut next = settings;
+    let mut changed = false;
+    for field in &mut next {
+        if field.pointer("/apply/op").and_then(Value::as_str) != Some("dictation.use_local_model") {
+            continue;
+        }
+        let answer =
+            handle_dictation_op("list_local_models", serde_json::json!({}), dictation_host).await;
+        if !answer.ok {
+            continue;
+        }
+        let command = answer
+            .data
+            .get("commandInstalled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let options: Vec<Value> = answer
+            .data
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|models| {
+                models
+                    .iter()
+                    .filter(|model| {
+                        let id = model.get("id").and_then(Value::as_str).unwrap_or("");
+                        model.get("downloaded").and_then(Value::as_bool) == Some(true)
+                            && model.get("transcriptionSupported").and_then(Value::as_bool)
+                                == Some(true)
+                            && (id.starts_with("parakeet") || command)
+                    })
+                    .map(|model| {
+                        serde_json::json!({
+                            "value": model.get("id").cloned().unwrap_or(Value::Null),
+                            "label": model.get("name").and_then(Value::as_str).unwrap_or(""),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(kind) = field.get_mut("kind") {
+            kind["options"] = Value::Array(options);
+            changed = true;
+        }
+    }
+    if changed {
+        if let Some(settings) = data.pointer_mut("/manifest/settings") {
+            *settings = Value::Array(next);
+        }
+    }
+}
+
+/// The numbers a plugin's page shows. The manifest names the operation and the
+/// fields to take from its answer; the Engine calls it and hands the page ready
+/// values, so a new plugin brings its own statistics with it.
+async fn plugin_stats(data: &mut Value, dictation_host: &Arc<DictationHost>) {
+    let Some(stats) = data
+        .get("manifest")
+        .and_then(|manifest| manifest.get("stats"))
+        .cloned()
+    else {
+        return;
+    };
+    let Some(op) = stats.get("op").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(rest) = op.strip_prefix("dictation.") else {
+        tracing::warn!(
+            op,
+            "plugins: statistics name an operation the Engine does not have"
+        );
+        return;
+    };
+    let answer = handle_dictation_op(rest, serde_json::json!({}), dictation_host).await;
+    if !answer.ok {
+        return;
+    }
+    let fields: Vec<Value> = stats
+        .get("fields")
+        .and_then(Value::as_array)
+        .map(|fields| {
+            fields
+                .iter()
+                .filter_map(|field| {
+                    let key = field.get("key").and_then(Value::as_str)?;
+                    Some(serde_json::json!({
+                        "key": key,
+                        "label": field.get("label").and_then(Value::as_str).unwrap_or(key),
+                        "format": field
+                            .get("format")
+                            .and_then(Value::as_str)
+                            .unwrap_or("number"),
+                        "value": answer.data.get(key).cloned().unwrap_or(Value::Null),
+                    }))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    data["stats"] = serde_json::json!({
+        "title": stats.get("title").and_then(Value::as_str).unwrap_or(""),
+        "fields": fields,
+    });
+}

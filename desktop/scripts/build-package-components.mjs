@@ -26,12 +26,12 @@ const icons = spawnSync(
 );
 if (icons.status !== 0) process.exit(icons.status ?? 1);
 
-// Manager is the only bundled component: `components/manager` ships
-// manager-gpui, a single-file Rust/GPUI exe under the packaged name the
-// tray resolves. The target triple is the toolchain.target the release BOM
-// records for Windows builds.
+// Manager is the only bundled component: `components/manager` ships the NSH
+// Manager (`manager/`), a single-file Rust/GPUI exe that embeds its pages as
+// `ui/bundle.js`, staged under the packaged name the tray resolves. The target
+// triple is the toolchain.target the release BOM records for Windows builds.
 const MANAGER_TARGET = "x86_64-pc-windows-msvc";
-const managerRelease = path.join(root, "manager-gpui", "target", MANAGER_TARGET, "release");
+const managerRelease = path.join(root, "manager", "target", MANAGER_TARGET, "release");
 const managerBuild = spawnSync(
   "cargo",
   [
@@ -41,12 +41,12 @@ const managerBuild = spawnSync(
     "--target",
     MANAGER_TARGET,
     "--manifest-path",
-    path.join(root, "manager-gpui", "Cargo.toml"),
+    path.join(root, "manager", "Cargo.toml"),
     "--target-dir",
-    path.join(root, "manager-gpui", "target"),
+    path.join(root, "manager", "target"),
   ],
   {
-    cwd: path.join(root, "manager-gpui"),
+    cwd: path.join(root, "manager"),
     stdio: "inherit",
     windowsHide: true,
     // Same product version and source commit the Engine bakes in
@@ -56,7 +56,7 @@ const managerBuild = spawnSync(
   },
 );
 if (managerBuild.status !== 0) process.exit(managerBuild.status ?? 1);
-const managerExe = path.join(managerRelease, "manager-gpui.exe");
+const managerExe = path.join(managerRelease, "manager.exe");
 if (!existsSync(managerExe)) {
   console.error(`[build-package-components] missing ${managerExe}`);
   process.exit(1);

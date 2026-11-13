@@ -1,4 +1,4 @@
-//! KOS-309 regression tests for the waiting process kill (Windows-only:
+//! Regression tests for the waiting process kill (Windows-only:
 //! terminate-and-wait rides on Win32 handles).
 //!
 //! The "process" under test is another instance of this very test binary,

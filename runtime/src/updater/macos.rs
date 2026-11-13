@@ -1,4 +1,4 @@
-//! macOS apply half of the self-updater (KOS-377): mount the downloaded
+//! macOS apply half of the self-updater: mount the downloaded
 //! DMG, copy its `.app` next to the running bundle, and hand the swap +
 //! relaunch to a detached helper script — the running Manager and Engine
 //! (this process) must quit before the bundle is replaced, and the helper

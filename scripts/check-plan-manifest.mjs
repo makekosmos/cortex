@@ -21,15 +21,16 @@ const SCRIPT_CHECKS = {
     rustfmt: ["rustfmt"],
     clippy: ["clippy"],
     "test:rust": ["test:rust"],
-    "check:manager-gpui": ["manager-gpui"],
+    "check:manager": ["manager"],
     "test:desktop-contracts": ["desktop-contracts"],
+    "test:db-writers": ["ark-db-writers"],
     "test:release-bom": ["release-bom"],
     "test:package-manager": ["package-manager"],
     "build:desktop": [],
     "build:installer:local": [],
     dev: [],
     "test:backend": [],
-    "test:static": [],
+    "test:static": ["ark-db-writers"],
     "test:desktop-tooling": [],
   },
   "desktop/package.json": {
@@ -96,5 +97,8 @@ export function manifestChecks(path, before, after) {
 // unnoticed. Any other .md/.mdx/.txt document selects no checks.
 export const DOC_CONTRACTS = {
   // package-manager-migration.test.mjs: command docs must not require Bun.
-  "README.md": ["package-manager"],
+  "README.md": ["package-manager", "doc-paths"],
+  // check-doc-paths.test.mjs: the doc scan covers AGENTS.md and README.md, so
+  // editing either has to re-run it.
+  "AGENTS.md": ["doc-paths"],
 };

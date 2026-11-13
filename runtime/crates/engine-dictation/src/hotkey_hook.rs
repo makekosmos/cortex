@@ -313,6 +313,53 @@ fn is_modifier_vk(vk: u32) -> bool {
     )
 }
 
+/// Исход одного события клавиши для handle_event.
+#[derive(Debug, PartialEq, Eq)]
+enum KeyDecision {
+    /// Не наша клавиша/аккорд — пропускаем по hook-chain'у дальше.
+    PassThrough,
+    /// Auto-repeat удержания — глушим без emit'а, чтобы системный
+    /// shortcut не сработал на втором tick'е.
+    Swallow,
+    /// Intercept + emit события режима (PTT шлёт down И up, toggle — down).
+    Fire { down: bool },
+}
+
+/// Чистая логика решения по событию — отделена от Win32 ради тестов.
+/// `pressed` — наш флаг "клавиша зажата" (dedup auto-repeat'ов); возвращаем
+/// (решение, новый pressed).
+///
+/// Ключевой инвариант: up зажатой нами клавиши всегда Fire{down:false},
+/// НЕЗАВИСИМО от модификаторов — мы съели её down, значит и up наш
+/// (PTT emit'ит phase "up", toggle — просто глушит). Раньше up при уже
+/// отпущенном модификаторе уходил в PassThrough не сбросив pressed — после
+/// первого такого отпускания hotkey умирал до смены конфига.
+fn decide(
+    pressed: bool,
+    is_down: bool,
+    key_matches: bool,
+    mods_ok: impl FnOnce() -> bool,
+) -> (KeyDecision, bool) {
+    if !key_matches {
+        return (KeyDecision::PassThrough, pressed);
+    }
+    if is_down {
+        if pressed {
+            return (KeyDecision::Swallow, pressed);
+        }
+        return if mods_ok() {
+            (KeyDecision::Fire { down: true }, true)
+        } else {
+            (KeyDecision::PassThrough, pressed)
+        };
+    }
+    if pressed {
+        (KeyDecision::Fire { down: false }, false)
+    } else {
+        (KeyDecision::PassThrough, pressed)
+    }
+}
+
 /// Возвращает `true` если событие consumed (intercept). Включает logging
 /// в broadcast при match + дедуп auto-repeat'а.
 fn handle_event(vk: u32, is_down: bool) -> bool {
@@ -321,7 +368,7 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
     // auto-repeat от удержания клавиши (Windows шлёт WM_KEYDOWN каждые
     // ~33ms) проскакивает через флаг пока мы выполняли emit без lock'а →
     // toggleDictation вызывался 6 раз на одно нажатие.
-    let (mode, sender_opt) = {
+    let (decision, mode, sender_opt) = {
         let mut guard = match state_mtx().lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -329,32 +376,28 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
         let Some(m) = guard.matcher else {
             return false;
         };
-        if !main_key_matches(m.vk, vk) {
+        let key_matches = main_key_matches(m.vk, vk);
+        let (decision, pressed) = decide(guard.pressed, is_down, key_matches, || {
+            check_mod(m.ctrl, VK_CONTROL.0)
+                && check_mod(m.shift, VK_SHIFT.0)
+                && check_mod(m.alt, VK_MENU.0)
+                && check_mod_win(m.win)
+        });
+        guard.pressed = pressed;
+        if decision == KeyDecision::PassThrough {
             return false;
         }
-        if is_down && guard.pressed {
-            // Auto-repeat от удержания — игнор события. Intercept (return true)
-            // чтобы системный shortcut не сработал на втором tick'е.
-            return true;
-        }
-        let mods_ok = check_mod(m.ctrl, VK_CONTROL.0)
-            && check_mod(m.shift, VK_SHIFT.0)
-            && check_mod(m.alt, VK_MENU.0)
-            && check_mod_win(m.win);
-        if !mods_ok {
-            return false;
-        }
-        // ВАЖНО: ставим pressed=is_down ДО emit'а, под тем же lock'ом, который
-        // проверял дедуп — соседний WM_KEYDOWN не сможет проскочить.
-        guard.pressed = is_down;
-        (guard.mode, guard.sender.clone())
+        (decision, guard.mode, guard.sender.clone())
+    };
+    let KeyDecision::Fire { down: fired_down } = decision else {
+        return true; // Swallow
     };
 
     // Emit event соответственно режиму (вне lock'а, чтобы broadcast не
     // блокировал hook callback'у нашему же thread'у).
     match mode {
         HookMode::PushToTalk => {
-            let phase = if is_down { "down" } else { "up" };
+            let phase = if fired_down { "down" } else { "up" };
             if let Some(tx) = sender_opt {
                 let _ = tx.send(json!({
                     "event": "dictation_ptt_trigger",
@@ -368,7 +411,7 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
             }
         }
         HookMode::Toggle => {
-            if is_down {
+            if fired_down {
                 if let Some(tx) = sender_opt {
                     let _ = tx.send(json!({
                         "event": "dictation_toggle_trigger",
@@ -385,7 +428,7 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
 
     // Подавить Start menu trigger при intercept'е Win-shortcut'а
     // (см. swallow_win_shortcut_if_active).
-    if is_down {
+    if fired_down {
         swallow_win_shortcut_if_active();
     }
     true
@@ -690,6 +733,54 @@ mod tests {
         let m = parse_accelerator("CommandOrControl+P").expect("parse ok");
         assert_eq!(m.vk, 'P' as u32);
         assert!(m.ctrl);
+    }
+
+    /// Регрессия: модификатор отпущен ДО главной клавиши (Ctrl ↑, потом
+    /// ',' ↑) — up обязан вернуть Fire и сбросить pressed, иначе все
+    /// последующие нажатия клавиши глушились навсегда как auto-repeat.
+    #[test]
+    fn decide_modifier_released_before_key_up() {
+        let mods = || false;
+        // down с модификаторами → Fire + pressed.
+        let (d, pressed) = decide(false, true, true, || true);
+        assert_eq!(d, KeyDecision::Fire { down: true });
+        assert!(pressed);
+        // up БЕЗ модификаторов — всё равно наш: Fire{down:false}, сброс.
+        let (d, pressed) = decide(pressed, false, true, mods);
+        assert_eq!(d, KeyDecision::Fire { down: false });
+        assert!(!pressed);
+        // Следующее полноценное нажатие снова срабатывает.
+        let (d, _) = decide(pressed, true, true, || true);
+        assert_eq!(d, KeyDecision::Fire { down: true });
+    }
+
+    #[test]
+    fn decide_swallows_auto_repeat() {
+        let (d, pressed) = decide(false, true, true, || true);
+        assert_eq!(d, KeyDecision::Fire { down: true });
+        // Повторные WM_KEYDOWN при удержании — Swallow без нового emit'а.
+        let (d, pressed) = decide(pressed, true, true, || true);
+        assert_eq!(d, KeyDecision::Swallow);
+        assert!(pressed);
+    }
+
+    #[test]
+    fn decide_up_without_prior_down_passes_through() {
+        let (d, pressed) = decide(false, false, true, || true);
+        assert_eq!(d, KeyDecision::PassThrough);
+        assert!(!pressed);
+    }
+
+    #[test]
+    fn decide_passes_foreign_and_modless_keys() {
+        // Чужая клавиша не трогает pressed.
+        let (d, pressed) = decide(true, true, false, || true);
+        assert_eq!(d, KeyDecision::PassThrough);
+        assert!(pressed);
+        // Своя клавиша без модификаторов — обычный ввод, пропускаем.
+        let (d, pressed) = decide(false, true, true, || false);
+        assert_eq!(d, KeyDecision::PassThrough);
+        assert!(!pressed);
     }
 
     #[test]

@@ -128,7 +128,7 @@ async fn spawn_runs_cmd_shim_from_path() {
         .unwrap();
 }
 
-/// Holder half of `parent_death_kills_job_child` (KOS-312): run as a separate
+/// Holder half of `parent_death_kills_job_child`: run as a separate
 /// process — the same test binary with `MUNDUS_TEST_JOB_HOLDER_DIR` set — it
 /// spawns a sleeper child inside the KILL_ON_JOB_CLOSE job, publishes the
 /// child pid, and then simply waits to be killed. In a normal suite run the
@@ -155,7 +155,7 @@ async fn job_holder_mode() {
     }
 }
 
-/// KOS-312 regression: the process holding the job is killed → the child in
+/// Regression: the process holding the job is killed → the child in
 /// the job is gone within a bounded deadline. `terminate_kills_grandchild`
 /// covers an explicit `terminate_and_wait`; this covers the *involuntary*
 /// path — process death closes the job handle and the kernel applies

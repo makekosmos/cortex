@@ -11,7 +11,7 @@ import {
   RUNTIME_BINARIES,
   stageRuntimeBinaries,
 } from "./runtime-staging.mjs";
-import { ARK_CORE_SOURCE, ARK_CORE_SOURCE_DIR } from "./ark-core-source.mjs";
+import { ARK_CORE_SOURCE, ARK_CORE_SOURCE_DIR } from "./kernel-source.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const cortexRoot = path.resolve(shellRoot, "..");
@@ -19,8 +19,8 @@ const cortexRoot = path.resolve(shellRoot, "..");
 test("non-default Cargo runtime is the one mapped into the Windows package", () => {
   assert.deepEqual(RUNTIME_BINARIES, ["mundus-engine"]);
   assert.equal(existsSync(path.join(cortexRoot, "core", ".git")), false);
-  assert.equal(ARK_CORE_SOURCE, "core/crates/ark-core");
-  assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "ark-core"));
+  assert.equal(ARK_CORE_SOURCE, "core/crates/kernel");
+  assert.equal(ARK_CORE_SOURCE_DIR, path.join(cortexRoot, "core", "crates", "kernel"));
 
   const root = mkdtempSync(path.join(os.tmpdir(), "mundus-runtime-stage-"));
   try {

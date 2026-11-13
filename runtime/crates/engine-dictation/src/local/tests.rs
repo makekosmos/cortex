@@ -1,3 +1,11 @@
+use super::backend::{
+    apply_partial, apply_whisper_accelerator_args_blocking, apply_whisper_quality_args_blocking,
+    apply_whisper_vad_args_blocking, best_cut, collapse_repeats, hash_pcm16,
+    local_inference_timeout, parakeet_cache_is_stale, parse_server_text, read_transcript,
+    server_request_form, split_points, wav_duration_secs, whisper_server_executable,
+};
+use super::*;
+
 mod tests {
     use super::*;
 

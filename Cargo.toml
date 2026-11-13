@@ -2,13 +2,16 @@
 resolver = "2"
 members = [
   "runtime",
-  "runtime/crates/package-protocol",
   "runtime/crates/pe-version-info",
   "runtime/crates/engine-base",
   "runtime/crates/engine-dictation",
-  "runtime/crates/engine-packages",
   "runtime/crates/engine-indexes",
-  "core/crates/ark-core",
+  "runtime/crates/engine-mobile",
+  "core/crates/domain",
+  "core/crates/sync",
+  "core/crates/net",
+  "core/crates/store",
+  "core/crates/kernel",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)
 # are standalone crates, never workspace members.
@@ -23,6 +26,21 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+[profile.dev.package."domain"]
+codegen-units = 16
+
+[profile.dev.package."store"]
+codegen-units = 16
+
+[profile.dev.package."sync"]
+codegen-units = 16
+
+[profile.dev.package."net"]
+codegen-units = 16
+
+[profile.dev.package."kernel"]
+codegen-units = 16
 
 # No [profile.test] override: the test profile inherits dev. A different
 # debuginfo setting here made the gate compile the engine rlib twice per run —
@@ -55,13 +73,6 @@ futures-util = "0.3"
 tokio-tungstenite = "0.30"
 tempfile = "3"
 hostname = "0.4"
-hpke = { version = "=0.14.1", default-features = false, features = [
-  "alloc",
-  "getrandom",
-  "x25519",
-  "hkdfsha2",
-  "chacha",
-] }
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls-no-provider",

@@ -1,5 +1,7 @@
+use super::*;
+
 impl LocalSttSidecarClient {
-    async fn spawn() -> Result<Self, LocalError> {
+    pub(super) async fn spawn() -> Result<Self, LocalError> {
         let sidecar_path = local_stt_sidecar_path()?;
         let mut command = TokioCommand::new(&sidecar_path);
         command
@@ -48,7 +50,10 @@ impl LocalSttSidecarClient {
         })
     }
 
-    async fn request(&mut self, request: LocalSttRequest) -> Result<LocalSttResponse, LocalError> {
+    pub(super) async fn request(
+        &mut self,
+        request: LocalSttRequest,
+    ) -> Result<LocalSttResponse, LocalError> {
         if let Some(status) = self
             .child
             .child_mut()
@@ -109,7 +114,7 @@ impl LocalSttSidecarClient {
         })
     }
 }
-fn model_spec_from_owned(req: &OwnedLocalRequest) -> LocalSttModelSpec {
+pub(super) fn model_spec_from_owned(req: &OwnedLocalRequest) -> LocalSttModelSpec {
     LocalSttModelSpec {
         engine: req.engine.clone(),
         model_id: req.model_id.clone(),
@@ -122,7 +127,7 @@ fn model_spec_from_owned(req: &OwnedLocalRequest) -> LocalSttModelSpec {
     }
 }
 
-fn owned_request_from_model(
+pub(super) fn owned_request_from_model(
     model: &LocalSttModelSpec,
     wav_bytes: &[u8],
     language: &str,
@@ -144,22 +149,22 @@ fn owned_request_from_model(
 
 #[cfg(test)]
 #[derive(Debug, Clone)]
-struct TestSidecarMock {
-    transcript: Option<String>,
-    fail_error: Option<String>,
-    sidecar_unavailable_remaining: u8,
-    seen_ops: Vec<String>,
+pub(super) struct TestSidecarMock {
+    pub(super) transcript: Option<String>,
+    pub(super) fail_error: Option<String>,
+    pub(super) sidecar_unavailable_remaining: u8,
+    pub(super) seen_ops: Vec<String>,
 }
 
 #[cfg(test)]
-static TEST_SIDECAR_MOCK: OnceLock<Mutex<Option<TestSidecarMock>>> = OnceLock::new();
+pub(super) static TEST_SIDECAR_MOCK: OnceLock<Mutex<Option<TestSidecarMock>>> = OnceLock::new();
 
 #[cfg(test)]
 pub(crate) static TEST_SIDECAR_TEST_LOCK: tokio::sync::Mutex<()> =
     tokio::sync::Mutex::const_new(());
 
 #[cfg(test)]
-fn test_sidecar_mock_state() -> &'static Mutex<Option<TestSidecarMock>> {
+pub(super) fn test_sidecar_mock_state() -> &'static Mutex<Option<TestSidecarMock>> {
     TEST_SIDECAR_MOCK.get_or_init(|| Mutex::new(None))
 }
 
@@ -231,7 +236,7 @@ pub(crate) fn recorded_test_sidecar_ops_for_host() -> Vec<String> {
 }
 
 #[cfg(test)]
-fn test_sidecar_mock_take(op: &str) -> Option<Result<LocalSttResponse, LocalError>> {
+pub(super) fn test_sidecar_mock_take(op: &str) -> Option<Result<LocalSttResponse, LocalError>> {
     let guard = match test_sidecar_mock_state().lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -259,7 +264,7 @@ fn test_sidecar_mock_take(op: &str) -> Option<Result<LocalSttResponse, LocalErro
             idle_unload_after_ms: local_stt_idle_unload_after_ms_for_engine(DEFAULT_LOCAL_ENGINE),
         }),
         "transcribe" => {
-            LocalSttResponse::Transcription(super::local_sidecar_protocol::LocalSttTranscription {
+            LocalSttResponse::Transcription(crate::local_sidecar_protocol::LocalSttTranscription {
                 text: mock
                     .transcript
                     .clone()
@@ -267,14 +272,16 @@ fn test_sidecar_mock_take(op: &str) -> Option<Result<LocalSttResponse, LocalErro
                 backend: "mock_sidecar".into(),
             })
         }
-        _ => LocalSttResponse::Ack(super::local_sidecar_protocol::LocalSttAck {
+        _ => LocalSttResponse::Ack(crate::local_sidecar_protocol::LocalSttAck {
             accepted: true,
             message: None,
         }),
     }))
 }
 
-async fn send_sidecar_request(request: LocalSttRequest) -> Result<LocalSttResponse, LocalError> {
+pub(super) async fn send_sidecar_request(
+    request: LocalSttRequest,
+) -> Result<LocalSttResponse, LocalError> {
     #[cfg(test)]
     {
         let op_name = match &request {

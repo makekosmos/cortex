@@ -39,14 +39,14 @@ impl FileIndex {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         // Reap finished handles first — the registry must stay bounded while
-        // the app runs, not just at teardown (KOS-270).
+        // the app runs, not just at teardown.
         tasks.retain(|t| !t.is_finished());
         tasks.push(task);
     }
 
     /// Wait until every spawned rescan/cleanup task has finished — the tasks
     /// hold `Arc<FileStore>` (an open SQLite connection), so callers tearing
-    /// down the index's data dir must drain first (KOS-270).
+    /// down the index's data dir must drain first.
     pub async fn drain_background(&self) {
         loop {
             let task = self

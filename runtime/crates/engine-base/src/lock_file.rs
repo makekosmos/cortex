@@ -69,7 +69,7 @@ pub struct EngineLockFile {
     pub auth_token: String,
     pub started_at: String,
     pub correlation_id: String,
-    /// Product version this Engine was built as part of (KOS-233: Engine no
+    /// Product version this Engine was built as part of (Engine no
     /// longer has its own release line). Empty for a build that did not go
     /// through `desktop/scripts/build-backend.mjs`. `#[serde(default)]` so a
     /// lock-file written by an older Engine still parses.
@@ -105,7 +105,8 @@ pub fn default_engine_lock_file_path() -> Result<std::path::PathBuf, LockFileErr
 /// Resolve base directory для всех Mundus backend файлов: lock, singleton,
 /// дефолтный ark.db. Уважает `MUNDUS_DATA_DIR` env override (тесты; legacy
 /// `MUNDUS_DATA_DIR` fallback), иначе — `%APPDATA%\Mundus` (Win) /
-/// `$XDG_CONFIG_HOME/Mundus` (Unix). Учитывает brand-migration: если переезд
+/// `~/Library/Application Support/Mundus` (macOS) /
+/// `$XDG_CONFIG_HOME/Mundus` (other Unix). Учитывает brand-migration: если переезд
 /// с `%APPDATA%\Kosmos` не удался, эта сессия работает на legacy dir.
 pub fn mundus_data_dir() -> Result<std::path::PathBuf, LockFileError> {
     crate::data_dir::mundus_data_dir()
@@ -290,7 +291,7 @@ mod tests {
 
     #[test]
     fn engine_version_and_source_commit_default_to_empty_for_old_lock_files() {
-        // A lock-file written before KOS-233 lacks these fields; a newer
+        // A lock-file written before lacks these fields; a newer
         // Engine reading it (e.g. during an in-place upgrade race) must not
         // fail to parse.
         let dir = tempdir().unwrap();

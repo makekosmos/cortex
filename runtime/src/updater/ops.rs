@@ -1,9 +1,8 @@
 //! Dispatch for `updater.<subop>`, wired in
 //! `crate::ws_server::dispatch_standard`. Shape mirrors the other per-host
-//! dispatch modules in this crate (`pomodoro_host::handle_pomodoro_op`,
-//! `dictation`'s `DictationResponse`) — a small local response struct rather
-//! than reusing `ws_server::ops::LocalResponse`, which is `pub(super)` to
-//! `ws_server` and not visible here.
+//! dispatch modules in this crate (`dictation`'s `DictationResponse`) — a small
+//! local response struct rather than reusing `ws_server::ops::LocalResponse`,
+//! which is `pub(super)` to `ws_server` and not visible here.
 //!
 //! Every op here is reachable only over the Engine's authenticated
 //! WebSocket (Manager/Host), never through the app-facing HTTP RPC path —

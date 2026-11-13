@@ -19,6 +19,7 @@ import { readReleaseVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
 import { packageMacosDmg } from "./package-macos-dmg.mjs";
+import { runDefenderGate } from "./defender-gate.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -34,13 +35,6 @@ function die(msg) {
 
 function log(...args) {
   console.log("[build-desktop]", ...args);
-}
-
-// KOS-350: release assets are installer + manifest.json (+ legacy feeds
-// during dual-publish) — see release-feeds.mjs. Provenance and receipt stay
-// local for the build→publish handoff and are not uploaded to GitHub.
-function emitReleaseMetadata(outputDir, platform, version, bom, installerFile, { local }) {
-  return emitReleaseFeeds({ outputDir, platform, version, bom, installerFile, local, log });
 }
 
 // KOS-306: every exe the installer ships (or the Engine installs) must carry
@@ -147,11 +141,8 @@ function stageInstaller(version) {
   return stage;
 }
 
-// KOS-306: static Defender gate. `-ScanType 3 -File` is a read-only custom
-// scan — it catches static signatures and the local ML model, but NOT the
-// cloud first-sight verdict that flagged 0.10.1 (an unknown hash has no
-// reputation yet). The unpacked-payload + VERSIONINFO work is what fixes the
-// cloud verdict; this gate just keeps the local model clean.
+// KOS-306 / KOS-399: static Defender gate; see defender-gate.mjs for how a
+// real detection is told apart from "scanner unavailable" (hr 0x800106BA).
 function defenderGate(outFile) {
   const mpCmdRun = path.join(
     process.env["ProgramFiles"] ?? "C:\\Program Files",
@@ -163,13 +154,11 @@ function defenderGate(outFile) {
     return;
   }
   log(`Defender gate: ${mpCmdRun} -Scan -ScanType 3 -File ${outFile}`);
-  const scan = spawnSync(
-    mpCmdRun,
-    ["-Scan", "-ScanType", "3", "-File", outFile, "-DisableRemediation"],
-    { stdio: "inherit", windowsHide: true },
-  );
-  if ((scan.status ?? 1) !== 0)
-    die(`Defender scan reported a detection in ${outFile} (exit ${scan.status})`);
+  try {
+    runDefenderGate({ outFile, mpCmdRun, log });
+  } catch (e) {
+    die(e.message);
+  }
 }
 
 async function buildWindows(version) {
@@ -275,10 +264,10 @@ async function main() {
       `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via dmgbuild" : "NSIS installer via makensis"}`,
     );
     if (!bom) {
-      log("  local build: manifest.json (+ legacy yml); no BOM, receipt, or publish");
+      log("  local build: manifest.json; no receipt or publish");
       return;
     }
-    log("  verify: manifest.json (+ legacy feeds), BOM, receipt (local handoff only)");
+    log("  verify: manifest.json, BOM, receipt (local handoff only)");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
     );
@@ -304,9 +293,16 @@ async function main() {
   }
   log("");
   if (bom) {
-    log("Installer built. Emitting manifest.json (+ legacy feeds) + local receipt...");
-    const { files } = await emitReleaseMetadata(releaseDir, platform, version, bom, outFile, {
-      local: false,
+    // KOS-350: release assets are installer + manifest.json. Provenance and
+    // receipt stay local for the build→publish handoff.
+    log("Installer built. Emitting manifest.json + local receipt...");
+    const { files } = await emitReleaseFeeds({
+      outputDir: releaseDir,
+      platform,
+      version,
+      bom,
+      installerFile: outFile,
+      log,
     });
     const receipt = await createReceipt({
       outputDir: releaseDir,
@@ -320,15 +316,22 @@ async function main() {
     log(`Verification receipt (local only): ${receiptPath}`);
     log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
   } else {
-    // Local builds still get manifest.json (+ legacy yml) so the Engine
-    // updater can be pointed at a local feed; no BOM file, no receipt.
+    // Local builds still get manifest.json so the Engine updater can be
+    // pointed at a local feed; no receipt.
     try {
       const localBom = await deriveReleaseBom(
         path.resolve(SHELL_ROOT, ".."),
         platform,
         currentCommit(),
       );
-      await emitReleaseMetadata(releaseDir, platform, version, localBom, outFile, { local: true });
+      await emitReleaseFeeds({
+        outputDir: releaseDir,
+        platform,
+        version,
+        bom: localBom,
+        installerFile: outFile,
+        log,
+      });
     } catch (error) {
       log(
         `warning: skipped local manifest.json (${error instanceof Error ? error.message : error})`,

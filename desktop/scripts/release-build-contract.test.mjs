@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
@@ -17,7 +17,7 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(script, /createReceipt\(/);
   assert.match(script, /writeReceipt\(/);
   assert.doesNotMatch(script, /publishRelease\(|release create|electron-builder/);
-  assert.match(script, /emitReleaseMetadata\(/);
+  assert.match(script, /emitReleaseFeeds\(/);
   assert.doesNotMatch(script, /emitProvenance\(|release-provenance\.json/);
   assert.match(script, /Preflight: source, BOM, and pins/);
   assert.match(script, /--dry-run/);
@@ -69,18 +69,17 @@ test("shipped binaries read the product version only from the variable the build
   assert.match(buildEnv, /MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit/);
   assert.match(components, /releaseBuildIdentity\(root\)\.env/);
   assert.match(macos, /releaseBuildIdentity\(cortexRoot\)/);
-  // A bare cargo build has no injected version. Both readers say "dev"
-  // rather than the crate's 0.1.0.
-  for (const file of [
-    "runtime/crates/engine-base/src/build_info.rs",
-    "manager-gpui/src/views/about.rs",
-  ]) {
+  // A bare cargo build has no injected version. The Engine's reader says
+  // "dev" rather than the crate's 0.1.0; the Manager never invents one — its
+  // About page shows what the Engine reports, and the crate version is only
+  // its own (`manager/Cargo.toml` documents that).
+  for (const file of ["runtime/crates/engine-base/src/build_info.rs"]) {
     const source = await readFile(path.join(repo, file), "utf8");
     assert.match(source, /"dev"/, file);
     assert.doesNotMatch(source, /CARGO_PKG_VERSION/, file);
   }
   const readers = [];
-  for (const dir of ["runtime/src", "runtime/crates", "manager-gpui/src", "core/crates"]) {
+  for (const dir of ["runtime/src", "runtime/crates", "manager/src", "core/crates"]) {
     for (const entry of readdirSync(path.join(repo, dir), { recursive: true })) {
       if (!entry.endsWith(".rs")) continue;
       const source = await readFile(path.join(repo, dir, entry), "utf8");
@@ -200,8 +199,11 @@ test("the VERSIONINFO brand strings share one source across pe-version-info, bra
 
 test("the build runs a static Defender scan on the finished installer", () => {
   assert.match(script, /MpCmdRun\.exe/);
+  assert.match(script, /runDefenderGate\(\{ outFile, mpCmdRun/);
+  // KOS-399: the scan itself lives in defender-gate.mjs.
+  const gate = readFileSync(new URL("./defender-gate.mjs", import.meta.url), "utf8");
   assert.match(
-    script,
+    gate,
     /"-Scan",\s*"-ScanType",\s*"3",\s*"-File",\s*outFile,\s*"-DisableRemediation"/,
   );
 });

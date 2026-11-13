@@ -218,11 +218,5 @@ fn classify_io(error: io::Error) -> UserDataError {
     }
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    include!("user_data/tests.rs");
-    include!("user_data/tests_race.rs");
-}
+#[path = "user_data/tests.rs"]
+mod tests;

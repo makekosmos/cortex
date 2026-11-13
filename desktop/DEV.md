@@ -3,9 +3,9 @@
 The shipped Mundus Desktop package is Engine + GPUI components. There is no
 Electron shell, Vite dev server, or packaged Vue UI in this repository.
 
-Component development happens in the dedicated checkouts (`manager-gpui`,
-sibling `agenda-gpui`/`memoria-gpui`/`dictation` repos). This directory owns
-packaging scripts and build resources only.
+Component development happens in the dedicated checkouts (`manager`,
+sibling `dictation` repo). This directory owns packaging scripts and build
+resources only.
 
 ## Building locally
 
@@ -29,8 +29,7 @@ pnpm run build:desktop -- --local           # NSIS installer (no BOM/publish)
 `desktop/.tmp/installer-stage`, compiles
 `desktop/build/installer.nsi` with `makensis` (downloaded on demand into
 `desktop/.tmp/nsis`), and writes `desktop/release/Mundus-Setup-<ver>.exe` plus
-`desktop/release/manifest.json` (and, during the KOS-350 dual-publish window,
-`desktop/release/latest.yml` rendered from it). It never publishes and never touches the
+`desktop/release/manifest.json`. It never publishes and never touches the
 installed system.
 
 ## Release preflight (`pnpm --dir desktop run build`)

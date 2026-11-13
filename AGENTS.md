@@ -1,9 +1,8 @@
 # AGENTS.md — cortex
 
 Cortex — это Mundus Engine (`runtime/`), встроенное ядро данных ARK (`core/`),
-Manager (`manager-gpui/`) и упаковка/релизы (`desktop/`). Агенда, Memoria и
-Dictation живут в своих репозиториях (`makekosmos/agenda-gpui`,
-`makekosmos/memoria-gpui`, `makekosmos/dictation`) и ставятся Engine из GitHub
+Manager (`manager/`) и упаковка/релизы (`desktop/`). Memoria и Dictation живут в своих репозиториях (`makekosmos/memoria-gpui`,
+`makekosmos/dictation`) и ставятся Engine из GitHub
 Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
 Linux годится для разработки Engine (`docs/linux-dev.md`).
 Локальный диктовочный dev-цикл (watchers, lock-файл, файловый источник
@@ -12,14 +11,16 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
 ## Карта
 
 - `runtime/` — крейт `engine` (бинарь `mundus-engine`): Engine API
-  (`/v1/rpc`, WebSocket), хост и супервизор пакетов, `focus.*`/`pomodoro.*`,
-  диктовка, апдейтер, трей. Подкрейты: `runtime/crates/{engine-base,
-  engine-dictation,engine-packages,engine-indexes,package-protocol,
-  pe-version-info}`. ARK работает внутри процесса: `runtime/crates/engine-packages/src/ark_host.rs`.
-- `core/crates/ark-core/` — Rust + SQLite, контракт и инварианты в
-  `core/crates/ark-core/AGENTS.md` и `docs/{ark-core,sync,write-boundary}.md`.
-- `manager-gpui/` — GPUI-приложение Manager. Это отдельный Cargo workspace со
-  своим `Cargo.lock`, корневой `cargo`-команды его не затрагивают.
+  (`/v1/rpc`, WebSocket), `focus.*`, диктовка, апдейтер, трей.
+  Подкрейты: `runtime/crates/{engine-base,engine-dictation,engine-indexes,
+  pe-version-info}`. ARK работает внутри процесса: `runtime/src/ark_host.rs`.
+- `core/crates/kernel/` — Rust + SQLite, контракт и инварианты в
+  `core/crates/kernel/AGENTS.md` и `docs/{kernel,sync,write-boundary}.md`.
+- `manager/` — Manager: крейт `manager` на GPUI-хосте NSH (`nsh-platform-gpui`),
+  страницы — TSX в `manager/ui/`; `nsh build` собирает их в
+  `manager/ui/bundle.js`, который лежит в репозитории и вшивается в exe
+  (`include_str!`), поэтому свежий клон собирается без `nsh`. Отдельный Cargo
+  workspace со своим `Cargo.lock`, корневой `cargo`-команды его не затрагивают.
 - `desktop/` — скрипты установщика (NSIS), релизный BOM и публикация.
 - `scripts/` — локальный гейт (`check-*.mjs`), `dev.mjs`; `docs/` — решения и
   замеры (`docs/experiments/` — журнал измерений, не правила).
@@ -31,7 +32,7 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
 
 - Приложения не ходят в ОС и в базу сами: микрофон, хоткеи, вставка текста,
   блокировка фокуса, ключи API и запись в SQLite принадлежат Engine
-  (`docs/repo-split-decisions.md`, `docs/write-boundary.md`). Новая
+  (`docs/exocortex.md`, `docs/write-boundary.md`). Новая
   возможность для приложения — это новая операция Engine, а не обход.
 
 ## Запуск
@@ -44,7 +45,10 @@ pnpm run dev -- --data-dir DIR   # общий MUNDUS_DATA_DIR (по умолча
 
 Manager запускает Engine сам, но уже живой Engine в той же папке данных
 переиспользуется как есть, поэтому после правок в `runtime/` останови старый
-(его `pid` лежит в `<data-dir>/engine.lock.json`). Версии Rust и Node берутся
+(его `pid` лежит в `<data-dir>/engine.lock.json`). Watch-цикл без Manager:
+`./dev-watch.sh engine` (пересборка+запуск Engine на сохранении) и
+`./dev-watch.sh manager --local-imago` (Manager против соседнего чекаута
+`../imago`); `--dry-run` печатает команду. Версии Rust и Node берутся
 из `toolchain.json`; `rust-toolchain.toml` из него генерируется
 (`node scripts/check-toolchain.mjs --write`).
 
@@ -82,11 +86,11 @@ CI на GitHub запускается на каждый PR и на push в `main
   `cargo check -p <crate> --all-targets` и `cargo nextest run -p <crate>`.
   Для `engine` добавляй
   `--features package-worker-fixture,markdown-bridge-fixture`. Manager:
-  `pnpm run check:manager-gpui`. Полный гейт обязателен перед push.
+  `pnpm run check:manager`. Полный гейт обязателен перед push.
 - Локальная диктовка (whisper.cpp, Parakeet/ONNX) собирается только с фичей
   `engine/local-dictation`: её включает `pnpm run clippy`, а CI и обычные
   сборки нет. Правя `runtime/crates/engine-dictation/src/local/`, проверяй с
-  фичей (`docs/onnxruntime.md`, `docs/experiments/2026-10-04-local-dictation-feature.md`).
+  фичей (`docs/dictation-dev.md`, `docs/experiments/2026-10-04-local-dictation-feature.md`).
 - Линкер и флаги кодогенерации держи в `.cargo/config.toml`, не в
   `RUSTFLAGS`: тогда кеш сборки общий у всех рабочих копий.
 
@@ -99,7 +103,7 @@ CI на GitHub запускается на каждый PR и на push в `main
   `Cargo.toml` (`unwrap_used` и `unreachable` — deny; `panic`, `todo`,
   `unimplemented` — warn) плюс `cargo clippy -- -D warnings`. Точечный
   `#[allow(clippy::…)]` на элементе допустим только с причиной рядом.
-  В `manager-gpui` таблицы `[lints]` нет, там действует один `-D warnings`.
+  В `manager/` таблицы `[lints]` нет, там действует один `-D warnings`.
 - Размер файла: больше 300 строк — предупреждение, больше 500 — ошибка
   (`scripts/check-source-size.mjs`). Список `GRANDFATHERED` только сокращается.
 - Нельзя `#[ignore]` без причины и тест, который «проходит» ранним `return`
@@ -114,9 +118,11 @@ CI на GitHub запускается на каждый PR и на push в `main
   CI собирает с `--locked`. Версии `gpui`/`gpui-component`/`gpui-base` в
   Manager должны совпадать с агендой, Memoria и Dictation: две версии gpui в
   одной сборке — ошибка типов, поднимай их вместе.
-- Схема данных ARK меняется только добавлением, без разрушающих миграций;
+- Схема данных ARK меняется добавлением по умолчанию; разовая перезапись
+  объектов разрешается только по явному согласованию для конкретной задачи, в
+  транзакции и с бэкапом `ark.db` (`core/crates/kernel/AGENTS.md`);
   любая запись в синхронизируемые данные обновляет версию синхронизации
-  (`core/crates/ark-core/AGENTS.md`).
+  (`core/crates/kernel/AGENTS.md`).
 
 ## Релиз
 

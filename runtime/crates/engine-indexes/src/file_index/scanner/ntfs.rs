@@ -35,19 +35,14 @@ pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFi
         .collect())
 }
 
-/// Service fast path: primary pipe first, then the legacy pipe names so a
-/// not-yet-migrated service still works. The versioned request wire format
-/// parses identically on older services (unknown fields are ignored).
-// MIGRATION(KOS-267): drop the legacy pipe names after 2026-11-01.
+/// Service fast path through the primary pipe.
 fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     let req = Request::NtfsScan {
         root: root.to_string_lossy().into_owned(),
         exclude_noisy,
     };
     let mut errors = Vec::new();
-    let pipe_names =
-        std::iter::once(brand::PIPE_NAME).chain(brand::LEGACY_PIPES.iter().map(|(name, _)| *name));
-    for pipe_name in pipe_names {
+    for pipe_name in [brand::PIPE_NAME] {
         match pipe::request_on(pipe_name, &req) {
             Ok(resp) => {
                 if !resp.ok {

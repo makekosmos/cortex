@@ -33,21 +33,6 @@ test("install keeps a newer or identical verified Engine, replaces a same-versio
   assert.match(installerSource, /manifest::same_build/);
 });
 
-test("install takes over an existing standalone Mundus Engine registration", () => {
-  // MIGRATION(KOS-267): remove after 2026-11-01.
-  const legacy = readFileSync(
-    path.join(desktopRoot, "..", "runtime", "src", "installer", "legacy.rs"),
-    "utf8",
-  );
-  assert.match(legacy, /migrate_standalone_registration/);
-  assert.match(legacy, /Uninstall\\KosmosEngine/);
-  assert.match(legacy, /Kosmos Engine\.lnk/);
-  // Snapshot before changing anything, restore if the takeover fails —
-  // never leave a half-migrated registration (KOS-134 pattern).
-  assert.ok(legacy.indexOf("snapshot") < legacy.indexOf("delete_tree"));
-  assert.match(legacy, /rolled back/);
-});
-
 test("the payload ships unpacked and every file is hash-verified before install", () => {
   // KOS-306: no zip, no Expand-Archive — the manifest's per-file sha256
   // covers tampering the way archive_sha256 did.

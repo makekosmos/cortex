@@ -1,0 +1,7 @@
+{
+  "name": "mundus-manager-ui",
+  "private": true,
+  "dependencies": {
+    "@makekosmos/imago-nsh": "github:makekosmos/imago#3fe52688917ed9c598060d0c6904224a87a48453"
+  }
+}

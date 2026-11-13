@@ -20,12 +20,14 @@ const CRATE_MAP = [
   { prefix: "runtime/crates/engine-base/", packages: ["engine-base", "engine"] },
   { prefix: "runtime/crates/engine-dictation/", packages: ["engine-dictation", "engine"] },
   { prefix: "runtime/crates/engine-indexes/", packages: ["engine-indexes", "engine"] },
-  { prefix: "runtime/crates/engine-packages/", packages: ["engine-packages", "engine"] },
-  { prefix: "runtime/crates/package-protocol/", packages: ["package-protocol"] },
   { prefix: "runtime/crates/pe-version-info/", packages: ["pe-version-info"] },
-  { prefix: "core/crates/ark-core/", packages: ["ark-core"] },
+  { prefix: "core/crates/domain/", packages: ["domain"] },
+  { prefix: "core/crates/store/", packages: ["store"] },
+  { prefix: "core/crates/sync/", packages: ["sync"] },
+  { prefix: "core/crates/net/", packages: ["net"] },
+  { prefix: "core/crates/kernel/", packages: ["kernel"] },
   { prefix: "runtime/", packages: ["engine"] },
-  { prefix: "manager-gpui/", packages: [], manager: true },
+  { prefix: "manager/", packages: [], manager: true },
 ];
 
 function changedFiles() {
@@ -82,13 +84,9 @@ if (!packages.length && !manager) {
   process.exit(0);
 }
 
-// Same test-only feature set as the gate (runtime/scripts/test-lib.mjs) so
-// `cargo check -p engine --all-targets` compiles the fixture bins and the
-// integration-test cfg surface instead of a different flag set.
-const ENGINE_FEATURES = [
-  "--features",
-  "engine/package-worker-fixture,engine/markdown-bridge-fixture",
-];
+// The engine gate builds with the shipped feature set only — the old package
+// and markdown-bridge fixture features are gone.
+const ENGINE_FEATURES = [];
 
 // KOS-337: default builds skip the ONNX stack, so the local backend only
 // compiles with the feature — mirror the full gate, which builds with it.
@@ -102,7 +100,7 @@ for (const pkg of packages) {
   run(["check", "-p", pkg, "--all-targets", ...features]);
 }
 if (manager) {
-  run(["check", "--manifest-path", "manager-gpui/Cargo.toml", "--all-targets"]);
+  run(["check", "--manifest-path", "manager/Cargo.toml", "--all-targets"]);
 }
 
 if (!checkOnly) {
@@ -111,6 +109,6 @@ if (!checkOnly) {
     run(["nextest", "run", "-p", pkg, ...features, ...filterArgs]);
   }
   if (manager) {
-    run(["nextest", "run", "--manifest-path", "manager-gpui/Cargo.toml", ...filterArgs]);
+    run(["nextest", "run", "--manifest-path", "manager/Cargo.toml", ...filterArgs]);
   }
 }

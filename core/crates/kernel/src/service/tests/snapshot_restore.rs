@@ -1,0 +1,402 @@
+// RPC-level покрытие db_backup_list/validate/restore.
+
+use super::*;
+
+/// The fixture owns both the state and the TempDir: `state` drops first,
+/// closing the connection before the directory is removed.
+async fn init_snapshot_db(fixture: &ServiceFixture) -> String {
+    let db_str = fixture.db_path().to_string_lossy().to_string();
+    initialize_test_database(&fixture.state, db_str.clone())
+        .await
+        .unwrap();
+    db_str
+}
+
+async fn seed_rpc_object(state: &Arc<ServiceState>, db_path: &str, id: &str, title: &str) {
+    ::store::test_support::seed_legacy_type(std::path::Path::new(db_path), "snap_type", "Note")
+        .unwrap();
+    handle_request(
+        state,
+        Request::UpsertObject {
+            object: ArkObjectWrite {
+                id: id.to_string(),
+                type_id: "snap_type".to_string(),
+                type_version: Some("0.0.0-legacy".to_string()),
+                title: title.to_string(),
+                content_json: json!({}),
+                props_json: json!({}),
+                created_at: "2026-09-15T00:00:00.000Z".to_string(),
+                updated_at: "2026-09-15T00:00:00.000Z".to_string(),
+                deleted_at: None,
+            },
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("test-device".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+/// Пишет snapshot live DB в Core-owned `backups/` через Online Backup.
+pub(super) fn write_snapshot(db_path: &str, id: &str) {
+    let dir = ::store::snapshot::backups_dir(db_path);
+    std::fs::create_dir_all(&dir).unwrap();
+    let dest = dir.join(id);
+    ::store::test_support::SnapshotTestFixture::backup_database(
+        std::path::Path::new(db_path),
+        &dest,
+    )
+    .unwrap();
+}
+
+async fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
+    handle_request(state, Request::objects_list_all())
+        .await
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|object| object["id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// Restore refuses a stale snapshot before changing live data, including
+/// committed object changes that may already have been observed by a peer.
+#[tokio::test]
+async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
+    seed_rpc_object(&state, &db_path, "obj-before", "before").await;
+    write_snapshot(&db_path, "ark.db.backup-rt");
+
+    // Live расходится со snapshot'ом.
+    handle_request(
+        &state,
+        Request::DeleteObject {
+            id: "obj-before".to_string(),
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("test-device".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+    seed_rpc_object(&state, &db_path, "obj-after", "after").await;
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
+
+    handle_request(
+        &state,
+        Request::StartSync(StartSyncParams {
+            space_id: "restore-refusal-space".to_string(),
+            device_id: "restore-refusal-device".to_string(),
+            device_name: Some("Restore Refusal Device".to_string()),
+            port: Some(free_port()),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        }),
+    )
+    .await
+    .expect("loopback sync must start before restore refusal");
+
+    let error = handle_request(
+        &state,
+        Request::DbBackupRestore {
+            backup_id: "ark.db.backup-rt".to_string(),
+        },
+    )
+    .await
+    .expect_err("stale snapshot must not roll back committed feed progress");
+    assert!(error.contains("snapshot predates committed sync history"));
+    assert!(error.contains("without changing the live database"));
+
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true),
+        "safe refusal must restart sync because live database state is known intact"
+    );
+    handle_request(&state, Request::StopSync).await.unwrap();
+
+    // Restart-equivalent: refusal leaves the same live contents on disk.
+    initialize_test_database(&state, db_path.clone())
+        .await
+        .unwrap();
+    assert_eq!(live_object_ids(&state).await, vec!["obj-after".to_string()]);
+}
+
+#[tokio::test]
+async fn db_backup_restore_quiesces_and_restarts_running_sync() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
+    seed_rpc_object(&state, &db_path, "obj-before-sync", "before sync").await;
+    write_snapshot(&db_path, "ark.db.backup-sync-restore");
+
+    handle_request(
+        &state,
+        Request::StartSync(StartSyncParams {
+            space_id: "restore-space".to_string(),
+            device_id: "restore-device".to_string(),
+            device_name: Some("Restore Device".to_string()),
+            port: Some(free_port()),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        }),
+    )
+    .await
+    .expect("loopback sync must start");
+
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true)
+    );
+    let running_server = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .expect("sync runtime must be active")
+        .server
+        .clone();
+
+    let report = handle_request(
+        &state,
+        Request::DbBackupRestore {
+            backup_id: "ark.db.backup-sync-restore".to_string(),
+        },
+    )
+    .await
+    .expect("restore must finish and restart sync");
+
+    assert_eq!(report["restored"], json!(true));
+    assert_eq!(
+        live_object_ids(&state).await,
+        vec!["obj-before-sync".to_string()]
+    );
+    let restarted_server = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .expect("sync runtime must be active after restore")
+        .server
+        .clone();
+    assert!(
+        !Arc::ptr_eq(&running_server, &restarted_server),
+        "restore must tear down and rebuild the sync runtime"
+    );
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true),
+        "sync must be running again after successful restore"
+    );
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
+/// AC3: невалидные id, отсутствующие, garbage и чужие схемы не трогают live DB.
+#[tokio::test]
+async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
+    seed_rpc_object(&state, &db_path, "obj-live", "alive").await;
+    write_snapshot(&db_path, "ark.db.backup-good");
+
+    // Не-SQLite garbage.
+    std::fs::write(
+        ::store::snapshot::backups_dir(&db_path).join("ark.db.backup-garbage"),
+        b"not a sqlite database",
+    )
+    .unwrap();
+    // Валидный SQLite с чужой schema.
+    let foreign_path = ::store::snapshot::backups_dir(&db_path).join("ark.db.backup-foreign");
+    let _foreign = ::store::test_support::ForeignSchemaFixture::create(&foreign_path).unwrap();
+
+    for bad_id in [
+        "../ark.db",
+        "..\\ark.db",
+        "sub/dir.db",
+        ".restore-src-x.db",
+        "ark.db.backup-missing",
+        "ark.db.backup-garbage",
+        "ark.db.backup-foreign",
+    ] {
+        let result = handle_request(
+            &state,
+            Request::DbBackupRestore {
+                backup_id: bad_id.to_string(),
+            },
+        )
+        .await;
+        assert!(result.is_err(), "must reject {bad_id:?}");
+    }
+
+    assert_eq!(live_object_ids(&state).await, vec!["obj-live".to_string()]);
+    ::store::test_support::SnapshotTestFixture::check_integrity(std::path::Path::new(&db_path))
+        .unwrap();
+}
+
+/// AC6: list возвращает только regular files из backups/; validate даёт
+/// per-check typed verdict.
+#[tokio::test]
+async fn db_backup_list_and_validate_contract() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
+    seed_rpc_object(&state, &db_path, "obj-l", "l").await;
+    write_snapshot(&db_path, "ark.db.backup-listed");
+
+    let backups = ::store::snapshot::backups_dir(&db_path);
+    std::fs::write(backups.join(".staging-tmp"), b"junk").unwrap();
+    std::fs::create_dir(backups.join("nested-dir")).unwrap();
+
+    let listed = handle_request(&state, Request::DbBackupList).await.unwrap();
+    let ids = listed["backups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["ark.db.backup-listed".to_string()]);
+    assert!(listed["backups"][0]["size_bytes"].as_u64().unwrap() > 0);
+
+    let ok = handle_request(
+        &state,
+        Request::DbBackupValidate {
+            backup_id: "ark.db.backup-listed".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ok["valid"], json!(true));
+    assert_eq!(ok["integrity_ok"], json!(true));
+    assert_eq!(ok["schema_match"], json!(true));
+
+    let missing = handle_request(
+        &state,
+        Request::DbBackupValidate {
+            backup_id: "ark.db.backup-nope".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(missing["exists"], json!(false));
+    assert_eq!(missing["valid"], json!(false));
+
+    let traversal = handle_request(
+        &state,
+        Request::DbBackupValidate {
+            backup_id: "../ark.db".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(traversal["valid"], json!(false));
+}
+
+/// AC2: restore ждёт state.backup_gate, пока активный backup не завершится.
+/// Gate удерживается в этом потоке; restore на отдельном потоке обязан
+/// завершиться только после release.
+#[test]
+fn db_backup_restore_waits_for_backup_gate() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let db_path = runtime.block_on(async {
+        let path = init_snapshot_db(&fixture).await;
+        seed_rpc_object(&fixture.state, &path, "obj-g", "g").await;
+        path
+    });
+    write_snapshot(&db_path, "ark.db.backup-gated");
+
+    let gate = state.backup_gate.blocking_lock();
+    let order = Arc::new(StdMutex::new(Vec::<&'static str>::new()));
+    let order_in_thread = order.clone();
+    let state_in_thread = state.clone();
+    let restore_thread = std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let result = rt.block_on(handle_request(
+            &state_in_thread,
+            Request::DbBackupRestore {
+                backup_id: "ark.db.backup-gated".to_string(),
+            },
+        ));
+        order_in_thread
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push("restore");
+        result
+    });
+
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    order
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push("gate_released");
+    drop(gate);
+
+    let result = restore_thread.join().unwrap();
+    assert!(result.is_ok(), "restore must succeed after gate release");
+    assert_eq!(
+        *order.lock().unwrap_or_else(|e| e.into_inner()),
+        vec!["gate_released", "restore"],
+        "restore must not run while state.backup_gate is held"
+    );
+}
+
+#[test]
+fn db_backup_snapshot_ops_parse_snake_case_wire_format() {
+    for (operation, extra) in [
+        ("backup.list", json!({})),
+        ("backup.check", json!({"backup_id": "x"})),
+        ("backup.restore", json!({"backup_id": "x"})),
+    ] {
+        let mut value = json!({"operation": operation});
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        assert!(
+            serde_json::from_value::<Request>(value).is_ok(),
+            "{operation} must parse"
+        );
+    }
+    // camelCase variants не принимаются.
+    assert!(serde_json::from_value::<Request>(json!({"operation": "dbBackupRestore"})).is_err());
+}

@@ -29,7 +29,7 @@ use resolve::resolve_component_executable;
 
 /// Manager exe path for *authorization* only — in release builds this never
 /// honours the `MUNDUS_MANAGER_EXECUTABLE` env override (`resolve.rs`
-/// explains why; KOS-269 round 4).
+/// explains why; round 4).
 pub(crate) fn manager_executable_for_auth() -> Option<std::path::PathBuf> {
     resolve::resolve_manager_for_auth()
 }

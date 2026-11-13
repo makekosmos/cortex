@@ -151,7 +151,6 @@ test("publish uploads installer + manifest.json and never provenance/receipt (KO
   assert.doesNotMatch(publish, /release-provenance\.json/);
   assert.match(publish, /RELEASE_MANIFEST_FILE/);
   assert.match(publish, /mergeReleaseManifest/);
-  assert.match(publish, /legacyFeedFiles/);
   assert.match(publish, /"release", "upload"/);
 });
 
@@ -161,54 +160,25 @@ async function publishDir(platform, names) {
   return dir;
 }
 
-test("publish set: dual-publish adds the legacy feeds; cutover is installer + manifest", async () => {
+test("publish set is the installer + manifest.json, nothing else", async () => {
   const { publishAssetPaths } = await import("./publish-release.mjs");
-  const win = await publishDir("win", [
-    "Mundus-Setup-1.2.3.exe",
-    "manifest.json",
-    "latest.yml",
-    "release-bom.v2.json",
-  ]);
   const names = (files) => files.map((file) => path.basename(file));
-  const args = { platform: "win", version: "1.2.3", outputDir: win };
-  assert.deepEqual(names(publishAssetPaths({ ...args, releaseAlreadyExists: false })), [
+  const win = await publishDir("win", ["Mundus-Setup-1.2.3.exe", "manifest.json", "extra.json"]);
+  assert.deepEqual(names(publishAssetPaths({ platform: "win", version: "1.2.3", outputDir: win })), [
     "Mundus-Setup-1.2.3.exe",
     "manifest.json",
-    "latest.yml",
-    "release-bom.v2.json",
   ]);
-  // Existing release (retry): keep the single bom already attached.
-  assert.deepEqual(names(publishAssetPaths({ ...args, releaseAlreadyExists: true })), [
-    "Mundus-Setup-1.2.3.exe",
-    "manifest.json",
-    "latest.yml",
-  ]);
-  assert.deepEqual(
-    names(publishAssetPaths({ ...args, releaseAlreadyExists: false, dual: false })),
-    ["Mundus-Setup-1.2.3.exe", "manifest.json"],
-  );
-  const mac = await publishDir("mac", ["Mundus-1.2.3.dmg", "manifest.json", "latest-mac.yml"]);
+  const mac = await publishDir("mac", ["Mundus-1.2.3.dmg", "manifest.json"]);
   const merged = path.join(mac, "publish-manifest", "manifest.json");
   await mkdir(path.dirname(merged));
   await writeFile(merged, "{}");
   const macArgs = { platform: "mac", version: "1.2.3", outputDir: mac };
-  const macFiles = publishAssetPaths({
-    ...macArgs,
-    releaseAlreadyExists: true,
-    manifestPath: merged,
-  });
-  assert.deepEqual(names(macFiles), ["Mundus-1.2.3.dmg", "manifest.json", "latest-mac.yml"]);
+  const macFiles = publishAssetPaths({ ...macArgs, manifestPath: merged });
+  assert.deepEqual(names(macFiles), ["Mundus-1.2.3.dmg", "manifest.json"]);
   assert.equal(macFiles[1], merged);
-  assert.deepEqual(
-    names(publishAssetPaths({ ...macArgs, releaseAlreadyExists: true, dual: false })),
-    ["Mundus-1.2.3.dmg", "manifest.json"],
-  );
+  await rm(path.join(mac, "Mundus-1.2.3.dmg"));
+  assert.throws(() => publishAssetPaths(macArgs), /missing publish artifact/);
   await rm(win, { recursive: true, force: true });
-  await rm(path.join(mac, "latest-mac.yml"));
-  assert.throws(
-    () => publishAssetPaths({ ...macArgs, releaseAlreadyExists: true }),
-    /missing publish artifact/,
-  );
   await rm(mac, { recursive: true, force: true });
 });
 
@@ -216,7 +186,7 @@ test("fetchReleaseManifest returns null without the asset and fails closed on gh
   const { fetchReleaseManifest } = await import("./publish-release.mjs");
   const view = (assets) => ({ status: 0, stdout: JSON.stringify({ assets }), stderr: "" });
   assert.equal(
-    fetchReleaseManifest("makekosmos/cortex", "1.2.3", () => view([{ name: "latest.yml", id: 1 }])),
+    fetchReleaseManifest("makekosmos/cortex", "1.2.3", () => view([{ name: "Mundus-1.2.3.dmg", id: 1 }])),
     null,
   );
   assert.throws(
@@ -243,7 +213,6 @@ test("RELEASE_REPOS.mac points at cortex, not desktop-mac (KOS-349)", async () =
   const { RELEASE_REPOS, releaseTarget } = await import("./release-repos.mjs");
   assert.equal(RELEASE_REPOS.win, "makekosmos/cortex");
   assert.equal(RELEASE_REPOS.mac, "makekosmos/cortex");
-  assert.equal(releaseTarget("mac").channelFile, "latest-mac.yml");
   assert.equal(releaseTarget("mac").manifestFile, "manifest.json");
   assert.notEqual(RELEASE_REPOS.mac, "makekosmos/desktop-mac");
 });

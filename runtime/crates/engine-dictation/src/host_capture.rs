@@ -1,4 +1,6 @@
-fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
+use super::*;
+
+pub(super) fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     #[cfg(windows)]
     {
         // Режима больше нет в UI: завершение — тем же хоткеем (toggle),
@@ -37,7 +39,7 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     }
 }
 
-async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationResponse {
     let key = match params.get("key").and_then(|v| v.as_str()) {
         Some(k) if !k.is_empty() => k.to_owned(),
         _ => return DictationResponse::err("set_api_key: missing or empty 'key'"),
@@ -57,7 +59,7 @@ async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationRespons
     }
 }
 
-async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     let hwnd = inject::capture_foreground_window();
     eprintln!("[dictation::inject] capture_foreground op result: {hwnd:?}");
     let mut s = host.state.lock().await;
@@ -65,7 +67,7 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
 }
 
-async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
     let hwnd = inject::capture_foreground_window();
     eprintln!("[dictation::inject] contract_foreground op result: {hwnd:?}");
     if hwnd.is_none() {
@@ -85,7 +87,9 @@ async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
 /// транскриба: local provider + engine=parakeet + модель на месте —
 /// то же условие, что у preload.
 #[cfg(feature = "local-dictation")]
-async fn stream_model_dir_for_streaming(host: &DictationHost) -> Option<std::path::PathBuf> {
+pub(super) async fn stream_model_dir_for_streaming(
+    host: &DictationHost,
+) -> Option<std::path::PathBuf> {
     let cfg = host.snapshot_config().await;
     let eligible = cfg.provider_enabled
         && provider_uses_local_runtime(&cfg.provider)
@@ -100,16 +104,18 @@ async fn stream_model_dir_for_streaming(host: &DictationHost) -> Option<std::pat
 }
 
 #[cfg(not(feature = "local-dictation"))]
-async fn stream_model_dir_for_streaming(_host: &DictationHost) -> Option<std::path::PathBuf> {
+pub(super) async fn stream_model_dir_for_streaming(
+    _host: &DictationHost,
+) -> Option<std::path::PathBuf> {
     None
 }
 
 /// Опциональный файловый источник захвата (e2e): `sourceFile` — абсолютный
 /// путь к wav/mp3/m4a, `sourceSpeed` — темп подачи (по умолчанию 1.0,
 /// зажато в (0, 64]).
-fn parse_capture_source(
+pub(super) fn parse_capture_source(
     params: &Value,
-) -> Result<Option<super::native_capture::CaptureSource>, String> {
+) -> Result<Option<crate::native_capture::CaptureSource>, String> {
     let Some(file) = params.get("sourceFile") else {
         return Ok(None);
     };
@@ -129,13 +135,16 @@ fn parse_capture_source(
             .filter(|s| s.is_finite())
             .ok_or("capture.start: sourceSpeed must be a finite number")?,
     };
-    Ok(Some(super::native_capture::CaptureSource {
+    Ok(Some(crate::native_capture::CaptureSource {
         path,
         speed: speed.clamp(0.01, 64.0) as f32,
     }))
 }
 
-async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+pub(super) async fn op_capture_start(
+    params: Value,
+    host: &Arc<DictationHost>,
+) -> DictationResponse {
     host.contract_events
         .store(true, std::sync::atomic::Ordering::Release);
     if host.capture.lock().is_ok_and(|capture| capture.is_some()) {
@@ -163,10 +172,14 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
         let events_tx = host.events_tx.clone();
         let level_capture_id = capture_id.clone();
+        // The pill's dot scope rides the same meter: the plugin draws what
+        // the engine's simulation settles on.
+        let pill = Arc::clone(&host.pill);
         std::thread::Builder::new()
             .name("mundus-dictation-levels".into())
             .spawn(move || {
                 for level in level_rx {
+                    pill.set_level(level);
                     let _ = events_tx.send(json!({
                         "event": "dictation_audio_level",
                         "captureId": level_capture_id,
@@ -184,7 +197,7 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
     let pcm_sink = stream_model_dir.as_ref().map(|_| pcm_tx);
     let native_capture_id = capture_id.clone();
     let result = tokio::task::spawn_blocking(move || {
-        super::native_capture::start(
+        crate::native_capture::start(
             device_id.as_deref(),
             native_capture_id,
             level_sink,
@@ -220,7 +233,7 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
     }
 }
 
-async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+pub(super) async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
     let Some(capture_id) = params.get("captureId").and_then(Value::as_str) else {
         return DictationResponse::err("capture.stop: missing captureId");
     };
@@ -235,12 +248,12 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
         *host.capture.lock().expect("capture mutex poisoned") = Some(session);
         return DictationResponse::err("capture.stop: captureId does not match active capture");
     }
-    let result = tokio::task::spawn_blocking(move || super::native_capture::stop(session)).await;
+    let result = tokio::task::spawn_blocking(move || crate::native_capture::stop(session)).await;
     match result {
         Ok(Ok(audio)) => {
             // Keep the foreground capability token alive for the worker's
             // subsequent speech.transcribe → input.insert_text sequence.
-            super::audio_duck::restore();
+            crate::audio_duck::restore();
             // Дождаться stream-потока (in-flight чанк дозавершится) и
             // сохранить partial для transcribe. Join'им вне async-runtime.
             #[cfg(feature = "local-dictation")]
@@ -248,7 +261,11 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
                 .await
                 .ok();
             let mut state = host.state.lock().await;
-            *state = HostState::idle();
+            let prev_hwnd = state.prev_hwnd;
+            *state = HostState {
+                prev_hwnd,
+                ..HostState::idle()
+            };
             let snapshot = state.clone();
             drop(state);
             host.emit_state(&snapshot).await;
@@ -269,7 +286,10 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
     }
 }
 
-async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+pub(super) async fn op_speech_transcribe(
+    params: Value,
+    host: &Arc<DictationHost>,
+) -> DictationResponse {
     host.contract_events
         .store(true, std::sync::atomic::Ordering::Release);
     if params.get("audioB64").and_then(Value::as_str).is_none() {
@@ -285,7 +305,7 @@ async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> Dicta
     op_submit_audio(params, host).await
 }
 
-async fn op_insert_text(params: Value, host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_insert_text(params: Value, host: &DictationHost) -> DictationResponse {
     let Some(text) = params
         .get("text")
         .and_then(Value::as_str)
@@ -325,7 +345,7 @@ async fn op_insert_text(params: Value, host: &DictationHost) -> DictationRespons
 /// In-engine обработка триггеров хоткея (`dictation.trigger`,
 /// `dictation_escape_cancel`): весь конвейер capture → transcribe → inject
 /// живёт в этом процессе, внешний клиент нужен только для UI. Вызывается
-/// из supervisor-loop в engine main.rs, когда dictation worker недоступен
+/// из trigger-loop в engine main.rs, когда dictation worker недоступен
 /// или не установлен.
 pub async fn handle_engine_trigger(host: &Arc<DictationHost>, event: &Value) {
     match event.get("event").and_then(Value::as_str) {
@@ -356,9 +376,55 @@ pub async fn handle_engine_trigger(host: &Arc<DictationHost>, event: &Value) {
     }
 }
 
+/// Маршрутизация одного события хоткея: worker → живое dictation-приложение
+/// (WS subscriber, обрабатывает тот же broadcast) → in-engine fallback.
+/// `invoke_worker`, `app_alive` и `engine_handle` инжектятся, чтобы роутинг
+/// тестировался без worker'а, процессов и аудио. `dictation_escape_cancel`
+/// — safety cancel, он идёт в engine безусловно и идемпотентен.
+pub async fn route_trigger_event<Invoke, InvokeFut, AppAlive, Engine, EngineFut, E>(
+    event: &Value,
+    invoke_worker: Invoke,
+    app_alive: AppAlive,
+    engine_handle: Engine,
+) where
+    Invoke: FnOnce(Value) -> InvokeFut,
+    InvokeFut: std::future::Future<Output = Result<Value, E>>,
+    E: std::fmt::Display,
+    AppAlive: FnOnce() -> bool,
+    Engine: FnOnce(Value) -> EngineFut,
+    EngineFut: std::future::Future<Output = ()>,
+{
+    match event.get("event").and_then(Value::as_str) {
+        Some("dictation.trigger") => {
+            let params = json!({
+                "kind": event.get("kind").and_then(Value::as_str),
+                "phase": event.get("phase").and_then(Value::as_str),
+            });
+            match invoke_worker(params).await {
+                Ok(_) => {}
+                Err(error) if app_alive() => {
+                    tracing::debug!(
+                        error = %error,
+                        "dictation trigger worker unavailable; app is running"
+                    );
+                }
+                Err(error) => {
+                    tracing::debug!(
+                        error = %error,
+                        "dictation trigger: no worker, no app; handling in-engine"
+                    );
+                    engine_handle(event.clone()).await;
+                }
+            }
+        }
+        Some("dictation_escape_cancel") => engine_handle(event.clone()).await,
+        _ => {}
+    }
+}
+
 /// Тот же happy path, что делает worker: захват foreground HWND, затем
 /// `capture.start` на сконфигурированном микрофоне.
-async fn engine_begin_capture(host: &Arc<DictationHost>) {
+pub(super) async fn engine_begin_capture(host: &Arc<DictationHost>) {
     let _ = op_capture_foreground(host).await;
     let device_id = host.snapshot_config().await.microphone_device_id;
     let params = match device_id {
@@ -376,7 +442,7 @@ async fn engine_begin_capture(host: &Arc<DictationHost>) {
 
 /// `capture.stop` активной сессии → `speech.transcribe` (тот сам транскрибирует
 /// и инжектит через SystemInjector с захваченным prev_hwnd).
-async fn engine_finish_capture(host: &Arc<DictationHost>) {
+pub(super) async fn engine_finish_capture(host: &Arc<DictationHost>) {
     let capture_id = host
         .capture
         .lock()
@@ -428,7 +494,7 @@ async fn engine_finish_capture(host: &Arc<DictationHost>) {
     });
 }
 
-async fn preload_local_runtime_for_recording(host: &DictationHost) {
+pub(super) async fn preload_local_runtime_for_recording(host: &DictationHost) {
     #[cfg(test)]
     {
         if !local::has_test_sidecar_mock_for_host() {
@@ -501,7 +567,7 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
     });
 }
 
-async fn op_start_recording(host: &DictationHost) -> DictationResponse {
+pub(super) async fn op_start_recording(host: &DictationHost) -> DictationResponse {
     let cfg = host.snapshot_config().await;
     let mut s = host.state.lock().await;
     if !matches!(s.name, DictationStateName::Idle | DictationStateName::Error) {
@@ -516,13 +582,13 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
     drop(s);
     host.emit_state(&snapshot).await;
     tracing::info!(state = "recording", "dictation recording started");
-    super::audio_duck::duck_if_enabled(cfg.duck_audio_during_recording);
+    crate::audio_duck::duck_if_enabled(cfg.duck_audio_during_recording);
     preload_local_runtime_for_recording(host).await;
     DictationResponse::ok(json!({ "state": "recording" }))
 }
 
-async fn op_cancel(host: &DictationHost) -> DictationResponse {
-    super::audio_duck::restore();
+pub(super) async fn op_cancel(host: &DictationHost) -> DictationResponse {
+    crate::audio_duck::restore();
     // Остановить stream-транскрибу и выбросить её partial — запись
     // отменена, частичный текст непригоден.
     #[cfg(feature = "local-dictation")]
@@ -537,7 +603,7 @@ async fn op_cancel(host: &DictationHost) -> DictationResponse {
     let session = host.capture.lock().expect("capture mutex poisoned").take();
     if let Some(session) = session {
         tokio::task::spawn_blocking(move || {
-            let _ = super::native_capture::stop(session);
+            let _ = crate::native_capture::stop(session);
         });
     }
     *host
@@ -568,8 +634,8 @@ async fn op_cancel(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "state": "idle" }))
 }
 
-async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
-    super::audio_duck::restore();
+pub(super) async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    crate::audio_duck::restore();
     let audio_b64 = match params.get("audioB64").and_then(|v| v.as_str()) {
         Some(s) => s.to_owned(),
         None => return DictationResponse::err("submit_audio: missing 'audioB64'"),
@@ -588,6 +654,13 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             tracing::warn!(error = %e, "dictation: base64 decode failed");
             return DictationResponse::err(format!("submit_audio: битое аудио ({e})"));
         }
+    };
+    // `speech.transcribe` идёт без `durationSec`, а статистике нужны секунды
+    // записи: берём их из самого WAV, иначе «слов в минуту» остаётся нулём.
+    let record_seconds = if record_seconds > 0.0 {
+        record_seconds
+    } else {
+        wav_seconds(&wav_bytes)
     };
     tracing::info!(
         bytes = wav_bytes.len(),
@@ -612,7 +685,7 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
 
     // Disk-first: enqueue до любого HTTP. Crash после этой точки не
     // теряет аудио.
-    let opts = super::pending::EnqueueOpts {
+    let opts = crate::pending::EnqueueOpts {
         language: cfg.language.clone(),
         prompt: cfg.transcription_prompt.clone(),
         inject_mode: match cfg.inject_mode {
@@ -622,7 +695,7 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
         model: effective_model_for_submit(&cfg),
         prev_hwnd,
     };
-    let uuid = match super::pending::enqueue(&host.data_dir, &wav_bytes, record_seconds, opts) {
+    let uuid = match crate::pending::enqueue(&host.data_dir, &wav_bytes, record_seconds, opts) {
         Ok(u) => u,
         Err(e) => {
             tracing::error!(error = %e, "dictation: pending enqueue failed");
@@ -814,4 +887,36 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             "deliveryReason": reason,
         })),
     }
+}
+
+/// Длительность WAV в секундах: длина блока `data` делённая на размер одного
+/// отсчёта. Вызывающий не всегда говорит длительность, а статистике она нужна.
+fn wav_seconds(wav: &[u8]) -> f32 {
+    if wav.len() < 12 {
+        return 0.0;
+    }
+    let chunk_size = |at: usize| -> Option<usize> {
+        let bytes = wav.get(at..at + 4)?;
+        Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize)
+    };
+    let (mut channels, mut rate, mut bits, mut data_len) = (0u16, 0u32, 0u16, 0usize);
+    let mut at = 12usize;
+    while at + 8 <= wav.len() {
+        let id = &wav[at..at + 4];
+        let size = chunk_size(at + 4).unwrap_or(0);
+        let body = at + 8;
+        if id == b"fmt " && body + 16 <= wav.len() {
+            let fmt = &wav[body..body + 16];
+            channels = u16::from_le_bytes([fmt[2], fmt[3]]);
+            rate = u32::from_le_bytes([fmt[4], fmt[5], fmt[6], fmt[7]]);
+            bits = u16::from_le_bytes([fmt[14], fmt[15]]);
+        } else if id == b"data" {
+            data_len = size.min(wav.len().saturating_sub(body));
+        }
+        // Блоки выровнены по чётной границе.
+        at = body + size + (size & 1);
+    }
+    let sample = u32::from(channels.max(1)) * u32::from((bits.max(8)) / 8);
+    let byte_rate = rate.max(1) * sample;
+    data_len as f32 / byte_rate as f32
 }

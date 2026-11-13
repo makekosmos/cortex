@@ -13,8 +13,6 @@ import {
   setMacVersion,
   setWinVersion,
 } from "./release-plan.mjs";
-import { RELEASE_BOM_FILE } from "./release-bom.mjs";
-import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_MANIFEST_FILE } from "./release-manifest.mjs";
 
 const HEAD = "a".repeat(40);
@@ -27,14 +25,9 @@ test("the release baseline repo is makekosmos/cortex", () => {
   assert.equal(RELEASE_REPO, "makekosmos/cortex");
 });
 
-function release(
-  tag,
-  { draft = false, prerelease = false, bom = true, receipt = false, manifest = false } = {},
-) {
+function release(tag, { draft = false, prerelease = false, manifest = true } = {}) {
   const assets = [];
   if (manifest) assets.push({ name: RELEASE_MANIFEST_FILE, id: 22222 });
-  if (bom) assets.push({ name: RELEASE_BOM_FILE, id: 11111 });
-  if (receipt) assets.push({ name: RELEASE_RECEIPT_FILE, id: 12345 });
   return {
     tag_name: tag,
     draft,
@@ -58,8 +51,35 @@ function fakeRun(handlers) {
   return { run, calls };
 }
 
-const bomJson = JSON.stringify({ release: { version: "0.10.0" }, source: { commit: BASE_COMMIT } });
-const receiptJson = JSON.stringify({ inputs: { commit: BASE_COMMIT, version: "0.10.0" } });
+function manifestJson({ version = "0.10.0", commit = BASE_COMMIT } = {}) {
+  const file = `Mundus-Setup-${version}.exe`;
+  return JSON.stringify({
+    schema: "mundus-release-manifest",
+    schema_version: 1,
+    product: "mundus",
+    version,
+    channel: "production",
+    source: {
+      repository: "makekosmos/cortex",
+      commit,
+      toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
+    },
+    compatibility: { engine_api: "1.0.0" },
+    platforms: {
+      win: {
+        file,
+        url: `https://github.com/makekosmos/cortex/releases/download/v${version}/${file}`,
+        size: 10,
+        sha512: `${"A".repeat(86)}==`,
+        target: "x86_64-pc-windows-msvc",
+        commit,
+        released_at: "2026-10-05T10:00:00.000Z",
+      },
+    },
+  });
+}
+
+const baseManifest = manifestJson();
 
 function baseHandlers({ diffStatus = 1 } = {}) {
   return [
@@ -67,7 +87,7 @@ function baseHandlers({ diffStatus = 1 } = {}) {
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
       { stdout: JSON.stringify([[release("v0.10.0")]]) },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: bomJson }],
+    ["gh api -H Accept: application/octet-stream", { stdout: baseManifest }],
     ["git rev-parse HEAD", { stdout: HEAD }],
     [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, {}],
     [`git diff --quiet ${BASE_COMMIT} HEAD --`, { status: diffStatus }],
@@ -124,7 +144,7 @@ test("git errors fail loudly instead of looking like no changes", () => {
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
       { stdout: JSON.stringify([[release("v0.10.0")]]) },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: bomJson }],
+    ["gh api -H Accept: application/octet-stream", { stdout: baseManifest }],
     ["git rev-parse HEAD", { stdout: HEAD }],
     [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, { status: 1, stderr: "not an ancestor" }],
   ]);
@@ -199,49 +219,15 @@ test("drafts, prereleases and non-stable tags never become the baseline", () => 
   assert.equal(best.version, "0.9.0");
 });
 
-test("a published release without a BOM or legacy receipt fails loudly", () => {
+test("a published release without manifest.json fails loudly", () => {
   const { run } = fakeRun([
     [
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-      { stdout: JSON.stringify([[release("v0.10.0", { bom: false, receipt: false })]]) },
+      { stdout: JSON.stringify([[release("v0.10.0", { manifest: false })]]) },
     ],
     ["git rev-parse HEAD", { stdout: HEAD }],
   ]);
-  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /no .* asset/);
-});
-
-test("a BOM naming a bad commit fails the baseline check", () => {
-  const { run } = fakeRun([
-    [
-      `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-      { stdout: JSON.stringify([[release("v0.10.0")]]) },
-    ],
-    [
-      "gh api -H Accept: application/octet-stream",
-      {
-        stdout: JSON.stringify({ release: { version: "0.10.0" }, source: { commit: "not-a-sha" } }),
-      },
-    ],
-    ["git rev-parse HEAD", { stdout: HEAD }],
-  ]);
-  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /source\.commit/);
-});
-
-test("a legacy receipt-only release still plans (KOS-349 fallback)", () => {
-  const { run } = fakeRun([
-    [
-      `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-      { stdout: JSON.stringify([[release("v0.10.0", { bom: false, receipt: true })]]) },
-    ],
-    ["gh api -H Accept: application/octet-stream", { stdout: receiptJson }],
-    ["git rev-parse HEAD", { stdout: HEAD }],
-    [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, {}],
-    [`git diff --quiet ${BASE_COMMIT} HEAD --`, { status: 0 }],
-    ["git rev-parse -q --verify refs/tags/", { status: 1 }],
-  ]);
-  const plan = planRelease({ run, currentVersion: CURRENT });
-  assert.equal(plan.release, false);
-  assert.equal(plan.previousCommit, BASE_COMMIT);
+  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /no manifest\.json asset/);
 });
 
 test("parseStableVersion rejects non-stable input", () => {
@@ -319,61 +305,30 @@ test("nextReleaseVersion mirrors the manual release bump rules", () => {
   assert.throws(() => nextReleaseVersion("0.9.0", "0.10.0", true), /below/);
 });
 
-const MANIFEST_COMMIT = "d".repeat(40);
-function manifestJson({ version = "0.10.0", commit = MANIFEST_COMMIT } = {}) {
-  const file = `Mundus-Setup-${version}.exe`;
-  return JSON.stringify({
-    schema: "mundus-release-manifest",
-    schema_version: 1,
-    product: "mundus",
-    version,
-    channel: "production",
-    source: {
-      repository: "makekosmos/cortex",
-      commit,
-      toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
-    },
-    compatibility: { engine_api: "1.0.0" },
-    platforms: {
-      win: {
-        file,
-        url: `https://github.com/makekosmos/cortex/releases/download/v${version}/${file}`,
-        size: 10,
-        sha512: `${"A".repeat(86)}==`,
-        target: "x86_64-pc-windows-msvc",
-        commit,
-        released_at: "2026-10-05T10:00:00.000Z",
-      },
-    },
-  });
-}
-
 test("latestPublishedRelease records the manifest.json asset (KOS-350)", () => {
-  const best = latestPublishedRelease([release("v0.10.0", { manifest: true })]);
+  const best = latestPublishedRelease([release("v0.10.0")]);
   assert.equal(best.manifestAssetId, 22222);
-  assert.equal(best.bomAssetId, 11111);
 });
 
-test("the planner baseline prefers manifest.json over the BOM (KOS-350)", () => {
-  const { run, calls } = fakeRun([
+test("the planner baseline is source.commit of the manifest.json asset (KOS-350)", () => {
+  const commit = "d".repeat(40);
+  const { run } = fakeRun([
     [
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-      { stdout: JSON.stringify([[release("v0.10.0", { manifest: true })]]) },
+      { stdout: JSON.stringify([[release("v0.10.0")]]) },
     ],
     [
       `gh api -H Accept: application/octet-stream repos/${RELEASE_REPO}/releases/assets/22222`,
-      { stdout: manifestJson() },
+      { stdout: manifestJson({ commit }) },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: bomJson }],
     ["git rev-parse HEAD", { stdout: HEAD }],
-    [`git merge-base --is-ancestor ${MANIFEST_COMMIT} HEAD`, {}],
-    [`git diff --quiet ${MANIFEST_COMMIT} HEAD --`, { status: 0 }],
+    [`git merge-base --is-ancestor ${commit} HEAD`, {}],
+    [`git diff --quiet ${commit} HEAD --`, { status: 0 }],
     ["git rev-parse -q --verify refs/tags/", { status: 1 }],
   ]);
   const plan = planRelease({ run, currentVersion: CURRENT });
-  assert.equal(plan.previousCommit, MANIFEST_COMMIT);
+  assert.equal(plan.previousCommit, commit);
   assert.equal(plan.release, false);
-  assert.ok(!calls.some((line) => line.endsWith("/releases/assets/11111")));
 });
 
 test("an invalid or mismatched manifest.json fails the baseline check", () => {
@@ -384,7 +339,7 @@ test("an invalid or mismatched manifest.json fails the baseline check", () => {
     const { run } = fakeRun([
       [
         `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-        { stdout: JSON.stringify([[release("v0.10.0", { manifest: true })]]) },
+        { stdout: JSON.stringify([[release("v0.10.0")]]) },
       ],
       ["gh api -H Accept: application/octet-stream", { stdout }],
       ["git rev-parse HEAD", { stdout: HEAD }],

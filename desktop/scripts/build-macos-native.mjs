@@ -26,6 +26,11 @@ mkdirSync(moduleCacheDir, { recursive: true });
 
 const helpers = [
   {
+    out: "engine-menu-bar",
+    sources: ["engine-menu-bar.swift"],
+    frameworks: ["AppKit", "Foundation"],
+  },
+  {
     out: "hotkey-hold-monitor",
     sources: ["hotkey-hold-monitor.swift"],
     frameworks: ["CoreGraphics", "AppKit", "Carbon"],
@@ -104,6 +109,11 @@ cargo(
     path.join(cortexRoot, "Cargo.toml"),
     "--bin",
     "mundus-engine",
+    // KOS-337 on macOS: without this the shipped Engine answers every local
+    // transcribe with `NotBuiltWithLocalDictation`, so dictation only worked
+    // through Groq while the app's default provider is the local model.
+    "--features",
+    "local-dictation",
   ],
   desktopRoot,
 );
@@ -113,7 +123,23 @@ cargo(
     "--release",
     "--locked",
     "--manifest-path",
-    path.join(cortexRoot, "manager-gpui", "Cargo.toml"),
+    path.join(cortexRoot, "Cargo.toml"),
+    "--bin",
+    // The Engine looks for this next to itself and, without it, answers every
+    // local transcribe with an empty result: the audio becomes no text.
+    "mundus-local-stt",
+    "--features",
+    "local-dictation",
   ],
-  path.join(cortexRoot, "manager-gpui"),
+  desktopRoot,
+);
+cargo(
+  [
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    path.join(cortexRoot, "manager", "Cargo.toml"),
+  ],
+  path.join(cortexRoot, "manager"),
 );

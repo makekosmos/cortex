@@ -18,8 +18,8 @@ pipeline that ships them to Windows and macOS every night.
 <p>
   <a href="rust-toolchain.toml"><img alt="Rust" src="https://img.shields.io/badge/rust-1.95.0-ce422b?style=for-the-badge&logo=rust&logoColor=white" /></a>
   <a href="package.json"><img alt="pnpm" src="https://img.shields.io/badge/pnpm-12.4.1-f69220?style=for-the-badge&logo=pnpm&logoColor=white" /></a>
-  <a href="manager-gpui/"><img alt="GPUI" src="https://img.shields.io/badge/UI-GPUI-6366f1?style=for-the-badge&logo=zedindustries&logoColor=white" /></a>
-  <a href="core/crates/ark-core/"><img alt="SQLite" src="https://img.shields.io/badge/storage-SQLite-0f80cc?style=for-the-badge&logo=sqlite&logoColor=white" /></a>
+  <a href="manager/"><img alt="NSH" src="https://img.shields.io/badge/UI-NSH%20%C2%B7%20GPUI-6366f1?style=for-the-badge&logo=zedindustries&logoColor=white" /></a>
+  <a href="core/crates/kernel/"><img alt="SQLite" src="https://img.shields.io/badge/storage-SQLite-0f80cc?style=for-the-badge&logo=sqlite&logoColor=white" /></a>
   <a href="#download"><img alt="Windows" src="https://img.shields.io/badge/Windows-primary-0078d4?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==" /></a>
   <a href="#download"><img alt="macOS" src="https://img.shields.io/badge/macOS-DMG-e4e4e7?style=for-the-badge&logo=apple&logoColor=black" /></a>
 </p>
@@ -44,9 +44,9 @@ This repository owns the Engine and everything around it.
 
 |                  | Path                    | What it is                                                                                                                                                                               |
 | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚙️ **Engine**    | `runtime/`              | `mundus-engine`: Engine API (`/v1/rpc`, WebSocket), package host and supervisor, focus and pomodoro, dictation, updater, tray, autostart. Privileged ops sit behind a one-time UAC grant |
-| 🗄️ **ARK**       | `core/crates/ark-core/` | Rust + SQLite data core, hosted in-process by the Engine. Append-only schema, HLC clocks, p2p sync over iroh, relay, or LAN beacon                                                       |
-| 🖥️ **Manager**   | `manager-gpui/`         | The GPUI control panel for the Engine. A separate Cargo workspace with its own `Cargo.lock`                                                                                              |
+| ⚙️ **Engine**    | `runtime/`              | `mundus-engine`: Engine API (`/v1/rpc`, WebSocket), package host and supervisor, focus, dictation, updater, tray, autostart. Privileged ops sit behind a one-time UAC grant |
+| 🗄️ **ARK**       | `core/crates/kernel/` | Rust + SQLite data core, hosted in-process by the Engine. Append-only schema, HLC clocks, p2p sync over iroh, relay, or LAN beacon                                                       |
+| 🖥️ **Manager**   | `manager/`              | The Engine's control panel: a Rust/GPUI host (`nsh-platform-gpui`) running TSX pages. A separate Cargo workspace with its own `Cargo.lock`                                               |
 | 📦 **Packaging** | `desktop/`              | NSIS installer, macOS DMG, release BOM, manifest, and publishing                                                                                                                         |
 | 🧪 **Gate**      | `scripts/`              | Local check planner (`check-*.mjs`), `dev.mjs`, Lefthook contracts                                                                                                                       |
 | 📚 **Docs**      | `docs/`                 | Decisions and measurements (`docs/experiments/` is a measurement log, not rules)                                                                                                         |
@@ -55,11 +55,10 @@ The apps themselves live in sibling repositories. The Engine's Store installs
 them from their GitHub Releases into `%LOCALAPPDATA%\Mundus\Apps`; the
 installer does not bundle them.
 
-| App          | Repository                                                              |
-| ------------ | ----------------------------------------------------------------------- |
-| 📅 Agenda    | [`makekosmos/agenda-gpui`](https://github.com/makekosmos/agenda-gpui)   |
-| 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui) |
-| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)       |
+| App          | Repository                                                                  |
+| ------------ | --------------------------------------------------------------------------- |
+| 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui)     |
+| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)           |
 
 ## Download
 
@@ -82,6 +81,10 @@ downloads):
 curl -fsSL https://raw.githubusercontent.com/makekosmos/cortex/main/desktop/install-macos.sh | bash
 ```
 
+The script checks the DMG against the sha512 in `manifest.json`, stops a
+running Mundus, replaces `/Applications/Mundus Manager.app` and opens it.
+Every release's notes carry the same line.
+
 Downloading `Mundus-<ver>.dmg` in a browser works on macOS 15 and earlier via
 Privacy & Security → "Open Anyway"; on macOS 26 it requires
 `xattr -dr com.apple.quarantine "/Applications/Mundus Manager.app"` after
@@ -92,12 +95,11 @@ copying the app to /Applications.
 ```mermaid
 flowchart LR
     subgraph apps["Native apps (sibling repos)"]
-        agenda["Agenda"]
         memoria["Memoria"]
         dictation["Dictation"]
     end
 
-    manager["Manager<br/><sub>manager-gpui</sub>"]
+    manager["Manager<br/><sub>manager/ui · TSX</sub>"]
 
     subgraph engine["mundus-engine"]
         api["Engine API<br/><sub>/v1/rpc · WebSocket</sub>"]
@@ -110,7 +112,7 @@ flowchart LR
     peers(["Other devices"])
     feed(["GitHub Releases<br/><sub>manifest.json</sub>"])
 
-    agenda & memoria & dictation --> api
+    memoria & dictation --> api
     manager --> api
     api --> host & priv & ark
     ark <-. "iroh · relay · beacon" .-> peers
@@ -122,7 +124,7 @@ directly. The microphone, hotkeys, text insertion, focus blocking, API keys,
 and every SQLite write belong to the Engine. If an app needs a new capability,
 it gets a new Engine operation, never a bypass. See
 [`docs/write-boundary.md`](docs/write-boundary.md) and
-[`docs/repo-split-decisions.md`](docs/repo-split-decisions.md).
+[`docs/exocortex.md`](docs/exocortex.md).
 
 The shipped package is `mundus-engine` with ARK in-process, plus GPUI
 components under `resources/components/<name>/`.
@@ -144,7 +146,7 @@ pnpm run dev -- --data-dir DIR    # default: <tmp>/mundus-dev, shared by both
 
 ```sh
 MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run -p engine
-MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.toml
+MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager/Cargo.toml
 ```
 
 `cargo run -p engine` works because the crate sets
@@ -160,8 +162,7 @@ MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.tom
 
 > [!NOTE]
 > The first build compiles several hundred crates and is slow. Later builds are
-> incremental. For cache tuning, see
-> [`docs/rust-build-cache.md`](docs/rust-build-cache.md).
+> incremental; `sccache`/`rtk` proxy settings are a local machine choice.
 
 ## Checks
 
@@ -180,7 +181,7 @@ pnpm run check             # full local gate (scripts/check-plan-commands.mjs)
 pnpm run check:affected    # only checks selected by the diff
 pnpm run check:plan        # print the plan: JSON on stdout, reasons on stderr
 node scripts/quick-check.mjs   # tight edit → check loop for the crates you touched
-pnpm run check:manager-gpui    # Manager fmt + Clippy + tests
+pnpm run check:manager         # Manager fmt + Clippy + tests
 ```
 
 The hooks install with `pnpm install` (recover with `pnpm run prepare`).
@@ -281,17 +282,14 @@ Windows job creates it; the macOS publish merges its entry in.
 
 The Engine updater (`runtime/src/updater/`) reads
 `…/releases/latest/download/manifest.json`, and the nightly planner takes its
-baseline from `source.commit`. During the dual-publish window
-(`DUAL_PUBLISH_LEGACY_FEEDS = true`, Rust `LEGACY_FEED_FALLBACK = true`), the
-release also carries `latest.yml`, `latest-mac.yml`, and `release-bom.v2.json`,
-all rendered from the same manifest. Cutover flips both flags to `false`.
+baseline from `source.commit`. A release publishes only the installers and
+`manifest.json`; the BOM and the receipt stay local build inputs.
 
 The Windows installer is a standalone NSIS script
 (`desktop/build/installer.nsi`) compiled by `makensis`. The build downloads the
-pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It writes
-`release/release-provenance.json` and, atomically,
-`release/release-receipt.v2.json`. `publish-release.mjs` consumes only that
-receipt. It never builds or packages, and it re-derives the BOM from HEAD, so it
+pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It writes the
+provenance JSON and, atomically, the v2 release receipt into the build's
+`release/` output directory. `publish-release.mjs` consumes only that receipt. It never builds or packages, and it re-derives the BOM from HEAD, so it
 rejects a receipt from any other commit. Signing secrets are never read by the
 BOM validator or the provenance emitter.
 
@@ -321,15 +319,11 @@ The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 
 | Topic                     | Doc                                                              |
 | ------------------------- | ---------------------------------------------------------------- |
-| ARK data core             | [`docs/ark-core.md`](docs/ark-core.md)                           |
+| ARK architecture          | [`docs/exocortex.md`](docs/exocortex.md)                 |
 | Sync: iroh, relay, beacon | [`docs/sync.md`](docs/sync.md)                                   |
 | Write boundary            | [`docs/write-boundary.md`](docs/write-boundary.md)               |
-| Focus and pomodoro        | [`docs/focus.md`](docs/focus.md)                                 |
 | Dictation dev loop        | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
-| ONNX Runtime              | [`docs/onnxruntime.md`](docs/onnxruntime.md)                     |
+| Dictation models          | [`docs/dictation-dev.md`](docs/dictation-dev.md)                 |
 | Linux development         | [`docs/linux-dev.md`](docs/linux-dev.md)                         |
-| macOS package workers     | [`docs/macos-package-workers.md`](docs/macos-package-workers.md) |
-| Build cache               | [`docs/rust-build-cache.md`](docs/rust-build-cache.md)           |
-| Repo split decisions      | [`docs/repo-split-decisions.md`](docs/repo-split-decisions.md)   |
 | Packaging and releases    | [`desktop/DEV.md`](desktop/DEV.md)                               |
-| Manager                   | [`manager-gpui/README.md`](manager-gpui/README.md)               |
+| Manager                   | [`manager/README.md`](manager/README.md)                           |

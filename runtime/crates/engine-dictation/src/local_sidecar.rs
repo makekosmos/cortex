@@ -1,10 +1,7 @@
-use std::env;
-use std::io::{self, BufRead, Write};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
-use std::sync::mpsc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -12,8 +9,6 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use serde_json::Value;
-use tokio::task::JoinHandle;
 
 use super::local::{
     preload_with_whisper_backend_model, transcribe_with_whisper_backend_model,
@@ -29,6 +24,9 @@ use super::local_sidecar_protocol::{
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 use super::local_whisper_dll::{whisper_dll_available, WhisperDllEngine};
 
+mod stdio;
+pub use stdio::run_stdio_service;
+
 #[derive(Default)]
 struct WarmState {
     loaded_model: Option<LocalSttModelSpec>,
@@ -40,7 +38,6 @@ struct WarmState {
 pub struct LocalSttSidecarService {
     state: WarmState,
 }
-
 impl Default for LocalSttSidecarService {
     fn default() -> Self {
         Self::new()
@@ -58,7 +55,7 @@ impl LocalSttSidecarService {
         self.handle_with_cancel(envelope, None).await
     }
 
-    async fn handle_with_cancel(
+    pub(super) async fn handle_with_cancel(
         &mut self,
         envelope: LocalSttRequestEnvelope,
         cancel_flag: Option<Arc<AtomicBool>>,
@@ -232,7 +229,7 @@ impl LocalSttSidecarService {
         engine.transcribe(model, wav, language, prompt, cancel_flag)
     }
 
-    async fn unload_if_idle(&mut self) {
+    pub(super) async fn unload_if_idle(&mut self) {
         let Some(model) = self.state.loaded_model.as_ref() else {
             return;
         };
@@ -248,13 +245,13 @@ impl LocalSttSidecarService {
         }
     }
 
-    fn reset(&mut self) {
+    pub(super) fn reset(&mut self) {
         self.state = WarmState::default();
     }
 }
 
 fn idle_watch_interval() -> Duration {
-    env::var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS")
+    std::env::var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS")
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
         .map(Duration::from_millis)
@@ -264,7 +261,7 @@ fn idle_watch_interval() -> Duration {
 fn spawn_idle_unload_watcher(
     service: Arc<tokio::sync::Mutex<LocalSttSidecarService>>,
     shutdown_signal: Arc<AtomicBool>,
-) -> JoinHandle<()> {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let interval = idle_watch_interval();
         loop {
@@ -277,28 +274,7 @@ fn spawn_idle_unload_watcher(
     })
 }
 
-struct ActiveSidecarRequest {
-    request_id: u64,
-    kind: ActiveSidecarRequestKind,
-    handle: JoinHandle<()>,
-    cancel_flag: Arc<AtomicBool>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ActiveSidecarRequestKind {
-    Preload,
-    Transcribe,
-}
-
-fn send_envelope(
-    tx: &mpsc::Sender<LocalSttResponseEnvelope>,
-    envelope: LocalSttResponseEnvelope,
-) -> io::Result<()> {
-    tx.send(envelope)
-        .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "sidecar writer stopped"))
-}
-
-fn effective_accelerator(model: &LocalSttModelSpec) -> LocalSttAccelerator {
+pub(super) fn effective_accelerator(model: &LocalSttModelSpec) -> LocalSttAccelerator {
     match model.accelerator {
         LocalSttAccelerator::Cpu => LocalSttAccelerator::Cpu,
         LocalSttAccelerator::Gpu => LocalSttAccelerator::Gpu,
@@ -306,7 +282,7 @@ fn effective_accelerator(model: &LocalSttModelSpec) -> LocalSttAccelerator {
     }
 }
 
-fn selected_device(model: &LocalSttModelSpec) -> Option<String> {
+pub(super) fn selected_device(model: &LocalSttModelSpec) -> Option<String> {
     if !matches!(effective_accelerator(model), LocalSttAccelerator::Gpu) {
         return None;
     }
@@ -325,284 +301,6 @@ fn selected_device(model: &LocalSttModelSpec) -> Option<String> {
         }
     })
 }
-
-pub async fn run_stdio_service() -> io::Result<()> {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut reader = stdin.lock();
-    let service = Arc::new(tokio::sync::Mutex::new(LocalSttSidecarService::new()));
-    let shutdown_signal = Arc::new(AtomicBool::new(false));
-    let idle_watcher =
-        spawn_idle_unload_watcher(Arc::clone(&service), Arc::clone(&shutdown_signal));
-    let active: Arc<tokio::sync::Mutex<Option<ActiveSidecarRequest>>> =
-        Arc::new(tokio::sync::Mutex::new(None));
-    let (tx, rx) = mpsc::channel::<LocalSttResponseEnvelope>();
-    let writer_thread = std::thread::spawn(move || -> io::Result<()> {
-        let mut writer = stdout.lock();
-        for response in rx {
-            serde_json::to_writer(&mut writer, &response)?;
-            writer.write_all(b"\n")?;
-            writer.flush()?;
-        }
-        Ok(())
-    });
-
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
-            break;
-        }
-        let trimmed = line.trim().trim_start_matches('\u{feff}');
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let envelope = match serde_json::from_str::<LocalSttRequestEnvelope>(trimmed) {
-            Ok(value) => value,
-            Err(error) => {
-                eprintln!("[mundus-local-stt] invalid request: {error}");
-                if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                    if let Some(request_id) = value
-                        .get("requestId")
-                        .or_else(|| value.get("request_id"))
-                        .and_then(Value::as_u64)
-                    {
-                        send_envelope(
-                            &tx,
-                            LocalSttResponseEnvelope {
-                                request_id,
-                                ok: false,
-                                response: None,
-                                error: Some(format!("invalid request: {error}")),
-                            },
-                        )?;
-                    }
-                }
-                continue;
-            }
-        };
-        let should_exit = matches!(envelope.request, LocalSttRequest::Shutdown);
-        let request_id = envelope.request_id;
-        match envelope.request {
-            LocalSttRequest::Preload { .. } | LocalSttRequest::Transcribe { .. } => {
-                let kind = if matches!(envelope.request, LocalSttRequest::Preload { .. }) {
-                    ActiveSidecarRequestKind::Preload
-                } else {
-                    ActiveSidecarRequestKind::Transcribe
-                };
-                let service = Arc::clone(&service);
-                let tx_task = tx.clone();
-                let active_task = Arc::clone(&active);
-                let cancel_flag = Arc::new(AtomicBool::new(false));
-                let task_cancel_flag = Arc::clone(&cancel_flag);
-                let handle = tokio::spawn(async move {
-                    let response = service
-                        .lock()
-                        .await
-                        .handle_with_cancel(envelope, Some(task_cancel_flag))
-                        .await;
-                    let _ = tx_task.send(response);
-                    let mut active = active_task.lock().await;
-                    if active
-                        .as_ref()
-                        .is_some_and(|active| active.request_id == request_id)
-                    {
-                        *active = None;
-                    }
-                });
-                let mut active_guard = active.lock().await;
-                let previous = active_guard.take();
-                if let Some(previous) = previous {
-                    if previous.kind == ActiveSidecarRequestKind::Preload
-                        && kind == ActiveSidecarRequestKind::Transcribe
-                    {
-                        // Keep the recording-start warm-up alive. The transcribe task will wait
-                        // on the service mutex and reuse the warmed whisper.cpp backend instead
-                        // of cancelling preload and paying cold-start latency on short utterances.
-                    } else {
-                        previous.cancel_flag.store(true, Ordering::SeqCst);
-                        previous.handle.abort();
-                    }
-                }
-                *active_guard = Some(ActiveSidecarRequest {
-                    request_id,
-                    kind,
-                    handle,
-                    cancel_flag,
-                });
-            }
-            LocalSttRequest::Cancel { .. } => {
-                let cancelled_active = if let Some(previous) = active.lock().await.take() {
-                    previous.cancel_flag.store(true, Ordering::SeqCst);
-                    previous.handle.abort();
-                    true
-                } else {
-                    false
-                };
-                if cancelled_active {
-                    unload_whisper_backend().await;
-                    let service_reset = Arc::clone(&service);
-                    tokio::spawn(async move {
-                        service_reset.lock().await.reset();
-                    });
-                }
-                send_envelope(
-                    &tx,
-                    LocalSttResponseEnvelope {
-                        request_id,
-                        ok: true,
-                        response: Some(LocalSttResponse::Ack(LocalSttAck {
-                            accepted: true,
-                            message: Some(if cancelled_active {
-                                "cancelled".into()
-                            } else {
-                                "nothing to cancel".into()
-                            }),
-                        })),
-                        error: None,
-                    },
-                )?;
-            }
-            LocalSttRequest::Shutdown => {
-                if let Some(previous) = active.lock().await.take() {
-                    previous.cancel_flag.store(true, Ordering::SeqCst);
-                    previous.handle.abort();
-                }
-                let response = service
-                    .lock()
-                    .await
-                    .handle(LocalSttRequestEnvelope {
-                        request_id,
-                        request: LocalSttRequest::Shutdown,
-                    })
-                    .await;
-                send_envelope(&tx, response)?;
-            }
-            _ => {
-                let response = service.lock().await.handle(envelope).await;
-                send_envelope(&tx, response)?;
-            }
-        }
-        if should_exit {
-            break;
-        }
-    }
-
-    if let Some(previous) = active.lock().await.take() {
-        previous.cancel_flag.store(true, Ordering::SeqCst);
-        previous.handle.abort();
-    }
-    shutdown_signal.store(true, Ordering::Relaxed);
-    idle_watcher.abort();
-    drop(tx);
-    match writer_thread.join() {
-        Ok(result) => result?,
-        Err(_) => return Err(io::Error::other("sidecar writer panicked")),
-    }
-    Ok(())
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    static ENV_SIDECAR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-    fn warm_test_service(timeout_ms: u64) -> LocalSttSidecarService {
-        let mut service = LocalSttSidecarService::new();
-        service.state = WarmState {
-            loaded_model: Some(LocalSttModelSpec {
-                engine: "whisper.cpp".into(),
-                model_id: Some("turbo".into()),
-                model_path: Some("C:/models/turbo.bin".into()),
-                command_path: Some("C:/tools/whisper.cpp-vulkan/Release/whisper-cli.exe".into()),
-                accelerator: LocalSttAccelerator::Gpu,
-                profile: LocalSttProfile::Accurate,
-                idle_unload_after_ms: Some(timeout_ms),
-            }),
-            backend: Some("whisper_server".into()),
-            last_used_at: Some(Instant::now()),
-            embedded: None,
-        };
-        service
-    }
-
-    #[tokio::test]
-    async fn status_exposes_accelerator_device_profile_and_idle_timeout() {
-        let mut service = warm_test_service(300_000);
-        let response = service
-            .handle(LocalSttRequestEnvelope {
-                request_id: 1,
-                request: LocalSttRequest::Status,
-            })
-            .await;
-
-        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
-        else {
-            panic!("expected status response");
-        };
-        assert!(status.warm);
-        assert_eq!(status.accelerator, LocalSttAccelerator::Gpu);
-        assert_eq!(status.profile, LocalSttProfile::Accurate);
-        assert_eq!(status.idle_unload_after_ms, Some(300_000));
-    }
-
-    #[tokio::test]
-    async fn cancel_unloads_backend_and_reports_accepted() {
-        let mut service = warm_test_service(300_000);
-        let response = service
-            .handle(LocalSttRequestEnvelope {
-                request_id: 2,
-                request: LocalSttRequest::Cancel {
-                    target_request_id: None,
-                },
-            })
-            .await;
-
-        let LocalSttResponse::Ack(ack) = response.response.expect("expected ack response") else {
-            panic!("expected ack response");
-        };
-        assert!(ack.accepted);
-        assert!(!service.status().warm);
-    }
-
-    #[tokio::test]
-    async fn idle_watcher_unloads_without_new_request() {
-        let _guard = ENV_SIDECAR_LOCK.lock().await;
-        env::set_var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS", "10");
-        let service = Arc::new(tokio::sync::Mutex::new(warm_test_service(1)));
-        {
-            let mut service = service.lock().await;
-            service.state.last_used_at = Some(Instant::now() - Duration::from_millis(20));
-        }
-        let shutdown_signal = Arc::new(AtomicBool::new(false));
-        let watcher = spawn_idle_unload_watcher(Arc::clone(&service), Arc::clone(&shutdown_signal));
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        shutdown_signal.store(true, Ordering::Relaxed);
-        watcher.abort();
-        env::remove_var("MUNDUS_LOCAL_STT_IDLE_WATCH_INTERVAL_MS");
-        assert!(!service.lock().await.status().warm);
-    }
-
-    #[tokio::test]
-    async fn status_unloads_after_idle_timeout() {
-        let mut service = warm_test_service(1);
-        service.state.last_used_at = Some(Instant::now() - Duration::from_millis(5));
-
-        let response = service
-            .handle(LocalSttRequestEnvelope {
-                request_id: 3,
-                request: LocalSttRequest::Status,
-            })
-            .await;
-
-        let LocalSttResponse::Status(status) = response.response.expect("expected status response")
-        else {
-            panic!("expected status response");
-        };
-        assert!(!status.warm);
-        assert!(status.loaded_model.is_none());
-    }
-}
+#[path = "local_sidecar/tests.rs"]
+mod tests;

@@ -5,7 +5,7 @@
 //! Trust model: the archive URL, byte size and sha256 are compile-time
 //! constants inside the released Engine binary — the runtime manifest +
 //! Ed25519 envelope used to re-check exactly those same values at download
-//! time and was removed in KOS-321. HTTPS + GitHub Releases + the pinned
+//! time and was removed in. HTTPS + GitHub Releases + the pinned
 //! hash (the same model the self-updater and native apps already use) is
 //! the trust anchor now.
 

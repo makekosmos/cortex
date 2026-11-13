@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, chmod, rm, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, copyFile, chmod, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { dmgName, MANAGER_MAC_BIN, ENGINE_BINARY_UNIX } from "./brand.mjs";
+import { dmgName, MANAGER_MAC_BIN, ENGINE_BINARY_UNIX, PRODUCT_NAME } from "./brand.mjs";
 
 test("dmgName is Mundus-<ver>.dmg", () => {
   assert.equal(dmgName("1.2.3"), "Mundus-1.2.3.dmg");
 });
+
+// stageMacosApp codesigns the bundle on darwin, and codesign refuses plain
+// text files as executables, so stand in a real Mach-O there.
+async function writeFakeBinary(file, text) {
+  if (process.platform === "darwin") await copyFile("/usr/bin/true", file);
+  else await writeFile(file, text);
+}
 
 test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () => {
   const { stageMacosApp } = await import("./package-macos-dmg.mjs");
@@ -18,9 +25,9 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     const cargoTarget = path.join(root, "cargo-target");
     await mkdir(path.join(cargoTarget, "release"), { recursive: true });
     const engine = path.join(cargoTarget, "release", ENGINE_BINARY_UNIX);
-    const manager = path.join(cargoTarget, "release", "manager-gpui");
-    await writeFile(engine, "engine-bin");
-    await writeFile(manager, "manager-bin");
+    const manager = path.join(cargoTarget, "release", "manager");
+    await writeFakeBinary(engine, "engine-bin");
+    await writeFakeBinary(manager, "manager-bin");
     await chmod(engine, 0o755);
     await chmod(manager, 0o755);
     process.env.CARGO_TARGET_DIR = cargoTarget;
@@ -32,15 +39,23 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     await mkdir(helpersDir, { recursive: true });
     const helper = path.join(helpersDir, "hotkey-hold-monitor");
     const createdHelper = !existsSync(helper);
-    if (createdHelper) await writeFile(helper, "helper");
+    if (createdHelper) await writeFakeBinary(helper, "helper");
+    const trayHelper = path.join(helpersDir, "engine-menu-bar");
+    const createdTrayHelper = !existsSync(trayHelper);
+    if (createdTrayHelper) await writeFakeBinary(trayHelper, "tray-helper");
 
     const stageDir = path.join(root, "stage");
     const appPath = stageMacosApp({ version: "1.2.3", stageDir });
-    assert.ok(appPath.endsWith("Mundus Manager.app"));
+    // The app carries the product name alone: "Mundus.app".
+    assert.ok(appPath.endsWith(`${PRODUCT_NAME}.app`));
     assert.equal(existsSync(path.join(appPath, "Contents", "MacOS", MANAGER_MAC_BIN)), true);
     assert.equal(existsSync(path.join(appPath, "Contents", "MacOS", ENGINE_BINARY_UNIX)), true);
     assert.equal(
       existsSync(path.join(appPath, "Contents", "MacOS", "native", "macos", "hotkey-hold-monitor")),
+      true,
+    );
+    assert.equal(
+      existsSync(path.join(appPath, "Contents", "MacOS", "native", "macos", "engine-menu-bar")),
       true,
     );
     const plist = await readFile(path.join(appPath, "Contents", "Info.plist"), "utf8");
@@ -49,6 +64,7 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
       assert.equal(existsSync(path.join(appPath, "Contents", "Resources", "mundus.icns")), true);
     }
     if (createdHelper) await rm(helper, { force: true });
+    if (createdTrayHelper) await rm(trayHelper, { force: true });
   } finally {
     if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
     else process.env.CARGO_TARGET_DIR = previous;

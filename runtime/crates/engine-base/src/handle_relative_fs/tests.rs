@@ -122,7 +122,7 @@ fn root_replacement_stays_on_open_handle() {
     );
     // The rename moved the tempdir's contents to a sibling path — drop of
     // `td` only covers the live path, so remove the ".old" tree or it
-    // leaks into %TEMP% (KOS-270).
+    // leaks into %TEMP%.
     fs::remove_dir_all(td.path().with_extension("old")).unwrap();
 }
 #[cfg(unix)]

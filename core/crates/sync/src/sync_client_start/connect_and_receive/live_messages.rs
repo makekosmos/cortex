@@ -1,0 +1,282 @@
+use super::super::send_msg;
+use super::super::{
+    AuthenticatedTx, ClientFeedInFlight, ClientMessageSender, ClientOnChangeCallback, TAG,
+};
+use domain::sync_contracts::protocol_negotiation::ProtocolCapability;
+use domain::sync_contracts::wire::LanSyncMessage;
+use domain::sync_storage::{OutboundAck, SyncRuntimeStorage};
+use domain::types::SyncEntity;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub(super) async fn handle_task_merge_batch(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    local_device_id: &str,
+    tx: &ClientMessageSender,
+    authenticated_tx: &AuthenticatedTx,
+    batch: domain::task_merge_sync::TaskMergeBatch,
+) -> Result<(), String> {
+    let supported = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session.peer_id == peer_device_id
+                && session.outbound_snapshot.has_been_sent()
+                && session
+                    .protocol
+                    .capabilities
+                    .contains(&ProtocolCapability::TaskMergeBootstrapV2)
+        });
+    if !supported {
+        return Ok(());
+    }
+    let local_profile = storage.load_local_sync_profile(local_device_id).await?;
+    let expected_identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
+    if batch.identity != expected_identity {
+        return Ok(());
+    }
+    let ack = storage
+        .apply_task_merge_batch(peer_device_id, local_device_id, &expected_identity, &batch)
+        .await?;
+    send_msg(
+        tx,
+        LanSyncMessage::TaskMergeBatchAck {
+            batch_id: ack.batch_id,
+            through_position: ack.through_position,
+            policy_identity: expected_identity,
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn handle_feed_ack_message(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &ClientMessageSender,
+    feed_in_flight: &ClientFeedInFlight,
+    authenticated_tx: &AuthenticatedTx,
+    change_id: &str,
+    policy_identity: Option<domain::sync_policy::PolicyIdentity>,
+    receipt_ack: bool,
+) -> bool {
+    if !super::snapshot_ack::was_sent(authenticated_tx).await {
+        return true;
+    }
+    let result = if receipt_ack {
+        handle_receipt_ack(
+            storage,
+            peer_device_id,
+            tx,
+            feed_in_flight,
+            authenticated_tx,
+            change_id,
+            policy_identity,
+        )
+        .await
+    } else {
+        handle_applied_ack(
+            storage,
+            peer_device_id,
+            tx,
+            feed_in_flight,
+            authenticated_tx,
+            change_id,
+            policy_identity,
+        )
+        .await
+    };
+    if let Err(error) = result {
+        let ack_kind = if receipt_ack {
+            "receipt"
+        } else {
+            "committed feed"
+        };
+        eprintln!("{TAG} {ack_kind} ACK failed: {error}");
+        false
+    } else {
+        true
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn handle_live_change(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    authenticated_tx: &AuthenticatedTx,
+    local_device_id: &str,
+    peer_device_id: &str,
+    tx: &ClientMessageSender,
+    on_change: &Arc<Mutex<Option<ClientOnChangeCallback>>>,
+    change_id: String,
+    entity: SyncEntity,
+    policy_identity: Option<domain::sync_policy::PolicyIdentity>,
+) -> Result<(), String> {
+    let (protocol, local_profile) = {
+        let session = authenticated_tx.lock().await;
+        let profile = storage.load_local_sync_profile(local_device_id).await?;
+        (
+            session.as_ref().map(|session| session.protocol.clone()),
+            profile,
+        )
+    };
+    let notification_entity = entity.clone();
+    let prepared = crate::inbound_live_change::prepare_live_change(
+        storage.as_ref(),
+        crate::inbound_live_change::IncomingLiveChange {
+            protocol: protocol.as_ref(),
+            local_profile: local_profile.as_ref(),
+            local_device_id,
+            peer_device_id,
+            change_id: change_id.clone(),
+            entity,
+            policy_identity: policy_identity.clone(),
+        },
+    )
+    .await?;
+    if prepared.receipt_recorded {
+        send_msg(
+            tx,
+            LanSyncMessage::LiveReceiptAck {
+                policy_identity: policy_identity.clone(),
+                change_id: change_id.clone(),
+            },
+        )
+        .await?;
+    }
+
+    let result = crate::inbound_live_change::apply_live_change(
+        storage.as_ref(),
+        prepared,
+        if policy_identity.is_some() {
+            crate::inbound_live_change::VersionVectorWriteMode::MergeConcurrent
+        } else {
+            crate::inbound_live_change::VersionVectorWriteMode::Replace
+        },
+    )
+    .await?;
+    match result.disposition {
+        crate::inbound_live_change::LiveChangeDisposition::Applied { notify_local } => {
+            if notify_local {
+                if let Some(handler) = on_change.lock().await.as_ref() {
+                    handler(notification_entity);
+                }
+            }
+        }
+        crate::inbound_live_change::LiveChangeDisposition::Stale => {}
+        crate::inbound_live_change::LiveChangeDisposition::Pending => return Ok(()),
+    }
+    send_msg(
+        tx,
+        LanSyncMessage::LiveAck {
+            change_id,
+            policy_identity,
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn handle_feed_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &ClientMessageSender,
+    feed_in_flight: &ClientFeedInFlight,
+    change_id: &str,
+    ack: domain::sync_storage::OutboundAck,
+    receipt_ack: bool,
+    policy_bound: bool,
+    policy_identity: Option<domain::sync_policy::PolicyIdentity>,
+) -> Result<(), String> {
+    crate::sync_client::acknowledge_client_feed(
+        storage,
+        peer_device_id,
+        change_id,
+        tx,
+        feed_in_flight,
+        ack,
+        receipt_ack,
+        policy_bound,
+        policy_identity,
+    )
+    .await
+}
+
+pub(super) async fn handle_applied_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &ClientMessageSender,
+    feed_in_flight: &ClientFeedInFlight,
+    authenticated_tx: &AuthenticatedTx,
+    change_id: &str,
+    policy_identity: Option<domain::sync_policy::PolicyIdentity>,
+) -> Result<(), String> {
+    let receipt_ack = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session
+                .protocol
+                .capabilities
+                .contains(&ProtocolCapability::DurableReceiptAckV1)
+        });
+    let policy_bound = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session
+                .protocol
+                .capabilities
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1)
+        });
+    handle_feed_ack(
+        storage,
+        peer_device_id,
+        tx,
+        feed_in_flight,
+        change_id,
+        OutboundAck::Applied,
+        receipt_ack,
+        policy_bound,
+        policy_identity,
+    )
+    .await
+}
+
+pub(super) async fn handle_receipt_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &ClientMessageSender,
+    feed_in_flight: &ClientFeedInFlight,
+    authenticated_tx: &AuthenticatedTx,
+    change_id: &str,
+    policy_identity: Option<domain::sync_policy::PolicyIdentity>,
+) -> Result<(), String> {
+    let policy_bound = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session
+                .protocol
+                .capabilities
+                .contains(&ProtocolCapability::PolicyBoundDeliveryV1)
+        });
+    handle_feed_ack(
+        storage,
+        peer_device_id,
+        tx,
+        feed_in_flight,
+        change_id,
+        OutboundAck::DurableReceipt,
+        true,
+        policy_bound,
+        policy_identity,
+    )
+    .await
+}

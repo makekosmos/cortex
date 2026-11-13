@@ -1,7 +1,7 @@
 //! Ports of the deleted PowerShell test suites
 //! (engine-install-headless.test.mjs / engine-post-install-headless.test.mjs)
 //! against an isolated temp target root — every behaviour the scripts had a
-//! test for keeps one here (KOS-306). Registry-touching tests point at
+//! test for keeps one here. Registry-touching tests point at
 //! scratch HKCU subkeys, never the real Run/Uninstall state.
 
 use std::path::{Path, PathBuf};
@@ -59,12 +59,6 @@ fn fixture(version: &str) -> (TempDir, PathBuf, PathBuf, install::Options) {
     let options = install::Options {
         manifest,
         target_root: target_root.clone(),
-        // A scratch key that does not exist: the migration short-circuits.
-        legacy_registry_key: format!(
-            r"Software\MundusInstallerTest\{}\absent",
-            std::process::id()
-        ),
-        legacy_shortcut: None,
     };
     (root, payload, target_root, options)
 }
@@ -130,7 +124,6 @@ fn install_never_downgrades_a_newer_verified_engine() {
     let older_options = install::Options {
         manifest,
         target_root: target_root.clone(),
-        ..options
     };
     assert_eq!(install::install(&older_options).unwrap()["action"], "kept");
     assert_eq!(current_version(&target_root), "2.0.0");
@@ -191,7 +184,7 @@ fn same_version_rebuild(options: install::Options) -> (TempDir, install::Options
 
 #[test]
 fn a_failed_move_in_restores_the_previous_install() {
-    // KOS-306 round 2: the second rename of a same-version replace is forced
+    // round 2: the second rename of a same-version replace is forced
     // to fail through the move_in seam — the previously installed Engine
     // must still be intact afterwards, not deleted.
     let (_root, _payload, target_root, options) = fixture("1.2.3");
@@ -222,7 +215,7 @@ fn a_failed_move_in_restores_the_previous_install() {
 
 #[test]
 fn a_failed_restore_reports_where_the_engine_stayed() {
-    // KOS-306 round 3: when even the restore rename fails, the error must
+    // round 3: when even the restore rename fails, the error must
     // name the aside dir — otherwise the previous Engine is silently lost.
     let (_root, _payload, target_root, options) = fixture("1.2.3");
     install::install(&options).unwrap();
@@ -270,46 +263,11 @@ fn unsafe_manifest_paths_and_sizes_are_rejected_before_installation() {
         let options = install::Options {
             manifest: manifest_path,
             target_root: root.path().join("installed"),
-            legacy_registry_key: format!(
-                r"Software\MundusInstallerTest\{}\absent",
-                std::process::id()
-            ),
-            legacy_shortcut: None,
         };
         // "ok.exe" fails too — the declared payload file does not exist.
         assert!(install::install(&options).is_err(), "{name}");
         assert!(!root.path().join("escape.exe").exists());
     }
-}
-
-#[cfg(windows)]
-#[test]
-fn install_takes_over_an_existing_standalone_kosmos_engine_registration() {
-    let (_root, _payload, target_root, mut options) = fixture("1.2.3");
-    let scratch = format!(
-        r"Software\MundusInstallerTest\{}\takeover",
-        std::process::id()
-    );
-    let shortcut = _root.path().join("Kosmos Engine.lnk"); // MIGRATION(KOS-267)
-    std::fs::write(&shortcut, b"fake shortcut").unwrap();
-    let old_root = _root.path().join("old-standalone-engine");
-    std::fs::create_dir_all(&old_root).unwrap();
-    std::fs::write(old_root.join("Uninstall.exe"), b"old uninstaller").unwrap();
-    registry::create_key(&scratch).unwrap();
-    registry::write_sz(&scratch, "DisplayName", "Kosmos Engine").unwrap();
-    registry::write_sz(&scratch, "InstallLocation", &old_root.to_string_lossy()).unwrap();
-    options.legacy_registry_key = scratch.clone();
-    options.legacy_shortcut = Some(shortcut.clone());
-
-    install::install(&options).unwrap();
-    assert!(!registry::key_exists(&scratch).unwrap());
-    assert!(!shortcut.exists(), "legacy Start Menu shortcut removed");
-    assert!(
-        !old_root.join("Uninstall.exe").exists(),
-        "orphaned standalone uninstaller cleaned up"
-    );
-    assert_eq!(current_version(&target_root), "1.2.3");
-    let _ = registry::delete_tree(&scratch);
 }
 
 fn post_install_options(root: &Path) -> post_install::Options {
@@ -403,8 +361,9 @@ fn migrate_autostart_seeds_run_value_and_enabled_marker() {
 
 #[cfg(windows)]
 #[test]
-fn disabled_startup_approved_marker_under_a_legacy_name_skips_autostart() {
-    for (marker_name, state) in [("Mundus Engine", 3u8), ("Kosmos Engine", 6u8)] {
+fn disabled_startup_approved_marker_skips_autostart() {
+    for state in [3u8, 6u8] {
+        let marker_name = "Mundus Engine";
         let root = installed_root("1.2.3");
         let mut options = post_install_options(root.path());
         options.migrate_autostart = true;

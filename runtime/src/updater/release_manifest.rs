@@ -1,4 +1,4 @@
-//! Parser for the release `manifest.json` (KOS-350) — the one release
+//! Parser for the release `manifest.json` — the one release
 //! document `desktop/scripts/release-manifest.mjs` writes and publishes next
 //! to the installers. The updater needs only `version` and the entry for its
 //! own platform (`file`, `size`, `sha512`); every other field (source
@@ -21,7 +21,6 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use super::manifest::ManifestFile;
 use super::UpdaterError;
 
 pub(crate) const MANIFEST_SCHEMA: &str = "mundus-release-manifest";
@@ -42,7 +41,16 @@ struct PlatformEntry {
     sha512: String,
 }
 
-/// What a feed says about the newest release for one platform. `file` is
+/// The installer for one platform: filename (relative, joined onto the feed
+/// base by the caller), base64 sha512 and byte size.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManifestFile {
+    pub(crate) url: String,
+    pub(crate) sha512: String,
+    pub(crate) size: u64,
+}
+
+/// What `manifest.json` says about the newest release for one platform. `file` is
 /// `None` when the release exists but has no build for this platform (for
 /// example the macOS job has not attached its DMG yet).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +103,7 @@ mod tests {
       "platforms": {
         "win": {
           "file": "Mundus-Setup-0.10.6.exe",
-          "url": "https://github.com/makekosmos/cortex/releases/download/v0.10.6/Mundus-Setup-0.10.6.exe",
+          "url": "https://example.test/v0.10.6/Mundus-Setup-0.10.6.exe",
           "size": 122041993,
           "sha512": "CX4w1234==",
           "target": "x86_64-pc-windows-msvc"
@@ -133,7 +141,10 @@ mod tests {
             &FIXTURE.replace("mundus-release-manifest", "other"),
             &FIXTURE.replace("\"size\": 122041993", "\"size\": 0"),
             &FIXTURE.replace("\"sha512\": \"CX4w1234==\"", "\"sha512\": \"\""),
-            r#"{"schema":"mundus-release-manifest","schema_version":1,"version":"1.0.0","platforms":{}}"#,
+            concat!(
+                r#"{"schema":"mundus-release-manifest","schema_version":1,"#,
+                r#""version":"1.0.0","platforms":{}}"#
+            ),
         ] {
             assert!(
                 matches!(

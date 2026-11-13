@@ -1,4 +1,4 @@
-//! Process handling for the installer subcommands (KOS-306).
+//! Process handling for the installer subcommands.
 //!
 //! Replaces the fifteen `taskkill /F /IM …` spawns the NSIS script used to
 //! run, and the `Get-CimInstance Win32_Process` lookups the PowerShell
@@ -6,7 +6,7 @@
 //! matching a process to an exe path uses `QueryFullProcessImageNameW` —
 //! the same semantics as `Win32_Process.ExecutablePath`.
 //!
-//! KOS-309: a kill is only done when the process is *gone* — the installer's
+//! A kill is only done when the process is *gone* — the installer's
 //! next step renames directories the dying process still holds handles into.
 //! `TerminateProcess` merely requests the exit, so every kill waits on the
 //! process handle, and `kill-product-processes` exits non-zero when any
@@ -26,36 +26,18 @@ use serde::Serialize;
 /// hanging it.
 const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Engine binary file names from every product generation, oldest first.
-/// MIGRATION(KOS-267): drop the legacy names after 2026-11-01.
-pub(crate) const ENGINE_BINARY_NAMES: &[&str] = &[
-    "mundus-engine.exe",
-    "kepler-backend.exe", // MIGRATION(KOS-267)
-];
+/// Engine binary file names.
+pub(crate) const ENGINE_BINARY_NAMES: &[&str] = &["mundus-engine.exe"];
 
-/// Every image name the installer kills before touching files: the current
-/// product plus the ones a 0.9.x/Electron-era install may have left running.
-/// MIGRATION(KOS-267): remove the legacy names after 2026-11-01.
+/// Every image name the installer kills before touching files.
 const PRODUCT_PROCESS_NAMES: &[&str] = &[
     "Mundus.exe",
     "mundus-engine.exe",
     "Mundus Manager.exe",
-    // Store-installed native apps (KOS-265) — must not hold their dir while
+    // Store-installed native apps — must not hold their dir while
     // the Engine or an uninstall replaces/removes it.
-    "agenda-gpui.exe",
     "memoria-gpui.exe",
     "dictation-gpui.exe",
-    "Agenda.exe",    // MIGRATION(KOS-267)
-    "Memoria.exe",   // MIGRATION(KOS-267)
-    "Dictation.exe", // MIGRATION(KOS-267)
-    // 0.9.x installs leave an orphaned ark-core-rpc.exe child holding the DB.
-    "ark-core-rpc.exe",     // MIGRATION(KOS-267)
-    "Kosmos.exe",           // MIGRATION(KOS-267)
-    "kepler-backend.exe",   // MIGRATION(KOS-267)
-    "Kosmos Manager.exe",   // MIGRATION(KOS-267)
-    "Kosmos Agenda.exe",    // MIGRATION(KOS-267)
-    "Kosmos Memoria.exe",   // MIGRATION(KOS-267)
-    "Kosmos Dictation.exe", // MIGRATION(KOS-267)
 ];
 
 /// whisper-server.exe — the local-STT sidecar the Engine spawns from
@@ -330,16 +312,6 @@ mod imp {
             }
         }
         Ok(report)
-    }
-
-    /// Kill every process whose image name is in `names`. Returns the
-    /// per-name result.
-    pub fn kill_by_names(names: &[&str]) -> Result<KillReport, String> {
-        let targets: Vec<KillTarget> = names
-            .iter()
-            .map(|name| KillTarget { name, under: None })
-            .collect();
-        kill_by_targets_with(&targets, &terminate_and_wait)
     }
 
     /// All `kill-product-processes` targets: product names plus the

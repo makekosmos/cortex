@@ -28,20 +28,3 @@ pub const PRODUCT_NAME: &str = crate::brand::PRODUCT_NAME;
 /// `mundus-engine.exe` so `taskkill /IM mundus-engine.exe` in the
 /// installer/uninstaller never kills the running service.
 pub const SERVICE_BINARY_NAME: &str = "mundus-privileged-service.exe";
-
-/// Services from previous releases that `privileged install`/`uninstall`
-/// removes. `KosmosSystemSvc` = the old focus-svc service; `KeplerFocusSvc` =
-/// its pre-rename name.
-// MIGRATION(KOS-267): remove after 2026-11-01.
-pub const LEGACY_SERVICE_NAMES: &[&str] = &["KosmosSystemSvc", "KeplerFocusSvc"];
-
-/// Pipe names the client still probes after the primary pipe, paired with the
-/// service name expected to own each (for server-PID verification), for
-/// talking to a not-yet-migrated legacy service. Legacy services speak a
-/// subset of the current protocol (they ignore the extra `protocol_version`
-/// field).
-// MIGRATION(KOS-267): remove after 2026-11-01.
-pub const LEGACY_PIPES: &[(&str, &str)] = &[
-    (r"\\.\pipe\kosmos-system-service", "KosmosSystemSvc"), // MIGRATION(KOS-267)
-    (r"\\.\pipe\kepler-focus-svc", "KeplerFocusSvc"),       // MIGRATION(KOS-267)
-];

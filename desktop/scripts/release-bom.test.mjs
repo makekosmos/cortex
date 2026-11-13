@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { bytes, documentHash } from "./release-utils.mjs";
-import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
+import { deriveReleaseBom } from "./release-bom.mjs";
 
 const COMMIT = "a".repeat(40);
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
@@ -49,7 +49,6 @@ test("the BOM is derived entirely from the checkout", async () => {
   });
   assert.deepEqual(bom.bytes, bytes(bom.value));
   assert.equal(bom.digest, documentHash(bom.bytes));
-  assert.equal(RELEASE_BOM_FILE, "release-bom.v2.json");
 });
 
 test("the same checkout always yields the same BOM bytes", async () => {

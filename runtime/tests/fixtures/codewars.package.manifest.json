@@ -16,11 +16,11 @@
     },
     {
       "capability": "ark.write",
-      "scopes": ["upsert_object_type", "upsert_object", "set_sync_kv"]
+      "scopes": ["upsert_object_type", "objects.upsert", "kv.set"]
     },
     {
       "capability": "ark.read",
-      "scopes": ["list_objects", "get_sync_kv"]
+      "scopes": ["objects.list", "kv.get"]
     }
   ],
   "targets": [

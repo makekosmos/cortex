@@ -180,7 +180,7 @@ fn sync_managed_block_via_pipe(_block: &str, _domains: &[String]) -> Result<(), 
     Err("privileged operations are Windows-only".to_string())
 }
 
-// ---------- firewall rule for the current Engine exe (KOS-269) ----------
+// ---------- firewall rule for the current Engine exe ----------
 
 /// Ask the installed service to point its managed inbound allow rule at the
 /// exe calling it (the service derives the path from the pipe client). An

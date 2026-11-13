@@ -1,11 +1,11 @@
-//! Sweep of interrupted atomic-write leftovers (KOS-301).
+//! Sweep of interrupted atomic-write leftovers.
 //!
 //! Several modules write into the Engine data dir via the same temp+rename
 //! shape; a crash between `File::create` and `rename` leaves the temp file
 //! forever (e.g. `.protocol-usage.json.tmp.1234`). Every writer sweeps only
 //! its own directory, only names matching that writer's own temp convention,
 //! and only files older than [`LEFTOVER_GRACE`] — a live atomic write holds
-//! its temp for seconds, so the grace window (same reasoning as KOS-300's
+//! its temp for seconds, so the grace window (same reasoning as 's
 //! `RESTORE_TEMP_GRACE`) is what protects an in-flight write without any
 //! cross-process flag.
 //!
@@ -88,9 +88,8 @@ pub fn sweep(
 /// targets it:
 /// - `.<name>.tmp.<pid>` / `.<name>.tmp.<pid>.<nonce>` —
 ///   `lock_file::write_owner_only_json` (engine.lock.json,
-///   protocol-usage.json, …), `pomodoro_host`, `dictation::config`;
-/// - `<name>.json.tmp` and `<name>.json.tmp.<pid>` — `integrations::config`,
-///   `grant_authority`, `engine_settings`.
+///   protocol-usage.json, …), `dictation::config`;
+/// - `<name>.json.tmp` and `<name>.json.tmp.<pid>` — `engine_settings`.
 ///
 /// Both shapes are anchored on the `.tmp` infix those writers bake into the
 /// name, so a real JSON/user file at the root is never matched.
@@ -161,10 +160,9 @@ mod tests {
         for name in [
             ".engine.lock.json.tmp.42",
             ".protocol-usage.json.tmp.42",
-            ".pomodoro-state.json.tmp.42",
             ".dictation-config.json.tmp.42.nonce",
-            "integrations.json.tmp",
-            "grant-authority.json.tmp",
+            "settings.json.tmp",
+            "settings.json.tmp.42",
             "engine-manager-settings.json.tmp.42",
         ] {
             age(&write(dir.path(), name), 2 * 60 * 60);
@@ -175,7 +173,7 @@ mod tests {
 
         let report = sweep_engine_root(dir.path());
 
-        assert_eq!(report.removed, 7);
+        assert_eq!(report.removed, 6);
         assert_eq!(names(dir.path()).len(), 3);
     }
 

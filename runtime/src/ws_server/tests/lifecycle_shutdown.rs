@@ -21,7 +21,7 @@ async fn connect_retrying(port: u16) -> tokio::net::TcpStream {
 
 #[tokio::test]
 async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
-    let (_dir, server) = production_ws_fixture().await;
+    let (_dir, ark, server) = production_ws_fixture().await;
     let shutdown = server.shutdown_handle();
     shutdown.set_response_deadline(Duration::from_millis(50));
     let port = server.port();
@@ -103,6 +103,8 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
     assert_eq!(shutdown.task_count(), 0);
     assert_eq!(dispatcher.live_owner_count(), 0);
     assert_eq!(bus.registration_count_sync(), 0);
+    drop(dispatcher);
+    shutdown_test_ark(ark).await;
 }
 
 #[tokio::test]
@@ -110,7 +112,7 @@ async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacit
     // Small limit: fd exhaustion, not semaphore saturation, is what a
     // 129-socket burst would exercise on a 256-fd host.
     const TEST_CAPACITY: usize = 8;
-    let (_dir, server) = production_ws_fixture().await;
+    let (_dir, ark, server) = production_ws_fixture().await;
     let server = server.with_test_capacity(TEST_CAPACITY);
     let port = server.port();
     let dispatcher = server.dispatcher();
@@ -141,4 +143,8 @@ async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacit
     assert_eq!(shutdown.task_count(), 0);
     assert_eq!(dispatcher.live_owner_count(), 0);
     assert_eq!(shutdown.available_capacity(), TEST_CAPACITY);
+    drop(sockets);
+    drop(rejected);
+    drop(dispatcher);
+    shutdown_test_ark(ark).await;
 }

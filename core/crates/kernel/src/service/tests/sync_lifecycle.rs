@@ -1,0 +1,272 @@
+use super::*;
+
+#[tokio::test]
+async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
+    let db_path = dir.path().join("ark.db");
+    initialize_test_database(&state, db_path.to_string_lossy().to_string())
+        .await
+        .unwrap();
+
+    let backend = Arc::new(crate::db::SqliteStorageBackend::with_db_handle(
+        get_db_handle(&state).unwrap(),
+    ));
+    backend.set_device_id("device-local").unwrap();
+
+    let peer = PeerRecord {
+        device_id: "peer-123".to_string(),
+        device_name: "Peer 123".to_string(),
+        addresses: vec!["192.168.1.20:21531".to_string()],
+        last_seen: "2026-06-17T00:00:00.000Z".to_string(),
+        last_address: None,
+        platform: None,
+        app_version: None,
+    };
+    let client = Arc::new(crate::direct_client::create_direct_client(
+        backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
+        crate::direct_client::DirectClientConfig::new(
+            peer,
+            "device-local".to_string(),
+            "Local Device".to_string(),
+            "space-a".to_string(),
+            vec![],
+            None,
+        ),
+    ));
+
+    let clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>> = Arc::new(TokioMutex::new(
+        HashMap::from([("peer-123".to_string(), client.clone())]),
+    ));
+    let runtime = SyncRuntime {
+        server: Arc::new(crate::sync_server::SyncServer::new(
+            backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
+        )),
+        storage: backend,
+        clients: clients.clone(),
+        relay: None,
+        transport_choice: Some(TransportChoice::None),
+        start_params: SyncStartParams {
+            space_id: "space-a".to_string(),
+            device_id: "device-local".to_string(),
+            device_name: "Local Device".to_string(),
+            port: None,
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: true,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        },
+        iroh_our_ticket: watch::channel(None).1,
+        beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
+        space_id: "space-a".to_string(),
+        device_id: "device-local".to_string(),
+        device_name: "Local Device".to_string(),
+        auth_secret: None,
+        own_addresses: Arc::new(TokioMutex::new(Vec::new())),
+    };
+    *state.sync.lock().await = Some(Arc::new(runtime));
+
+    let mut event_rx = crate::events::subscribe();
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let error = handle_disconnect_peer(&state, "peer-123".to_string())
+        .await
+        .expect_err("failed peer persistence must be reported to the caller");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        client.is_stopped(),
+        "outbound client must stop despite DB failure"
+    );
+    assert!(clients.lock().await.is_empty());
+    let emitted_disconnect_for_peer = std::iter::from_fn(|| event_rx.try_recv().ok())
+        .any(|event| event["event"] == "peer_disconnected" && event["device_id"] == "peer-123");
+    assert!(
+        !emitted_disconnect_for_peer,
+        "failed persistence must not emit a success event for peer-123"
+    );
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle_disconnect_peer(&state, "peer-123".to_string())
+        .await
+        .unwrap();
+
+    assert!(client.is_stopped());
+    assert!(clients.lock().await.is_empty());
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut saw_disconnect = false;
+    let mut saw_list = false;
+    while !(saw_disconnect && saw_list) {
+        match event_rx.try_recv() {
+            Ok(event) => {
+                if event["event"] == "peer_disconnected" {
+                    assert_eq!(event["device_id"], "peer-123");
+                    saw_disconnect = true;
+                } else if event["event"] == "peer_list_updated" {
+                    saw_list = true;
+                }
+            }
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+            | Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {
+                assert!(
+                    std::time::Instant::now() <= deadline,
+                    "timed out waiting for disconnect events"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => {
+                panic!("event bus is process-wide and never closes");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn upsert_object_broadcasts_live_change_to_peers() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
+
+    let captured = setup_sync_with_capturing_transport(&state).await;
+
+    let object = ArkObjectWrite {
+        id: "live-obj-1".to_string(),
+        type_id: "core.note".to_string(),
+        type_version: Some("0.1.0".to_string()),
+        title: "Live Test".to_string(),
+        content_json: json!({ "type": "doc", "content": [{"type": "paragraph"}] }),
+        props_json: json!({"description": null, "extensions": {}}),
+        created_at: "2026-06-17T00:00:00.000Z".to_string(),
+        updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+        deleted_at: None,
+    };
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object,
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("test-device".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Небольшая пауза — broadcast_local_change запускается как spawn
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    let msgs = captured.lock().await;
+    let live_change = msgs.iter().find(|m| {
+        matches!(m, ::domain::sync_contracts::wire::LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "live-obj-1" && entity.entity_type == "object" &&
+                    entity.deleted.is_none())
+    });
+    assert!(
+        live_change.is_some(),
+        "UpsertObject должен рассылать LiveChange(entity_type=object, id=live-obj-1, \
+             deleted=None); \
+             получено сообщений: {}, содержимое: {:?}",
+        msgs.len(),
+        msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
+    );
+
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+#[tokio::test]
+async fn delete_object_broadcasts_live_change_with_deleted_flag() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    initialize_test_database(&state, fixture.db_path().to_string_lossy().into_owned())
+        .await
+        .unwrap();
+
+    // Создаём объект сначала
+    let object = ArkObjectWrite {
+        id: "live-obj-del".to_string(),
+        type_id: "core.note".to_string(),
+        type_version: Some("0.1.0".to_string()),
+        title: "To Delete".to_string(),
+        content_json: json!({ "type": "doc", "content": [{"type": "paragraph"}] }),
+        props_json: json!({"description": null, "extensions": {}}),
+        created_at: "2026-06-17T00:00:00.000Z".to_string(),
+        updated_at: "2026-06-17T00:00:00.000Z".to_string(),
+        deleted_at: None,
+    };
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object,
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("test-device".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let captured = setup_sync_with_capturing_transport(&state).await;
+
+    handle_request(
+        &state,
+        Request::DeleteObject {
+            id: "live-obj-del".to_string(),
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("test-device".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    let msgs = captured.lock().await;
+    let live_change = msgs.iter().find(|m| {
+        matches!(m, ::domain::sync_contracts::wire::LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "live-obj-del"
+                    && entity.entity_type == "object"
+                    && entity.deleted == Some(true))
+    });
+    assert!(
+        live_change.is_some(),
+        "DeleteObject должен рассылать LiveChange(deleted=Some(true)); \
+             получено: {:?}",
+        msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
+    );
+
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+// -----------------------------------------------------------------------
+// RED-тесты: fail-closed + атомарность entity/sync-meta (2026-06-18)
+// -----------------------------------------------------------------------

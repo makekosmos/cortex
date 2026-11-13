@@ -4,7 +4,7 @@
 //
 // Default platform is win: publish-release.mjs invokes the checker with no
 // --platform, and that must keep verifying platforms.win of manifest.json
-// (+ legacy latest.yml during dual-publish) on makekosmos/cortex.
+// on makekosmos/cortex.
 
 import { releaseTarget } from "./release-repos.mjs";
 
@@ -35,7 +35,7 @@ export function parseArgs(argv) {
   return result;
 }
 
-/** Platform, repo, manifest and legacy channel file. Default platform is win. */
+/** Platform, repo and manifest. Default platform is win. */
 export function resolveVerifyTarget(argv) {
   const parsed = parseArgs(argv);
   const platform = parsed.platform ?? "win";

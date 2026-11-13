@@ -97,9 +97,29 @@ let wantDoubleFn = CommandLine.arguments.count >= 8 && parseBool(CommandLine.arg
 // событие не перехватываем.
 let kEscKeyCode: CGKeyCode = 53
 let kFnKeyCode: CGKeyCode = 63
-let kDoubleTapMs: Double = 0.5
+let kDoubleTapMs: Double = 0.8
 var lastEscDown = Date.distantPast
 var lastFnDown = Date.distantPast
+var activeTap: CFMachPort?
+var askedForListenAccess = false
+
+func listenAccessGranted() -> Bool {
+    if #available(macOS 10.15, *) {
+        return CGPreflightListenEventAccess()
+    }
+    return true
+}
+
+func askForListenAccess() {
+    if askedForListenAccess || listenAccessGranted() {
+        return
+    }
+    askedForListenAccess = true
+    if #available(macOS 10.15, *) {
+        _ = CGRequestListenEventAccess()
+    }
+    emit(["needsInputMonitoring": true])
+}
 
 let statePtr = Unmanaged.passRetained(state).toOpaque()
 let eventMask: CGEventMask =
@@ -112,6 +132,13 @@ let callback: CGEventTapCallBack = { _, type, event, userInfo in
     let state = Unmanaged<MonitorState>.fromOpaque(userInfo).takeUnretainedValue()
 
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        // A disabled tap stays dead until it is switched back on. Without
+        // this, the first timeout (or a missing Input Monitoring grant)
+        // makes every later Fn press disappear.
+        if let tap = activeTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+        askForListenAccess()
         return Unmanaged.passUnretained(event)
     }
 
@@ -169,19 +196,34 @@ let callback: CGEventTapCallBack = { _, type, event, userInfo in
     return Unmanaged.passUnretained(event)
 }
 
-guard let eventTap = CGEvent.tapCreate(
-    tap: .cghidEventTap,
-    place: .headInsertEventTap,
-    options: .listenOnly,
-    eventsOfInterest: eventMask,
-    callback: callback,
-    userInfo: statePtr
-) else {
-    emit([
-        "error": "Failed to create event tap. Enable Input Monitoring/Accessibility permissions for SuperCmd."
-    ])
+askForListenAccess()
+installParentWatchdogIfNeeded()
+
+// The grant dialog is asynchronous. Keep trying until the tap exists, or
+// until the parent Engine exits and the watchdog stops this process.
+var eventTap: CFMachPort?
+while eventTap == nil {
+    eventTap = CGEvent.tapCreate(
+        tap: .cghidEventTap,
+        place: .headInsertEventTap,
+        options: .listenOnly,
+        eventsOfInterest: eventMask,
+        callback: callback,
+        userInfo: statePtr
+    )
+    if eventTap == nil {
+        if let raw = ProcessInfo.processInfo.environment["MUNDUS_PARENT_PID"],
+           let parentPid = Int32(raw), kill(parentPid, 0) != 0 {
+            exit(0)
+        }
+        Thread.sleep(forTimeInterval: 1.0)
+    }
+}
+guard let eventTap else {
+    emit(["error": "Failed to create event tap"])
     exit(2)
 }
+activeTap = eventTap
 
 guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0) else {
     emit(["error": "Failed to create run loop source"])
@@ -189,7 +231,6 @@ guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 
 }
 
 CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-installParentWatchdogIfNeeded()
 CGEvent.tapEnable(tap: eventTap, enable: true)
 emit(["ready": true])
 CFRunLoopRun()

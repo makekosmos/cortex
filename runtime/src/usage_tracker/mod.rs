@@ -43,7 +43,7 @@ const USAGE_SPAN_HEARTBEAT_SECS: i64 = 60;
 /// A persisted usage span may extend at most this far past its last flush:
 /// span boundaries are wall-clock, so a stalled tick (sleep/hibernate) would
 /// otherwise stretch the last foreground span across the whole sleep —
-/// the same phantom-hours bug as session deltas (KOS-287).
+/// the same phantom-hours bug as session deltas.
 const MAX_USAGE_SPAN_GAP_SECS: i64 = USAGE_SPAN_HEARTBEAT_SECS * 4;
 const WINDOW_TITLE_STABILITY_MS: i64 = 10_000;
 const HIDDEN_INACTIVE_SESSION_TTL_MS: i64 = 10 * 60_000;
@@ -426,7 +426,7 @@ async fn run(
 /// would be credited to every tracked session — and to whatever window
 /// happened to stay focused. Ticks land at ~poll_interval, so 4× poll (with a
 /// 60s floor) covers scheduling jitter without letting a stall mint phantom
-/// hours (KOS-287).
+/// hours.
 fn capped_tick_delta_ms(elapsed: Duration, poll_interval: Duration) -> i64 {
     let cap_ms = (poll_interval.as_millis() * 4)
         .max(60_000)
@@ -562,7 +562,7 @@ struct ActiveUsageSpan {
     last_flushed_at_unix: i64,
 }
 
-/// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
+/// Локальный snapshot полей TrackedApp. Не используем kernel::types::TrackedApp
 /// напрямую чтобы не плодить дублирующий type-import — JSON envelope build'ится
 /// руками (тот же shape что у RPC operation `upsert_tracked_app`).
 #[cfg(target_os = "windows")]
@@ -895,7 +895,7 @@ async fn persist_compact_usage_span(
     let flags = i64::from(span.key.is_idle) | (i64::from(span.key.is_private) << 1);
     ark_request(
         ark,
-        "upsert_usage_span",
+        "usage.spans.upsert",
         json!({
             "usage_span": {
                 "deviceId": identity.device_id,
@@ -946,7 +946,7 @@ async fn update_usage_timeline(
 }
 
 /// Wall-clock span end, clamped to at most MAX_USAGE_SPAN_GAP_SECS past the
-/// last flush — a stalled/suspended tick must not stretch the span (KOS-287).
+/// last flush — a stalled/suspended tick must not stretch the span.
 #[cfg(target_os = "windows")]
 fn clamp_span_end(span: &ActiveUsageSpan, now_unix: i64) -> i64 {
     now_unix
@@ -1008,7 +1008,7 @@ async fn ark_request(ark: &Arc<ArkHost>, op: &str, params: Value) -> Result<Valu
 }
 
 async fn load_or_create_tracker_device_id(ark: &Arc<ArkHost>) -> Result<String, String> {
-    let existing = ark_request(ark, "get_sync_kv", json!({ "key": TRACKER_DEVICE_ID_KEY })).await?;
+    let existing = ark_request(ark, "kv.get", json!({ "key": TRACKER_DEVICE_ID_KEY })).await?;
     if let Some(value) = existing.as_str() {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
@@ -1019,7 +1019,7 @@ async fn load_or_create_tracker_device_id(ark: &Arc<ArkHost>) -> Result<String, 
     let generated = format!("usage-tracker-{}", new_uuid_simple());
     ark_request(
         ark,
-        "set_sync_kv",
+        "kv.set",
         json!({ "key": TRACKER_DEVICE_ID_KEY, "value": generated }),
     )
     .await?;
@@ -1045,7 +1045,7 @@ async fn persist_tracked_app(
     });
     ark_request(
         ark,
-        "upsert_tracked_app",
+        "usage.apps.upsert",
         json!({ "tracked_app": payload, "device_id": device_id }),
     )
     .await
@@ -1059,7 +1059,7 @@ async fn persist_usage_session(
 ) -> Result<(), String> {
     ark_request(
         ark,
-        "upsert_usage_session",
+        "usage.sessions.upsert",
         json!({ "usage_session": session, "device_id": device_id }),
     )
     .await
@@ -1106,7 +1106,7 @@ fn resolve_device_name() -> String {
 
 /// Display name comes from the exe version resource (FileDescription →
 /// ProductName → file stem) — never the window title, or a browser would be
-/// labelled with whatever tab happened to be open last (KOS-287).
+/// labelled with whatever tab happened to be open last.
 #[cfg(target_os = "windows")]
 async fn resolve_display_name(exe_path: &str, process_name: &str) -> Option<String> {
     let path = exe_path.to_string();
@@ -1361,7 +1361,7 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn active_time_is_focus_minus_idle_not_visible_runtime() {
-        // KOS-287 regression, the Raycast case: a launcher sits visible in the
+        // regression, the Raycast case: a launcher sits visible in the
         // background for hours but is focused for seconds. Active time is
         // foreground&&!idle only — runtime (visible) stays a separate counter.
         let mut session = test_session();
@@ -1380,7 +1380,7 @@ mod tests {
 
     #[test]
     fn tick_delta_is_capped_so_stalls_do_not_mint_phantom_time() {
-        // KOS-287 regression: a suspended tracker must not credit the whole
+        // Regression: a suspended tracker must not credit the whole
         // gap. Normal ticks stay untouched; an 8h sleep collapses to the cap.
         let poll = Duration::from_millis(DEFAULT_POLL_MS);
         assert_eq!(

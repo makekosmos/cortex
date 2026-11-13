@@ -3,6 +3,6 @@
 # scripts/check-toolchain.mjs enforces the match; bump toolchain.json and run
 # `node scripts/check-toolchain.mjs --write` to regenerate this file.
 [toolchain]
-channel = "1.95.0"
+channel = "1.99.1"
 profile = "minimal"
 components = ["rustfmt", "clippy"]

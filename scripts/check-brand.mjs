@@ -30,7 +30,7 @@ const allowedFiles = new Set(allowlist.files.map((entry) => entry.path));
 // Changelog / release-note history is allowed to mention old names.
 const HISTORY_FILE = /(^|\/)(CHANGELOG|HISTORY|RELEASE[_-]NOTES)[^/]*\.(?:md|mdx|txt)$/i;
 // Vendored or generated trees are not Cortex-owned brand surface.
-const VENDOR_FILE = /^(?:manager-gpui\/vendor\/|node_modules\/)/;
+const VENDOR_FILE = /^node_modules\//;
 
 function git(args) {
   return execFileSync("git", args, {

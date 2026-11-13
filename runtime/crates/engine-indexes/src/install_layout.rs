@@ -1,6 +1,6 @@
 //! Engine install-root layout derived from an exe path.
 //!
-//! Moved verbatim from `engine::engine_versions::prune` (KOS-335) so
+//! Moved verbatim from `engine::engine_versions::prune` so
 //! `privileged::firewall::validation` can resolve the calling user's
 //! versioned install root without a back-edge into engine; engine
 //! re-exports [`engine_root_of_exe`] at the old path.

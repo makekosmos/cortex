@@ -1,0 +1,9 @@
+{
+  "cssVars": {
+    "theme": {
+      "font-sans": "Inter",
+      "font-size-body": "13px",
+      "font-size-label": "12px"
+    }
+  }
+}

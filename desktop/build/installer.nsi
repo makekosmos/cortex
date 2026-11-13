@@ -129,11 +129,8 @@ LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё �
 ; moves.
 ;
 ; Order: `--shutdown` asks the running Engine to exit gracefully on its own
-; control path; `kill-product-processes` then force-kills whatever is left —
-; current product names plus the 0.9.x/Electron-era ones (the subcommand
-; skips its own pid, so the helper never kills itself).
-; MIGRATION(KOS-267): the legacy names live inside the subcommand, marked
-; for removal after 2026-11-01.
+; control path; `kill-product-processes` then force-kills whatever is left
+; (the subcommand skips its own pid, so the helper never kills itself).
 !macro StopProductProcesses
   ; Repair leftovers of a crashed previous run: an orphaned resources.old
   ; is the last good payload — restore it when resources is gone; stale
@@ -174,20 +171,8 @@ LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё �
   kill_done:
 !macroend
 
-; MIGRATION(KOS-267): remove after 2026-11-01.
-!macro DeleteOldRunValues
-  DeleteRegValue HKCU "${RUN_KEY}" "com.kazui.kosmos"             ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "electron.app.Kosmos"          ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "Kosmos"                       ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "Kosmos Engine"                ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "com.kazui.kepler"             ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "Kepler"                       ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "KeplerKosmos"                 ; MIGRATION(KOS-267)
-  DeleteRegValue HKCU "${RUN_KEY}" "KosmosKepler"                 ; MIGRATION(KOS-267)
-!macroend
-
 Function .onInit
-  ; Legacy electron-updater passes arguments like --updated and --force-run.
+  ; Electron-era updater passes arguments like --updated and --force-run.
   ; NSIS does not recognise them, so we simply ignore them rather than failing.
 
   ; Auto-select the installer language from the Windows UI language. Russian
@@ -227,80 +212,11 @@ Function StartEngine
     DetailPrint "post-install --start-engine exited $0"
 FunctionEnd
 
-
-; MIGRATION(KOS-267): remove after 2026-11-01. Before any old payload is
-; deleted, record which bundled components (agenda/memoria/dictation) the
-; previous generation shipped — the Engine reads this marker on first start
-; to auto-install them as store apps. Written only when a component was
-; found: re-running the installer before the Engine's first start must not
-; overwrite a recorded "true" with an all-false marker. An absent marker and
-; "nothing recorded" mean the same. A write failure only skips the
-; auto-install — the wipe still proceeds.
-Function RecordLegacyComponents
-  ; $R4/$R5/$R6 = "true"/"false" per component; presence in EITHER the 0.9.x
-  ; Programs\Kosmos layout or this installer's previous bundled layout counts.
-  StrCpy $R4 "false"
-  StrCpy $R5 "false"
-  StrCpy $R6 "false"
-  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\agenda\*.*" 0 +2   ; MIGRATION(KOS-267)
-    StrCpy $R4 "true"
-  IfFileExists "$INSTDIR\resources\components\agenda\*.*" 0 +2                          ; MIGRATION(KOS-267)
-    StrCpy $R4 "true"
-  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\memoria\*.*" 0 +2  ; MIGRATION(KOS-267)
-    StrCpy $R5 "true"
-  IfFileExists "$INSTDIR\resources\components\memoria\*.*" 0 +2                         ; MIGRATION(KOS-267)
-    StrCpy $R5 "true"
-  IfFileExists "$LOCALAPPDATA\Programs\Kosmos\resources\components\dictation\*.*" 0 +2 ; MIGRATION(KOS-267)
-    StrCpy $R6 "true"
-  IfFileExists "$INSTDIR\resources\components\dictation\*.*" 0 +2                       ; MIGRATION(KOS-267)
-    StrCpy $R6 "true"
-  StrCmp "$R4$R5$R6" "falsefalsefalse" record_done
-  CreateDirectory "$LOCALAPPDATA\Mundus"
-  ClearErrors
-  FileOpen $R7 "$LOCALAPPDATA\Mundus\legacy-components.json" w
-  IfErrors record_failed
-  FileWrite $R7 '{"schema_version":1,"components":{"agenda":$R4,"memoria":$R5,"dictation":$R6}}'
-  FileWrite $R7 '$\r$\n'
-  FileClose $R7
-  Goto record_done
-record_failed:
-  DetailPrint "legacy-components marker write failed — bundled-app migration skipped"
-record_done:
-FunctionEnd
-
 Section "Install"
   SetShellVarContext current
 
-  ; MIGRATION(KOS-267): must run before the Programs\Kosmos and
-  ; $INSTDIR\resources wipes below — it records which bundled
-  ; components existed so the Engine's first-start migration reads a marker,
-  ; not the deleted directories.
-  Call RecordLegacyComponents                                                       ; MIGRATION(KOS-267)
-
-  ; Stop all product processes (current and legacy names) before touching
-  ; files or registry.
+  ; Stop all product processes before touching files or registry.
   !insertmacro StopProductProcesses
-
-  ; MIGRATION(KOS-267): remove after 2026-11-01. Old autostart values are
-  ; stale regardless of whether the legacy payload survived; the user's
-  ; preference is carried by StartupApproved markers, which
-  ; `post-install --migrate-autostart` reads.
-  !insertmacro DeleteOldRunValues
-
-  ; MIGRATION(KOS-267): upgrade from Electron or Kosmos-era installs: remove the old program
-  ; files, its stale Apps & Features entries, and its shortcuts. We never run
-  ; the old uninstaller and never touch %APPDATA%\Kosmos or
-  ; %LOCALAPPDATA%\Kosmos — the Engine moves user data on first start.
-  IfFileExists "$LOCALAPPDATA\Programs\kepler-shell" 0 +2          ; MIGRATION(KOS-267)
-    RMDir /r "$LOCALAPPDATA\Programs\kepler-shell"                 ; MIGRATION(KOS-267)
-  IfFileExists "$LOCALAPPDATA\Programs\Kosmos" 0 +2                ; MIGRATION(KOS-267)
-    RMDir /r "$LOCALAPPDATA\Programs\Kosmos"                       ; MIGRATION(KOS-267)
-  ; Bare GUID keys — the real Electron entries have no braces.
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\4fe2b964-4d0e-5a72-8728-cca14468c9f0" ; MIGRATION(KOS-267)
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d" ; MIGRATION(KOS-267)
-  ; MIGRATION(KOS-267): Kosmos-era registration + the standalone Engine entry.
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Kosmos" ; MIGRATION(KOS-267)
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine" ; MIGRATION(KOS-267)
 
   ; Bundled-era component shortcuts — the apps are store-installed now,
   ; so these point at files the upgrade deletes. Engine-owned links live
@@ -308,28 +224,6 @@ Section "Install"
   Delete "$SMPROGRAMS\Agenda.lnk"
   Delete "$SMPROGRAMS\Memoria.lnk"
   Delete "$SMPROGRAMS\Dictation.lnk"
-
-  ; Old shortcuts on Desktop and in the Start Menu.
-  Delete "$DESKTOP\Kosmos.lnk"                                     ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos.lnk"                                  ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Agenda.lnk"                           ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Memoria.lnk"                          ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Dictation.lnk"                        ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Engine.lnk"                           ; MIGRATION(KOS-267)
-  Delete "$DESKTOP\Kepler.lnk"                                     ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kepler.lnk"                                  ; MIGRATION(KOS-267)
-  Delete "$DESKTOP\CosCast.lnk"                                    ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\CosCast.lnk"                                 ; MIGRATION(KOS-267)
-  ; MIGRATION(KOS-267): remove after 2026-11-01. The Electron-era 0.9.x host
-  ; wrote per-app links into "$SMPROGRAMS\Kosmos\" (tracked by its own index
-  ; file) that point at the removed host. Delete exactly those; the folder
-  ; itself goes only if nothing else is left in it (non-recursive RMDir).
-  Delete "$SMPROGRAMS\Kosmos\Agenda.lnk"                           ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos\Memoria.lnk"                          ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos\Dictation.lnk"                        ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos\Ordo.lnk"                             ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos\.kosmos-desktop-host-shortcuts.json"  ; MIGRATION(KOS-267)
-  RMDir "$SMPROGRAMS\Kosmos"                                       ; MIGRATION(KOS-267)
 
   ; Swap the payload in place: everything was extracted into resources.next
   ; by StopProductProcesses, so the live `resources` is renamed aside and
@@ -366,12 +260,6 @@ payload_swapped:
   StrCmp $0 "0" engine_ready
     Abort "$(ABORT_ENGINE_INSTALL): $1"
   engine_ready:
-
-  ; The old Engine payload under %LOCALAPPDATA%\Kosmos\Engine is only removed
-  ; once the new Engine is installed and verified — never before, so a failed
-  ; install leaves a working 0.9.x Engine.
-  IfFileExists "$LOCALAPPDATA\Kosmos\Engine\*.*" 0 +2              ; MIGRATION(KOS-267)
-    RMDir /r "$LOCALAPPDATA\Kosmos\Engine"                         ; MIGRATION(KOS-267)
 
   ; Windows entry points open the GPUI Manager.
   CreateShortCut "$SMPROGRAMS\Mundus.lnk" "$INSTDIR\resources\components\manager\${MANAGER_EXE}" "" "$INSTDIR\resources\icon.ico" 0
@@ -454,20 +342,8 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Agenda.lnk"
   Delete "$SMPROGRAMS\Memoria.lnk"
   Delete "$SMPROGRAMS\Dictation.lnk"
-  ; Legacy shortcut names. MIGRATION(KOS-267): remove after 2026-11-01.
-  Delete "$DESKTOP\Kosmos.lnk"                                     ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos.lnk"                                  ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Agenda.lnk"                           ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Memoria.lnk"                          ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Dictation.lnk"                        ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kosmos Engine.lnk"                           ; MIGRATION(KOS-267)
-  Delete "$DESKTOP\Kepler.lnk"                                     ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\Kepler.lnk"                                  ; MIGRATION(KOS-267)
-  Delete "$DESKTOP\CosCast.lnk"                                    ; MIGRATION(KOS-267)
-  Delete "$SMPROGRAMS\CosCast.lnk"                                 ; MIGRATION(KOS-267)
 
   DeleteRegValue HKCU "${RUN_KEY}" "${RUN_VALUE}"
-  !insertmacro DeleteOldRunValues
 
   ; Remove the payload we ship and the store-installed native apps (program
   ; files, not user data). The rest of %APPDATA%\Mundus and

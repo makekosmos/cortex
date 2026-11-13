@@ -5,15 +5,15 @@
 // forgotten RC pin only surfaces when it breaks a release build.
 //
 // New pins fail this check. To land one deliberately, add it to ALLOWED below
-// with a comment naming the upstream constraint that forces it — matching how
-// deny.toml documents its skip list.
+// with a comment naming the upstream or experiment constraint that requires it
+// — matching how deny.toml documents its skip list.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // "crate@<manifest dir>" → exact requirement string that is allowed.
 const ALLOWED = new Map([
-  // ed25519-dalek 3.0.0-rc.0 (workspace dep, used by ark-core and the engine
+  // ed25519-dalek 3.0.0-rc.0 (workspace dep, used by kernel and the engine
   // replication test fixtures): the 3.x line carries the API noq/iroh need; no
   // stable 3.x exists yet. Revisit on the first stable 3.x release.
   ["Cargo.toml::ed25519-dalek", "=3.0.0-rc.0"],
@@ -24,15 +24,37 @@ const ALLOWED = new Map([
   // hpke =0.14.1: the iroh/noq stack pins the same RustCrypto draft suite;
   // a caret bump splits the crypto traits.
   ["Cargo.toml::hpke", "=0.14.1"],
-  // embed-resource =3.0.11: Windows resource compiler helper, pinned to keep
-  // manager-gpui build output reproducible.
+  // embed-resource =3.0.11: Windows resource compiler helper, pinned so every
+  // shipped exe's VERSIONINFO is reproducible.
   ["runtime/crates/pe-version-info/Cargo.toml::embed-resource", "=3.0.11"],
-  // gpui-kit/gpui-component/gpui-base =0.7.1: the 0.7.1 family pins gpui-pre
-  // =0.3.8, which our imago [patch.crates-io] entries replace — the exact pin
-  // is required so the patched source satisfies the requirement.
-  ["manager-gpui/Cargo.toml::gpui", "=0.7.1"],
-  ["manager-gpui/Cargo.toml::gpui-component", "=0.7.1"],
-  ["manager-gpui/Cargo.toml::gpui-base", "=0.7.1"],
+  // gpui-kit/gpui-component =0.8.0, gpui-fast =0.1.10 (the NSH Manager): the
+  // 0.8.0 family pins gpui-pre =0.3.9 and gpui-fast =0.1.10, which our imago
+  // [patch.crates-io] entries replace — the exact pin is what lets the patched
+  // source satisfy the requirement.
+  ["manager/Cargo.toml::gpui", "=0.8.0"],
+  ["manager/Cargo.toml::gpui-component", "=0.8.0"],
+  ["manager/Cargo.toml::gpui-fast-backend", "=0.1.10"],
+  // nsh-platform-gpui =0.4.0: the host crate runs the bundle that `nsh` 0.4
+  // emits, so the host and the tool that builds `manager/ui` move together.
+  ["manager/Cargo.toml::nsh-platform-gpui", "=0.4.0"],
+  // raw-window-handle =0.6.2: the Manager reads its own HWND out of the window
+  // (`chrome`), and the trait it uses has to be the same 0.6.2 gpui-fast was
+  // built against — a caret bump would give it a second, incompatible
+  // `HasWindowHandle` implementation to resolve.
+  ["manager/Cargo.toml::raw-window-handle", "=0.6.2"],
+  // wgpu =29.0.4 and image =0.25.10: the pill's shader runs on the device
+  // gpui-fast creates, and `gpu_scope` hands that device an `image` buffer.
+  // Two wgpu or image versions in one binary are two incompatible types, and
+  // the scope would not compile against gpui's own device.
+  ["manager/Cargo.toml::wgpu", "=29.0.4"],
+  ["manager/Cargo.toml::image", "=0.25.10"],
+  // KOS-423 is a reproducible comparison of Automerge, Loro, and Yrs merge
+  // behavior and encoded sizes. Pin all inputs, including JSON serialization,
+  // so regenerating its standalone lockfile cannot silently change results.
+  ["experiments/kos423-merge-harness/Cargo.toml::automerge", "=0.12.0"],
+  ["experiments/kos423-merge-harness/Cargo.toml::loro", "=1.16.2"],
+  ["experiments/kos423-merge-harness/Cargo.toml::yrs", "=0.28.0"],
+  ["experiments/kos423-merge-harness/Cargo.toml::serde_json", "=1.0.145"],
 ]);
 
 // Vendored/upstream trees and generated dirs are not our pins to police.
@@ -43,7 +65,7 @@ function* cargoTomls(dir) {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
     if (entry === "Cargo.toml") yield path;
-    else if (statSync(path).isDirectory() && !SKIP_DIRS.has(entry)) yield* cargoTomls(path);
+    else if (!SKIP_DIRS.has(entry) && statSync(path).isDirectory()) yield* cargoTomls(path);
   }
 }
 
@@ -73,7 +95,8 @@ function offendingPins(manifest) {
 export function collectViolations(root) {
   const violations = [];
   for (const manifest of cargoTomls(root)) {
-    const rel = relative(root, manifest);
+    // ALLOWED keys are written with forward slashes; Windows joins with `\`.
+    const rel = relative(root, manifest).replaceAll("\\", "/");
     for (const hit of offendingPins(manifest)) {
       const key = `${rel}::${hit.dep}`;
       if (ALLOWED.get(key) === hit.req) continue;
@@ -90,7 +113,7 @@ if (isMain) {
     console.error("New exact or pre-release dependency pins found:");
     for (const v of violations) console.error(`  ${v}`);
     console.error(
-      "Document the upstream constraint in ALLOWED in scripts/check-dep-pins.mjs, or relax the pin.",
+      "Document the constraint in ALLOWED in scripts/check-dep-pins.mjs, or relax the pin.",
     );
     process.exit(1);
   }

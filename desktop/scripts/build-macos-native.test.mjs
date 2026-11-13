@@ -23,6 +23,7 @@ test("every Swift helper the build script compiles is in the tree", async () => 
   assert.match(source, /process\.platform !== "darwin"/);
   const sources = [...source.matchAll(/sources: \["([^"]+)"\]/g)].map((match) => match[1]);
   assert.deepEqual(sources, [
+    "engine-menu-bar.swift",
     "hotkey-hold-monitor.swift",
     "capture-hotkey.swift",
     "audio-capturer.swift",

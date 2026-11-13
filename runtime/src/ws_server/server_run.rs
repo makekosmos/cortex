@@ -46,15 +46,11 @@ impl WsServer {
                     let ark_host = self.ark_host.clone();
                     let token = self.auth_token.clone();
                     let bus = self.command_bus.clone();
-                    let pomo = self.pomodoro_host.clone();
                     let dict = self.dictation_host.clone();
-                    let agent_events = self.agent_events.clone();
                     let protocol_usage = self.protocol_usage.clone();
                     let correlation_id = self.correlation_id.clone();
                     let dispatcher = self.dispatcher.clone();
                     let desktop_authority = self.desktop_authority.clone();
-                    let snapshots = self.snapshots.clone();
-                    let grants = self.grants.clone();
                     let task_shutdown = shutdown.clone();
                     let resources = Arc::new(Mutex::new(Some(WsConnectionResources {
                         stream: Some(stream),
@@ -95,9 +91,9 @@ impl WsServer {
                         // The task cannot execute any connection code until its
                         // JoinHandle has replaced the Reserved slot below.
                         if let Err(e) = handle_connection(
-                            stream, ark_host, token, bus, pomo, dict, agent_events,
+                            stream, ark_host, token, bus, dict,
                             protocol_usage, correlation_id, dispatcher, owner_lease,
-                            desktop_authority, snapshots, grants, task_shutdown,
+                            desktop_authority, task_shutdown,
                         ).await {
                             eprintln!("[mundus.ws] connection error: {e}");
                         }

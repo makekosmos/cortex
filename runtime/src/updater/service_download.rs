@@ -1,9 +1,12 @@
-// Download half of `UpdaterService` — `include!`d into service.rs (same
-// module, same scope: `native_apps/install.rs` pattern). Kept separate so
-// neither file crosses the 300-line review threshold.
+// Download half of `UpdaterService`. Kept separate so neither file crosses
+// the 300-line review threshold.
+
+use std::sync::{atomic::Ordering, Arc};
+
+use super::{cleanup, download, PendingUpdate, Phase, UpdaterService, UpdaterStatus};
 
 impl UpdaterService {
-    fn start_download(self: &Arc<Self>) {
+    pub(super) fn start_download(self: &Arc<Self>) {
         if self.downloading.swap(true, Ordering::SeqCst) {
             return;
         }

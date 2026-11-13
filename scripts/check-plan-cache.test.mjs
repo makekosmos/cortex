@@ -64,7 +64,7 @@ test("a recorded pass covers the same or a smaller set of checks", (t) => {
   assert.equal(coveredByCache(dir, tree, ["rustfmt", "test:rust"]), false);
 
   recordPass(dir, tree, ["full"]);
-  assert.equal(coveredByCache(dir, tree, ["manager-gpui", "lint"]), true);
+  assert.equal(coveredByCache(dir, tree, ["manager", "lint"]), true);
 
   writeFileSync(path.join(dir, "a.rs"), "fn b() {}\n");
   assert.equal(coveredByCache(dir, diskTree(dir), ["rustfmt"]), false);

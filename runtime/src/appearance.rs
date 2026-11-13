@@ -32,6 +32,16 @@ const THEME_IDS: &[&str] = &[
     "graphite",
     "amethyst-haze",
     "vercel",
+    // The Manager's own palette family (imago-nsh `palettes.ts`): a device-wide
+    // choice like the rest, so the Engine stores it and every client reads it.
+    "cobalt-foundry",
+    "cinder-peak",
+    "ember-hollow",
+    "heliotrope",
+    "merino-light",
+    "alpine-milk",
+    "buttercream-diner",
+    "coastal-linen",
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -129,6 +139,10 @@ fn valid_color(color: &str) -> bool {
 
 // Shared by the global and per-app settings shapes (the latter omits
 // `follow_apps`, which stays global/Manager-only — see `appearance/apps.rs`).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one field-set validator shared by two settings shapes"
+)]
 fn validate_fields(
     mode: &str,
     light_theme: &str,
@@ -195,7 +209,7 @@ fn read(path: &Path) -> Result<AppearanceSettings, String> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(AppearanceSettings::default())
+            return Ok(AppearanceSettings::default());
         }
         Err(error) => return Err(error.to_string()),
     };
@@ -262,8 +276,15 @@ pub struct AppearanceStore {
     wallpaper: Arc<WallpaperCache>,
 }
 
-include!("appearance/wallpaper.rs");
-include!("appearance/apps.rs");
+mod wallpaper;
+#[cfg(all(test, target_os = "macos"))]
+use wallpaper::extract_image;
+use wallpaper::{desktop_wallpaper_accent, WallpaperCache, WallpaperCacheState, WallpaperSampler};
+
+mod apps;
+#[cfg(test)]
+use apps::APPS_DIR;
+pub use apps::{is_safe_app_id, AppAppearanceSettings};
 
 impl AppearanceStore {
     pub fn new(data_dir: PathBuf) -> Self {
@@ -319,8 +340,8 @@ impl AppearanceStore {
             }
             return self.set_scoped(app_id, patch, client).await;
         }
-        if client.class.as_deref() != Some("manager-gpui") {
-            return Err("appearance.set is restricted to the manager-gpui client".into());
+        if !crate::brand::is_manager_client(client.class.as_deref()) {
+            return Err("appearance.set is restricted to the Manager client".into());
         }
         let patch = object;
         if patch.is_empty() {
@@ -372,7 +393,5 @@ impl AppearanceStore {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("appearance/tests.rs");
-    include!("appearance/apps_tests.rs");
-}
+#[path = "appearance/tests.rs"]
+mod tests;

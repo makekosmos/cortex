@@ -29,10 +29,33 @@ async function runFixture(files) {
   }
 }
 
+test("rejects Rust include! source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs": 'mod sync { include!("sync/connection.rs"); }\n',
+    "src/dynamic.rs": 'include!(concat!("sync/", "connection.rs"));\n',
+    "src/sync/connection.rs": "pub fn connect() {}\n",
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /include! source-fragment check failed/);
+  assert.match(result.stderr, /lib\.rs: Rust source fragments must be ordinary modules/);
+  assert.match(result.stderr, /dynamic\.rs: Rust source fragments must be ordinary modules/);
+});
+
+test("does not mistake include_str! or include_bytes! for source fragments", async () => {
+  const result = await runFixture({
+    "src/lib.rs":
+      'const _: &str = include_str!("message.txt");\nconst _: &[u8] = include_bytes!("asset.bin");\n',
+    "src/message.txt": "text",
+    "src/asset.bin": "bytes",
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("accepts exactly 500 lines and ignores generated dependencies", async () => {
   const result = await runFixture({
     "src/limit.rs": lines(500),
     "node_modules/generated.mjs": lines(900),
+    "vendor/example/src/part7.rs": lines(900),
   });
   assert.equal(result.status, 0, result.stderr);
 });
@@ -54,6 +77,43 @@ test("rejects a new source file above 500 lines", async () => {
   assert.match(result.stderr, /new-module\.mjs: 501 lines \(max 500\)/);
 });
 
+test("rejects part-numbered paths even when a legacy baseline lists them", async () => {
+  const result = await runFixture({
+    "scripts/source-part-baseline.json": JSON.stringify(["src/part01.rs"]),
+    "src/part01.rs": lines(20),
+    "src/tests_part02.rs": lines(20),
+    "src/part3a.rs": lines(20),
+    "src/part01_helpers.rs": lines(20),
+    "src/tests_part02_extra.rs": lines(20),
+    "src/part3.test.rs": lines(20),
+    "src/part_01.rs": lines(20),
+    "src/part-01.rs": lines(20),
+    "src/part4/helpers.rs": lines(20),
+    "src/counterpart1.rs": lines(20),
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /part-numbered source check failed \(9 file\(s\)\)/);
+  assert.match(result.stderr, /move it into a semantic module/);
+  assert.match(result.stderr, /src\/tests_part02\.rs/);
+  assert.match(result.stderr, /src\/part3a\.rs/);
+  assert.match(result.stderr, /src\/part01_helpers\.rs/);
+  assert.match(result.stderr, /src\/tests_part02_extra\.rs/);
+  assert.match(result.stderr, /src\/part3\.test\.rs/);
+  assert.match(result.stderr, /src\/part_01\.rs/);
+  assert.match(result.stderr, /src\/part-01\.rs/);
+  assert.match(result.stderr, /src\/part4\/helpers\.rs/);
+  assert.doesNotMatch(result.stderr, /counterpart1\.rs/);
+});
+
+test("accepts normal semantic source paths", async () => {
+  const result = await runFixture({
+    "src/objects/write.rs": lines(20),
+    "src/objects/query.rs": lines(20),
+    "src/tests_objects.rs": lines(20),
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("retired Godfile paths cannot reuse an old exemption", async () => {
   const result = await runFixture({ "runtime/src/integrations.rs": lines(501) });
   assert.equal(result.status, 1);
@@ -61,15 +121,15 @@ test("retired Godfile paths cannot reuse an old exemption", async () => {
 });
 
 test("core/ is first-party and checked like everything else", async () => {
-  const result = await runFixture({ "core/crates/ark-core/src/big.rs": lines(501) });
+  const result = await runFixture({ "core/crates/kernel/src/big.rs": lines(501) });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /core\/crates\/ark-core\/src\/big\.rs: 501 lines \(max 500\)/);
+  assert.match(result.stderr, /core\/crates\/kernel\/src\/big\.rs: 501 lines \(max 500\)/);
 });
 
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(501),
-    "runtime/crates/engine-base/src/package_manifest.rs": lines(501),
+    "runtime/crates/engine-dictation/src/config.rs": lines(501),
     "runtime/src/focus.rs": lines(501),
   });
   assert.equal(result.status, 0, result.stderr);

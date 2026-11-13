@@ -32,14 +32,7 @@ const MAX_RESPONSE_BYTES: u64 = 1 << 30;
 /// Service expected to own each pipe name we talk to (anti-squatting).
 /// `None` for unknown names → the caller must not use them.
 fn service_name_for_pipe(pipe_name: &str) -> Option<&'static str> {
-    if pipe_name == brand::PIPE_NAME {
-        return Some(brand::SERVICE_NAME);
-    }
-    // MIGRATION(KOS-267): drop with the legacy pipes after 2026-11-01.
-    brand::LEGACY_PIPES
-        .iter()
-        .find(|(name, _)| *name == pipe_name)
-        .map(|(_, svc)| *svc)
+    (pipe_name == brand::PIPE_NAME).then_some(brand::SERVICE_NAME)
 }
 
 /// The connected server is trusted iff its PID equals the SCM-registered
@@ -132,9 +125,6 @@ mod tests {
             service_name_for_pipe(brand::PIPE_NAME),
             Some(brand::SERVICE_NAME)
         );
-        for (name, svc) in brand::LEGACY_PIPES {
-            assert_eq!(service_name_for_pipe(name), Some(*svc));
-        }
         assert_eq!(service_name_for_pipe(r"\\.\pipe\random"), None);
     }
 

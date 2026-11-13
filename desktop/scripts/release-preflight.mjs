@@ -30,7 +30,7 @@ export function ensureCleanSource() {
       "--",
       "desktop/scripts",
       "desktop/build",
-      "manager-gpui",
+      "manager",
       "runtime/src",
       "runtime/crates",
     ],

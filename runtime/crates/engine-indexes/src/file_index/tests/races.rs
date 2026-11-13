@@ -20,7 +20,7 @@ async fn rescan_coalesces_overlapping_spawn_requests() {
     }
 
     // Wait for the rescan to finish — should be one, not 50. Generous hang
-    // guard only; convergence is the event (KOS-308).
+    // guard only; convergence is the event.
     tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if !index.rescan_pending.load(Ordering::SeqCst)
@@ -76,7 +76,7 @@ async fn rescan_schedules_followup_when_generation_changes_during_write() {
 
 #[tokio::test]
 async fn background_task_registry_reaps_finished_handles() {
-    // KOS-270: every spawn used to push a JoinHandle forever — a memory leak
+    // every spawn used to push a JoinHandle forever — a memory leak
     // in the long-running app. Spawning after a completed task must reap it.
     let data = tempdir().unwrap();
     let index = std::sync::Arc::new(FileIndex::new_disabled(data.path()).unwrap());

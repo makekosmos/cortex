@@ -10,7 +10,7 @@ const desktop = path.join(root, "desktop");
 // This exercises the component build itself, so it runs with --local: the
 // release preflight (clean main, publishable version, Engine manifest) has its
 // own tests and must not be satisfied here with fabricated inputs.
-// The Manager component is manager-gpui (cargo); only the desktop leg needs
+// The Manager component is `manager/` (cargo); only the desktop leg needs
 // installed pnpm dependencies.
 const prerequisites =
   process.platform === "win32" &&
@@ -40,7 +40,7 @@ test(
       `exit ${result.status} ${result.error?.code ?? ""}\n${result.stderr}\n${result.stdout.slice(-3000)}`,
     );
 
-    for (const name of ["mundus", "memoria", "agenda", "dictation"])
+    for (const name of ["mundus", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
     // Only Manager is staged as a bundled component — assert on the staged
     // tree, not on the script text.
@@ -51,7 +51,7 @@ test(
       "components staging must contain only manager",
     );
     const managerOut = path.join(componentsDir, "manager", "win-unpacked");
-    assert.ok(existsSync(path.join(managerOut, "Mundus Manager.exe")), "manager unpackaged output");
+    assert.ok(existsSync(path.join(managerOut, "Mundus.exe")), "manager unpackaged output");
     assert.ok(
       !existsSync(path.join(managerOut, "resources")),
       "manager component must be the GPUI exe, not an Electron package",

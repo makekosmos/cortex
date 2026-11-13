@@ -1,0 +1,7 @@
+{
+  "name": "Mundus",
+  "id": "computer.mundus.app",
+  "version": "0.1.0",
+  "build": 1,
+  "theme": "./theme.json"
+}

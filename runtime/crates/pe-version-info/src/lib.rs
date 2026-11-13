@@ -1,10 +1,10 @@
 //! Shared build-time helper that embeds an icon, a VERSIONINFO resource and
 //! (optionally) an application manifest into every Windows exe we ship
-//! (KOS-306).
+//!
 //!
 //! Defender's ML weighs the absence of version metadata heavily; a bare exe
 //! with empty CompanyName/FileDescription looks like a dropper. Both
-//! `runtime/build.rs` (mundus-engine) and `manager-gpui/build.rs` call
+//! `runtime/build.rs` (mundus-engine) and `manager/build.rs` call
 //! [`embed`] so the resource script is written once, here.
 
 #![cfg_attr(test, allow(clippy::unwrap_used))]
@@ -34,7 +34,7 @@ pub enum Manifest {
     /// runtime behaviour.
     Background,
     /// [`Manifest::Background`] plus what gpui's own `gpui.manifest.xml`
-    /// carried before the imago pin dropped `windows-manifest` (KOS-347):
+    /// carried before the imago pin dropped `windows-manifest`:
     /// the Common-Controls v6 dependency, PerMonitorV2 DPI awareness and
     /// SegmentHeap. gpui's Windows backend imports `TaskDialogIndirect`,
     /// which only comctl32 v6 exports — without the dependency the loader
@@ -101,7 +101,7 @@ pub struct ExeInfo<'a> {
     /// Optional `.ico` embedded as the exe's icon.
     pub icon: Option<PathBuf>,
     /// The embedded application manifest. Both shipped exes carry one: the
-    /// imago gpui pin dropped the `windows-manifest` feature (KOS-347), so
+    /// imago gpui pin dropped the `windows-manifest` feature, so
     /// `Mundus Manager.exe` no longer gets a manifest from a dependency.
     pub manifest: Manifest,
 }
@@ -112,7 +112,7 @@ pub struct ExeInfo<'a> {
 /// falls back to `desktop/release-versions.json` `win`, which is exactly
 /// what those scripts read — never a silent `CARGO_PKG_VERSION` drift.
 /// `package_dir` is the *calling* crate's `CARGO_MANIFEST_DIR` (`runtime/` or
-/// `manager-gpui/`), so both resolve the same `../desktop/` path.
+/// `manager/`), so both resolve the same `../desktop/` path.
 // Build-time helper: a bad/missing version must abort the build — panic is
 // the mechanism, an Err would be silently ignored by the caller's build.rs.
 #[allow(clippy::panic, clippy::unwrap_used)]

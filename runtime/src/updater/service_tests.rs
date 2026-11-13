@@ -14,7 +14,7 @@ async fn service_with_manifest(
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
+            when.method(httpmock::Method::GET).path("/manifest.json");
             then.status(200).body(manifest);
         })
         .await;
@@ -30,8 +30,7 @@ async fn service_with_manifest(
 #[tokio::test]
 async fn equal_and_older_versions_are_not_available() {
     for candidate in ["0.5.0", "0.0.1"] {
-        let manifest =
-            format!("version: {candidate}\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+        let manifest = win_manifest(candidate, "a.exe", "AAA", 1);
         let (_dir, service) = service_with_manifest(manifest, "0.5.0").await;
         assert_eq!(service.check().await["state"], "not-available");
     }
@@ -42,9 +41,9 @@ async fn unsupported_package_reports_release_without_downloading_foreign_install
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
+            when.method(httpmock::Method::GET).path("/manifest.json");
             then.status(200)
-                .body("version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+                .body(win_manifest("99.0.0", "a.exe", "AAA", 1));
         })
         .await;
     let payload = server
@@ -94,17 +93,17 @@ async fn feed_failure_is_an_error_state() {
 }
 
 #[tokio::test]
-async fn check_downloads_and_verifies_update_in_background() {
+async fn download_after_check_verifies_update() {
     let body = b"installer payload".repeat(50);
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
-            then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n \
-   size: {}\n",
-                hash(&body),
-                body.len()
+            when.method(httpmock::Method::GET).path("/manifest.json");
+            then.status(200).body(win_manifest(
+                "99.0.0",
+                "Mundus-Setup-99.0.0.exe",
+                &hash(&body),
+                body.len(),
             ));
         })
         .await;
@@ -120,6 +119,8 @@ async fn check_downloads_and_verifies_update_in_background() {
         UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
 
     assert_eq!(service.check().await["state"], "available");
+    assert!(!service.downloading.load(Ordering::SeqCst));
+    service.download();
     for _ in 0..200 {
         if service.status()["state"] == "downloaded" {
             break;
@@ -162,7 +163,7 @@ async fn install_requires_finished_download() {
 
 #[test]
 fn construction_sweeps_payloads_left_by_a_previous_run() {
-    // KOS-301: applied installers and crashed `.part` downloads used to
+    // applied installers and crashed `.part` downloads used to
     // accumulate in updates/ forever.
     let dir = tempfile::tempdir().unwrap();
     let updates = dir.path().join("updates");
@@ -181,12 +182,12 @@ async fn check_replacing_pending_drops_the_superseded_installer() {
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
-            then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n \
-   size: {}\n",
-                hash(&body),
-                body.len()
+            when.method(httpmock::Method::GET).path("/manifest.json");
+            then.status(200).body(win_manifest(
+                "99.0.0",
+                "Mundus-Setup-99.0.0.exe",
+                &hash(&body),
+                body.len(),
             ));
         })
         .await;
@@ -218,8 +219,8 @@ async fn desktop_lease_does_not_block_update_discovery_kos_357() {
     // registry held a lease, so with Manager connected an update was never
     // discovered without the manual button. The Engine-owned check loop
     // must consult the feed regardless of leases.
-    let manifest = "version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n";
-    let (_dir, service) = service_with_manifest(manifest.to_string(), "0.5.0").await;
+    let manifest = win_manifest("99.0.0", "a.exe", "AAA", 1);
+    let (_dir, service) = service_with_manifest(manifest, "0.5.0").await;
     let authority = crate::desktop_authority::DesktopAuthorityRegistry::new();
     authority.register("session".into(), 1, 123, "credential");
     assert!(!authority.is_empty());
@@ -235,9 +236,9 @@ async fn check_tick_skips_the_feed_once_an_installer_is_downloaded() {
     let server = MockServer::start_async().await;
     let feed_mock = server
         .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
+            when.method(httpmock::Method::GET).path("/manifest.json");
             then.status(200)
-                .body("version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+                .body(win_manifest("99.0.0", "a.exe", "AAA", 1));
         })
         .await;
     let dir = tempfile::tempdir().unwrap();
@@ -268,6 +269,13 @@ pub(super) fn manifest_json(version: &str, platforms: &str) -> String {
     )
 }
 
+fn win_manifest(version: &str, file: &str, sha512: &str, size: usize) -> String {
+    manifest_json(
+        version,
+        &format!(r#""win":{{"file":"{file}","size":{size},"sha512":"{sha512}"}}"#),
+    )
+}
+
 #[tokio::test]
 async fn check_uses_manifest_json_for_the_download_kos_350() {
     let body = b"manifest installer".repeat(40);
@@ -285,13 +293,6 @@ async fn check_uses_manifest_json_for_the_download_kos_350() {
             ));
         })
         .await;
-    let legacy = server
-        .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest.yml");
-            then.status(200)
-                .body("version: 1.0.0\nfiles:\n  - url: old.exe\n");
-        })
-        .await;
     server
         .mock_async(|when, then| {
             when.method(httpmock::Method::GET)
@@ -304,6 +305,7 @@ async fn check_uses_manifest_json_for_the_download_kos_350() {
         UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
 
     assert_eq!(service.check().await["newVersion"], "99.1.0");
+    service.download();
     for _ in 0..200 {
         if service.status()["state"] == "downloaded" {
             break;
@@ -311,7 +313,6 @@ async fn check_uses_manifest_json_for_the_download_kos_350() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert_eq!(service.status()["state"], "downloaded");
-    legacy.assert_calls_async(0).await;
 }
 
 #[tokio::test]

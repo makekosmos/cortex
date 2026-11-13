@@ -155,9 +155,9 @@ unsafe fn get_process_user_sid(
 /// Executable image path of a same-user process, queried by PID —
 /// trustworthy process identity, unlike self-declared client headers.
 /// Used to pin `/v1/rpc` callers that claim to be the Manager
-/// (KOS-269 round 3).
+/// (round 3).
 ///
-/// Implementation lives in `engine-indexes` (KOS-335) so the privileged
+/// Implementation lives in `engine-indexes` so the privileged
 /// pipe server can use it without a back-edge into engine.
 #[cfg(windows)]
 pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
@@ -173,7 +173,7 @@ pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
 /// not by path spelling. `QueryFullProcessImageNameW` and the resolved
 /// Manager path may name the same file through different spellings (`\\?\`
 /// prefix, `..` segments, different case, 8.3 short names, junctions), so a
-/// string compare would deny the real Manager (KOS-269 round 4).
+/// string compare would deny the real Manager (round 4).
 /// Deny-closed: returns `false` when either path cannot be opened.
 #[cfg(windows)]
 pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {

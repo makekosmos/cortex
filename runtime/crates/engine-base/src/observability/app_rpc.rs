@@ -1,6 +1,6 @@
-//! Rejection logging for app-facing RPC entry points (KOS-298).
+//! Rejection logging for app-facing RPC entry points.
 //!
-//! During KOS-295 the Engine log held no record of rejected `upsert_object`
+//! During the Engine log held no record of rejected `upsert_object`
 //! calls, so the reason could not be recovered on the user's machine. Every
 //! app-RPC rejection now emits one WARN with client class, operation, object
 //! type id and the internal reason — metadata only, never payload values.
@@ -28,7 +28,7 @@ pub fn app_error_class(error: &str) -> &'static str {
 ///
 /// `Site` is a call-site constant explaining where the request died; safe
 /// by construction. `Dispatch` is a string produced by the dispatch layer —
-/// ark-core codes, ark-host messages or package-worker replies — and may
+/// kernel codes, ark-host messages or package-worker replies — and may
 /// quote payload values, so only a pure wire code is echoed; anything else
 /// collapses to its public class.
 pub enum RejectionReason<'a> {
@@ -196,7 +196,7 @@ pub mod tests {
     }
 
     /// A rejected app RPC must log client class, op, type id and the
-    /// internal reason — and nothing from the payload (KOS-298).
+    /// internal reason — and nothing from the payload.
     #[test]
     fn rejection_log_carries_metadata_but_never_payload_values() {
         let buf = CaptureBuf::default();
@@ -208,14 +208,14 @@ pub mod tests {
         tracing::subscriber::with_default(subscriber, || {
             let params = serde_json::json!({
                 "object": {
-                    "typeId": "com.kosmos.note",
+                    "typeId": "core.note",
                     "title": "PRIVATE TITLE",
                     "contentJson": {"text": "private body"},
                 }
             });
             log_app_rpc_rejection(
                 "memoria-gpui",
-                "upsert_object",
+                "objects.upsert",
                 app_rpc_type_id(&params),
                 RejectionReason::Dispatch(
                     "canonical_ingress:invalid_request:canonical_field:/recurrence/dayOfMonth",
@@ -224,14 +224,14 @@ pub mod tests {
             // A reason that embeds a payload value collapses to the class.
             log_app_rpc_rejection(
                 "memoria-gpui",
-                "upsert_object",
+                "objects.upsert",
                 app_rpc_type_id(&params),
                 RejectionReason::Dispatch("rejected value PRIVATE TITLE at /title"),
             );
             // No type id → the field is still emitted, empty.
             log_app_rpc_rejection(
-                "agenda-gpui",
-                "list_objects",
+                "dictation-gpui",
+                "objects.list",
                 None,
                 RejectionReason::Dispatch("forbidden"),
             );
@@ -239,8 +239,8 @@ pub mod tests {
         let line = buf.text();
         assert!(line.contains("app RPC rejected"));
         assert!(line.contains("memoria-gpui"));
-        assert!(line.contains("upsert_object"));
-        assert!(line.contains("com.kosmos.note"));
+        assert!(line.contains("objects.upsert"));
+        assert!(line.contains("core.note"));
         assert!(line.contains("canonical_ingress:invalid_request"));
         assert!(line.contains("reason=unavailable"));
         assert!(line.contains("forbidden"));
