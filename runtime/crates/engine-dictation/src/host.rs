@@ -104,16 +104,24 @@ pub async fn handle_dictation_op(
         // dictation keeps working with only the menu bar icon left.
         "restore_hotkey" => {
             #[cfg(target_os = "macos")]
-            {
-                crate::macos_native::restore_listeners();
-                let config = host.config.lock().await.clone();
-                apply_ptt_hook(&config, &host.events_tx);
-            }
+            crate::macos_native::restore_listeners();
+            // Windows needs no listener to restore: its hook thread runs for the
+            // life of the process, and `release_hotkey` only takes the matcher
+            // away. Giving the matcher back is what makes the key work again
+            // once the Manager's window closes.
+            tracing::info!(target: "dictation::hotkey", "hotkey handed back to the Engine");
+            let config = host.config.lock().await.clone();
+            apply_ptt_hook(&config, &host.events_tx);
             DictationResponse::ok(json!({}))
         }
         "release_hotkey" => {
             #[cfg(target_os = "macos")]
             crate::macos_native::release_listeners();
+            #[cfg(windows)]
+            {
+                tracing::info!(target: "dictation::hotkey", "hotkey handed to the Manager");
+                crate::hotkey_hook::set_active(None, None, crate::hotkey_hook::HookMode::Toggle);
+            }
             DictationResponse::ok(json!({}))
         }
         "get_stats" => op_get_stats(host).await,

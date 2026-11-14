@@ -27,8 +27,9 @@ pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf])
     roots
 }
 
-/// `<root>\resources\components\manager\Mundus Manager.exe` for every
-/// candidate root — Manager is the only bundled component left.
+/// `<root>\resources\components\manager\Mundus.exe` for every candidate root
+/// — Manager is the only bundled component left, and the installer names its
+/// binary `Mundus.exe` (`desktop/scripts/brand.mjs` `MANAGER_EXE`).
 pub fn manager_executable_candidates(roots: &[PathBuf]) -> Vec<PathBuf> {
     roots
         .iter()
@@ -36,7 +37,7 @@ pub fn manager_executable_candidates(roots: &[PathBuf]) -> Vec<PathBuf> {
             root.join("resources")
                 .join("components")
                 .join("manager")
-                .join("Mundus Manager.exe")
+                .join(super::MANAGER_EXE)
         })
         .collect()
 }
@@ -78,7 +79,7 @@ mod tests {
         assert_eq!(
             candidates,
             vec![PathBuf::from(
-                r"C:\Mundus\resources\components\manager\Mundus Manager.exe"
+                r"C:\Mundus\resources\components\manager\Mundus.exe"
             )]
         );
     }

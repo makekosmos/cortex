@@ -21,6 +21,10 @@ mod paths;
 mod resolve;
 mod wide;
 
+/// File name the installer gives the bundled Manager (`desktop/scripts/brand.mjs`
+/// `MANAGER_EXE`). The tray resolves by this name, so the two must agree.
+pub(super) const MANAGER_EXE: &str = "Mundus.exe";
+
 use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
 use menu::{build_menu, MenuAction};
 use resolve::manager_executable;

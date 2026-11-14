@@ -394,6 +394,7 @@ pub(crate) fn inject_with_adapter(
     #[cfg(not(target_os = "macos"))]
     {
         let Some(hwnd) = prev_hwnd else {
+            tracing::warn!(target: "dictation::inject", "delivery=clipboard_fallback reason=no target window");
             return Ok(DeliveryResult {
                 delivery: Delivery::ClipboardFallback {
                     reason: InjectError::MissingTarget.safe_reason(),
@@ -401,6 +402,11 @@ pub(crate) fn inject_with_adapter(
             });
         };
         if let Err(error) = adapter.restore_foreground_window(hwnd) {
+            tracing::warn!(
+                target: "dictation::inject",
+                reason = error.safe_reason(),
+                "delivery=clipboard_fallback reason=cannot restore the target window",
+            );
             return Ok(DeliveryResult {
                 delivery: Delivery::ClipboardFallback {
                     reason: error.safe_reason(),
@@ -410,6 +416,10 @@ pub(crate) fn inject_with_adapter(
 
         std::thread::sleep(std::time::Duration::from_millis(80));
         if adapter.foreground_window() != Some(hwnd) {
+            tracing::warn!(
+                target: "dictation::inject",
+                "delivery=clipboard_fallback reason=the target window did not come forward",
+            );
             return Ok(DeliveryResult {
                 delivery: Delivery::ClipboardFallback {
                     reason: InjectError::TargetChanged.safe_reason(),
@@ -449,6 +459,7 @@ pub(crate) fn inject_with_adapter(
         #[cfg(windows)]
         {
             std::thread::sleep(std::time::Duration::from_millis(80));
+            tracing::info!(target: "dictation::inject", "delivery=pasted");
             Ok(DeliveryResult {
                 delivery: Delivery::Pasted,
             })

@@ -54,13 +54,17 @@ export function headerHeight(): number {
 }
 
 /**
- * The space above the sidebar's search field. macOS puts the traffic lights
- * over the top-left corner, so the field starts below the band they sit in;
- * Windows draws its caption buttons at the right end of the same band, and the
- * field starts below it too — the band is the window's, not the app's, on both.
+ * The space above the sidebar's search field.
+ *
+ * macOS draws the traffic lights over the field's own corner, so the field
+ * starts below the band they sit in. Windows draws its caption buttons at the
+ * far right, and the sidebar's first row (search) shares that band — centred in
+ * it, which is what puts the field level with the window controls instead of
+ * 2 pt under the top edge.
  */
-export function sidebarTopInset(): number {
+export function sidebarTopInset(searchHeight: number): number {
   const host = platform();
   if (host === "darwin" || host === "macos") return MAC_LIGHTS_INSET;
-  return TITLEBAR_HEIGHT;
+  if (host === "win32" || host === "windows") return (TITLEBAR_HEIGHT - searchHeight) / 2;
+  return 16;
 }
