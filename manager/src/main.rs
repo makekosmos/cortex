@@ -14,6 +14,7 @@ mod gpu_scope;
 mod handover;
 mod hotkey;
 mod identity;
+mod lifecycle;
 mod log;
 mod menu;
 mod pill;
@@ -112,9 +113,14 @@ fn main() {
             app_owns_titlebar_drag: true,
             ..Default::default()
         };
+        // A second launch (the tray's «Открыть интерфейс») belongs to the
+        // process already drawing the pill: reveal its window and leave.
+        if lifecycle::reveal_existing(WINDOW_TITLE) {
+            std::process::exit(0);
+        }
         pill::start(cx);
         hotkey::start();
-        cx.open_window(options, |window, cx| {
+        let opened = cx.open_window(options, |window, cx| {
             window.set_window_title(WINDOW_TITLE);
             let view = cx.new(|cx| {
                 let view =
@@ -144,6 +150,12 @@ fn main() {
             cx.new(|_| Shell { root })
         })
         .expect("the Manager window opens");
+        // Closing hides the window instead of ending the process, because the
+        // pill is drawn here and dictation must keep working with the UI gone.
+        let _ = opened.update(cx, |_, window, cx| {
+            lifecycle::remember(window);
+            lifecycle::guard_close(window, cx);
+        });
         cx.activate(true);
     });
 }

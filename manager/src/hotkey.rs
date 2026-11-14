@@ -43,10 +43,14 @@ static TRIGGER: Mutex<String> = Mutex::new(String::new());
 pub fn start() {
     // The Manager keeps the tap, so the Engine's helper must go at once: it
     // carries its own signature, cannot see the key, and would fire a second
-    // toggle if it ever did.
-    crate::handover::from_engine();
+    // toggle if it ever did. Windows has no Manager tap yet, so there the
+    // Engine must keep the hook — releasing it would leave the key dead for
+    // as long as the window is open.
     #[cfg(target_os = "macos")]
-    macos::start();
+    {
+        crate::handover::from_engine();
+        macos::start();
+    }
 }
 
 /// The page that should hear what the tap sees. Called once, when the pages

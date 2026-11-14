@@ -29,6 +29,8 @@ const FRAME: Duration = Duration::from_millis(16);
 /// Off screen nothing is drawn, so the Engine is only asked whether a
 /// dictation started — rarely enough to keep an idle Manager off a CPU.
 const IDLE: Duration = Duration::from_millis(120);
+/// ~15 s of silence from the Engine before a hidden Manager gives up on it.
+const UNANSWERED_LIMIT: u32 = 120;
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
@@ -137,14 +139,17 @@ fn draw_of(frame: &Value) -> Option<Draw> {
     })
 }
 
-fn fetch(engine: &Engine) -> Option<Draw> {
+/// `Err` is an Engine that did not answer at all, which the pill loop reads as
+/// "there is nothing here to draw for any more"; an Engine that answers `idle`
+/// is a quiet session, not a dead one.
+fn fetch(engine: &Engine) -> Result<Option<Draw>, ()> {
     let value = engine
         .rpc("dictation.pill_frame", serde_json::json!({}))
-        .ok()?;
+        .map_err(|_| ())?;
     if value.get("active").and_then(Value::as_bool) != Some(true) {
-        return None;
+        return Ok(None);
     }
-    draw_of(value.get("frame").unwrap_or(&Value::Null))
+    Ok(draw_of(value.get("frame").unwrap_or(&Value::Null)))
 }
 
 /// Watches the Engine and shows the pill while a frame has something to draw.
@@ -160,14 +165,28 @@ pub fn start(cx: &mut App) {
             return;
         };
         let mut window: Option<gpui::WindowHandle<Plate>> = None;
+        let mut unanswered = 0u32;
         loop {
             let tick = if window.is_some() { FRAME } else { IDLE };
             cx.background_executor().timer(tick).await;
             let engine = engine.clone();
-            let draw = cx
+            let probe = cx
                 .background_executor()
                 .spawn(async move { fetch(&engine) })
                 .await;
+            // With the window hidden the pill is all this process is for, so an
+            // Engine that stopped answering means it is over: leave instead of
+            // lingering invisibly in the task list.
+            if probe.is_err() && !crate::lifecycle::main_visible() {
+                unanswered += 1;
+                if unanswered > UNANSWERED_LIMIT {
+                    cx.update(|app: &mut gpui::App| app.quit());
+                    return;
+                }
+            } else {
+                unanswered = 0;
+            }
+            let draw = probe.ok().flatten();
             let image = draw.as_ref().and_then(|draw| renderer.render(draw).ok());
             let plate = draw
                 .as_ref()

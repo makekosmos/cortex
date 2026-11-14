@@ -8,6 +8,9 @@ use serde_json::json;
 
 /// The Engine drops its helper: the Manager keeps the tap, because the person
 /// granted Input Monitoring to the program they see.
+/// macOS only: Windows keeps the Engine's hook for the whole session, so
+/// nothing is handed over there.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn from_engine() {
     std::thread::spawn(|| {
         let engine = crate::engine::Engine::new(crate::engine::data_dir());

@@ -279,7 +279,7 @@ mod native {
     /// the surface answers for it.
     pub(super) fn listen(window: &mut Window) {
         let answered: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, _| {
+        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if event.button != MouseButton::Left {
                 return;
             }
@@ -296,7 +296,7 @@ mod native {
             match control {
                 Control::Minimize => window.minimize_window(),
                 Control::Maximize => window.zoom_window(),
-                Control::Close => window.remove_window(),
+                Control::Close => crate::lifecycle::request_close(window, cx),
             }
         });
     }

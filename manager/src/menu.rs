@@ -66,7 +66,7 @@ pub fn install(cx: &mut App) {
     });
     cx.on_action(|_: &CloseWindow, cx: &mut App| {
         if let Some(handle) = cx.active_window() {
-            let _ = handle.update(cx, |_, window, _| window.remove_window());
+            let _ = handle.update(cx, |_, window, cx| crate::lifecycle::request_close(window, cx));
         }
     });
 }
