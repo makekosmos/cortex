@@ -71,6 +71,8 @@ libc.workspace = true
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Com",
+  # GetCurrentThreadId, for AttachThreadInput-based focus restore.
+  "Win32_System_Threading",
   # IMMDevice::Activate (KOS-342): PROPVARIANT activation params gated here.
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Variant",

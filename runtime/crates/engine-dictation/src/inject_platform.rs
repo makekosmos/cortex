@@ -188,6 +188,43 @@ fn send_paste_shortcut(shortcut: PasteShortcut) -> Result<(), InjectError> {
     Ok(())
 }
 
+/// Windows only lets a process activate a foreign window when it already owns
+/// the foreground, shares its input queue, or was the last to receive input.
+/// A dictation injector is none of those, so SetForegroundWindow alone usually
+/// returns success while the target stays behind. An ALT tap marks this process
+/// as input-owning, which makes the follow-up call actually work.
+#[cfg(windows)]
+fn send_alt_tap() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
+        VIRTUAL_KEY, VK_MENU,
+    };
+
+    fn make_key(vk: u16, key_up: bool) -> INPUT {
+        let flags = if key_up {
+            KEYEVENTF_KEYUP
+        } else {
+            KEYBD_EVENT_FLAGS(0)
+        };
+        INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(vk),
+                    wScan: 0,
+                    dwFlags: flags,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        }
+    }
+
+    let inputs = [make_key(VK_MENU.0, false), make_key(VK_MENU.0, true)];
+    let cb = std::mem::size_of::<INPUT>() as i32;
+    unsafe { SendInput(&inputs, cb) };
+}
+
 /// Result of the `paste-text` helper: it activates the captured pid, waits
 /// for real frontmost, and posts Cmd+V through the HID event tap — pasting
 /// works in any paste-capable control, not only AX-recognised text fields.
@@ -284,17 +321,42 @@ impl OsAdapter for SystemOsAdapter {
         #[cfg(windows)]
         {
             use windows::Win32::Foundation::HWND;
+            use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
             use windows::Win32::UI::WindowsAndMessaging::{
-                GetForegroundWindow, IsWindow, SetForegroundWindow,
+                GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
             };
 
             let hwnd = HWND(raw as *mut _);
             if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
                 return Err(InjectError::StaleTarget);
             }
-            if unsafe { GetForegroundWindow() } != hwnd
-                && !unsafe { SetForegroundWindow(hwnd).as_bool() }
-            {
+            if unsafe { GetForegroundWindow() } == hwnd {
+                return Ok(());
+            }
+            // Share the foreground thread's input queue, then ask again; the
+            // pair is detached on the way out so the queue is not left merged.
+            let foreground = unsafe { GetForegroundWindow() };
+            let mut attached_to = 0u32;
+            if !foreground.0.is_null() {
+                let thread = unsafe { GetWindowThreadProcessId(foreground, None) };
+                let self_thread = unsafe { GetCurrentThreadId() };
+                if thread != 0
+                    && thread != self_thread
+                    && unsafe { AttachThreadInput(self_thread, thread, true).as_bool() }
+                {
+                    attached_to = thread;
+                }
+            }
+            let mut brought = unsafe { SetForegroundWindow(hwnd).as_bool() };
+            if !brought || unsafe { GetForegroundWindow() } != hwnd {
+                send_alt_tap();
+                brought = unsafe { SetForegroundWindow(hwnd).as_bool() };
+            }
+            if attached_to != 0 {
+                let self_thread = unsafe { GetCurrentThreadId() };
+                let _ = unsafe { AttachThreadInput(self_thread, attached_to, false) };
+            }
+            if !brought && unsafe { GetForegroundWindow() } != hwnd {
                 return Err(InjectError::ForegroundRestore);
             }
             if unsafe { GetForegroundWindow() } != hwnd {
