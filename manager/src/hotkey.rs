@@ -76,6 +76,9 @@ pub fn arm() {
     HELD.iter()
         .for_each(|held| held.store(false, Ordering::SeqCst));
     CAPTURING.store(true, Ordering::SeqCst);
+    // Windows has no tap to read the combination, so a poller stands in for it.
+    #[cfg(target_os = "windows")]
+    windows::watch();
     log("capture armed");
     let attempt = ATTEMPT.fetch_add(1, Ordering::SeqCst) + 1;
     publish();
@@ -102,6 +105,172 @@ pub fn request_access() {
 pub fn disarm() {
     if CAPTURING.swap(false, Ordering::SeqCst) {
         publish();
+    }
+}
+
+/// Windows capture: macOS gets the combination from its event tap, Windows has
+/// none, so the keys are polled instead. `GetAsyncKeyState` reports the state of
+/// every key without consuming anything, which is what a "press the combination
+/// you want" prompt needs — the page keeps its own text input working.
+#[cfg(target_os = "windows")]
+mod windows {
+    use std::sync::atomic::Ordering;
+    use std::sync::Once;
+
+    use super::{cancel, finish, log, publish, CAPTURING};
+
+    /// `GetAsyncKeyState`'s high bit: the key is down at this moment.
+    const DOWN: i16 = 0x8000u16 as i16;
+
+    const CTRL: [u32; 3] = [0x11, 0xA2, 0xA3];
+    const SHIFT: [u32; 3] = [0x10, 0xA0, 0xA1];
+    const ALT: [u32; 3] = [0x12, 0xA4, 0xA5];
+    const WIN: [u32; 2] = [0x5B, 0x5C];
+
+    /// The names the Engine parses back (`hotkey_hook::key_to_vk`): anything
+    /// outside this table would be captured and then silently ignored.
+    const KEYS: &[(u32, &str)] = &[
+        (0x08, "Backspace"),
+        (0x09, "Tab"),
+        (0x0D, "Enter"),
+        (0x20, "Space"),
+        (0x21, "PageUp"),
+        (0x22, "PageDown"),
+        (0x23, "End"),
+        (0x24, "Home"),
+        (0x25, "Left"),
+        (0x26, "Up"),
+        (0x27, "Right"),
+        (0x28, "Down"),
+        (0x2D, "Insert"),
+        (0x2E, "Delete"),
+        (0xBA, ";"),
+        (0xBB, "="),
+        (0xBC, ","),
+        (0xBD, "-"),
+        (0xBE, "."),
+        (0xBF, "/"),
+        (0xC0, "`"),
+        (0xDB, "["),
+        (0xDC, "\\"),
+        (0xDD, "]"),
+        (0xDE, "'"),
+    ];
+
+    /// Starts the poller once; it idles between captures.
+    pub(super) fn watch() {
+        static STARTED: Once = Once::new();
+        STARTED.call_once(|| {
+            std::thread::spawn(run);
+        });
+    }
+
+    fn run() {
+        let mut previous: Vec<u32> = Vec::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            if !CAPTURING.load(Ordering::SeqCst) {
+                previous.clear();
+                continue;
+            }
+            let mut down = pressed();
+            let fresh: Vec<u32> = down
+                .iter()
+                .copied()
+                .filter(|vk| !previous.contains(vk))
+                .collect();
+            previous = std::mem::take(&mut down);
+            let Some(&first) = fresh.first() else {
+                continue;
+            };
+            if first == 0x1B && modifiers().is_empty() {
+                log("capture cancelled");
+                cancel("escape");
+                continue;
+            }
+            let held = modifiers();
+            if held.is_empty() {
+                // A bare key is a person typing; the combination needs a
+                // modifier, and the Engine refuses one-key hotkeys anyway.
+                publish();
+                continue;
+            }
+            let Some(token) = token_of(first) else {
+                publish();
+                continue;
+            };
+            let text = format!("{}+{token}", held.join("+"));
+            log(&format!("captured {text}"));
+            finish(&text);
+        }
+    }
+
+    /// Every tracked key that is down right now.
+    fn pressed() -> Vec<u32> {
+        let mut keys = Vec::new();
+        for (vk, _) in KEYS {
+            if is_down(*vk) {
+                keys.push(*vk);
+            }
+        }
+        for vk in 0x30..=0x39u32 {
+            if is_down(vk) {
+                keys.push(vk);
+            }
+        }
+        for vk in 0x41..=0x5Au32 {
+            if is_down(vk) {
+                keys.push(vk);
+            }
+        }
+        for vk in 0x70..=0x87u32 {
+            if is_down(vk) {
+                keys.push(vk);
+            }
+        }
+        keys
+    }
+
+    fn token_of(vk: u32) -> Option<String> {
+        if let Some((_, token)) = KEYS.iter().find(|(key, _)| *key == vk) {
+            return Some((*token).to_owned());
+        }
+        if (0x30..=0x39).contains(&vk) {
+            return Some(char::from_u32(vk)?.to_string());
+        }
+        if (0x41..=0x5A).contains(&vk) {
+            return Some(char::from_u32(vk)?.to_string());
+        }
+        if (0x70..=0x87).contains(&vk) {
+            return Some(format!("F{}", vk - 0x6F));
+        }
+        None
+    }
+
+    fn modifiers() -> Vec<&'static str> {
+        let mut held = Vec::new();
+        if CTRL.iter().any(|vk| is_down(*vk)) {
+            held.push("Ctrl");
+        }
+        if SHIFT.iter().any(|vk| is_down(*vk)) {
+            held.push("Shift");
+        }
+        if ALT.iter().any(|vk| is_down(*vk)) {
+            held.push("Alt");
+        }
+        if WIN.iter().any(|vk| is_down(*vk)) {
+            held.push("Win");
+        }
+        held
+    }
+
+    fn is_down(vk: u32) -> bool {
+        unsafe { GetAsyncKeyState(vk as i32) & DOWN != 0 }
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetAsyncKeyState(vkey: i32) -> i16;
     }
 }
 
@@ -154,7 +323,6 @@ fn publish() {
     emit("hotkeyState", event);
 }
 
-#[cfg(target_os = "macos")]
 fn finish(accelerator: &str) {
     ATTEMPT.fetch_add(1, Ordering::SeqCst);
     CAPTURING.store(false, Ordering::SeqCst);
