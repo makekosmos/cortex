@@ -12,23 +12,14 @@ export function ServerPage(props: PageProps) {
   const engineRunning = () => state().engine.status === "running";
   const engineBusy = () =>
     state().engine.status === "starting" || state().engine.status === "stopping";
-  // The Engine, named and versioned, as its subtitle: the header says what the
-  // product is, this row says what runs under it.
-  const engineSubtitle = () => {
-    const engine = state().engine;
-    return engine.version
-      ? `${statusLabel(engine.status)} · ${engine.version}`
-      : statusLabel(engine.status);
-  };
-  // The header's one button is the release: download it, or install it once it
-  // is ready (green). The Engine's own lifetime lives in the card below.
+  // Nothing to press while there is nothing to do: a check runs by itself, so the
+  // only update button is the one that installs what is already waiting.
   const releaseWaiting = () => {
     const updates = state().updates;
     return (
       updates.canInstall ||
       !!updates.newVersion ||
-      (updates.percent > 0 && updates.percent < 100) ||
-      updates.state === "error"
+      (updates.percent > 0 && updates.percent < 100)
     );
   };
   return (
@@ -45,58 +36,23 @@ export function ServerPage(props: PageProps) {
           }
           last
           right={
-            releaseWaiting()
-              ? updateAction({ ...props, updates: state().updates })
-              : undefined
+            <View class="flex-row items-center gap-2">
+              <PillButton
+                colors={props.colors}
+                tone={engineRunning() ? "danger" : "accent"}
+                label={engineRunning() ? "Остановить" : "Запустить"}
+                disabled={engineBusy()}
+                onPress={() =>
+                  props.onCommand(engineRunning() ? "server.stop" : "server.start")
+                }
+              />
+              {releaseWaiting()
+                ? updateAction({ ...props, updates: state().updates })
+                : undefined}
+            </View>
           }
         />
       </Card>
-
-      <View>
-        <SectionLabel colors={props.colors}>Движок</SectionLabel>
-        <Card colors={props.colors}>
-          <CardRow
-            colors={props.colors}
-            icon="pulse"
-            title="Engine"
-            subtitle={engineSubtitle()}
-            right={
-              <View class="flex-row items-center gap-2">
-                <PillButton
-                  colors={props.colors}
-                  tone={engineRunning() ? "danger" : "accent"}
-                  label={engineRunning() ? "Остановить" : "Запустить"}
-                  disabled={engineBusy()}
-                  onPress={() =>
-                    props.onCommand(engineRunning() ? "server.stop" : "server.start")
-                  }
-                />
-                <PillButton
-                  colors={props.colors}
-                  label="Перезапустить"
-                  disabled={engineBusy()}
-                  onPress={() => props.onCommand("server.restart")}
-                />
-              </View>
-            }
-          />
-          <CardRow
-            colors={props.colors}
-            icon="display"
-            title="Запуск при входе"
-            subtitle="Движок поднимается сам при входе в систему — диктовка работает без Manager"
-            last
-            right={
-              <Switch
-                colors={props.colors}
-                value={state().settings.autostart}
-                accessibilityLabel="Запуск при входе"
-                onChange={(value) => props.onCommand("settings.autostart", { value })}
-              />
-            }
-          />
-        </Card>
-      </View>
 
       <View>
         <SectionLabel colors={props.colors}>Коннектор</SectionLabel>
@@ -164,13 +120,17 @@ export function ServerPage(props: PageProps) {
           </FieldRow>
           <CardRow
             colors={props.colors}
-            title="Порт Engine"
-            subtitle="Из engine.lock.json того Engine, что отвечает"
+            icon="display"
+            title="Запуск при входе"
+            subtitle="Движок поднимается сам при входе в систему — диктовка работает без Manager"
             last
             right={
-              <Text style={{ fontSize: 12.5, color: props.colors.muted }}>
-                {state().engine.port || "—"}
-              </Text>
+              <Switch
+                colors={props.colors}
+                value={state().settings.autostart}
+                accessibilityLabel="Запуск при входе"
+                onChange={(value) => props.onCommand("settings.autostart", { value })}
+              />
             }
           />
         </Card>
