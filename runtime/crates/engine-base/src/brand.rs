@@ -57,7 +57,7 @@ pub const SYSTEM_SERVICE_PIPE: &str = r"\\.\pipe\mundus-system-service";
 pub const CLIENT_CLASS_HEADER: &str = "x-client-class";
 
 /// The pre-rename class header, still accepted from already-shipped clients
-/// (Atlas, agenda, memoria, dictation, imago's kit). Persisted contract — see
+/// (Atlas, dictation, imago's kit). Persisted contract — see
 /// `docs/brand-legacy-identifiers.md`.
 pub const LEGACY_CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
 

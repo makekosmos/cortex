@@ -1,5 +1,5 @@
 ; Mundus Desktop installer (Engine + Manager component) — no Electron.
-; Agenda, Memoria and Dictation are native apps installed by the Engine from
+; Agenda and Dictation are native apps installed by the Engine from
 ; their GitHub releases (KOS-265); only components\manager ships here.
 ;
 ; KOS-306: this script spawns no script host and no per-image process kills —
@@ -218,10 +218,11 @@ Section "Install"
   ; Stop all product processes before touching files or registry.
   !insertmacro StopProductProcesses
 
-  ; Bundled-era component shortcuts — the apps are store-installed now,
+  ; Bundled-era component shortcuts - the apps are store-installed now,
   ; so these point at files the upgrade deletes. Engine-owned links live
-  ; under "$SMPROGRAMS\Mundus\" — flat-name deletes can never reach them.
+  ; under "$SMPROGRAMS\Mundus\" - flat-name deletes can never reach them.
   Delete "$SMPROGRAMS\Agenda.lnk"
+  ; Memoria is retired; the link is deleted where a bundled-era one is left.
   Delete "$SMPROGRAMS\Memoria.lnk"
   Delete "$SMPROGRAMS\Dictation.lnk"
 

@@ -1,5 +1,7 @@
-// The hardcoded store table: one descriptor per shipped native app plus the
-// naming rules that tie GitHub Releases assets to install records.
+// The naming rules that tie GitHub Releases assets to install records. The
+// product ships no hardcoded apps: the catalog declares the plugins
+// (`plugins/catalog.json`), and what the Engine installs is always described
+// by a manifest, never by a table in the binary.
 
 /// One hardcoded store row: everything needed to name, locate and verify a
 /// release asset without a catalog service. Ids are persisted identifiers
@@ -19,7 +21,7 @@ pub struct NativeAppDescriptor {
     /// unix targets).
     pub asset_stem: &'static str,
     /// Dev-only env override naming an executable to launch instead of the
-    /// installed one (`MUNDUS_MEMORIA_EXECUTABLE` etc., via `brand::env`).
+    /// installed one (`TEST_APP_EXECUTABLE` in the tests, via `brand::env`).
     pub env_override: &'static str,
 }
 
@@ -91,29 +93,27 @@ impl<'a> ReleaseTarget<'a> {
     }
 }
 
-/// The store's app list — the whole catalog, hardcoded.
+/// The store's app list — empty, on purpose.
 ///
-/// Ids are `computer.mundus.*`: the product was renamed and its own component
-/// ids moved with it. Installs made under the old `com.kosmos.*` ids are moved
-/// by [`super::RENAMED_IDS`] on the first start after the rename.
-pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
-    NativeAppDescriptor {
-        id: "computer.mundus.memoria",
-        name: "Memoria",
-        repository: "makekosmos/memoria-gpui",
-        tag_prefix: "v",
-        asset_stem: "memoria-gpui",
-        env_override: "MEMORIA_EXECUTABLE",
-    },
-    NativeAppDescriptor {
-        id: "computer.mundus.dictation",
-        name: "Dictation",
-        repository: "makekosmos/dictation",
-        tag_prefix: "gpui-v",
-        asset_stem: "dictation-gpui",
-        env_override: "DICTATION_EXECUTABLE",
-    },
-];
+/// Atlas is the product's app, and every component with code is a plugin the
+/// catalog declares ([`crate::plugins`]): a new one is a new manifest, not a
+/// new row here. The table survives for the store that installs, launches and
+/// shortcuts whatever an install record says ([`ReleaseTarget`] carries the
+/// naming rules), so nothing in this file has to know an id.
+pub const NATIVE_APPS: &[NativeAppDescriptor] = &[];
+
+/// The descriptor the unit tests exercise — release naming, install layout,
+/// shortcuts, dev env overrides. Not in [`NATIVE_APPS`]: the product ships no
+/// hardcoded apps, and a fixture in the table would be one.
+#[cfg(test)]
+pub(crate) const TEST_APP: NativeAppDescriptor = NativeAppDescriptor {
+    id: "computer.mundus.test-app",
+    name: "Test App",
+    repository: "makekosmos/test-app",
+    tag_prefix: "v",
+    asset_stem: "test-app",
+    env_override: "TEST_APP_EXECUTABLE",
+};
 
 fn is_windows_target(target: &str) -> bool {
     target.ends_with("-pc-windows-msvc")

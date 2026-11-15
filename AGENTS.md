@@ -1,9 +1,9 @@
 # AGENTS.md — cortex
 
 Cortex — это Mundus Engine (`runtime/`), встроенное ядро данных ARK (`core/`),
-Manager (`manager/`) и упаковка/релизы (`desktop/`). Memoria и Dictation живут в своих репозиториях (`makekosmos/memoria-gpui`,
-`makekosmos/dictation`) и ставятся Engine из GitHub
-Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
+Manager (`manager/`) и упаковка/релизы (`desktop/`). Atlas — приложение продукта;
+из плагинов сейчас только Dictation (`makekosmos/dictation`), и он ставится
+Engine по каталогу (`plugins/catalog.json`) из GitHub Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
 Linux годится для разработки Engine (`docs/linux-dev.md`).
 Локальный диктовочный dev-цикл (watchers, lock-файл, файловый источник
 захвата, ловушки lefthook) — `docs/dictation-dev.md`.
@@ -116,7 +116,7 @@ CI на GitHub запускается на каждый PR и на push в `main
   `scripts/check-dep-pins.mjs`; новые дубликаты версий ловит `deny.toml`
   (убрал дубликат — удали его `skip` в том же PR). `Cargo.lock` коммитится,
   CI собирает с `--locked`. Версии `gpui`/`gpui-component`/`gpui-base` в
-  Manager должны совпадать с агендой, Memoria и Dictation: две версии gpui в
+  Manager должны совпадать с Atlas и Dictation: две версии gpui в
   одной сборке — ошибка типов, поднимай их вместе.
 - Схема данных ARK меняется добавлением по умолчанию; разовая перезапись
   объектов разрешается только по явному согласованию для конкретной задачи, в

@@ -34,8 +34,10 @@ const PRODUCT_PROCESS_NAMES: &[&str] = &[
     "Mundus.exe",
     "mundus-engine.exe",
     "Mundus Manager.exe",
-    // Store-installed native apps — must not hold their dir while
-    // the Engine or an uninstall replaces/removes it.
+    // Store-installed components - must not hold their dir while the Engine
+    // or an uninstall replaces/removes it. memoria-gpui is retired and is killed
+    // for the same reason: a running leftover would keep its directory from
+    // being deleted.
     "memoria-gpui.exe",
     "dictation-gpui.exe",
 ];

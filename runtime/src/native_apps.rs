@@ -119,6 +119,8 @@ pub enum NativeAppError {
 pub type Result<T> = std::result::Result<T, NativeAppError>;
 
 mod descriptor;
+#[cfg(test)]
+pub(crate) use descriptor::TEST_APP;
 pub use descriptor::{
     app_descriptor, host_app_target, NativeAppDescriptor, ReleaseTarget, NATIVE_APPS,
 };
@@ -229,10 +231,12 @@ pub fn default_store() -> Result<NativeAppStore> {
 /// The install directory is the id, so a rename is a directory move — see
 /// [`NativeAppStore::migrate_renamed_ids`]. Kept here rather than in a
 /// migration script: every start re-runs it, and a locked app is retried.
-pub const RENAMED_IDS: &[(&str, &str)] = &[
-    ("com.kosmos.dictation", "computer.mundus.dictation"),
-    ("com.kosmos.memoria", "computer.mundus.memoria"),
-];
+pub const RENAMED_IDS: &[(&str, &str)] = &[("com.kosmos.dictation", "computer.mundus.dictation")];
+
+/// Components the product no longer has. Their install directory is deleted on
+/// start: with no descriptor and no manifest, nothing can list, launch or
+/// uninstall it, so leaving it is dead weight. User data stays untouched.
+pub const RETIRED_IDS: &[&str] = &["com.kosmos.memoria", "computer.mundus.memoria"];
 
 /// The manifest a plugin install keeps beside `install.json`.
 const PLUGIN_FILE: &str = "plugin.json";
@@ -300,6 +304,8 @@ impl NativeAppStore {
         // under the old id would otherwise sit in the Apps root as a directory
         // nothing looks for any more.
         store.migrate_renamed_ids();
+        // Components the product dropped: their install goes, their data stays.
+        store.retire_removed_components();
         Ok(store)
     }
 
@@ -361,6 +367,33 @@ impl NativeAppStore {
                 rewrite_id(&to.join(file), new);
             }
             tracing::info!(target: "native_apps", old, new, "install renamed");
+        }
+    }
+
+    /// Deletes installs of components the product no longer has.
+    ///
+    /// Nothing can act on such a directory: no descriptor, no manifest, no
+    /// settings page. A running executable holds its files, so the removal is
+    /// retried on every start rather than reported as an error.
+    pub fn retire_removed_components(&self) {
+        for id in RETIRED_IDS {
+            let dir = self.app_dir(id);
+            if !dir.is_dir() {
+                continue;
+            }
+            match fs::remove_dir_all(&dir) {
+                Ok(()) => tracing::info!(
+                    target: "native_apps",
+                    id,
+                    "retired component removed"
+                ),
+                Err(error) => tracing::warn!(
+                    target: "native_apps",
+                    id,
+                    %error,
+                    "retired component is in use; will retry on the next start"
+                ),
+            }
         }
     }
 

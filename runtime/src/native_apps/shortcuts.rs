@@ -55,6 +55,11 @@ pub fn sync_shortcut(
 
 /// Reconcile every store app's link at once. Per-app best-effort: one bad
 /// link is logged and skipped, never blocking the rest of the table.
+///
+/// The table is what the product ships ([`NATIVE_APPS`]) and it is empty by
+/// construction — components arrive from the catalog, not from the binary — so
+/// this is a no-op until a shipped app comes back. The per-app work it calls is
+/// still what a catalog-driven sync would reuse.
 pub fn reconcile_shortcuts(store: &NativeAppStore, programs: &Path) {
     for desc in NATIVE_APPS {
         if let Err(error) = sync_shortcut(store, programs, desc) {

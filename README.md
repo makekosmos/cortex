@@ -51,14 +51,13 @@ This repository owns the Engine and everything around it.
 | 🧪 **Gate**      | `scripts/`              | Local check planner (`check-*.mjs`), `dev.mjs`, Lefthook contracts                                                                                                                       |
 | 📚 **Docs**      | `docs/`                 | Decisions and measurements (`docs/experiments/` is a measurement log, not rules)                                                                                                         |
 
-The apps themselves live in sibling repositories. The Engine's Store installs
-them from their GitHub Releases into `%LOCALAPPDATA%\Mundus\Apps`; the
-installer does not bundle them.
+The components live in sibling repositories and arrive through the plugin
+catalog (`plugins/catalog.json`): the Engine installs them from their GitHub
+Releases into `%LOCALAPPDATA%\Mundus\Apps`; the installer does not bundle them.
 
-| App          | Repository                                                                  |
-| ------------ | --------------------------------------------------------------------------- |
-| 🧠 Memoria   | [`makekosmos/memoria-gpui`](https://github.com/makekosmos/memoria-gpui)     |
-| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation)           |
+| Plugin       | Repository                                                        |
+| ------------ | ----------------------------------------------------------------- |
+| 🎙️ Dictation | [`makekosmos/dictation`](https://github.com/makekosmos/dictation) |
 
 ## Download
 
@@ -94,8 +93,7 @@ copying the app to /Applications.
 
 ```mermaid
 flowchart LR
-    subgraph apps["Native apps (sibling repos)"]
-        memoria["Memoria"]
+    subgraph apps["Plugins (sibling repos)"]
         dictation["Dictation"]
     end
 
@@ -112,7 +110,7 @@ flowchart LR
     peers(["Other devices"])
     feed(["GitHub Releases<br/><sub>manifest.json</sub>"])
 
-    memoria & dictation --> api
+    dictation --> api
     manager --> api
     api --> host & priv & ark
     ark <-. "iroh · relay · beacon" .-> peers
@@ -310,8 +308,8 @@ BOM validator or the provenance emitter.
   synced data bumps the sync version vector.
 - **The product is Mundus.** `pnpm run check:brand` guards legacy names
   ([`docs/brand-legacy-identifiers.md`](docs/brand-legacy-identifiers.md)).
-- **One gpui version.** The Manager pins the same `gpui` as Agenda, Memoria,
-  and Dictation. Bump them together.
+- **One gpui version.** The Manager pins the same `gpui` as Atlas and
+  Dictation. Bump them together.
 
 The full rule set for contributors and agents is in [`AGENTS.md`](AGENTS.md).
 

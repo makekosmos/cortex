@@ -5,18 +5,18 @@ use tempfile::TempDir;
 use zip::{write::FileOptions, ZipWriter};
 
 fn spec(version: &str, archive: &Path) -> NativeInstallSpec {
-    spec_for(version, archive, "memoria-gpui.exe")
+    spec_for(version, archive, "test-app.exe")
 }
 
 fn spec_for(version: &str, archive: &Path, executable: &str) -> NativeInstallSpec {
     let bytes = fs::read(archive).unwrap();
     NativeInstallSpec {
-        id: "computer.mundus.memoria".into(),
+        id: "computer.mundus.test-app".into(),
         version: version.into(),
         executable: executable.into(),
         sha256: format!("{:x}", Sha256::digest(&bytes)),
         size: bytes.len() as u64,
-        repository: "makekosmos/memoria-gpui".into(),
+        repository: "makekosmos/test-app".into(),
         release_tag: format!("v{version}"),
     }
 }
@@ -96,20 +96,20 @@ fn install_from_tarball_extracts_bundle_and_keeps_exec_bit() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.tar.gz");
-    let executable = "Memoria.app/Contents/MacOS/memoria-gpui";
+    let executable = "Test App.app/Contents/MacOS/test-app";
     // The bundle binary may arrive 0644 in the archive — the extractor must
     // still land the declared executable runnable.
     write_tar_gz(
         &archive,
         &[
-            ("Memoria.app/Contents/Info.plist", 0o644, b"plist"),
+            ("Test App.app/Contents/Info.plist", 0o644, b"plist"),
             (executable, 0o644, b"binary"),
         ],
     );
     store
         .install_archive(&spec_for("0.2.0", &archive, executable), &archive)
         .unwrap();
-    let installed = store.executable_path("computer.mundus.memoria").unwrap();
+    let installed = store.executable_path("computer.mundus.test-app").unwrap();
     assert!(installed.is_file());
     assert_eq!(fs::read(&installed).unwrap(), b"binary");
     #[cfg(unix)]
@@ -129,9 +129,9 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
     // Windows record hygiene only accepts `*.exe`; darwin tarballs carry the
     // `.app` bundle path. Either way the safety gate must run.
     let executable = if cfg!(windows) {
-        "memoria-gpui.exe"
+        "test-app.exe"
     } else {
-        "Memoria.app/Contents/MacOS/memoria-gpui"
+        "Test App.app/Contents/MacOS/test-app"
     };
 
     // `..` escapes staging — rejected like the zip traversal case.
@@ -143,7 +143,7 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
     assert!(store
         .install_archive(&spec_for("0.1.0", &traversal, executable), &traversal)
         .is_err());
-    assert!(store.current("computer.mundus.memoria").unwrap().is_none());
+    assert!(store.current("computer.mundus.test-app").unwrap().is_none());
     assert!(!dir.path().join("Apps").join("escape").exists());
 
     // Symlinks are rejected outright — same rule as zip unix-mode markers.
@@ -162,7 +162,7 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
         builder
             .append_data(&mut header, executable, b"binary".as_slice())
             .unwrap();
-        append_tar_link(&mut builder, "Memoria.app/link");
+        append_tar_link(&mut builder, "Test App.app/link");
         builder.into_inner().unwrap().finish().unwrap();
     }
     assert!(store
@@ -179,20 +179,17 @@ fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
 
 #[test]
 fn executable_path_matches_each_target_layout() {
-    let memoria = app_descriptor("computer.mundus.memoria").unwrap();
+    let app = &TEST_APP;
+    assert_eq!(app.executable("x86_64-pc-windows-msvc"), "test-app.exe");
     assert_eq!(
-        memoria.executable("x86_64-pc-windows-msvc"),
-        "memoria-gpui.exe"
+        app.executable("aarch64-apple-darwin"),
+        "Test App.app/Contents/MacOS/test-app"
     );
     assert_eq!(
-        memoria.executable("aarch64-apple-darwin"),
-        "Memoria.app/Contents/MacOS/memoria-gpui"
-    );
-    assert_eq!(
-        app_descriptor("computer.mundus.dictation")
-            .unwrap()
-            .executable("aarch64-apple-darwin"),
-        "Dictation.app/Contents/MacOS/dictation-gpui"
+        app_descriptor("computer.mundus.test-app")
+            .map(|app| app.executable("x86_64-pc-windows-msvc")),
+        None,
+        "the product ships no hardcoded apps any more"
     );
 }
 
@@ -209,7 +206,7 @@ fn install_flips_pointer_and_cleans_old_versions() {
     let archive = dir.path().join("app.zip");
     write_zip(
         &archive,
-        &[("memoria-gpui.exe", b"exe"), ("LICENSE", b"license")],
+        &[("test-app.exe", b"exe"), ("LICENSE", b"license")],
     );
     let first = store
         .install_archive(&spec("0.1.0", &archive), &archive)
@@ -217,14 +214,14 @@ fn install_flips_pointer_and_cleans_old_versions() {
     assert_eq!(first.version, "0.1.0");
     assert_eq!(
         store
-            .current("computer.mundus.memoria")
+            .current("computer.mundus.test-app")
             .unwrap()
             .unwrap()
             .version,
         "0.1.0"
     );
     assert!(store
-        .executable_path("computer.mundus.memoria")
+        .executable_path("computer.mundus.test-app")
         .unwrap()
         .is_file());
 
@@ -233,7 +230,7 @@ fn install_flips_pointer_and_cleans_old_versions() {
         .install_archive(&spec("0.2.0", &archive), &archive)
         .unwrap();
     assert_eq!(second.version, "0.2.0");
-    let app_dir = dir.path().join("Apps").join("computer.mundus.memoria");
+    let app_dir = dir.path().join("Apps").join("computer.mundus.test-app");
     let dirs: Vec<_> = fs::read_dir(&app_dir)
         .unwrap()
         .flatten()
@@ -249,7 +246,7 @@ fn bad_sha_leaves_previous_version_current() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.zip");
-    write_zip(&archive, &[("memoria-gpui.exe", b"exe")]);
+    write_zip(&archive, &[("test-app.exe", b"exe")]);
     store
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
@@ -260,10 +257,10 @@ fn bad_sha_leaves_previous_version_current() {
         store.install_archive(&bad, &archive),
         Err(NativeAppError::HashMismatch)
     ));
-    let current = store.current("computer.mundus.memoria").unwrap();
+    let current = store.current("computer.mundus.test-app").unwrap();
     assert_eq!(current.expect("record").version, "0.1.0");
     assert!(store
-        .executable_path("computer.mundus.memoria")
+        .executable_path("computer.mundus.test-app")
         .unwrap()
         .is_file());
 }
@@ -273,7 +270,7 @@ fn bad_archive_leaves_previous_version_current() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let good = dir.path().join("good.zip");
-    write_zip(&good, &[("memoria-gpui.exe", b"exe")]);
+    write_zip(&good, &[("test-app.exe", b"exe")]);
     store.install_archive(&spec("0.1.0", &good), &good).unwrap();
 
     // Traversal entry fails the archive-safety gate mid-extraction.
@@ -281,7 +278,7 @@ fn bad_archive_leaves_previous_version_current() {
     {
         let file = fs::File::create(&evil).unwrap();
         let mut zip = ZipWriter::new(file);
-        zip.start_file("memoria-gpui.exe", FileOptions::default())
+        zip.start_file("test-app.exe", FileOptions::default())
             .unwrap();
         zip.write_all(b"exe").unwrap();
         zip.add_directory("../escape", FileOptions::default())
@@ -293,7 +290,7 @@ fn bad_archive_leaves_previous_version_current() {
     assert!(result.is_err());
     assert_eq!(
         store
-            .current("computer.mundus.memoria")
+            .current("computer.mundus.test-app")
             .unwrap()
             .unwrap()
             .version,
@@ -301,9 +298,9 @@ fn bad_archive_leaves_previous_version_current() {
     );
     assert!(store
         .root()
-        .join("computer.mundus.memoria")
+        .join("computer.mundus.test-app")
         .join("0.1.0")
-        .join("memoria-gpui.exe")
+        .join("test-app.exe")
         .is_file());
     assert!(!dir.path().join("Apps").join("escape").exists());
 
@@ -314,7 +311,7 @@ fn bad_archive_leaves_previous_version_current() {
     assert!(store.install_archive(&spec_missing, &missing).is_err());
     assert_eq!(
         store
-            .current("computer.mundus.memoria")
+            .current("computer.mundus.test-app")
             .unwrap()
             .unwrap()
             .version,
@@ -327,32 +324,32 @@ fn uninstall_removes_everything() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let archive = dir.path().join("app.zip");
-    write_zip(&archive, &[("memoria-gpui.exe", b"exe")]);
+    write_zip(&archive, &[("test-app.exe", b"exe")]);
     store
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
     assert_eq!(store.list().len(), 1);
-    store.uninstall("computer.mundus.memoria").unwrap();
+    store.uninstall("computer.mundus.test-app").unwrap();
     assert!(store.list().is_empty());
-    assert!(store.current("computer.mundus.memoria").unwrap().is_none());
+    assert!(store.current("computer.mundus.test-app").unwrap().is_none());
     assert!(!dir
         .path()
         .join("Apps")
-        .join("computer.mundus.memoria")
+        .join("computer.mundus.test-app")
         .exists());
     // Uninstall is idempotent.
-    store.uninstall("computer.mundus.memoria").unwrap();
+    store.uninstall("computer.mundus.test-app").unwrap();
 }
 
 #[test]
 fn corrupt_record_reads_as_absent() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
-    let app_dir = dir.path().join("Apps").join("computer.mundus.memoria");
+    let app_dir = dir.path().join("Apps").join("computer.mundus.test-app");
     fs::create_dir_all(&app_dir).unwrap();
     fs::write(app_dir.join(INSTALL_FILE), b"not json").unwrap();
-    assert!(store.current("computer.mundus.memoria").unwrap().is_none());
-    store.uninstall("computer.mundus.memoria").unwrap();
+    assert!(store.current("computer.mundus.test-app").unwrap().is_none());
+    store.uninstall("computer.mundus.test-app").unwrap();
     assert!(!app_dir.exists());
 }
 
@@ -387,11 +384,11 @@ fn an_install_under_the_old_id_moves_to_the_renamed_one() {
 fn a_second_install_under_the_new_id_is_left_alone() {
     let dir = TempDir::new().unwrap();
     let apps = dir.path().join("Apps");
-    let old = apps.join("com.kosmos.memoria");
-    let new = apps.join("computer.mundus.memoria");
+    let old = apps.join("com.kosmos.dictation");
+    let new = apps.join("computer.mundus.dictation");
     fs::create_dir_all(&old).unwrap();
     fs::create_dir_all(&new).unwrap();
-    fs::write(old.join(INSTALL_FILE), br#"{"id":"com.kosmos.memoria"}"#).unwrap();
+    fs::write(old.join(INSTALL_FILE), br#"{"id":"com.kosmos.dictation"}"#).unwrap();
 
     let _store = NativeAppStore::new(apps.clone()).unwrap();
 
@@ -399,6 +396,27 @@ fn a_second_install_under_the_new_id_is_left_alone() {
     // than leaving both where they are.
     assert!(old.join(INSTALL_FILE).is_file());
     assert!(new.is_dir());
+}
+
+#[test]
+fn a_retired_component_install_is_deleted() {
+    let dir = TempDir::new().unwrap();
+    let apps = dir.path().join("Apps");
+    let new_id = apps.join("computer.mundus.memoria");
+    let old_id = apps.join("com.kosmos.memoria");
+    fs::create_dir_all(new_id.join("0.7.3")).unwrap();
+    fs::create_dir_all(&old_id).unwrap();
+    fs::write(
+        new_id.join(INSTALL_FILE),
+        br#"{"id":"computer.mundus.memoria"}"#,
+    )
+    .unwrap();
+
+    let _store = NativeAppStore::new(apps.clone()).unwrap();
+
+    // Nothing can list, launch or uninstall an install nothing describes.
+    assert!(!new_id.exists());
+    assert!(!old_id.exists());
 }
 
 // --- Release metadata: sums parsing, tag/version agreement, ---

@@ -88,18 +88,17 @@ the node executable path — rather than `undefined`. Always pass
 
 ## OS-branch audit (KOS-100)
 
-A KOS-100 audit of first-party app product `src/` (Agenda, Memoria,
-Arcadia, Dictation, Store; Ordo was audited before its source moved to
+A KOS-100 audit of first-party app product `src/` (Agenda, Arcadia, Dictation,
+Store; Ordo was audited before its source moved to
 `incubator/ordo-vue`) found no `process.platform` or
 `os.platform` use in renderer code. The only app-side OS detection was
 window-chrome styling; those sites now consume the Engine-side platform
-state instead. Memoria's `getPlatform()` keeps a `navigator.userAgent`
-fallback only for sessions running outside a managed host.
+state instead.
 Remaining follow-up: Arcadia's library copy is Windows-centric (`.exe`
 paths, `C:\Games\...` placeholder). To re-run the search from a directory
 holding the app checkouts:
 
 ```text
 rg -n 'process\.platform|os\.platform|navigator\.platform|navigator\.userAgent|\bwin32\b|\bdarwin\b|data-platform|platform="' \
-  memoria/src arcadia/src dictation/src
+  arcadia/src dictation/src
 ```

@@ -8,7 +8,7 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
     let archive = dir.path().join(format!("app-{version}.zip"));
     let file = fs::File::create(&archive).unwrap();
     let mut zip = ZipWriter::new(file);
-    zip.start_file("memoria-gpui.exe", FileOptions::default())
+    zip.start_file("test-app.exe", FileOptions::default())
         .unwrap();
     zip.write_all(b"MZ fixture").unwrap();
     zip.finish().unwrap();
@@ -16,12 +16,12 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
     store
         .install_archive(
             &NativeInstallSpec {
-                id: "computer.mundus.memoria".into(),
+                id: "computer.mundus.test-app".into(),
                 version: version.into(),
-                executable: "memoria-gpui.exe".into(),
+                executable: "test-app.exe".into(),
                 sha256: format!("{:x}", Sha256::digest(&bytes)),
                 size: bytes.len() as u64,
-                repository: "makekosmos/memoria-gpui".into(),
+                repository: "makekosmos/test-app".into(),
                 release_tag: format!("v{version}"),
             },
             &archive,
@@ -29,33 +29,33 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
         .unwrap()
 }
 
-fn memoria() -> &'static NativeAppDescriptor {
-    app_descriptor("computer.mundus.memoria").unwrap()
+fn test_app() -> &'static NativeAppDescriptor {
+    &TEST_APP
 }
 
 fn link(dir: &TempDir) -> PathBuf {
-    link_path(dir.path(), memoria())
+    link_path(dir.path(), test_app())
 }
 
 #[test]
 fn link_lives_under_the_product_subfolder() {
     // The path must stay inside `<Programs>\Mundus\` — the installer's flat
     // legacy deletes (`$SMPROGRAMS\Memoria.lnk`) can never reach it.
-    let link = link_path(Path::new("Programs"), memoria());
+    let link = link_path(Path::new("Programs"), test_app());
     assert_eq!(
         link,
-        Path::new("Programs").join("Mundus").join("Memoria.lnk")
+        Path::new("Programs").join("Mundus").join("Test App.lnk")
     );
 }
 
 #[test]
-fn reconcile_removes_links_without_an_install_record() {
+fn a_link_without_an_install_record_is_removed() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     let link = link(&dir);
     fs::create_dir_all(link.parent().unwrap()).unwrap();
     fs::write(&link, b"stale").unwrap();
-    reconcile_shortcuts(&store, dir.path());
+    sync_shortcut(&store, dir.path(), test_app()).unwrap();
     assert!(!link.exists());
 }
 
@@ -96,26 +96,26 @@ fn sync_writes_and_repoints_the_real_lnk() {
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
     install_fixture(&store, &dir, "0.1.0");
 
-    sync_shortcut(&store, &programs, memoria()).unwrap();
-    let link = link_path(&programs, memoria());
+    sync_shortcut(&store, &programs, test_app()).unwrap();
+    let link = link_path(&programs, test_app());
     assert!(link.is_file());
-    let target = store.executable_for(memoria()).unwrap();
+    let target = store.executable_for(test_app()).unwrap();
     assert!(link_points_at(&link, &target));
 
     // Idempotent: a correct link is not rewritten.
     let written = fs::metadata(&link).unwrap().modified().unwrap();
-    sync_shortcut(&store, &programs, memoria()).unwrap();
+    sync_shortcut(&store, &programs, test_app()).unwrap();
     assert_eq!(fs::metadata(&link).unwrap().modified().unwrap(), written);
 
     // Update: the link repoints at the new version's executable.
     install_fixture(&store, &dir, "0.2.0");
-    sync_shortcut(&store, &programs, memoria()).unwrap();
-    let target = store.executable_for(memoria()).unwrap();
+    sync_shortcut(&store, &programs, test_app()).unwrap();
+    let target = store.executable_for(test_app()).unwrap();
     assert!(target.to_string_lossy().contains("0.2.0"));
     assert!(link_points_at(&link, &target));
 
     // Uninstall: the link goes with the app.
-    store.uninstall("computer.mundus.memoria").unwrap();
-    sync_shortcut(&store, &programs, memoria()).unwrap();
+    store.uninstall("computer.mundus.test-app").unwrap();
+    sync_shortcut(&store, &programs, test_app()).unwrap();
     assert!(!link.exists());
 }

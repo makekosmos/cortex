@@ -11,7 +11,7 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | Identifier                                                                 | Where                                                                                                                                                           | Why it stays                                                                                     |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `makekosmos` (GitHub org/repo URLs)                                        | component pins, updater channel `makekosmos/cortex`, `imago` git deps (`imago-gpui`, `mundus-gpui-kit`), docs links | Org rename is a separate change; GitHub redirects keep old URLs valid.                           |
-| `com.kosmos.*`                                                             | signed-catalog package ids (`com.kosmos.hevy`, `com.kosmos.integrations.fatsecret`, `com.kosmos.core` owner ids)                                                                                                    | Package and canonical type ids persisted in user DBs and remote catalogs we do not control. The product's **own** component ids moved to `computer.mundus.*` (dictation, memoria) and are migrated on start — see below. |
+| `com.kosmos.*`                                                             | signed-catalog package ids (`com.kosmos.hevy`, `com.kosmos.integrations.fatsecret`, `com.kosmos.core` owner ids)                                                                                                    | Package and canonical type ids persisted in user DBs and remote catalogs we do not control. The product's **own** component id moved to `computer.mundus.dictation` and is migrated on start — see below. |
 | `kosmos-root-2026`, `kosmos-release-2026`                                  | `package_service` signing key id                                                                                                                                | The key id is embedded in signed catalogs and installed trust state; rotation is KOS-265.        |
 | `publisher: "kosmos"`                                                      | package manifests persisted by old installs                                                                                                                    | Persisted contract in already-installed package state.                                           |
 | `extensions.kosmos` / `"kosmos":` JSON keys                                | ARK object extensions in user DBs (`taskBucket` etc.)                                                                                                           | Persisted user data.                                                                             |
@@ -33,20 +33,30 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 ## Component ids moved with the rename
 
 The product's own components are named `computer.mundus.*` (`computer.mundus.engine`
-is the launchd label). The two component ids that used `com.kosmos.*` moved:
+is the launchd label). The one component id that used `com.kosmos.*` moved:
 
 | Old id | New id | Migrated by |
 | --- | --- | --- |
 | `com.kosmos.dictation` | `computer.mundus.dictation` | `native_apps::RENAMED_IDS` on every Engine start |
-| `com.kosmos.memoria` | `computer.mundus.memoria` | same |
 
 An install is its directory (`Apps/<id>`), so the migration renames the
 directory and rewrites `id` in `install.json` / `plugin.json`; a locked
 executable is retried on the next start, and two installs under both ids are
 left alone rather than guessed about.
 
+The Engine hardcodes no app ids at all (`native_apps::NATIVE_APPS` is empty):
+components are declared by the plugin catalog, so a component's id lives in
+`plugins/catalog.json`, not in the binary.
+
 `com.kosmos.*` is still correct where the id is **not ours**: package ids in the
 signed catalog and canonical type/owner ids already written into user databases.
+
+## Components that were dropped
+
+`memoria` is no longer part of the product. Its install directories
+(`com.kosmos.memoria`, `computer.mundus.memoria`) are deleted on start by
+`native_apps::RETIRED_IDS` — with no descriptor and no manifest nothing can
+list, launch or uninstall it — while user data is left where it is.
 
 ## Legacy data-dir move
 
@@ -78,7 +88,7 @@ is the first name that leaves the repository, so it is a role, not a product:
 | Name                             | Where it lives                                          | Why                                                                                                                                    |
 | -------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `X-Client-Class`                 | `engine_base::brand::CLIENT_CLASS_HEADER`, the Manager's `identity::CLIENT_CLASS_HEADER` | Names the caller's role. A product rename never touches the wire.                                    |
-| `x-kosmos-client-class` (legacy) | `brand::LEGACY_CLIENT_CLASS_HEADER`                      | Still accepted from already-shipped clients (Atlas, agenda, memoria, dictation, imago's kit). Dropped only once they all send the new one. |
+| `x-kosmos-client-class` (legacy) | `brand::LEGACY_CLIENT_CLASS_HEADER`                      | Still accepted from already-shipped clients (Atlas, agenda, dictation, imago's kit). Dropped only once they all send the new one. |
 | `manager`, `mundus-manager`      | `brand::MANAGER_CLIENT_CLASSES`                         | The Manager's own class.                                                                              |
 | `manager-gpui` (legacy)          | `brand::MANAGER_CLIENT_CLASSES`                         | The class Managers installed before 0.10.27 send. An Engine outlives the Manager that started it, so a mixed install must keep working; drop it when no such binary can run. |
 
