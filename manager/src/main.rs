@@ -57,7 +57,83 @@ impl gpui::Render for Shell {
     }
 }
 
+/// `MUNDUS_STARTUP_TRACE=1`: how long each step of opening the window took,
+/// on stderr. Off by default.
+fn boot_trace(boot: &std::time::Instant, label: &str) {
+    if std::env::var_os("MUNDUS_STARTUP_TRACE").is_none() {
+        return;
+    }
+    let since_spawn = ms_since_process_start()
+        .map(|ms| format!(", {ms} ms since the process started"))
+        .unwrap_or_default();
+    eprintln!(
+        "boot: {label} ({} ms in main{since_spawn})",
+        boot.elapsed().as_millis()
+    );
+}
+
+/// Time from process creation to now: includes mapping the exe and loading its
+/// DLLs, which `Instant` cannot see.
+#[cfg(windows)]
+fn ms_since_process_start() -> Option<u128> {
+    use std::ffi::c_void;
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> *mut c_void;
+        fn GetProcessTimes(
+            process: *mut c_void,
+            creation: *mut u64,
+            exit: *mut u64,
+            kernel: *mut u64,
+            user: *mut u64,
+        ) -> i32;
+        fn GetSystemTimeAsFileTime(time: *mut u64);
+    }
+    unsafe {
+        let mut creation = 0u64;
+        let (mut exit, mut kernel, mut user) = (0u64, 0u64, 0u64);
+        if GetProcessTimes(
+            GetCurrentProcess(),
+            &mut creation,
+            &mut exit,
+            &mut kernel,
+            &mut user,
+        ) == 0
+        {
+            return None;
+        }
+        let mut now = 0u64;
+        GetSystemTimeAsFileTime(&mut now);
+        Some(u128::from(now.saturating_sub(creation)) / 10_000)
+    }
+}
+
+#[cfg(not(windows))]
+fn ms_since_process_start() -> Option<u128> {
+    None
+}
+
+/// Frames 1..34 with their timings: the JS bundle is evaluated on the first
+/// frames, so "opened" can mean "the first frame" or "the frame with the real
+/// pages".
+fn arm_frame_trace(
+    window: &mut gpui::Window,
+    boot: std::time::Instant,
+    seen: std::rc::Rc<std::cell::Cell<u32>>,
+) {
+    window.on_next_frame(move |window, _cx| {
+        let frame = seen.get() + 1;
+        seen.set(frame);
+        if matches!(frame, 1 | 2 | 3 | 5 | 8 | 13 | 21 | 34) {
+            boot_trace(&boot, &format!("frame {frame}"));
+        }
+        if frame < 34 {
+            arm_frame_trace(window, boot, seen.clone());
+        }
+    });
+}
+
 fn main() {
+    let boot = std::time::Instant::now();
     // The pages only mirror the Engine, so one has to answer before the window
     // opens. `--check-engine` runs that wait alone, for the installer smoke
     // test; `MUNDUS_SKIP_ENGINE_BOOT=1` leaves the lifetime to whoever started
@@ -68,11 +144,15 @@ fn main() {
             std::process::exit(1);
         }
     }
+    boot_trace(&boot, "engine ready");
     if std::env::args().any(|argument| argument == "--check-engine") {
         println!("Engine ready");
         return;
     }
-    gpui::application().run(|cx: &mut App| {
+    let application = gpui::application();
+    boot_trace(&boot, "gpui object");
+    application.run(move |cx: &mut App| {
+        boot_trace(&boot, "app.run");
         gpui_component::init(cx);
         // The pages are embedded in this window, not in an NSH surface of their
         // own, so the menu bar macOS expects is placed here; without it Cmd+Q
@@ -81,6 +161,7 @@ fn main() {
         cx.text_system()
             .add_fonts(assets::font_bytes())
             .expect("failed to load the design's fonts");
+        boot_trace(&boot, "fonts");
         // `MUNDUS_MANAGER_OFFSCREEN=1` parks the window off the desktop so a
         // soak run does not pop up over the user's work.
         let bounds = if std::env::var("MUNDUS_MANAGER_OFFSCREEN").is_ok() {
@@ -115,13 +196,18 @@ fn main() {
         };
         // A second launch (the tray's «Открыть интерфейс») belongs to the
         // process already drawing the pill: reveal its window and leave.
-        if lifecycle::reveal_existing(WINDOW_TITLE) {
+        // `MUNDUS_TRACE_TITLE` only exists so a soak run can open its own window
+        // next to the running one instead of revealing it.
+        let title = std::env::var("MUNDUS_TRACE_TITLE").unwrap_or_else(|_| WINDOW_TITLE.to_string());
+        if lifecycle::reveal_existing(&title) {
             std::process::exit(0);
         }
         pill::start(cx);
         hotkey::start();
+        boot_trace(&boot, "pill+hotkey");
         let opened = cx.open_window(options, |window, cx| {
-            window.set_window_title(WINDOW_TITLE);
+            window.set_window_title(title.as_str());
+            boot_trace(&boot, "window object");
             let view = cx.new(|cx| {
                 let view =
                     imago_nsh::AppView::new(nsh_platform_gpui::AppOptions::default(), window, cx);
@@ -143,11 +229,14 @@ fn main() {
                 }
                 view
             });
+            boot_trace(&boot, "nsh view");
             // gpui-component widgets (the pages' inputs and menus) need a Root,
             // and the caption buttons sit above it: they belong to the window,
             // not to the pages (see `chrome`).
             let root = cx.new(|cx| gpui_component::Root::new(view, window, cx));
-            cx.new(|_| Shell { root })
+            let shell = cx.new(|_| Shell { root });
+            boot_trace(&boot, "shell");
+            shell
         })
         .expect("the Manager window opens");
         // Closing hides the window instead of ending the process, because the
@@ -156,6 +245,14 @@ fn main() {
             lifecycle::remember(window);
             lifecycle::guard_close(window, cx);
         });
-        cx.activate(true);
+        boot_trace(&boot, "guard close");
+        if std::env::var("MUNDUS_MANAGER_OFFSCREEN").is_err() {
+            cx.activate(true);
+        }
+        boot_trace(&boot, "activated");
+        let seen = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let _ = opened.update(cx, move |_, window, _cx| {
+            arm_frame_trace(window, boot, seen);
+        });
     });
 }
