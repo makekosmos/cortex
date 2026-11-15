@@ -14,6 +14,7 @@ use gpui::{
     div, img, point, px, size, App, AsyncApp, Bounds, ImageSource, RenderImage, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
+use image::Frame;
 use serde_json::Value;
 
 use crate::frames::Frames;
@@ -35,9 +36,10 @@ const IDLE: Duration = Duration::from_millis(25);
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
-    /// The plate's size in points, as the Engine reported it, so the window can
-    /// be shaped to it (Windows only; the shape is what keeps DWM's own
-    /// backdrop — a rectangle the size of the whole HUD — out of sight).
+    /// The plate's size in whole points, as the window was last shaped to it.
+    /// Whole points because the region is a hard, unantialiased rectangle: a
+    /// fractional step changes nothing on screen but does make DWM composite
+    /// the window again, which reads as the pill twitching.
     plate: (f32, f32),
 }
 
@@ -47,10 +49,11 @@ impl Plate {
         // be given to the window again, and the window has to be shown, not only
         // when the size changes.
         let returning = self.image.is_none();
+        let shaped = (plate.0.round(), plate.1.round());
         #[cfg(target_os = "windows")]
-        if self.plate != plate || returning {
-            self.plate = plate;
-            windows::shape(window, plate);
+        if self.plate != shaped || returning {
+            self.plate = shaped;
+            windows::shape(window, shaped);
         }
         #[cfg(target_os = "windows")]
         if returning {
@@ -173,10 +176,7 @@ pub(crate) fn log(what: &str) {
         return;
     };
     let _ = std::fs::create_dir_all(&dir);
-    let ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.as_millis())
-        .unwrap_or_default();
+    let ms = epoch_ms();
     let path = dir.join("dictation.log");
     // Two lines per dictation add up over months: past a quarter of a megabyte
     // the log starts again, which is all a delay report ever needs.
@@ -186,6 +186,14 @@ pub(crate) fn log(what: &str) {
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(file, "{ms} {what}");
     }
+}
+
+/// Epoch milliseconds: the clock a script and a frame dump share.
+fn epoch_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis())
+        .unwrap_or_default()
 }
 
 /// Watches the Engine's frames and draws them into a window that is created
@@ -209,12 +217,36 @@ pub fn start(cx: &mut App, frames: Frames) {
         let mut placed = cx.update(|app| placed_on(app));
         let mut window = cx.update(open);
         let mut shown = false;
+        let dump = std::env::var_os("MUNDUS_PILL_DUMP").map(PathBuf::from);
+        let mut shot = 0usize;
         loop {
             cx.background_executor()
                 .timer(if shown { FRAME } else { IDLE })
                 .await;
-            let draw = frames.take().as_ref().and_then(draw_of);
-            let image = draw.as_ref().and_then(|draw| renderer.render(draw).ok());
+            let frame = frames.take();
+            let draw = frame.as_ref().and_then(draw_of);
+            let buffer = draw
+                .as_ref()
+                .and_then(|draw| renderer.render_buffer(draw).ok());
+            // `MUNDUS_PILL_DUMP=<dir>` writes every frame the plugin drew, so a
+            // report about the picture can be checked against the picture.
+            if let (Some(dir), Some(buffer)) = (dump.as_ref(), buffer.as_ref()) {
+                shot += 1;
+                if shot <= 400 {
+                    let _ = buffer.save(dir.join(format!("frame-{shot:04}.png")));
+                    if let Some(frame) = frame.as_ref() {
+                        use std::io::Write as _;
+                        if let Ok(mut file) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(dir.join("frames.txt"))
+                        {
+                            let _ = writeln!(file, "{shot} {} {}", epoch_ms(), frame);
+                        }
+                    }
+                }
+            }
+            let image = buffer.map(|buffer| Arc::new(RenderImage::new(vec![Frame::new(buffer)])));
             let plate = draw
                 .as_ref()
                 .map_or((0., 0.), |draw| (draw.width * draw.scale, draw.height * draw.scale));
@@ -416,6 +448,12 @@ mod windows {
         let left = ((WIDTH as f32 - width) / 2.0).round();
         let top = ((HEIGHT as f32 - height) / 2.0).round();
         let (right, bottom) = (left + width.round(), top + height.round());
+        if std::env::var_os("MUNDUS_PILL_DUMP").is_some() {
+            super::log(&format!(
+                "shape {:.0}x{:.0} rgn {left:.0},{top:.0},{right:.0},{bottom:.0}",
+                plate.0, plate.1
+            ));
+        }
         let corner = height.round();
         unsafe {
             let region = CreateRoundRectRgn(

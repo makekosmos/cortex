@@ -38,6 +38,13 @@ const QUIET_DBFS: f32 = -120.0;
 const PILL_GAIN: f32 = 1.5;
 /// How long a finished session may keep fading before the pill is hidden.
 const SETTLE_MS: u128 = 1200;
+/// How long `Done` is shown before it fades. The scope's own wipe clears the
+/// dots in `WIPE` (0.3 s); a plate that keeps its opacity after that is a black
+/// pill sitting on the screen with nothing in it, which is what the pill used
+/// to do until it was taken away in one frame.
+const DONE_HOLD: Duration = Duration::from_millis(300);
+/// A failure is worth reading, so it stays longer than a success.
+const FAILED_HOLD: Duration = Duration::from_millis(900);
 
 #[derive(Default)]
 pub struct PillTicker {
@@ -164,12 +171,48 @@ impl PillTicker {
             ..Tuning::default()
         });
         let mut last = Instant::now();
+        let mut last_shown = (u8::MAX, true);
         loop {
             std::thread::sleep(TICK);
             let now = Instant::now();
             let dt = now.duration_since(last).as_secs_f32();
             last = now;
             let stage = stage_from(self.shared.stage.load(Ordering::Acquire));
+            let done = matches!(stage, Stage::Done | Stage::Failed);
+            // A session that ended does not stay on screen: once the stage has
+            // had its moment the plate fades, and `settled` then ends the
+            // ticker. Until this was here the ticker kept sending a fully
+            // opaque plate and the app hid it in a single frame.
+            let hold = if stage == Stage::Failed {
+                FAILED_HOLD
+            } else {
+                DONE_HOLD
+            };
+            let hiding = done
+                && self
+                    .shared
+                    .done_since
+                    .lock()
+                    .ok()
+                    .and_then(|since| *since)
+                    .is_some_and(|at| now.duration_since(at) > hold);
+            let visible = !hiding;
+            if tracing::enabled!(tracing::Level::INFO) && last_shown != (stage_code(stage), visible)
+            {
+                last_shown = (stage_code(stage), visible);
+                tracing::info!(
+                    stage = stage_code(stage),
+                    visible,
+                    done_since_ms = self
+                        .shared
+                        .done_since
+                        .lock()
+                        .ok()
+                        .and_then(|since| *since)
+                        .map(|at| now.duration_since(at).as_millis()),
+                    "dictation pill stage"
+                );
+            }
             let loudness = self
                 .shared
                 .loudness
@@ -180,7 +223,7 @@ impl PillTicker {
                 dt,
                 Frame {
                     stage,
-                    visible: true,
+                    visible,
                     loudness,
                     reduce_motion: false,
                 },
@@ -287,6 +330,54 @@ mod tests {
         assert!(frame["plate"]
             .as_array()
             .is_some_and(|plate| plate.len() == 4));
+    }
+
+    #[test]
+    fn a_stop_does_not_blink_the_plate() {
+        // The recording-to-processing handover is one stage change: the plate
+        // changes width and cools down, but it must not fade out and back in.
+        let mut scope = Scope::new(Tuning::default());
+        let at = |stage| Frame {
+            stage,
+            visible: true,
+            loudness: -30.0,
+            reduce_motion: false,
+        };
+        for _ in 0..60 {
+            scope.advance(1.0 / 60.0, at(Stage::Recording));
+        }
+        let mut least = scope.pose().opacity;
+        for _ in 0..30 {
+            scope.advance(1.0 / 60.0, at(Stage::Processing));
+            least = least.min(scope.pose().opacity);
+        }
+        assert!(least > 0.9, "the plate blinked out: {least}");
+    }
+
+    #[test]
+    fn a_finished_session_fades_before_it_is_hidden() {
+        // `Done` keeps its plate for the hold and then fades: a plate at full
+        // opacity with the dots wiped out is the black puck this used to show.
+        let mut scope = Scope::new(Tuning::default());
+        let at = |stage, visible| Frame {
+            stage,
+            visible,
+            loudness: QUIET_DBFS,
+            reduce_motion: false,
+        };
+        for _ in 0..60 {
+            scope.advance(1.0 / 60.0, at(Stage::Recording, true));
+        }
+        for _ in 0..60 {
+            scope.advance(1.0 / 60.0, at(Stage::Done, true));
+        }
+        assert!(scope.pose().opacity > 0.99, "the plate went early");
+        let mut faded = false;
+        for _ in 0..60 {
+            scope.advance(1.0 / 60.0, at(Stage::Done, false));
+            faded |= scope.settled();
+        }
+        assert!(faded, "a hidden plate has to settle");
     }
 
     #[test]

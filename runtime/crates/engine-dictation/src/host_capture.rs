@@ -356,7 +356,7 @@ pub async fn handle_engine_trigger(host: &Arc<DictationHost>, event: &Value) {
                 *slot = Some(event.clone());
             }
         }
-        Some("dictation_escape_cancel") | Some("dictation_capture_cancelled") => {
+        Some("dictation_escape_cancel") => {
             let _ = op_cancel(host).await;
         }
         Some("dictation.trigger") => {
@@ -629,6 +629,8 @@ pub(super) async fn op_cancel(host: &DictationHost) -> DictationResponse {
     *s = HostState::idle();
     let snapshot = s.clone();
     drop(s);
+    // A cancelled recording is over, not on its way to a transcription.
+    host.finish_pill();
     if should_cancel_sidecar {
         tokio::spawn(async {
             if let Err(e) = local::cancel_sidecar().await {

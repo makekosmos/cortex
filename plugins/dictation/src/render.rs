@@ -5,11 +5,8 @@
 //! from the Engine's `dictation_pill_frame` — the app's scope, stepped by the
 //! Engine and broadcast to whoever draws it.
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
-use gpui::RenderImage;
-use image::{Frame, ImageBuffer, Rgba};
+use image::{ImageBuffer, Rgba};
 
 pub const WIDTH: u32 = 192;
 pub const HEIGHT: u32 = 96;
@@ -212,7 +209,9 @@ impl Renderer {
         })
     }
 
-    pub fn render(&mut self, draw: &Draw) -> anyhow::Result<Arc<RenderImage>> {
+    /// The frame as a buffer: the app wraps it for GPUI, and a measurement
+    /// looks at what was drawn rather than at what the Engine asked for.
+    pub fn render_buffer(&mut self, draw: &Draw) -> anyhow::Result<ImageBuffer<Rgba<u8>, Vec<u8>>> {
         let uniforms = Uniforms {
             resolution: [WIDTH as f32, HEIGHT as f32],
             backing_scale: 1.0,
@@ -315,8 +314,6 @@ impl Renderer {
         }
         drop(mapped);
         self.readback.unmap();
-        let image = ImageBuffer::<Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, pixels)
-            .context("invalid WGPU frame buffer")?;
-        Ok(Arc::new(RenderImage::new(vec![Frame::new(image)])))
+        ImageBuffer::<Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, pixels).context("invalid WGPU frame buffer")
     }
 }

@@ -71,6 +71,11 @@ pub struct DictationHost {
     /// `hotkey_status`; the Engine owns the hook, so the answer has to come
     /// from here rather than from a UI process.
     pub(super) last_capture: std::sync::Mutex<Option<Value>>,
+    /// The stage the pill was last given. `capture.stop` reports `idle` for the
+    /// moment the audio spends on its way to a transcription, and a plate that
+    /// reads that as «done» wipes itself, fades out and grows back a few
+    /// hundred milliseconds later — the twitch a stop used to show.
+    pub(super) pill_stage: std::sync::Mutex<Option<crate::pill_scope::Stage>>,
 }
 
 impl DictationHost {
@@ -131,6 +136,7 @@ impl DictationHost {
             downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
             pill: Arc::new(crate::pill_frame::PillTicker::new()),
             last_capture: std::sync::Mutex::new(None),
+            pill_stage: std::sync::Mutex::new(None),
         });
         // Активируем PTT hook соответственно текущему trigger_mode.
         apply_ptt_hook(&cfg, &events_tx);
@@ -165,6 +171,7 @@ impl DictationHost {
             downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
             pill: Arc::new(crate::pill_frame::PillTicker::new()),
             last_capture: std::sync::Mutex::new(None),
+            pill_stage: std::sync::Mutex::new(None),
         })
     }
 
@@ -237,15 +244,30 @@ impl DictationHost {
     /// при старте движка пилюля не мигала.
     fn drive_pill(&self, name: DictationStateName) {
         use crate::pill_scope::Stage;
+        let previous = self.pill_stage.lock().ok().and_then(|stage| *stage);
         let stage = match name {
             DictationStateName::Recording => Stage::Recording,
             DictationStateName::Transcribing | DictationStateName::Pending => Stage::Processing,
             DictationStateName::Error => Stage::Failed,
+            // A capture that just stopped is on its way to a transcription, not
+            // finished: «working» is the honest look for that gap.
+            DictationStateName::Idle if previous == Some(Stage::Recording) => Stage::Processing,
             DictationStateName::Idle => Stage::Done,
         };
+        if let Ok(mut slot) = self.pill_stage.lock() {
+            *slot = Some(stage);
+        }
         self.pill.set_stage(stage);
         if matches!(stage, Stage::Recording) {
             self.pill.begin(self.events_tx.clone());
+        }
+    }
+
+    /// A cancelled session is finished even though its state is `idle`: the
+    /// pill must not carry a cancelled recording into the working look.
+    pub fn finish_pill(&self) {
+        if let Ok(mut slot) = self.pill_stage.lock() {
+            *slot = Some(crate::pill_scope::Stage::Done);
         }
     }
 

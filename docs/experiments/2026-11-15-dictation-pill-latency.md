@@ -56,6 +56,43 @@ killed the process, so the Engine had to launch it — that path is the old
 startup cost and it is why the Engine keeps the pill process warm
 (`plugins::pill::ensure_running` at Engine start, not at the first session).
 
+## The stop transition: a blink and a black puck
+
+Two complaints, one cause each, both visible in the frames the plugin draws
+(`MUNDUS_PILL_DUMP=<dir>` writes every frame as `frame-NNNN.png` plus
+`frames.txt` with epoch milliseconds, width, opacity, scale):
+
+- **Recording → transcription twitched.** The plate collapsed to `HIDDEN_SCALE`
+  and faded to 2 % opacity, then grew and faded back in. `capture.stop` reports
+  `idle` while the audio is on its way to the transcription, `idle` maps to
+  `Stage::Done`, and the Done stage wipes the dots *and* starts the hide, so the
+  plate was being taken away in the middle of a session.
+- **After the animation there was just a black puck.** Conversely, at the real
+  end of a session nothing ever hid the plate: the ticker sent `visible: true`
+  for the whole life of the scope, so after the Done wipe it kept a fully opaque
+  plate with nothing in it for `SETTLE_MS` (1200 ms) and the plugin then hid it
+  in a single frame.
+
+Fixes, Engine side (`runtime/crates/engine-dictation`):
+
+- `drive_pill` remembers the stage it last gave the pill, and an `idle` that
+  follows `Recording` becomes `Processing` — the gap before a transcription is
+  «working», not «finished». `op_cancel` marks the pill finished explicitly, so
+  a cancelled recording does not inherit that look.
+- The ticker keeps its plate for `DONE_HOLD` (300 ms, `FAILED_HOLD` 900 ms) and
+  then sends `visible: false`, which is the scope's own fade (opacity to 0,
+  scale to 0.9) and ends the thread through `settled()`.
+
+Plugin side: the window is shaped only when the plate's size changes in whole
+points — the region is a hard rectangle, so a fractional step changes nothing on
+screen but makes DWM composite the window again. The component is also a window
+subsystem binary (`windows_subsystem = "windows"`), like the Engine's packaged
+build: a component of the product must never put a console window on the screen.
+
+After: opacity is 100 % across the stop while the width ramps 112 → 76 over
+~150 ms, and at the end 100 → 93 → 72 → 48 → 32 → 20 → 12 → 7 → 4 → 2 % over
+~250 ms, then hidden. Warm latency is unchanged (trigger → shown 116/150/141 ms).
+
 ## Verifying the window is gone when it should be
 
 `EnumWindows` + `IsWindowVisible` over the plugin's process shows one visible

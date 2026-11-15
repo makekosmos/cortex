@@ -6,6 +6,10 @@
 //! frames and paints them in a 192×96 window that takes no pointer, sits above
 //! other windows, and is absent whenever there is nothing to draw.
 //!
+//! A window subsystem, not a console one: the Engine starts this process on its
+//! own, and a component of the product must never put a black console window on
+//! the screen.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 //! Nothing of the product is required for a dictation to work: with this
 //! process gone the Engine still records, transcribes and inserts.
 
