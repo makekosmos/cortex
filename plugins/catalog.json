@@ -7,7 +7,10 @@
       "name": "Диктовка",
       "summary": "Речь в текст по горячей клавише: расшифровка на облаке или локально и вставка в активное окно.",
       "source": {
-        "kind": "builtin"
+        "kind": "release",
+        "repository": "makekosmos/dictation",
+        "tag_prefix": "gpui-v",
+        "asset": "dictation-gpui"
       },
       "settings_file": "dictation-config.json",
       "settings": [
@@ -550,13 +553,6 @@
             "format": "number"
           }
         ]
-      },
-      "overlay": {
-        "kind": "pill",
-        "state_op": "dictation.get_state",
-        "config_op": "dictation.get_config",
-        "cancel_op": "dictation.cancel",
-        "label": "Диктовка"
       }
     }
   ]
