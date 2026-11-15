@@ -7,7 +7,7 @@
     },
     {
       "pattern": "com\\.kosmos\\.",
-      "reason": "Signed-catalog package ids and canonical type ids persisted in user databases (ark.db objects/migration objects). KOS-265 replaces them."
+      "reason": "Signed-catalog package ids and canonical type/owner ids persisted in user databases (ark.db objects and migrations; com.kosmos.integrations.fatsecret, com.kosmos.core). The product's own component ids moved to computer.mundus.* (native_apps::RENAMED_IDS migrates installs); KOS-265 replaces the rest."
     },
     {
       "pattern": "kosmos-(release|root)-2026",

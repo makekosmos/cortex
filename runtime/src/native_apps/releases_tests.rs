@@ -75,7 +75,7 @@ fn select_asset_picks_the_host_target_line() {
     // Absent target → None.
     assert!(select_asset(&parsed, AGENDA.target(), "x86_64-pc-windows-gnu").is_none());
     // Wrong stem → None.
-    let dictation = app_descriptor("com.kosmos.dictation").unwrap();
+    let dictation = app_descriptor("computer.mundus.dictation").unwrap();
     assert!(select_asset(&parsed, dictation.target(), TARGET).is_none());
 }
 

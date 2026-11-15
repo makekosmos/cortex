@@ -3,7 +3,7 @@
   "plugins": [
     {
       "schema_version": 1,
-      "id": "com.kosmos.dictation",
+      "id": "computer.mundus.dictation",
       "name": "Диктовка",
       "summary": "Речь в текст по горячей клавише: расшифровка на облаке или локально и вставка в активное окно.",
       "source": {

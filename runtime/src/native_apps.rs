@@ -224,6 +224,41 @@ pub fn default_store() -> Result<NativeAppStore> {
     NativeAppStore::new(native_apps_root()?)
 }
 
+/// Component ids that moved with the product rename, old → new.
+///
+/// The install directory is the id, so a rename is a directory move — see
+/// [`NativeAppStore::migrate_renamed_ids`]. Kept here rather than in a
+/// migration script: every start re-runs it, and a locked app is retried.
+pub const RENAMED_IDS: &[(&str, &str)] = &[
+    ("com.kosmos.dictation", "computer.mundus.dictation"),
+    ("com.kosmos.memoria", "computer.mundus.memoria"),
+];
+
+/// The manifest a plugin install keeps beside `install.json`.
+const PLUGIN_FILE: &str = "plugin.json";
+
+/// Rewrites the `id` field of an installed record, when the file is there and
+/// names something else. Anything unreadable is left as it is: a broken record
+/// already fails closed (`read_record` treats it as absent).
+fn rewrite_id(path: &Path, id: &str) {
+    let Ok(bytes) = fs::read(path) else {
+        return;
+    };
+    let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return;
+    };
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    if object.get("id").and_then(|value| value.as_str()) == Some(id) {
+        return;
+    }
+    object.insert("id".into(), serde_json::Value::String(id.to_owned()));
+    if let Ok(text) = serde_json::to_vec_pretty(&value) {
+        let _ = fs::write(path, text);
+    }
+}
+
 /// A running executable cannot be opened for write on Windows — the loader
 /// maps the image with sharing that denies it. Anything else (including a
 /// missing file) is not treated as "in use".
@@ -261,6 +296,10 @@ impl NativeAppStore {
             mutation: Mutex::new(()),
         };
         store.sweep_stale_leftovers();
+        // The product rename moved its own component ids; an install made
+        // under the old id would otherwise sit in the Apps root as a directory
+        // nothing looks for any more.
+        store.migrate_renamed_ids();
         Ok(store)
     }
 
@@ -283,6 +322,46 @@ impl NativeAppStore {
 
     fn state_path(&self, id: &str) -> PathBuf {
         self.app_dir(id).join(INSTALL_FILE)
+    }
+
+    /// Moves installs made under an id that has since been renamed.
+    ///
+    /// Idempotent and offline: the directory is renamed, and the `id` inside
+    /// `install.json` / `plugin.json` is rewritten so the record still
+    /// validates against the new name. Both names present is left alone — a
+    /// hand-made second install is not something to guess about — and a locked
+    /// executable (the app is running) is retried on the next start.
+    pub fn migrate_renamed_ids(&self) {
+        for (old, new) in RENAMED_IDS {
+            let from = self.app_dir(old);
+            let to = self.app_dir(new);
+            if !from.is_dir() {
+                continue;
+            }
+            if to.exists() {
+                tracing::warn!(
+                    target: "native_apps",
+                    old,
+                    new,
+                    "both the renamed and the previous install exist; left alone"
+                );
+                continue;
+            }
+            if let Err(error) = fs::rename(&from, &to) {
+                tracing::warn!(
+                    target: "native_apps",
+                    old,
+                    new,
+                    %error,
+                    "install rename failed; will retry on the next start"
+                );
+                continue;
+            }
+            for file in [INSTALL_FILE, PLUGIN_FILE] {
+                rewrite_id(&to.join(file), new);
+            }
+            tracing::info!(target: "native_apps", old, new, "install renamed");
+        }
     }
 
     fn read_record(&self, id: &str) -> Result<Option<NativeAppInstall>> {

@@ -92,9 +92,13 @@ impl<'a> ReleaseTarget<'a> {
 }
 
 /// The store's app list — the whole catalog, hardcoded.
+///
+/// Ids are `computer.mundus.*`: the product was renamed and its own component
+/// ids moved with it. Installs made under the old `com.kosmos.*` ids are moved
+/// by [`super::RENAMED_IDS`] on the first start after the rename.
 pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
     NativeAppDescriptor {
-        id: "com.kosmos.memoria",
+        id: "computer.mundus.memoria",
         name: "Memoria",
         repository: "makekosmos/memoria-gpui",
         tag_prefix: "v",
@@ -102,7 +106,7 @@ pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
         env_override: "MEMORIA_EXECUTABLE",
     },
     NativeAppDescriptor {
-        id: "com.kosmos.dictation",
+        id: "computer.mundus.dictation",
         name: "Dictation",
         repository: "makekosmos/dictation",
         tag_prefix: "gpui-v",

@@ -11,7 +11,7 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | Identifier                                                                 | Where                                                                                                                                                           | Why it stays                                                                                     |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `makekosmos` (GitHub org/repo URLs)                                        | component pins, updater channel `makekosmos/cortex`, `imago` git deps (`imago-gpui`, `mundus-gpui-kit`), docs links | Org rename is a separate change; GitHub redirects keep old URLs valid.                           |
-| `com.kosmos.*`                                                             | signed-catalog package ids                                                                                                                                    | Package ids remain part of the signed catalog contract. ARK canonical type ids moved to `core.*@0.1.0` in KOS-436. |
+| `com.kosmos.*`                                                             | signed-catalog package ids (`com.kosmos.hevy`, `com.kosmos.integrations.fatsecret`, `com.kosmos.core` owner ids)                                                                                                    | Package and canonical type ids persisted in user DBs and remote catalogs we do not control. The product's **own** component ids moved to `computer.mundus.*` (dictation, memoria) and are migrated on start — see below. |
 | `kosmos-root-2026`, `kosmos-release-2026`                                  | `package_service` signing key id                                                                                                                                | The key id is embedded in signed catalogs and installed trust state; rotation is KOS-265.        |
 | `publisher: "kosmos"`                                                      | package manifests persisted by old installs                                                                                                                    | Persisted contract in already-installed package state.                                           |
 | `extensions.kosmos` / `"kosmos":` JSON keys                                | ARK object extensions in user DBs (`taskBucket` etc.)                                                                                                           | Persisted user data.                                                                             |
@@ -29,6 +29,24 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `kosmos-kepler`                                                            | `brand::KEYRING_SERVICE` — Windows Credential Manager service for user API keys + integration secrets                                                           | Renaming orphans every stored credential.                                                        |
 | `kepler-fallback`                                                          | fallback device id written into `*-device-id.txt`                                                                                                               | Existing installs persist this value in sync identity.                                           |
 | `window.kosmosApp` / `window.kepler`                                       | legacy page globals read by pinned component builds                                                                                                            | Renaming breaks already-built clients; the Engine no longer serves pages.                         |
+
+## Component ids moved with the rename
+
+The product's own components are named `computer.mundus.*` (`computer.mundus.engine`
+is the launchd label). The two component ids that used `com.kosmos.*` moved:
+
+| Old id | New id | Migrated by |
+| --- | --- | --- |
+| `com.kosmos.dictation` | `computer.mundus.dictation` | `native_apps::RENAMED_IDS` on every Engine start |
+| `com.kosmos.memoria` | `computer.mundus.memoria` | same |
+
+An install is its directory (`Apps/<id>`), so the migration renames the
+directory and rewrites `id` in `install.json` / `plugin.json`; a locked
+executable is retried on the next start, and two installs under both ids are
+left alone rather than guessed about.
+
+`com.kosmos.*` is still correct where the id is **not ours**: package ids in the
+signed catalog and canonical type/owner ids already written into user databases.
 
 ## Legacy data-dir move
 

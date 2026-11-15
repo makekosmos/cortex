@@ -6,7 +6,7 @@ use serde_json::json;
 fn manifest() -> PluginManifest {
     serde_json::from_value(json!({
         "schema_version": 1,
-        "id": "com.kosmos.dictation",
+        "id": "computer.mundus.dictation",
         "name": "Диктовка",
         "summary": "Речь в текст по горячей клавише",
         "source": {

@@ -202,7 +202,7 @@ mod tests {
     fn dictation() -> &'static str {
         r#"{
             "schema_version": 1,
-            "id": "com.kosmos.dictation",
+            "id": "computer.mundus.dictation",
             "name": "Диктовка",
             "summary": "Речь в текст",
             "source": { "kind": "release", "repository": "makekosmos/dictation",
@@ -218,7 +218,7 @@ mod tests {
     fn a_catalog_parses_into_manifests() {
         let catalog = Catalog::parse(&body(dictation())).expect("catalog");
         assert_eq!(catalog.plugins.len(), 1);
-        assert_eq!(catalog.plugins[0].id, "com.kosmos.dictation");
+        assert_eq!(catalog.plugins[0].id, "computer.mundus.dictation");
         assert_eq!(catalog.plugins[0].settings[0].key, "hotkey");
     }
 

@@ -13,7 +13,7 @@ fn store(dir: &tempfile::TempDir) -> PluginStore {
 fn manifest(settings_file: Option<&str>) -> PluginManifest {
     serde_json::from_value(json!({
         "schema_version": 1,
-        "id": "com.kosmos.dictation",
+        "id": "computer.mundus.dictation",
         "name": "Диктовка",
         "source": { "kind": "release", "repository": "makekosmos/dictation",
                     "tag_prefix": "gpui-v", "asset": "dictation-gpui" },
@@ -156,14 +156,14 @@ fn a_plugin_that_is_not_installed_has_nothing_to_show() {
     let dir = tempfile::tempdir().unwrap();
     let store = store(&dir);
     assert!(store.installed().is_empty());
-    assert_eq!(store.manifest("com.kosmos.dictation"), None);
-    assert_eq!(store.executable("com.kosmos.dictation"), None);
+    assert_eq!(store.manifest("computer.mundus.dictation"), None);
+    assert_eq!(store.executable("computer.mundus.dictation"), None);
     assert!(store
-        .record("com.kosmos.dictation")
+        .record("computer.mundus.dictation")
         .expect("record")
         .is_none());
     // Removing what is not there is not an error.
-    store.remove("com.kosmos.dictation").expect("no-op");
+    store.remove("computer.mundus.dictation").expect("no-op");
 }
 
 /// The catalog this repository publishes is the one the Engine will fetch:
@@ -176,7 +176,7 @@ fn the_published_catalog_parses_and_mirrors_the_dictation_config() {
     let dictation = catalog
         .plugins
         .iter()
-        .find(|plugin| plugin.id == "com.kosmos.dictation")
+        .find(|plugin| plugin.id == "computer.mundus.dictation")
         .expect("dictation in the catalog");
     assert_eq!(
         dictation.settings_file.as_deref(),
@@ -220,13 +220,13 @@ fn the_published_catalog_parses_and_mirrors_the_dictation_config() {
 fn an_install_without_a_manifest_takes_the_catalogs() {
     let dir = tempfile::tempdir().unwrap();
     let store = store(&dir);
-    let app = dir.path().join("Apps").join("com.kosmos.dictation");
+    let app = dir.path().join("Apps").join("computer.mundus.dictation");
     std::fs::create_dir_all(app.join("0.5.2")).unwrap();
     std::fs::write(
         app.join("install.json"),
         json!({
             "schema_version": 1,
-            "id": "com.kosmos.dictation",
+            "id": "computer.mundus.dictation",
             "version": "0.5.2",
             "executable": "dictation-gpui.exe",
             "sha256": "0".repeat(64),
@@ -239,16 +239,17 @@ fn an_install_without_a_manifest_takes_the_catalogs() {
     )
     .unwrap();
     std::fs::write(app.join("0.5.2").join("dictation-gpui.exe"), b"MZ").unwrap();
-    assert_eq!(store.manifest("com.kosmos.dictation"), None);
-    assert!(store.record("com.kosmos.dictation").unwrap().is_some());
+    assert_eq!(store.manifest("computer.mundus.dictation"), None);
+    assert!(store.record("computer.mundus.dictation").unwrap().is_some());
 
     let catalog =
         super::catalog::Catalog::parse_for_test(include_str!("../../../plugins/catalog.json"))
             .expect("published catalog");
-    let adopted = super::ops::adopt(&store, &catalog, "com.kosmos.dictation").expect("adopted");
+    let adopted =
+        super::ops::adopt(&store, &catalog, "computer.mundus.dictation").expect("adopted");
     assert_eq!(adopted.name, "Диктовка");
     // Kept: the next read does not need the catalog.
-    assert_eq!(store.manifest("com.kosmos.dictation"), Some(adopted));
+    assert_eq!(store.manifest("computer.mundus.dictation"), Some(adopted));
     let installed = store.installed();
     assert_eq!(
         installed[0].manifest.as_ref().map(|m| m.name.as_str()),

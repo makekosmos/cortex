@@ -16,7 +16,7 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
     store
         .install_archive(
             &NativeInstallSpec {
-                id: "com.kosmos.memoria".into(),
+                id: "computer.mundus.memoria".into(),
                 version: version.into(),
                 executable: "memoria-gpui.exe".into(),
                 sha256: format!("{:x}", Sha256::digest(&bytes)),
@@ -30,7 +30,7 @@ fn install_fixture(store: &NativeAppStore, dir: &TempDir, version: &str) -> Nati
 }
 
 fn memoria() -> &'static NativeAppDescriptor {
-    app_descriptor("com.kosmos.memoria").unwrap()
+    app_descriptor("computer.mundus.memoria").unwrap()
 }
 
 fn link(dir: &TempDir) -> PathBuf {
@@ -115,7 +115,7 @@ fn sync_writes_and_repoints_the_real_lnk() {
     assert!(link_points_at(&link, &target));
 
     // Uninstall: the link goes with the app.
-    store.uninstall("com.kosmos.memoria").unwrap();
+    store.uninstall("computer.mundus.memoria").unwrap();
     sync_shortcut(&store, &programs, memoria()).unwrap();
     assert!(!link.exists());
 }
