@@ -37,6 +37,7 @@ use crate::native_apps::{self, NativeAppInstall, NativeAppStore, NativeInstallSp
 pub mod catalog;
 pub mod manifest;
 pub mod ops;
+pub mod pill;
 pub mod release;
 #[cfg(test)]
 mod tests;

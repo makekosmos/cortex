@@ -10,13 +10,11 @@ mod bridge;
 mod chrome;
 mod data;
 mod engine;
-mod gpu_scope;
 mod hotkey_view;
 mod identity;
 mod lifecycle;
 mod log;
 mod menu;
-mod pill;
 mod plugins;
 
 use gpui::prelude::*;
@@ -194,15 +192,14 @@ fn main() {
             ..Default::default()
         };
         // A second launch (the tray's «Открыть интерфейс») belongs to the
-        // process already drawing the pill: reveal its window and leave.
+        // process already showing the window: reveal it and leave.
         // `MUNDUS_TRACE_TITLE` only exists so a soak run can open its own window
         // next to the running one instead of revealing it.
         let title = std::env::var("MUNDUS_TRACE_TITLE").unwrap_or_else(|_| WINDOW_TITLE.to_string());
         if lifecycle::reveal_existing(&title) {
             std::process::exit(0);
         }
-        pill::start(cx);
-        boot_trace(&boot, "pill+hotkey");
+        boot_trace(&boot, "hotkey mirror");
         let opened = cx.open_window(options, |window, cx| {
             window.set_window_title(title.as_str());
             boot_trace(&boot, "window object");
@@ -237,8 +234,9 @@ fn main() {
             shell
         })
         .expect("the Manager window opens");
-        // Closing hides the window instead of ending the process, because the
-        // pill is drawn here and dictation must keep working with the UI gone.
+        // Closing hides the window instead of ending the process, so the tray's
+        // «Открыть интерфейс» is instant. Dictation does not depend on either:
+        // its hotkey and pill live outside this process.
         let _ = opened.update(cx, |_, window, cx| {
             lifecycle::remember(window);
             lifecycle::guard_close(window, cx);

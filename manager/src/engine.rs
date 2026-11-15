@@ -134,9 +134,9 @@ impl Engine {
 
     fn agent(&self) -> &'static ureq::Agent {
         // One pool for the whole process: a fresh Agent per call threw the
-        // keep-alive socket away, and the pill asks for a frame ~60 times a
-        // second — on Windows the resulting TIME_WAIT pile-up runs the
-        // machine out of ephemeral ports.
+        // keep-alive socket away, and a page that polls (the hotkey mirror
+        // does, four times a second) piled TIME_WAIT sockets up until the
+        // machine ran out of ephemeral ports.
         static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
         AGENT.get_or_init(|| {
             ureq::AgentBuilder::new()

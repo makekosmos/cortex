@@ -1,0 +1,77 @@
+# Releases the dictation pill component on its own, so a pill fix ships as a
+# plugin update and never as a new Engine.
+#
+# Tag `dictation-v<semver>` → a release whose asset is the one the catalog names
+# (`plugins/catalog.json`: repository makekosmos/cortex, tag_prefix dictation-v,
+# asset dictation), plus the `SHA256SUMS.txt` an install verifies against:
+#
+#   dictation-<version>-<target>.zip   the archive
+#   SHA256SUMS.txt                     "<sha256>  <asset>" per line
+#
+# The archive holds `dictation.exe` at its root — the Engine installs that as
+# the plugin's program (`install.json` → `executable`).
+#
+# Windows only for now: it is the platform the pill is built and checked on.
+# darwin/linux jobs are added with the archive layout they need when someone
+# actually runs them.
+name: dictation component
+
+on:
+  push:
+    tags:
+      - "dictation-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^dictation-v(\d+\.\d+\.\d+)$') {
+            throw "tag $tag is not dictation-v<semver>"
+          }
+          "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
+          $declared = (Select-String -Path plugins/dictation/Cargo.toml -Pattern '^version = "(.+)"$').Matches[0].Groups[1].Value
+          if ($declared -ne $Matches[1]) {
+            throw "Cargo.toml says $declared, tag says $($Matches[1])"
+          }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cargo build --manifest-path plugins/dictation/Cargo.toml --release --locked
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $target = "x86_64-pc-windows-msvc"
+          $asset = "dictation-$version-$target.zip"
+          New-Item -ItemType Directory -Force staging | Out-Null
+          Copy-Item plugins/dictation/target/release/dictation.exe staging/
+          Compress-Archive -Path staging/dictation.exe -DestinationPath $asset
+          $hash = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLower()
+          "$hash  $asset" | Set-Content SHA256SUMS.txt -Encoding ascii -NoNewline
+          Add-Content SHA256SUMS.txt ""
+          "asset=$asset" >> $env:GITHUB_OUTPUT
+          Get-Content SHA256SUMS.txt
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dictation-*.zip
+            SHA256SUMS.txt
+          name: Dictation ${{ steps.version.outputs.version }}
+          body: |
+            The dictation pill, as a plugin component (${{ github.ref_name }}).
+
+            Installs over the Engine's plugin catalog; no Engine update needed.

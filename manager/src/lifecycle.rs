@@ -1,13 +1,14 @@
 //! What closing the window means, per OS.
 //!
-//! The animated dictation pill is a window of this process (`pill.rs`), so the
-//! pill lives exactly as long as the Manager does. On macOS that is the whole
-//! point of a menu-bar app: the window closes, the icon stays, dictation keeps
-//! working. Windows has no menu-bar icon of its own — the tray belongs to the
-//! Engine — so the same rule has to be spelled out: closing the window hides
-//! it and the process stays behind with the pill. A second launch (the tray's
-//! «Открыть интерфейс», a double click on the shortcut) finds the window the
-//! first process still owns and shows it, so there is never a second pill.
+//! The Manager is only the interface: closing its window must not touch
+//! dictation, which lives in the Engine, nor the pill, which is a plugin
+//! process of its own. On macOS that is the whole point of a menu-bar app: the
+//! window closes, the icon stays, dictation keeps working. Windows has no
+//! menu-bar icon of its own — the tray belongs to the Engine — so the same rule
+//! has to be spelled out: closing the window hides it and the process stays
+//! behind, dictation unaffected. A second launch (the tray's «Открыть
+//! интерфейс», a double click on the shortcut) finds the window the first
+//! process still owns and shows it.
 
 use gpui::{App, Window};
 
@@ -21,7 +22,8 @@ pub fn request_close(window: &mut Window, cx: &mut App) {
 }
 
 /// The platform asks before it takes the window away; a hidden window is what
-/// keeps the pill alive, so the answer on Windows is always "no".
+/// keeps the interface one key press away, so the answer on Windows is always
+/// "no".
 pub fn guard_close(window: &Window, cx: &App) {
     #[cfg(target_os = "windows")]
     {
@@ -39,16 +41,6 @@ pub fn guard_close(window: &Window, cx: &App) {
 pub fn remember(window: &Window) {
     #[cfg(target_os = "windows")]
     windows::remember(window);
-}
-
-/// `false` only when the remembered window is known to be hidden.
-pub fn main_visible() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        return windows::main_visible();
-    }
-    #[cfg(not(target_os = "windows"))]
-    true
 }
 
 /// True when another Manager already runs: it is shown and this process should
@@ -74,8 +66,8 @@ mod windows {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
     thread_local! {
-        /// The window the app opened; the pill loop reads its visibility from
-        /// any thread, so it is stored as a raw handle rather than an entity.
+        /// The window the app opened, kept as a raw handle so it can be found
+        /// again without an entity.
         static MAIN: Cell<isize> = const { Cell::new(0) };
     }
 
@@ -99,14 +91,6 @@ mod windows {
         }
     }
 
-    pub(super) fn main_visible() -> bool {
-        let raw = MAIN.with(Cell::get);
-        if raw == 0 {
-            return true;
-        }
-        unsafe { IsWindowVisible(raw as *mut c_void) != 0 }
-    }
-
     pub(super) fn reveal(title: &str) -> bool {
         let mut wide: Vec<u16> = title.encode_utf16().collect();
         wide.push(0);
@@ -127,7 +111,6 @@ mod windows {
     #[link(name = "user32")]
     extern "system" {
         fn ShowWindow(window: *mut c_void, command: i32) -> i32;
-        fn IsWindowVisible(window: *mut c_void) -> i32;
         fn FindWindowW(class: *const u16, title: *const u16) -> *mut c_void;
         fn SetForegroundWindow(window: *mut c_void) -> i32;
     }

@@ -35,6 +35,7 @@ use engine::{
     engine_supervisor::{self, ProcessMode},
     lock_file::{self, EngineLockFile, ENGINE_LOCK_FILE_FORMAT_VERSION},
     manager_api::ManagerState,
+    plugins,
     observability::{self, CORRELATION_ID_ENV},
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
@@ -500,6 +501,29 @@ async fn setup() -> Result<SetupState, DynError> {
             match dictation_events.recv().await {
                 Ok(event) => {
                     dictation::handle_engine_trigger(&dictation_host_for_triggers, &event).await;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    // The pill is a plugin process, kept warm: started with the Engine and
+    // again before a dictation, so the first frame lands in a window that is
+    // already there. The Engine draws none of it.
+    plugins::pill::ensure_running();
+    let mut pill_events = dictation_host.subscribe();
+    tokio::spawn(async move {
+        loop {
+            match pill_events.recv().await {
+                Ok(event) => {
+                    let recording = event.get("event").and_then(|value| value.as_str())
+                        == Some("dictation_state_changed")
+                        && event.get("state").and_then(|value| value.as_str())
+                            == Some("recording");
+                    if recording {
+                        tokio::task::spawn_blocking(plugins::pill::ensure_running);
+                    }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,

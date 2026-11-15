@@ -1,9 +1,9 @@
-//! The dictation pill, the same picture the app drew.
+//! The pill window: the Engine's frames, painted.
 //!
-//! The Engine steps the dot scope and keeps the latest frame. This window
-//! paints that frame with the app's shader and sits where the app's pill sat:
+//! The Engine steps the dot scope and broadcasts each step; this window shows
+//! the newest one with the app's shader and sits where the app's pill sat:
 //! bottom center, 163 points up, 192×96, transparent, and it does not take
-//! the pointer.
+//! the pointer. It only exists while there is something to draw.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,8 +15,8 @@ use gpui::{
 };
 use serde_json::Value;
 
-use crate::engine::Engine;
-use crate::gpu_scope::{Draw, Renderer, HEIGHT, WIDTH};
+use crate::frames::Frames;
+use crate::render::{Draw, Renderer, HEIGHT, WIDTH};
 
 /// The app's established vertical center, independent of the shadow canvas.
 const CENTER_FROM_BOTTOM: f32 = 163.;
@@ -26,11 +26,9 @@ const CENTER_FROM_BOTTOM: f32 = 163.;
 /// a 165 Hz display is fed at ~6 ms instead of the 16 ms a 60 Hz assumption
 /// pinned it to (a slower ask showed on Windows as a visibly choppy pill).
 const FRAME: Duration = Duration::from_millis(6);
-/// Off screen nothing is drawn, so the Engine is only asked whether a
-/// dictation started — rarely enough to keep an idle Manager off a CPU.
+/// Off screen nothing is drawn, so the frame slot is only checked for
+/// something new — rarely enough to keep an idle pill off a CPU.
 const IDLE: Duration = Duration::from_millis(120);
-/// ~15 s of silence from the Engine before a hidden Manager gives up on it.
-const UNANSWERED_LIMIT: u32 = 120;
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
@@ -139,54 +137,24 @@ fn draw_of(frame: &Value) -> Option<Draw> {
     })
 }
 
-/// `Err` is an Engine that did not answer at all, which the pill loop reads as
-/// "there is nothing here to draw for any more"; an Engine that answers `idle`
-/// is a quiet session, not a dead one.
-fn fetch(engine: &Engine) -> Result<Option<Draw>, ()> {
-    let value = engine
-        .rpc("dictation.pill_frame", serde_json::json!({}))
-        .map_err(|_| ())?;
-    if value.get("active").and_then(Value::as_bool) != Some(true) {
-        return Ok(None);
-    }
-    Ok(draw_of(value.get("frame").unwrap_or(&Value::Null)))
-}
-
-/// Watches the Engine and shows the pill while a frame has something to draw.
-pub fn start(cx: &mut App) {
+/// Watches the Engine's frames and shows the pill while there is something to
+/// draw. The process stays up between dictations — it is started by the Engine
+/// and hidden whenever the scope has nothing to show.
+pub fn start(cx: &mut App, frames: Frames) {
     cx.spawn(async move |cx: &mut AsyncApp| {
-        let engine = Engine::new(None);
         let renderer = cx
             .background_executor()
             .spawn(async { Renderer::new() })
             .await;
         let Ok(mut renderer) = renderer else {
-            eprintln!("pill: GPU renderer did not start");
+            eprintln!("dictation: GPU renderer did not start");
             return;
         };
         let mut window: Option<gpui::WindowHandle<Plate>> = None;
-        let mut unanswered = 0u32;
         loop {
             let tick = if window.is_some() { FRAME } else { IDLE };
             cx.background_executor().timer(tick).await;
-            let engine = engine.clone();
-            let probe = cx
-                .background_executor()
-                .spawn(async move { fetch(&engine) })
-                .await;
-            // With the window hidden the pill is all this process is for, so an
-            // Engine that stopped answering means it is over: leave instead of
-            // lingering invisibly in the task list.
-            if probe.is_err() && !crate::lifecycle::main_visible() {
-                unanswered += 1;
-                if unanswered > UNANSWERED_LIMIT {
-                    cx.update(|app: &mut gpui::App| app.quit());
-                    return;
-                }
-            } else {
-                unanswered = 0;
-            }
-            let draw = probe.ok().flatten();
+            let draw = frames.take().as_ref().and_then(draw_of);
             let image = draw.as_ref().and_then(|draw| renderer.render(draw).ok());
             let plate = draw
                 .as_ref()
@@ -267,6 +235,7 @@ fn open(cx: &mut App, image: Arc<RenderImage>, plate: (f32, f32)) -> Option<gpui
             },
         )
         .ok()?;
+    eprintln!("dictation: pill shown {:.0}x{:.0}", plate.0, plate.1);
     Some(handle)
 }
 
@@ -280,6 +249,7 @@ fn close(window: &mut Option<gpui::WindowHandle<Plate>>, cx: &mut App) {
         }
         window.remove_window();
     });
+    eprintln!("dictation: pill hidden");
 }
 
 /// A HUD, not a window: no pointer, no shadow, above the Dock, on every space.
@@ -302,7 +272,7 @@ mod windows {
     use gpui::Window;
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-    use crate::gpu_scope::{HEIGHT, WIDTH};
+    use crate::render::{HEIGHT, WIDTH};
 
     /// Room around the plate for the shader's drop shadow. 18 pt out the
     /// shadow is already below 1/255, so the cut cannot be seen.

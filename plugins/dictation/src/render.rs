@@ -1,8 +1,9 @@
-//! The dictation app's HEX shader, drawn to the same 192×96 image.
+//! The dictation pill's HEX shader, drawn to the same 192×96 image.
 //!
 //! GPUI does not expose its render pass, so the app rendered this shader to
 //! a texture and showed the texture. This is that renderer. The numbers come
-//! from the Engine's `dictation.pill_frame`, which is the app's scope.
+//! from the Engine's `dictation_pill_frame` — the app's scope, stepped by the
+//! Engine and broadcast to whoever draws it.
 
 use std::sync::Arc;
 

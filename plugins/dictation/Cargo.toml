@@ -1,0 +1,47 @@
+[package]
+name = "dictation"
+version = "0.5.0"
+edition = "2021"
+description = "Dictation - the pill the Engine draws its frames into"
+publish = false
+default-run = "dictation"
+
+# Its own workspace on purpose: the Engine must not link gpui, and this binary
+# is released on its own (tag `dictation-v*`), so it keeps its own lockfile and
+# its own dependency resolution. The gpui/gpui-kit pins are the ones the product
+# stack already uses - same version everywhere, or two version of gpui end up in
+# one build and the types stop matching.
+[workspace]
+
+[dependencies]
+gpui = { package = "gpui-kit", version = "=0.9.1", features = ["gpui-fast"] }
+gpui-fast-backend = { package = "gpui-fast", version = "=0.1.14" }
+serde_json = "1.0.154"
+# The pill is the same HEX shader the app drew, not a second drawing.
+wgpu = "=29.0.4"
+pollster = "0.4"
+image = { version = "=0.25.10", default-features = false }
+anyhow = "1"
+raw-window-handle = "=0.6.2"
+# A blocking WebSocket client: the Engine broadcasts every frame, a plain thread
+# keeps the newest one, and the UI thread only ever renders. No async runtime in
+# a process whose whole job is one window.
+tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Dependencies stay optimized even in dev builds: an unoptimized gpui/taffy/
+# cosmic-text tops a small UI out at ~20fps (KOS-328).
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
