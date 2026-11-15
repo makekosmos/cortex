@@ -1,9 +1,13 @@
 import { append, bindProp, component, element, insert, merge, prop, setup, spread, text } from "nsh:rt";
 import { effect, mount, nativeComponent, signal } from "nsh";
-import { Window, titleBar } from "nsh/desktop";
+import { currentWindow, titleBar } from "nsh/desktop";
 import { platform } from "os";
 
-//#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/types.ts
+//#region \0nsh-app
+setup(null, null, null, null, "{\"id\":\"computer.mundus.app\",\"name\":\"Mundus\",\"version\":\"0.1.0\",\"build\":1,\"development\":true}");
+
+//#endregion
+//#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/types.ts
 /** Metrics of the settings shell the Manager and NSH preference panes wear. */
 const settingsMetrics = {
 	sidebarWidth: 282,
@@ -38,7 +42,7 @@ const settingsMetrics = {
 };
 
 //#endregion
-//#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/icons.ts
+//#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/icons.ts
 const icons = {
 	mundus: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20854%20841%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M848.85895%20312.15771C833.823%20246.3922%20789.67505%20200.34573%20750.2724%20209.29922C719.13416%20216.38741%20414.19922%20453.55243%20336.24701%20504.18228C403.00226%20439.42935%20679.25177%20166.39703%20693.11469%20137.61795C710.65662%20101.21774%20675.57306%2047.923195%20614.73621%2018.664467C553.89935%20-10.594261%20490.39661%20-4.8384075%20472.80139%2031.615091C458.93848%2060.394169%20320.19763%20399.6716%20311.18674%20492.19101C302.17584%20399.6716%20394.95541%2060.447464%20381.0925%2031.615091C363.5506%20-4.8384075%20299.99451%20-10.594261%20239.15767%2018.664467C178.32083%2047.923195%20143.23724%20101.21774%20160.77916%20137.61795C174.64207%20166.39703%20219.37186%20439.48267%20286.12711%20504.18228C208.12158%20453.55243%20134.75906%20216.38741%20103.62083%20209.29922C64.164856%20200.29243%2020.016878%20246.3389%205.0342722%20312.15771C-10.001652%20377.92322%209.7798576%20438.57248%2049.235832%20447.57925C80.374062%20454.66742%20187.75366%20543.08728%20279.99533%20531.3092C191.75259%20560.6745%2094.663284%20517.02222%2069.656731%20536.95441C38.038635%20562.16272%2046.516647%20625.37006%2088.638565%20678.13171C130.70715%20730.89337%20190.47778%20753.22388%20222.09589%20728.01556C247.10245%20708.08337%20249.01703%20632.46222%20297.32394%20553C265.2793%20640.29651%20304.74017%20735.79651%20304.74017%20767.77325C304.74017%20808.22388%20359.44498%20841%20427%20841C494.55502%20841%20549.2605%20808.22388%20549.2605%20767.77325C549.2605%20735.84979%20357.2009%20640.29651%20325.15625%20553C373.46317%20632.46222%20606.89819%20708.08337%20631.90472%20728.01556C663.52283%20753.22388%20723.29346%20730.89337%20765.36206%20678.13171C807.43066%20625.37006%20815.96136%20562.16272%20784.34326%20536.95441C759.33673%20517.02222%20430.72763%20560.6745%20342.48489%20531.3092C434.72656%20543.08728%20773.57263%20454.66742%20804.76416%20447.57925C844.22015%20438.57248%20864.00165%20377.97653%20848.9657%20312.15771L848.85895%20312.15771Z%22%20fill%3D%22currentColor%22%20fill-rule%3D%22nonzero%22%2F%3E%3C%2Fsvg%3E",
 	about: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M16%202V6M8%202V6%22%20stroke%3D%22currentColor%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M13%204H11C7.22876%204%205.34315%204%204.17157%205.17157C3%206.34315%203%208.22876%203%2012V14C3%2017.7712%203%2019.6569%204.17157%2020.8284C5.34315%2022%207.22876%2022%2011%2022H13C16.7712%2022%2018.6569%2022%2019.8284%2020.8284C21%2019.6569%2021%2017.7712%2021%2014V12C21%208.22876%2021%206.34315%2019.8284%205.17157C18.6569%204%2016.7712%204%2013%204Z%22%20stroke%3D%22currentColor%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M3%2010H21%22%20stroke%3D%22currentColor%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M10%2018.5002L9.99999%2013.8474C9.99999%2013.6557%209.86325%2013.5002%209.69458%2013.5002H9M14%2018.4983L15.4855%2013.8923C15.4951%2013.8626%2015.5%2013.8315%2015.5%2013.8002C15.5%2013.6346%2015.3657%2013.5002%2015.2%2013.5002L13%2013.5%22%20stroke%3D%22currentColor%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%2F%3E%3C%2Fsvg%3E",
@@ -81,7 +85,7 @@ const icons = {
 };
 
 //#endregion
-//#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/components.tsx
+//#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/components.tsx
 function Icon(props) {
 	return (() => {
 		const __nsh_hv0 = element("image");
@@ -96,7 +100,7 @@ function Icon(props) {
 }
 
 //#endregion
-//#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/palettes.ts
+//#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/palettes.ts
 /**
 * Cobalt Foundry: forged steel greys lit by a cobalt arc. The Manager wears it
 * as its signature scheme; every consumer may ship its own palettes next to
@@ -242,7 +246,7 @@ const darkThemes = [
 ];
 
 //#endregion
-//#region node_modules/@makekosmos/imago-nsh/crates/imago-nsh/ui/settings.tsx
+//#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/settings.tsx
 /** One hex colour nudged toward another: the sheen and the shade of a tile. */
 function mix(hex, toward, amount) {
 	const parse = (value) => {
@@ -3979,10 +3983,10 @@ function command(name, args = {}) {
 * the sidebar can inset below it.
 */
 function useHiddenChrome() {
-	effect(() => Window.setTitleBar({
+	effect(() => currentWindow().set({ titleBar: {
 		style: "hidden",
 		height: 44
-	}));
+	} }));
 }
 function renderPage(page) {
 	const props = {

@@ -1,4 +1,5 @@
 import { effect, mount, nativeComponent, signal, Text, View } from "nsh";
+import { currentWindow } from "nsh/desktop";
 import { Window as DesktopWindow } from "nsh/desktop";
 import { TextInput, cobaltFoundry, settingsMetrics } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme, NavGroup } from "@makekosmos/imago-nsh";
@@ -101,7 +102,9 @@ function command(name: string, args: CommandArgs = {}) {
  * the sidebar can inset below it.
  */
 function useHiddenChrome() {
-  effect(() => DesktopWindow.setTitleBar({ style: "hidden", height: TITLEBAR_HEIGHT }));
+  // NSH 0.5 dropped the module-level `Window` helper: the running window's
+  // attributes are set through its `WindowRef`.
+  effect(() => currentWindow().set({ titleBar: { style: "hidden", height: TITLEBAR_HEIGHT } }));
 }
 
 function renderPage(page: string) {
