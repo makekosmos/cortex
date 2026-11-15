@@ -33,16 +33,17 @@ const FRAME: Duration = Duration::from_millis(6);
 /// delay the person sees after the hotkey: an idle pill still costs ~40 wakeups
 /// a second, which is nothing next to the window it belongs to.
 const IDLE: Duration = Duration::from_millis(25);
+/// How long the last frame stays on screen with no successor. The Engine ticks
+/// every 6 ms while a session runs, so this only elapses when the session is
+/// over (its fade ends the ticker) or the Engine went away.
+const QUIET_HIDE: Duration = Duration::from_millis(400);
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
-    /// The plate's size in whole points the window region was last shaped to.
-    /// Whole points because the region is a hard, unantialiased rectangle: a
-    /// fractional step changes nothing on screen but does make DWM composite
-    /// the window again, which reads as the pill twitching.
+    /// The plate's size in whole points the window region was last shaped to:
+    /// rounded up, so the region is never smaller than the plate it clips — a
+    /// region a fraction of a point too small cuts the plate's soft edge off.
     shaped: (f32, f32),
-    /// The plate's size the previous frame asked for.
-    plate: (f32, f32),
 }
 
 impl Plate {
@@ -51,15 +52,9 @@ impl Plate {
         // be given to the window again, and the window has to be shown, not only
         // when the size changes.
         let returning = self.image.is_none();
-        // The region is applied at once, but the picture it clips is the one
-        // already composited — the frame being handed over now arrives with the
-        // next composite. Shaping to the newest size cut the plate's edge for
-        // one frame on every step of the shrink, which reads as another, smaller
-        // window taking this one's place. So the region keeps the larger of this
-        // frame and the last: it never cuts the plate it is showing.
-        let target = (plate.0.max(self.plate.0), plate.1.max(self.plate.1));
-        self.plate = plate;
-        let shaped = (target.0.round(), target.1.round());
+        // Whole points, because the region is a hard rectangle: a fractional step
+        // changes nothing on screen but does make DWM composite the window again.
+        let shaped = (plate.0.ceil(), plate.1.ceil());
         #[cfg(target_os = "windows")]
         if self.shaped != shaped || returning {
             self.shaped = shaped;
@@ -72,7 +67,7 @@ impl Plate {
         #[cfg(not(target_os = "windows"))]
         {
             let _ = returning;
-            self.shaped = target;
+            self.shaped = shaped;
         }
         if let Some(previous) = self.image.replace(image) {
             let _ = window.drop_image(previous);
@@ -86,7 +81,6 @@ impl Plate {
             let _ = window.drop_image(image);
         }
         self.shaped = (0., 0.);
-        self.plate = (0., 0.);
         #[cfg(target_os = "windows")]
         windows::hide(window);
     }
@@ -228,13 +222,32 @@ pub fn start(cx: &mut App, frames: Frames) {
         let mut placed = cx.update(|app| placed_on(app));
         let mut window = cx.update(open);
         let mut shown = false;
+        // The last frame the Engine sent and when: a frame without a successor is
+        // not the end of a session. `Frames::take` hands over whatever arrived
+        // since the last look, so a tick of the Engine that lands a hair late
+        // left the app with nothing to draw — and it hid the window, only to show
+        // it again 30 ms later. That blink, seen on every start and every stage
+        // change, reads as the window being re-created.
+        let mut last_at: Option<std::time::Instant> = None;
         let dump = std::env::var_os("MUNDUS_PILL_DUMP").map(PathBuf::from);
         let mut shot = 0usize;
         loop {
             cx.background_executor()
                 .timer(if shown { FRAME } else { IDLE })
                 .await;
-            let frame = frames.take();
+            let incoming = frames.take();
+            let fresh = incoming.is_some();
+            if fresh {
+                last_at = Some(std::time::Instant::now());
+            }
+            // The picture stays while the Engine is only briefly quiet; a session
+            // that really ended fades to nothing first, and this clock is the
+            // backstop for one that ends without a fade.
+            let quiet = last_at.is_none_or(|at| at.elapsed() > QUIET_HIDE);
+            if !fresh && !quiet {
+                continue;
+            }
+            let frame = incoming;
             let draw = frame.as_ref().and_then(draw_of);
             let buffer = draw
                 .as_ref()
@@ -366,7 +379,6 @@ fn open(cx: &mut App) -> Option<gpui::WindowHandle<Plate>> {
                 cx.new(|_| Plate {
                     image: None,
                     shaped: (0., 0.),
-                    plate: (0., 0.),
                 })
             },
         )
