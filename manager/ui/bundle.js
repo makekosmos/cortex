@@ -1462,14 +1462,32 @@ function updateAction(props) {
 		insert(__nsh_hv0, () => `${Math.round(updates.percent)}%`);
 		return __nsh_hv0;
 	})();
-	if (updates.canInstall) return component(PillButton, {
-		get colors() {
-			return props.colors;
-		},
-		tone: "accent",
-		label: "Установить",
-		onPress: () => props.onCommand("updates.install")
-	});
+	if (updates.canInstall) return (() => {
+		const __nsh_hv1 = element("view");
+		prop(__nsh_hv1, "onPress", () => props.onCommand("updates.install"));
+		prop(__nsh_hv1, "role", "button");
+		prop(__nsh_hv1, "accessibilityLabel", "Установить");
+		prop(__nsh_hv1, "hoverStyle", { opacity: .9 });
+		prop(__nsh_hv1, "class", "items-center justify-center rounded-full");
+		bindProp(__nsh_hv1, "style", () => ({
+			paddingLeft: 8,
+			paddingRight: 8,
+			paddingTop: 4,
+			paddingBottom: 4,
+			backgroundColor: props.colors.success
+		}));
+		const __nsh_hv2 = element("text");
+		bindProp(__nsh_hv2, "style", () => ({
+			fontSize: 13,
+			lineHeight: 15,
+			fontWeight: "500",
+			color: props.colors.background
+		}));
+		const __nsh_hv3 = text("Установить");
+		append(__nsh_hv2, __nsh_hv3);
+		append(__nsh_hv1, __nsh_hv2);
+		return __nsh_hv1;
+	})();
 	if (updates.newVersion) return component(PillButton, {
 		get colors() {
 			return props.colors;
@@ -1486,23 +1504,17 @@ function updateAction(props) {
 		onPress: () => props.onCommand("updates.check")
 	});
 }
-function updateSubtitle(updates) {
-	if (updates.percent > 0 && updates.percent < 100) return `Загружается · ${Math.round(updates.percent)}%`;
-	if (updates.canInstall) return updates.newVersion ? `Версия ${updates.newVersion} готова к установке` : "Обновление готово к установке";
-	if (updates.newVersion) return `Доступна версия ${updates.newVersion}`;
-	if (updates.state === "checking") return "Проверяем…";
-	if (updates.state === "error") return "Не удалось проверить обновления";
-	return "Установлена последняя версия";
-}
 
 //#endregion
 //#region pages/server.tsx
 /** The page of the reference: what the Engine is doing right now. */
 function ServerPage(props) {
 	const state = () => props.state();
-	const running = state().engine.status === "running";
-	const busy = state().engine.status === "starting" || state().engine.status === "stopping";
 	const code = state().sync.ownCode;
+	const releaseWaiting = () => {
+		const updates = state().updates;
+		return updates.canInstall || !!updates.newVersion || updates.percent > 0 && updates.percent < 100 || updates.state === "error";
+	};
 	return component(Page, {
 		get colors() {
 			return props.colors;
@@ -1528,15 +1540,10 @@ function ServerPage(props) {
 							},
 							last: true,
 							get right() {
-								return component(PillButton, {
-									get colors() {
-										return props.colors;
-									},
-									tone: running ? "danger" : "accent",
-									label: running ? "Остановить" : "Запустить",
-									disabled: busy,
-									onPress: () => props.onCommand(running ? "server.stop" : "server.start")
-								});
+								return releaseWaiting() ? updateAction({
+									...props,
+									updates: state().updates
+								}) : void 0;
 							}
 						});
 					}
@@ -1544,58 +1551,6 @@ function ServerPage(props) {
 				(() => {
 					const __nsh_hv0 = element("view");
 					insert(__nsh_hv0, [component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Программа";
-						}
-					}), component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return [component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Обновления",
-								get subtitle() {
-									return updateSubtitle(state().updates);
-								},
-								get right() {
-									return updateAction({
-										...props,
-										updates: state().updates
-									});
-								}
-							}), component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Engine",
-								get subtitle() {
-									return state().engine.version ? `${statusLabel(state().engine.status)} · ${state().engine.version}` : statusLabel(state().engine.status);
-								},
-								get right() {
-									return component(StatusDot, {
-										get colors() {
-											return props.colors;
-										},
-										get tone() {
-											return state().engine.status === "running" ? "success" : "muted";
-										}
-									});
-								},
-								last: true
-							})];
-						}
-					})]);
-					return __nsh_hv0;
-				})(),
-				(() => {
-					const __nsh_hv1 = element("view");
-					insert(__nsh_hv1, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1652,13 +1607,13 @@ function ServerPage(props) {
 									label: "Код",
 									get children() {
 										return (() => {
-											const __nsh_hv2 = element("text");
-											bindProp(__nsh_hv2, "style", () => ({
+											const __nsh_hv1 = element("text");
+											bindProp(__nsh_hv1, "style", () => ({
 												fontSize: 11.5,
 												color: props.colors.muted
 											}));
-											insert(__nsh_hv2, code);
-											return __nsh_hv2;
+											insert(__nsh_hv1, code);
+											return __nsh_hv1;
 										})();
 									}
 								}) : null,
@@ -1685,11 +1640,11 @@ function ServerPage(props) {
 							];
 						}
 					})]);
-					return __nsh_hv1;
+					return __nsh_hv0;
 				})(),
 				(() => {
-					const __nsh_hv3 = element("view");
-					insert(__nsh_hv3, [component(SectionLabel, {
+					const __nsh_hv2 = element("view");
+					insert(__nsh_hv2, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1708,13 +1663,13 @@ function ServerPage(props) {
 								label: "Имя",
 								get children() {
 									return (() => {
-										const __nsh_hv4 = element("text");
-										bindProp(__nsh_hv4, "style", () => ({
+										const __nsh_hv3 = element("text");
+										bindProp(__nsh_hv3, "style", () => ({
 											fontSize: 13,
 											color: props.colors.foreground
 										}));
-										insert(__nsh_hv4, () => state().client.name);
-										return __nsh_hv4;
+										insert(__nsh_hv3, () => state().client.name);
+										return __nsh_hv3;
 									})();
 								}
 							}), component(CardRow, {
@@ -1726,19 +1681,19 @@ function ServerPage(props) {
 								last: true,
 								get right() {
 									return (() => {
-										const __nsh_hv5 = element("text");
-										bindProp(__nsh_hv5, "style", () => ({
+										const __nsh_hv4 = element("text");
+										bindProp(__nsh_hv4, "style", () => ({
 											fontSize: 12.5,
 											color: props.colors.muted
 										}));
-										insert(__nsh_hv5, () => state().engine.port || "—");
-										return __nsh_hv5;
+										insert(__nsh_hv4, () => state().engine.port || "—");
+										return __nsh_hv4;
 									})();
 								}
 							})];
 						}
 					})]);
-					return __nsh_hv3;
+					return __nsh_hv2;
 				})()
 			];
 		}

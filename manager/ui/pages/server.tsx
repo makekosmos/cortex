@@ -1,23 +1,26 @@
 import { Text, View } from "nsh";
-import {
-  Card,
-  CardRow,
-  FieldRow,
-  PillButton,
-  SectionLabel,
-  StatusDot,
-} from "@makekosmos/imago-nsh";
+import { Card, CardRow, FieldRow, PillButton, SectionLabel } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import { productVersion, statusLabel } from "../state";
 import { Page } from "../page";
-import { updateAction, updateSubtitle } from "./updates";
+import { updateAction } from "./updates";
 
 /** The page of the reference: what the Engine is doing right now. */
 export function ServerPage(props: PageProps) {
   const state = () => props.state();
-  const running = state().engine.status === "running";
-  const busy = state().engine.status === "starting" || state().engine.status === "stopping";
   const code = state().sync.ownCode;
+  // The header's one button is the release: download it, or install it once it
+  // is ready (green). The Engine keeps running either way — stopping it is not
+  // something this window offers.
+  const releaseWaiting = () => {
+    const updates = state().updates;
+    return (
+      updates.canInstall ||
+      !!updates.newVersion ||
+      (updates.percent > 0 && updates.percent < 100) ||
+      updates.state === "error"
+    );
+  };
   return (
     <Page colors={props.colors} title="Сервер">
       <Card colors={props.colors}>
@@ -32,44 +35,12 @@ export function ServerPage(props: PageProps) {
           }
           last
           right={
-            <PillButton
-              colors={props.colors}
-              tone={running ? "danger" : "accent"}
-              label={running ? "Остановить" : "Запустить"}
-              disabled={busy}
-              onPress={() => props.onCommand(running ? "server.stop" : "server.start")}
-            />
+            releaseWaiting()
+              ? updateAction({ ...props, updates: state().updates })
+              : undefined
           }
         />
       </Card>
-
-      <View>
-        <SectionLabel colors={props.colors}>Программа</SectionLabel>
-        <Card colors={props.colors}>
-          <CardRow
-            colors={props.colors}
-            title="Обновления"
-            subtitle={updateSubtitle(state().updates)}
-            right={updateAction({ ...props, updates: state().updates })}
-          />
-          <CardRow
-            colors={props.colors}
-            title="Engine"
-            subtitle={
-              state().engine.version
-                ? `${statusLabel(state().engine.status)} · ${state().engine.version}`
-                : statusLabel(state().engine.status)
-            }
-            right={
-              <StatusDot
-                colors={props.colors}
-                tone={state().engine.status === "running" ? "success" : "muted"}
-              />
-            }
-            last
-          />
-        </Card>
-      </View>
 
       <View>
         <SectionLabel colors={props.colors}>Коннектор</SectionLabel>

@@ -1,4 +1,4 @@
-import { Text } from "nsh";
+import { Text, View } from "nsh";
 import { PillButton } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { ManagerState } from "../state";
@@ -19,15 +19,28 @@ export function updateAction(props: PageProps & { updates: ManagerState["updates
     );
   }
   // Ready to install with or without a version label: the Engine has the
-  // package, and the subtitle says so.
+  // package, and the subtitle says so. Green, because the one button the header
+  // has is this one — `PillButton` carries no success tone of its own.
   if (updates.canInstall) {
     return (
-      <PillButton
-        colors={props.colors}
-        tone="accent"
-        label="Установить"
+      <View
         onPress={() => props.onCommand("updates.install")}
-      />
+        role="button"
+        accessibilityLabel="Установить"
+        hoverStyle={{ opacity: 0.9 }}
+        class="items-center justify-center rounded-full"
+        style={{
+          paddingLeft: 8,
+          paddingRight: 8,
+          paddingTop: 4,
+          paddingBottom: 4,
+          backgroundColor: props.colors.success,
+        }}
+      >
+        <Text style={{ fontSize: 13, lineHeight: 15, fontWeight: "500", color: props.colors.background }}>
+          Установить
+        </Text>
+      </View>
     );
   }
   if (updates.newVersion) {
