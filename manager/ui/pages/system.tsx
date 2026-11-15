@@ -2,13 +2,17 @@ import { View } from "nsh";
 import { platform } from "os";
 import { Card, CardRow, SectionLabel, Switch } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
-import { minutes } from "../state";
-import { Page } from "../page";
+import { isRead, minutes } from "../state";
+import { Page, Pending } from "../page";
 
 export function ActivityPage(props: PageProps) {
   const usage = () => props.state().usage;
+  /** The days are summed from the usage table, so the first read of a session
+   * takes a moment: a skeleton meanwhile, never «нечего показать». */
+  const cold = () => !isRead(props.state(), "usage");
   return (
     <Page colors={props.colors} title="Активность">
+      <Pending cold={cold()} colors={props.colors} rows={2}>
       <View>
         <SectionLabel colors={props.colors}>Экранное время</SectionLabel>
         <Card colors={props.colors}>
@@ -48,6 +52,7 @@ export function ActivityPage(props: PageProps) {
           )}
         </Card>
       </View>
+      </Pending>
     </Page>
   );
 }

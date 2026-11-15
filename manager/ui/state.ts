@@ -144,6 +144,11 @@ export type ConnectorRow = {
 };
 
 export type ManagerState = {
+  /** Which keys the host has been answered for at least once this session: a
+   * page draws a skeleton until its own key is here, so a read in flight never
+   * reads as «nothing here». Absent without a host (`nsh dev`, the tests read
+   * the demo state as already read). */
+  read?: Record<string, boolean>;
   engine: { status: EngineStatus; version: string; channel: string; port: number };
   client: { name: string };
   product: { bundleId?: string };
@@ -296,6 +301,16 @@ export const demoState: ManagerState = {
   },
   settings: { autostart: true, telemetry: false },
 };
+
+/**
+ * Whether the host has answered a page's own key at least once. Without a host
+ * (the demo, the tests) there is nothing to wait for, so everything reads as
+ * answered; a host always sends `read`, and it starts empty.
+ */
+export function isRead(state: ManagerState, key: string): boolean {
+  if (!state.read) return true;
+  return state.read[key] === true;
+}
 
 export function statusLabel(status: EngineStatus): string {
   switch (status) {

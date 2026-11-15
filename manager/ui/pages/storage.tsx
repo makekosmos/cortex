@@ -2,7 +2,8 @@ import { Text, View, signal } from "nsh";
 import { Card, CardRow, PillButton, SectionLabel } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import type { StoragePart } from "../state";
-import { Page } from "../page";
+import { isRead } from "../state";
+import { Page, Pending } from "../page";
 
 /**
  * The storage overview of the old Manager: one bar, one row per part, and a
@@ -124,6 +125,10 @@ export function StoragePage(props: PageProps) {
   const parts = () => segments(state().storage.parts, databaseOnly());
   const total = () => parts().reduce((sum, part) => sum + part.bytes, 0);
   const open = (id: string) => openIds().includes(id);
+  /** The sizes are a walk of the data directory, so they take a moment on the
+   * first read of a session: skeleton until then, the real numbers after —
+   * exact, never rounded or guessed. */
+  const cold = () => !isRead(props.state(), "storage") || !isRead(props.state(), "backups");
   return (
     <Page colors={props.colors} title="Хранилище">
       <View class="flex-row" style={{ gap: 8 }}>
@@ -141,6 +146,7 @@ export function StoragePage(props: PageProps) {
         />
       </View>
 
+      <Pending cold={cold()} colors={props.colors} rows={4}>
       <Card colors={props.colors} padded>
         <View style={{ gap: 4, marginBottom: 12 }}>
           <Text
@@ -326,6 +332,7 @@ export function StoragePage(props: PageProps) {
           />
         </Card>
       </View>
+      </Pending>
     </Page>
   );
 }

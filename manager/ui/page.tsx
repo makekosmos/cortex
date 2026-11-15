@@ -1,6 +1,6 @@
 import { Image, Scroll, Text, View } from "nsh";
 import { titleBar } from "nsh/desktop";
-import { settingsMetrics as M } from "@makekosmos/imago-nsh";
+import { settingsMetrics as M, SkeletonCard } from "@makekosmos/imago-nsh";
 import type { ApplicationTheme } from "@makekosmos/imago-nsh";
 import { captionStrip, headerHeight } from "./chrome";
 import { dragBinding } from "./host";
@@ -64,6 +64,23 @@ function Anchors(props: { colors: ApplicationTheme }) {
       <Anchor direction="forward" enabled={canForward()} colors={props.colors} onPress={forward} />
     </View>
   );
+}
+
+/**
+ * A page's body while its data has not arrived: skeleton cards instead of the
+ * empty states the page would otherwise show, so a read in flight never reads
+ * as «nothing here». The page's own heading and controls stay outside this, so
+ * its shape is the same before and after the answers land.
+ */
+export function Pending(props: {
+  cold: boolean;
+  colors: ApplicationTheme;
+  rows?: number;
+  avatar?: boolean;
+  children: any;
+}) {
+  if (!props.cold) return props.children;
+  return <SkeletonCard colors={props.colors} rows={props.rows ?? 3} avatar={props.avatar} />;
 }
 
 /**

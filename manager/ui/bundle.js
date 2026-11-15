@@ -452,12 +452,93 @@ function CardRow(props) {
 		return __nsh_hv23;
 	})();
 }
+/** A block standing where a value will be: the page is reading, it is not
+* empty. It pulses, so it reads as motion and not as a disabled control. */
+function Skeleton(props) {
+	return (() => {
+		const __nsh_hv28 = element("view");
+		bindProp(__nsh_hv28, "style", () => ({
+			width: props.width ?? "100%",
+			height: props.height ?? 12,
+			borderRadius: props.radius ?? 6,
+			backgroundColor: props.colors.raised,
+			opacity: .75,
+			animationName: "pulse",
+			animationDuration: 1200,
+			animationTimingFunction: "ease-in-out"
+		}));
+		return __nsh_hv28;
+	})();
+}
+/** One skeleton row, as tall as the `CardRow` it stands in for: the page keeps
+* its height while it reads, so nothing jumps when the answers land. */
+function SkeletonRow(props) {
+	return (() => {
+		const __nsh_hv29 = element("view");
+		prop(__nsh_hv29, "class", "flex-row items-center gap-2.5");
+		bindProp(__nsh_hv29, "style", () => ({
+			height: settingsMetrics.cardRowHeight,
+			paddingLeft: settingsMetrics.cardPaddingX,
+			paddingRight: settingsMetrics.cardPaddingX,
+			borderBottomWidth: props.last ? 0 : 1,
+			borderColor: props.colors.border
+		}));
+		const __nsh_hv30 = element("view");
+		prop(__nsh_hv30, "class", "flex-1");
+		prop(__nsh_hv30, "style", { gap: 6 });
+		insert(__nsh_hv30, [component(Skeleton, {
+			get colors() {
+				return props.colors;
+			},
+			width: "40%",
+			height: 11
+		}), component(Skeleton, {
+			get colors() {
+				return props.colors;
+			},
+			width: "62%",
+			height: 9
+		})]);
+		append(__nsh_hv29, __nsh_hv30);
+		insert(__nsh_hv29, () => props.avatar ? component(Skeleton, {
+			get colors() {
+				return props.colors;
+			},
+			width: 35,
+			height: 35,
+			radius: 18
+		}) : null, __nsh_hv30);
+		return __nsh_hv29;
+	})();
+}
+/** A card of skeleton rows: what a page draws instead of «nothing here» while
+* the Engine has not answered it yet. */
+function SkeletonCard(props) {
+	const rows = props.rows ?? 2;
+	return component(Card, {
+		get colors() {
+			return props.colors;
+		},
+		get children() {
+			return Array.from({ length: rows }, (_, index) => component(SkeletonRow, {
+				key: `skeleton-${index}`,
+				get colors() {
+					return props.colors;
+				},
+				get avatar() {
+					return props.avatar;
+				},
+				last: index === rows - 1
+			}));
+		}
+	});
+}
 /** Label on the left, control on the right — the "Название" row of settings. */
 function FieldRow(props) {
 	return (() => {
-		const __nsh_hv28 = element("view");
-		prop(__nsh_hv28, "class", "flex-row items-center");
-		bindProp(__nsh_hv28, "style", () => ({
+		const __nsh_hv31 = element("view");
+		prop(__nsh_hv31, "class", "flex-row items-center");
+		bindProp(__nsh_hv31, "style", () => ({
 			height: settingsMetrics.fieldRowHeight,
 			gap: 40,
 			paddingLeft: settingsMetrics.cardPaddingX,
@@ -467,36 +548,36 @@ function FieldRow(props) {
 			borderBottomWidth: props.last ? 0 : 1,
 			borderColor: props.colors.border
 		}));
-		const __nsh_hv29 = element("text");
-		bindProp(__nsh_hv29, "style", () => ({
+		const __nsh_hv32 = element("text");
+		bindProp(__nsh_hv32, "style", () => ({
 			width: props.labelWidth ?? settingsMetrics.fieldLabelWidth,
 			fontSize: 13,
 			fontWeight: "500",
 			color: props.colors.foreground
 		}));
-		insert(__nsh_hv29, () => props.label);
-		const __nsh_hv30 = element("view");
-		prop(__nsh_hv30, "class", "flex-1");
-		insert(__nsh_hv30, () => props.children);
-		append(__nsh_hv28, __nsh_hv29);
-		append(__nsh_hv28, __nsh_hv30);
-		return __nsh_hv28;
+		insert(__nsh_hv32, () => props.label);
+		const __nsh_hv33 = element("view");
+		prop(__nsh_hv33, "class", "flex-1");
+		insert(__nsh_hv33, () => props.children);
+		append(__nsh_hv31, __nsh_hv32);
+		append(__nsh_hv31, __nsh_hv33);
+		return __nsh_hv31;
 	})();
 }
 function TextInput(props) {
 	return (() => {
-		const __nsh_hv31 = element("input");
-		bindProp(__nsh_hv31, "value", () => props.value);
-		prop(__nsh_hv31, "onChange", (event) => props.onChange(event.value));
-		bindProp(__nsh_hv31, "onSubmit", () => props.onSubmit ? (event) => props.onSubmit?.(event.text) : void 0);
-		bindProp(__nsh_hv31, "placeholder", () => props.placeholder);
-		bindProp(__nsh_hv31, "accessibilityLabel", () => props.accessibilityLabel ?? props.placeholder);
-		prop(__nsh_hv31, "class", "h-8 rounded-[10px] px-2.5 text-[13px]");
-		bindProp(__nsh_hv31, "style", () => ({
+		const __nsh_hv34 = element("input");
+		bindProp(__nsh_hv34, "value", () => props.value);
+		prop(__nsh_hv34, "onChange", (event) => props.onChange(event.value));
+		bindProp(__nsh_hv34, "onSubmit", () => props.onSubmit ? (event) => props.onSubmit?.(event.text) : void 0);
+		bindProp(__nsh_hv34, "placeholder", () => props.placeholder);
+		bindProp(__nsh_hv34, "accessibilityLabel", () => props.accessibilityLabel ?? props.placeholder);
+		prop(__nsh_hv34, "class", "h-8 rounded-[10px] px-2.5 text-[13px]");
+		bindProp(__nsh_hv34, "style", () => ({
 			backgroundColor: props.colors.input ?? props.colors.raised,
 			color: props.colors.foreground
 		}));
-		return __nsh_hv31;
+		return __nsh_hv34;
 	})();
 }
 function PillButton(props) {
@@ -504,14 +585,14 @@ function PillButton(props) {
 	const background = tone === "accent" ? props.colors.accent : tone === "danger" ? props.colors.dangerFill : props.colors.raised;
 	const color = tone === "accent" ? props.colors.accentText : tone === "danger" ? props.colors.danger : props.colors.foreground;
 	return (() => {
-		const __nsh_hv32 = element("view");
-		bindProp(__nsh_hv32, "onPress", () => props.disabled ? void 0 : props.onPress);
-		prop(__nsh_hv32, "role", "button");
-		bindProp(__nsh_hv32, "accessibilityLabel", () => props.label);
-		bindProp(__nsh_hv32, "accessibilityState", () => ({ disabled: !!props.disabled }));
-		prop(__nsh_hv32, "hoverStyle", { opacity: .9 });
-		prop(__nsh_hv32, "class", "items-center justify-center rounded-full");
-		bindProp(__nsh_hv32, "style", () => ({
+		const __nsh_hv35 = element("view");
+		bindProp(__nsh_hv35, "onPress", () => props.disabled ? void 0 : props.onPress);
+		prop(__nsh_hv35, "role", "button");
+		bindProp(__nsh_hv35, "accessibilityLabel", () => props.label);
+		bindProp(__nsh_hv35, "accessibilityState", () => ({ disabled: !!props.disabled }));
+		prop(__nsh_hv35, "hoverStyle", { opacity: .9 });
+		prop(__nsh_hv35, "class", "items-center justify-center rounded-full");
+		bindProp(__nsh_hv35, "style", () => ({
 			paddingLeft: 8,
 			paddingRight: 8,
 			paddingTop: 4,
@@ -520,16 +601,16 @@ function PillButton(props) {
 			opacity: props.disabled ? .5 : 1,
 			cursor: props.disabled ? "default" : "pointer"
 		}));
-		const __nsh_hv33 = element("text");
-		prop(__nsh_hv33, "style", {
+		const __nsh_hv36 = element("text");
+		prop(__nsh_hv36, "style", {
 			fontSize: 13,
 			lineHeight: 15,
 			fontWeight: "500",
 			color
 		});
-		insert(__nsh_hv33, () => props.label);
-		append(__nsh_hv32, __nsh_hv33);
-		return __nsh_hv32;
+		insert(__nsh_hv36, () => props.label);
+		append(__nsh_hv35, __nsh_hv36);
+		return __nsh_hv35;
 	})();
 }
 function Switch(props) {
@@ -537,13 +618,13 @@ function Switch(props) {
 	const SIDE = 2;
 	const KNOB = 18;
 	return (() => {
-		const __nsh_hv34 = element("view");
-		prop(__nsh_hv34, "onPress", () => props.onChange(!props.value));
-		prop(__nsh_hv34, "role", "switch");
-		bindProp(__nsh_hv34, "accessibilityLabel", () => props.accessibilityLabel);
-		bindProp(__nsh_hv34, "accessibilityState", () => ({ checked: props.value }));
-		prop(__nsh_hv34, "class", "justify-center");
-		bindProp(__nsh_hv34, "style", () => ({
+		const __nsh_hv37 = element("view");
+		prop(__nsh_hv37, "onPress", () => props.onChange(!props.value));
+		prop(__nsh_hv37, "role", "switch");
+		bindProp(__nsh_hv37, "accessibilityLabel", () => props.accessibilityLabel);
+		bindProp(__nsh_hv37, "accessibilityState", () => ({ checked: props.value }));
+		prop(__nsh_hv37, "class", "justify-center");
+		bindProp(__nsh_hv37, "style", () => ({
 			width: 44,
 			height: 22,
 			borderRadius: 11,
@@ -560,8 +641,8 @@ function Switch(props) {
 			transitionDuration: 160,
 			transitionTimingFunction: "ease-out"
 		}));
-		const __nsh_hv35 = element("view");
-		bindProp(__nsh_hv35, "style", () => ({
+		const __nsh_hv38 = element("view");
+		bindProp(__nsh_hv38, "style", () => ({
 			position: "absolute",
 			width: KNOB,
 			height: KNOB,
@@ -575,10 +656,10 @@ function Switch(props) {
 			transitionDuration: 160,
 			transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)"
 		}));
-		append(__nsh_hv34, __nsh_hv35);
-		insert(__nsh_hv34, () => off ? (() => {
-			const __nsh_hv36 = element("view");
-			prop(__nsh_hv36, "style", {
+		append(__nsh_hv37, __nsh_hv38);
+		insert(__nsh_hv37, () => off ? (() => {
+			const __nsh_hv39 = element("view");
+			prop(__nsh_hv39, "style", {
 				position: "absolute",
 				width: 6,
 				height: 6,
@@ -589,23 +670,23 @@ function Switch(props) {
 				left: 32,
 				top: 8
 			});
-			return __nsh_hv36;
+			return __nsh_hv39;
 		})() : null);
-		return __nsh_hv34;
+		return __nsh_hv37;
 	})();
 }
 function StatusDot(props) {
 	const tone = props.tone ?? "success";
 	const color = tone === "success" ? props.colors.success : tone === "danger" ? props.colors.danger : props.colors.muted;
 	return (() => {
-		const __nsh_hv37 = element("view");
-		prop(__nsh_hv37, "style", {
+		const __nsh_hv40 = element("view");
+		prop(__nsh_hv40, "style", {
 			width: 7,
 			height: 7,
 			borderRadius: 4,
 			backgroundColor: color
 		});
-		return __nsh_hv37;
+		return __nsh_hv40;
 	})();
 }
 
@@ -1198,6 +1279,15 @@ const demoState = {
 		telemetry: false
 	}
 };
+/**
+* Whether the host has answered a page's own key at least once. Without a host
+* (the demo, the tests) there is nothing to wait for, so everything reads as
+* answered; a host always sends `read`, and it starts empty.
+*/
+function isRead(state, key) {
+	if (!state.read) return true;
+	return state.read[key] === true;
+}
 function statusLabel(status) {
 	switch (status) {
 		case "running": return "Работает";
@@ -1404,6 +1494,26 @@ function Anchors(props) {
 		}));
 		return __nsh_hv2;
 	})();
+}
+/**
+* A page's body while its data has not arrived: skeleton cards instead of the
+* empty states the page would otherwise show, so a read in flight never reads
+* as «nothing here». The page's own heading and controls stay outside this, so
+* its shape is the same before and after the answers land.
+*/
+function Pending(props) {
+	if (!props.cold) return props.children;
+	return component(SkeletonCard, {
+		get colors() {
+			return props.colors;
+		},
+		get rows() {
+			return props.rows ?? 3;
+		},
+		get avatar() {
+			return props.avatar;
+		}
+	});
 }
 /**
 * The frame every page sits in: the scroll area, its gutter, the heading row the
@@ -1750,91 +1860,105 @@ function ServerPage(props) {
 //#region pages/system.tsx
 function ActivityPage(props) {
 	const usage = () => props.state().usage;
+	/** The days are summed from the usage table, so the first read of a session
+	* takes a moment: a skeleton meanwhile, never «нечего показать». */
+	const cold = () => !isRead(props.state(), "usage");
 	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
 		title: "Активность",
 		get children() {
-			return [(() => {
-				const __nsh_hv0 = element("view");
-				insert(__nsh_hv0, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Экранное время";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return [component(CardRow, {
+			return component(Pending, {
+				get cold() {
+					return cold();
+				},
+				get colors() {
+					return props.colors;
+				},
+				rows: 2,
+				get children() {
+					return [(() => {
+						const __nsh_hv0 = element("view");
+						insert(__nsh_hv0, [component(SectionLabel, {
 							get colors() {
 								return props.colors;
 							},
-							title: "Сегодня",
-							get subtitle() {
-								return minutes(usage().todayMinutes);
+							get children() {
+								return "Экранное время";
 							}
-						}), component(CardRow, {
+						}), component(Card, {
 							get colors() {
 								return props.colors;
 							},
-							title: "За неделю",
-							get subtitle() {
-								return minutes(usage().weekMinutes);
-							},
-							last: true
-						})];
-					}
-				})]);
-				return __nsh_hv0;
-			})(), (() => {
-				const __nsh_hv1 = element("view");
-				insert(__nsh_hv1, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Чаще всего";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return usage().top.length ? usage().top.map((program, index) => component(CardRow, {
-							get key() {
-								return program.name;
-							},
-							get colors() {
-								return props.colors;
-							},
-							get title() {
-								return program.name;
-							},
-							get subtitle() {
-								return minutes(program.minutes);
-							},
-							get last() {
-								return index === usage().top.length - 1;
+							get children() {
+								return [component(CardRow, {
+									get colors() {
+										return props.colors;
+									},
+									title: "Сегодня",
+									get subtitle() {
+										return minutes(usage().todayMinutes);
+									}
+								}), component(CardRow, {
+									get colors() {
+										return props.colors;
+									},
+									title: "За неделю",
+									get subtitle() {
+										return minutes(usage().weekMinutes);
+									},
+									last: true
+								})];
 							}
-						})) : component(CardRow, {
+						})]);
+						return __nsh_hv0;
+					})(), (() => {
+						const __nsh_hv1 = element("view");
+						insert(__nsh_hv1, [component(SectionLabel, {
 							get colors() {
 								return props.colors;
 							},
-							title: "Пока нечего показать",
-							get subtitle() {
-								return platform() === "darwin" ? "Движок пока считает активность только на Windows" : "Учёт активности выключен или пуст";
+							get children() {
+								return "Чаще всего";
+							}
+						}), component(Card, {
+							get colors() {
+								return props.colors;
 							},
-							last: true
-						});
-					}
-				})]);
-				return __nsh_hv1;
-			})()];
+							get children() {
+								return usage().top.length ? usage().top.map((program, index) => component(CardRow, {
+									get key() {
+										return program.name;
+									},
+									get colors() {
+										return props.colors;
+									},
+									get title() {
+										return program.name;
+									},
+									get subtitle() {
+										return minutes(program.minutes);
+									},
+									get last() {
+										return index === usage().top.length - 1;
+									}
+								})) : component(CardRow, {
+									get colors() {
+										return props.colors;
+									},
+									title: "Пока нечего показать",
+									get subtitle() {
+										return platform() === "darwin" ? "Движок пока считает активность только на Windows" : "Учёт активности выключен или пуст";
+									},
+									last: true
+								});
+							}
+						})]);
+						return __nsh_hv1;
+					})()];
+				}
+			});
 		}
 	});
 }
@@ -2010,316 +2134,330 @@ function StoragePage(props) {
 	const parts = () => segments(state().storage.parts, databaseOnly());
 	const total = () => parts().reduce((sum, part) => sum + part.bytes, 0);
 	const open = (id) => openIds().includes(id);
+	/** The sizes are a walk of the data directory, so they take a moment on the
+	* first read of a session: skeleton until then, the real numbers after —
+	* exact, never rounded or guessed. */
+	const cold = () => !isRead(props.state(), "storage") || !isRead(props.state(), "backups");
 	return component(Page, {
 		get colors() {
 			return props.colors;
 		},
 		title: "Хранилище",
 		get children() {
-			return [
-				(() => {
-					const __nsh_hv0 = element("view");
-					prop(__nsh_hv0, "class", "flex-row");
-					prop(__nsh_hv0, "style", { gap: 8 });
-					insert(__nsh_hv0, [component(PillButton, {
-						get colors() {
-							return props.colors;
-						},
-						get tone() {
-							return databaseOnly() ? void 0 : "accent";
-						},
-						label: "Все",
-						onPress: () => databaseOnly.set(false)
-					}), component(PillButton, {
-						get colors() {
-							return props.colors;
-						},
-						get tone() {
-							return databaseOnly() ? "accent" : void 0;
-						},
-						label: "База данных",
-						onPress: () => databaseOnly.set(true)
-					})]);
-					return __nsh_hv0;
-				})(),
-				component(Card, {
+			return [(() => {
+				const __nsh_hv0 = element("view");
+				prop(__nsh_hv0, "class", "flex-row");
+				prop(__nsh_hv0, "style", { gap: 8 });
+				insert(__nsh_hv0, [component(PillButton, {
 					get colors() {
 						return props.colors;
 					},
-					padded: true,
-					get children() {
-						return [
-							(() => {
-								const __nsh_hv1 = element("view");
-								prop(__nsh_hv1, "style", {
-									gap: 4,
-									marginBottom: 12
-								});
-								const __nsh_hv2 = element("text");
-								bindProp(__nsh_hv2, "style", () => ({
-									fontSize: 28,
-									lineHeight: 34,
-									fontWeight: 600,
-									color: props.colors.foreground
-								}));
-								insert(__nsh_hv2, () => sizeText(total()));
-								const __nsh_hv3 = element("text");
-								bindProp(__nsh_hv3, "style", () => ({
-									fontSize: 12,
-									lineHeight: 16,
-									color: props.colors.muted
-								}));
-								insert(__nsh_hv3, () => databaseOnly() ? "Содержимое рабочей базы ARK и журнал SQLite" : "Установки, данные и локальные ИИ-модели Mundus");
-								append(__nsh_hv1, __nsh_hv2);
-								append(__nsh_hv1, __nsh_hv3);
-								return __nsh_hv1;
-							})(),
-							(() => {
-								const __nsh_hv4 = element("view");
-								prop(__nsh_hv4, "class", "flex-row");
-								prop(__nsh_hv4, "style", {
-									height: 27,
-									gap: 2,
-									marginBottom: 14
-								});
-								insert(__nsh_hv4, () => parts().map((part) => (() => {
-									const __nsh_hv5 = element("view");
-									bindProp(__nsh_hv5, "key", () => part.id);
-									bindProp(__nsh_hv5, "style", () => ({
-										flexGrow: total() > 0 ? part.bytes / total() * 100 : 1,
-										minWidth: 4,
-										height: 27,
-										borderRadius: 5,
-										backgroundColor: partColor(part.id)
-									}));
-									prop(__nsh_hv5, "hoverStyle", { opacity: .72 });
-									bindProp(__nsh_hv5, "tooltip", () => (() => {
-										const __nsh_hv6 = element("text");
-										prop(__nsh_hv6, "style", {
+					get tone() {
+						return databaseOnly() ? void 0 : "accent";
+					},
+					label: "Все",
+					onPress: () => databaseOnly.set(false)
+				}), component(PillButton, {
+					get colors() {
+						return props.colors;
+					},
+					get tone() {
+						return databaseOnly() ? "accent" : void 0;
+					},
+					label: "База данных",
+					onPress: () => databaseOnly.set(true)
+				})]);
+				return __nsh_hv0;
+			})(), component(Pending, {
+				get cold() {
+					return cold();
+				},
+				get colors() {
+					return props.colors;
+				},
+				rows: 4,
+				get children() {
+					return [
+						component(Card, {
+							get colors() {
+								return props.colors;
+							},
+							padded: true,
+							get children() {
+								return [
+									(() => {
+										const __nsh_hv1 = element("view");
+										prop(__nsh_hv1, "style", {
+											gap: 4,
+											marginBottom: 12
+										});
+										const __nsh_hv2 = element("text");
+										bindProp(__nsh_hv2, "style", () => ({
+											fontSize: 28,
+											lineHeight: 34,
+											fontWeight: 600,
+											color: props.colors.foreground
+										}));
+										insert(__nsh_hv2, () => sizeText(total()));
+										const __nsh_hv3 = element("text");
+										bindProp(__nsh_hv3, "style", () => ({
 											fontSize: 12,
-											color: "#ffffff"
+											lineHeight: 16,
+											color: props.colors.muted
+										}));
+										insert(__nsh_hv3, () => databaseOnly() ? "Содержимое рабочей базы ARK и журнал SQLite" : "Установки, данные и локальные ИИ-модели Mundus");
+										append(__nsh_hv1, __nsh_hv2);
+										append(__nsh_hv1, __nsh_hv3);
+										return __nsh_hv1;
+									})(),
+									(() => {
+										const __nsh_hv4 = element("view");
+										prop(__nsh_hv4, "class", "flex-row");
+										prop(__nsh_hv4, "style", {
+											height: 27,
+											gap: 2,
+											marginBottom: 14
 										});
-										insert(__nsh_hv6, () => `${part.label}: ${sizeText(part.bytes)}`);
-										return __nsh_hv6;
-									})());
-									prop(__nsh_hv5, "onPress", () => {
-										const id = part.id;
-										if (!open(id) && part.detail?.length) toggle(id);
-									});
-									return __nsh_hv5;
-								})()));
-								return __nsh_hv4;
-							})(),
-							(() => {
-								const __nsh_hv7 = element("view");
-								insert(__nsh_hv7, () => parts().map((part) => (() => {
-									const __nsh_hv8 = element("view");
-									bindProp(__nsh_hv8, "key", () => part.id);
-									const __nsh_hv9 = element("view");
-									prop(__nsh_hv9, "class", "flex-row items-center");
-									prop(__nsh_hv9, "style", {
-										gap: 10,
-										paddingVertical: 9,
-										borderRadius: 8,
-										paddingHorizontal: 6
-									});
-									prop(__nsh_hv9, "hoverStyle", { backgroundColor: "rgba(255,255,255,0.05)" });
-									prop(__nsh_hv9, "onPress", () => {
-										if (part.detail?.length) toggle(part.id);
-									});
-									const __nsh_hv10 = element("view");
-									bindProp(__nsh_hv10, "style", () => ({
-										width: 16,
-										height: 16,
-										borderRadius: 8,
-										backgroundColor: partColor(part.id)
-									}));
-									const __nsh_hv11 = element("view");
-									prop(__nsh_hv11, "style", {
-										flexGrow: 1,
-										flexShrink: 1,
-										minWidth: 0
-									});
-									const __nsh_hv12 = element("text");
-									bindProp(__nsh_hv12, "style", () => ({
-										fontSize: 13,
-										lineHeight: 18,
-										color: props.colors.foreground
-									}));
-									insert(__nsh_hv12, () => part.label);
-									append(__nsh_hv11, __nsh_hv12);
-									const __nsh_hv13 = element("text");
-									prop(__nsh_hv13, "class", "font-mono");
-									bindProp(__nsh_hv13, "style", () => ({
-										fontSize: 12.5,
-										color: props.colors.muted
-									}));
-									insert(__nsh_hv13, () => sizeText(part.bytes));
-									append(__nsh_hv9, __nsh_hv10);
-									append(__nsh_hv9, __nsh_hv11);
-									append(__nsh_hv9, __nsh_hv13);
-									append(__nsh_hv8, __nsh_hv9);
-									insert(__nsh_hv8, () => open(part.id) && part.detail?.length ? (() => {
-										const __nsh_hv14 = element("view");
-										prop(__nsh_hv14, "style", {
-											paddingLeft: 32,
-											paddingBottom: 8
-										});
-										insert(__nsh_hv14, () => part.detail.map((item, index) => (() => {
-											const __nsh_hv15 = element("view");
-											bindProp(__nsh_hv15, "key", () => `${part.id}-${item.id}-${index}`);
-											prop(__nsh_hv15, "class", "flex-row items-center");
-											prop(__nsh_hv15, "style", {
-												gap: 10,
-												paddingVertical: 4
+										insert(__nsh_hv4, () => parts().map((part) => (() => {
+											const __nsh_hv5 = element("view");
+											bindProp(__nsh_hv5, "key", () => part.id);
+											bindProp(__nsh_hv5, "style", () => ({
+												flexGrow: total() > 0 ? part.bytes / total() * 100 : 1,
+												minWidth: 4,
+												height: 27,
+												borderRadius: 5,
+												backgroundColor: partColor(part.id)
+											}));
+											prop(__nsh_hv5, "hoverStyle", { opacity: .72 });
+											bindProp(__nsh_hv5, "tooltip", () => (() => {
+												const __nsh_hv6 = element("text");
+												prop(__nsh_hv6, "style", {
+													fontSize: 12,
+													color: "#ffffff"
+												});
+												insert(__nsh_hv6, () => `${part.label}: ${sizeText(part.bytes)}`);
+												return __nsh_hv6;
+											})());
+											prop(__nsh_hv5, "onPress", () => {
+												const id = part.id;
+												if (!open(id) && part.detail?.length) toggle(id);
 											});
-											const __nsh_hv16 = element("view");
-											prop(__nsh_hv16, "style", {
+											return __nsh_hv5;
+										})()));
+										return __nsh_hv4;
+									})(),
+									(() => {
+										const __nsh_hv7 = element("view");
+										insert(__nsh_hv7, () => parts().map((part) => (() => {
+											const __nsh_hv8 = element("view");
+											bindProp(__nsh_hv8, "key", () => part.id);
+											const __nsh_hv9 = element("view");
+											prop(__nsh_hv9, "class", "flex-row items-center");
+											prop(__nsh_hv9, "style", {
+												gap: 10,
+												paddingVertical: 9,
+												borderRadius: 8,
+												paddingHorizontal: 6
+											});
+											prop(__nsh_hv9, "hoverStyle", { backgroundColor: "rgba(255,255,255,0.05)" });
+											prop(__nsh_hv9, "onPress", () => {
+												if (part.detail?.length) toggle(part.id);
+											});
+											const __nsh_hv10 = element("view");
+											bindProp(__nsh_hv10, "style", () => ({
+												width: 16,
+												height: 16,
+												borderRadius: 8,
+												backgroundColor: partColor(part.id)
+											}));
+											const __nsh_hv11 = element("view");
+											prop(__nsh_hv11, "style", {
 												flexGrow: 1,
 												flexShrink: 1,
 												minWidth: 0
 											});
-											const __nsh_hv17 = element("text");
-											bindProp(__nsh_hv17, "style", () => ({
-												fontSize: 12,
-												lineHeight: 16,
+											const __nsh_hv12 = element("text");
+											bindProp(__nsh_hv12, "style", () => ({
+												fontSize: 13,
+												lineHeight: 18,
+												color: props.colors.foreground
+											}));
+											insert(__nsh_hv12, () => part.label);
+											append(__nsh_hv11, __nsh_hv12);
+											const __nsh_hv13 = element("text");
+											prop(__nsh_hv13, "class", "font-mono");
+											bindProp(__nsh_hv13, "style", () => ({
+												fontSize: 12.5,
 												color: props.colors.muted
 											}));
-											insert(__nsh_hv17, () => item.label || item.id);
-											append(__nsh_hv16, __nsh_hv17);
-											const __nsh_hv18 = element("text");
-											prop(__nsh_hv18, "class", "font-mono");
-											bindProp(__nsh_hv18, "style", () => ({
-												fontSize: 12,
-												color: props.colors.muted
-											}));
-											insert(__nsh_hv18, () => sizeText(item.bytes));
-											append(__nsh_hv15, __nsh_hv16);
-											append(__nsh_hv15, __nsh_hv18);
-											return __nsh_hv15;
+											insert(__nsh_hv13, () => sizeText(part.bytes));
+											append(__nsh_hv9, __nsh_hv10);
+											append(__nsh_hv9, __nsh_hv11);
+											append(__nsh_hv9, __nsh_hv13);
+											append(__nsh_hv8, __nsh_hv9);
+											insert(__nsh_hv8, () => open(part.id) && part.detail?.length ? (() => {
+												const __nsh_hv14 = element("view");
+												prop(__nsh_hv14, "style", {
+													paddingLeft: 32,
+													paddingBottom: 8
+												});
+												insert(__nsh_hv14, () => part.detail.map((item, index) => (() => {
+													const __nsh_hv15 = element("view");
+													bindProp(__nsh_hv15, "key", () => `${part.id}-${item.id}-${index}`);
+													prop(__nsh_hv15, "class", "flex-row items-center");
+													prop(__nsh_hv15, "style", {
+														gap: 10,
+														paddingVertical: 4
+													});
+													const __nsh_hv16 = element("view");
+													prop(__nsh_hv16, "style", {
+														flexGrow: 1,
+														flexShrink: 1,
+														minWidth: 0
+													});
+													const __nsh_hv17 = element("text");
+													bindProp(__nsh_hv17, "style", () => ({
+														fontSize: 12,
+														lineHeight: 16,
+														color: props.colors.muted
+													}));
+													insert(__nsh_hv17, () => item.label || item.id);
+													append(__nsh_hv16, __nsh_hv17);
+													const __nsh_hv18 = element("text");
+													prop(__nsh_hv18, "class", "font-mono");
+													bindProp(__nsh_hv18, "style", () => ({
+														fontSize: 12,
+														color: props.colors.muted
+													}));
+													insert(__nsh_hv18, () => sizeText(item.bytes));
+													append(__nsh_hv15, __nsh_hv16);
+													append(__nsh_hv15, __nsh_hv18);
+													return __nsh_hv15;
+												})()));
+												return __nsh_hv14;
+											})() : null);
+											return __nsh_hv8;
 										})()));
-										return __nsh_hv14;
-									})() : null);
-									return __nsh_hv8;
-								})()));
-								return __nsh_hv7;
-							})()
-						];
-					}
-				}),
-				(() => {
-					const __nsh_hv19 = element("view");
-					insert(__nsh_hv19, [component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Данные";
-						}
-					}), component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return (() => {
-								const __nsh_hv20 = element("view");
-								prop(__nsh_hv20, "style", {
-									paddingVertical: 10,
-									gap: 2
-								});
-								const __nsh_hv21 = element("text");
-								bindProp(__nsh_hv21, "style", () => ({
-									fontSize: 13,
-									lineHeight: 18,
-									color: props.colors.foreground
-								}));
-								const __nsh_hv22 = text("Папка данных");
-								append(__nsh_hv21, __nsh_hv22);
-								const __nsh_hv23 = element("text");
-								bindProp(__nsh_hv23, "style", () => ({
-									fontSize: 11.5,
-									lineHeight: 16,
-									color: props.colors.muted
-								}));
-								insert(__nsh_hv23, () => state().storage.dataDir);
-								append(__nsh_hv20, __nsh_hv21);
-								append(__nsh_hv20, __nsh_hv23);
-								return __nsh_hv20;
-							})();
-						}
-					})]);
-					return __nsh_hv19;
-				})(),
-				(() => {
-					const __nsh_hv24 = element("view");
-					insert(__nsh_hv24, [component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return "Резервные копии";
-						}
-					}), component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return [() => state().backups.length ? state().backups.map((backup, index, list) => component(CardRow, {
-								get key() {
-									return backup.id;
-								},
+										return __nsh_hv7;
+									})()
+								];
+							}
+						}),
+						(() => {
+							const __nsh_hv19 = element("view");
+							insert(__nsh_hv19, [component(SectionLabel, {
 								get colors() {
 									return props.colors;
 								},
-								get title() {
-									return backup.id;
+								get children() {
+									return "Данные";
+								}
+							}), component(Card, {
+								get colors() {
+									return props.colors;
 								},
-								get subtitle() {
-									return [stamp(backup.modified), backup.size].filter(Boolean).join(" · ");
+								get children() {
+									return (() => {
+										const __nsh_hv20 = element("view");
+										prop(__nsh_hv20, "style", {
+											paddingVertical: 10,
+											gap: 2
+										});
+										const __nsh_hv21 = element("text");
+										bindProp(__nsh_hv21, "style", () => ({
+											fontSize: 13,
+											lineHeight: 18,
+											color: props.colors.foreground
+										}));
+										const __nsh_hv22 = text("Папка данных");
+										append(__nsh_hv21, __nsh_hv22);
+										const __nsh_hv23 = element("text");
+										bindProp(__nsh_hv23, "style", () => ({
+											fontSize: 11.5,
+											lineHeight: 16,
+											color: props.colors.muted
+										}));
+										insert(__nsh_hv23, () => state().storage.dataDir);
+										append(__nsh_hv20, __nsh_hv21);
+										append(__nsh_hv20, __nsh_hv23);
+										return __nsh_hv20;
+									})();
+								}
+							})]);
+							return __nsh_hv19;
+						})(),
+						(() => {
+							const __nsh_hv24 = element("view");
+							insert(__nsh_hv24, [component(SectionLabel, {
+								get colors() {
+									return props.colors;
 								},
-								get last() {
-									return index === list.length - 1;
+								get children() {
+									return "Резервные копии";
+								}
+							}), component(Card, {
+								get colors() {
+									return props.colors;
 								},
-								get right() {
-									return component(PillButton, {
+								get children() {
+									return [() => state().backups.length ? state().backups.map((backup, index, list) => component(CardRow, {
+										get key() {
+											return backup.id;
+										},
 										get colors() {
 											return props.colors;
 										},
-										tone: "danger",
-										label: "Восстановить",
-										onPress: () => props.onCommand("backups.restore", { id: backup.id })
-									});
-								}
-							})) : component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Копий нет",
-								subtitle: "Engine ещё не сделал ни одной",
-								last: true
-							}), component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								title: "Сделать копию сейчас",
-								subtitle: "Снимок базы рядом с данными Engine",
-								last: true,
-								get right() {
-									return component(PillButton, {
+										get title() {
+											return backup.id;
+										},
+										get subtitle() {
+											return [stamp(backup.modified), backup.size].filter(Boolean).join(" · ");
+										},
+										get last() {
+											return index === list.length - 1;
+										},
+										get right() {
+											return component(PillButton, {
+												get colors() {
+													return props.colors;
+												},
+												tone: "danger",
+												label: "Восстановить",
+												onPress: () => props.onCommand("backups.restore", { id: backup.id })
+											});
+										}
+									})) : component(CardRow, {
 										get colors() {
 											return props.colors;
 										},
-										tone: "accent",
-										label: "Создать",
-										onPress: () => props.onCommand("backups.create")
-									});
+										title: "Копий нет",
+										subtitle: "Engine ещё не сделал ни одной",
+										last: true
+									}), component(CardRow, {
+										get colors() {
+											return props.colors;
+										},
+										title: "Сделать копию сейчас",
+										subtitle: "Снимок базы рядом с данными Engine",
+										last: true,
+										get right() {
+											return component(PillButton, {
+												get colors() {
+													return props.colors;
+												},
+												tone: "accent",
+												label: "Создать",
+												onPress: () => props.onCommand("backups.create")
+											});
+										}
+									})];
 								}
-							})];
-						}
-					})]);
-					return __nsh_hv24;
-				})()
-			];
+							})]);
+							return __nsh_hv24;
+						})()
+					];
+				}
+			})];
 		}
 	});
 }
@@ -3115,132 +3253,144 @@ function PluginsPage(props) {
 		},
 		title: "Плагины",
 		get children() {
-			return [(() => {
-				const __nsh_hv0 = element("view");
-				insert(__nsh_hv0, [component(SectionLabel, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return "Установленные";
-					}
-				}), component(Card, {
-					get colors() {
-						return props.colors;
-					},
-					get children() {
-						return installed().length ? installed().map((plugin, index) => component(InstalledRow, {
-							get key() {
-								return plugin.id;
-							},
-							plugin,
+			return component(Pending, {
+				get cold() {
+					return !isRead(props.state(), "plugins.installed");
+				},
+				get colors() {
+					return props.colors;
+				},
+				rows: 1,
+				avatar: true,
+				get children() {
+					return [(() => {
+						const __nsh_hv0 = element("view");
+						insert(__nsh_hv0, [component(SectionLabel, {
 							get colors() {
 								return props.colors;
 							},
-							get last() {
-								return index === installed().length - 1;
-							},
-							get latest() {
-								return newer(plugin);
-							},
-							onConfigure: () => props.onCommand("route", { route: `plugin/${plugin.id}` }),
-							onUpdate: () => props.onCommand("plugins.install", { id: plugin.id }),
-							onRemove: () => props.onCommand("plugins.remove", { id: plugin.id })
-						})) : component(CardRow, {
+							get children() {
+								return "Установленные";
+							}
+						}), component(Card, {
 							get colors() {
 								return props.colors;
 							},
-							icon: "plug",
-							get iconFill() {
-								return props.colors.raised;
-							},
-							get accent() {
-								return props.colors.muted;
-							},
-							title: "Пока ничего не установлено",
-							subtitle: "Выберите плагин из списка ниже",
-							last: true
-						});
-					}
-				})]);
-				return __nsh_hv0;
-			})(), () => available().length && !rest().length ? null : (() => {
-				const __nsh_hv1 = element("view");
-				insert(__nsh_hv1, [
-					component(SectionLabel, {
-						get colors() {
-							return props.colors;
-						},
-						get right() {
-							return state().catalog.stale ? (() => {
-								const __nsh_hv2 = element("text");
-								bindProp(__nsh_hv2, "style", () => ({
+							get children() {
+								return installed().length ? installed().map((plugin, index) => component(InstalledRow, {
+									get key() {
+										return plugin.id;
+									},
+									plugin,
+									get colors() {
+										return props.colors;
+									},
+									get last() {
+										return index === installed().length - 1;
+									},
+									get latest() {
+										return newer(plugin);
+									},
+									onConfigure: () => props.onCommand("route", { route: `plugin/${plugin.id}` }),
+									onUpdate: () => props.onCommand("plugins.install", { id: plugin.id }),
+									onRemove: () => props.onCommand("plugins.remove", { id: plugin.id })
+								})) : component(CardRow, {
+									get colors() {
+										return props.colors;
+									},
+									icon: "plug",
+									get iconFill() {
+										return props.colors.raised;
+									},
+									get accent() {
+										return props.colors.muted;
+									},
+									title: "Пока ничего не установлено",
+									subtitle: "Выберите плагин из списка ниже",
+									last: true
+								});
+							}
+						})]);
+						return __nsh_hv0;
+					})(), () => available().length && !rest().length ? null : (() => {
+						const __nsh_hv1 = element("view");
+						insert(__nsh_hv1, [
+							component(SectionLabel, {
+								get colors() {
+									return props.colors;
+								},
+								get right() {
+									return state().catalog.stale ? (() => {
+										const __nsh_hv2 = element("text");
+										bindProp(__nsh_hv2, "style", () => ({
+											fontSize: 12,
+											color: props.colors.muted
+										}));
+										const __nsh_hv3 = text("Список сохранён: Engine не смог обновить его");
+										append(__nsh_hv2, __nsh_hv3);
+										return __nsh_hv2;
+									})() : null;
+								},
+								get children() {
+									return "Доступные";
+								}
+							}),
+							component(Card, {
+								get colors() {
+									return props.colors;
+								},
+								get children() {
+									return rest().length ? rest().map((plugin, index) => component(AvailableRow, {
+										get key() {
+											return plugin.id;
+										},
+										plugin,
+										get colors() {
+											return props.colors;
+										},
+										get last() {
+											return index === rest().length - 1;
+										},
+										onInstall: () => props.onCommand("plugins.install", { id: plugin.id })
+									})) : component(CardRow, {
+										get colors() {
+											return props.colors;
+										},
+										icon: "check",
+										get iconFill() {
+											return props.colors.raised;
+										},
+										get accent() {
+											return props.colors.muted;
+										},
+										title: "Список пуст",
+										subtitle: "Engine не получил каталог плагинов",
+										last: true
+									});
+								}
+							}),
+							() => rest().length ? (() => {
+								const __nsh_hv4 = element("view");
+								prop(__nsh_hv4, "style", {
+									marginTop: 8,
+									paddingLeft: 12
+								});
+								const __nsh_hv5 = element("text");
+								bindProp(__nsh_hv5, "style", () => ({
 									fontSize: 12,
+									lineHeight: 16,
 									color: props.colors.muted
 								}));
-								const __nsh_hv3 = text("Список сохранён: Engine не смог обновить его");
-								append(__nsh_hv2, __nsh_hv3);
-								return __nsh_hv2;
-							})() : null;
-						},
-						get children() {
-							return "Доступные";
-						}
-					}),
-					component(Card, {
-						get colors() {
-							return props.colors;
-						},
-						get children() {
-							return rest().length ? rest().map((plugin, index) => component(AvailableRow, {
-								get key() {
-									return plugin.id;
-								},
-								plugin,
-								get colors() {
-									return props.colors;
-								},
-								get last() {
-									return index === rest().length - 1;
-								},
-								onInstall: () => props.onCommand("plugins.install", { id: plugin.id })
-							})) : component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								icon: "check",
-								get iconFill() {
-									return props.colors.raised;
-								},
-								get accent() {
-									return props.colors.muted;
-								},
-								title: "Список пуст",
-								subtitle: "Engine не получил каталог плагинов",
-								last: true
-							});
-						}
-					}),
-					() => rest().length ? (() => {
-						const __nsh_hv4 = element("view");
-						prop(__nsh_hv4, "style", {
-							marginTop: 8,
-							paddingLeft: 12
-						});
-						const __nsh_hv5 = element("text");
-						bindProp(__nsh_hv5, "style", () => ({
-							fontSize: 12,
-							lineHeight: 16,
-							color: props.colors.muted
-						}));
-						const __nsh_hv6 = text("Загрузка идёт в фоне — плагин появится в списке выше, когда Engine его установит.");
-						append(__nsh_hv5, __nsh_hv6);
-						append(__nsh_hv4, __nsh_hv5);
-						return __nsh_hv4;
-					})() : null
-				]);
-				return __nsh_hv1;
-			})()];
+								const __nsh_hv6 = text("Загрузка идёт в фоне — плагин появится в списке выше, когда Engine его установит.");
+								append(__nsh_hv5, __nsh_hv6);
+								append(__nsh_hv4, __nsh_hv5);
+								return __nsh_hv4;
+							})() : null
+						]);
+						return __nsh_hv1;
+					})()];
+				}
+			});
 		}
 	});
 }

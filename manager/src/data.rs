@@ -210,7 +210,25 @@ fn run(
             crate::log::append("manager", &format!("{op} failed -> {key}: {message}"));
         }
     }
+    // The page is told that this key has been asked, whatever the answer: a
+    // skeleton that waited for a failed call would never go away.
+    mark_read(&mut state, key);
     context.emit("state", state.clone());
+}
+
+/// `state.read.<key>` — the Engine has answered this key at least once this
+/// session. Pages draw a skeleton until then, and their own data after: a read
+/// that is still in flight must not look like «nothing here».
+pub(crate) fn mark_read(state: &mut Value, key: &str) {
+    let Some(object) = state.as_object_mut() else {
+        return;
+    };
+    let read = object
+        .entry("read".to_owned())
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    if let Some(read) = read.as_object_mut() {
+        read.insert(key.to_owned(), Value::Bool(true));
+    }
 }
 
 /// Narrows one answer and writes it where the pages read it. Split out of `run`

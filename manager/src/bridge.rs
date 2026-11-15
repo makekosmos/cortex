@@ -453,6 +453,9 @@ impl NativeComponent for ManagerBridge {
 /// the first poll or page load.
 fn snapshot() -> Value {
     json!({
+        // Nothing has been answered yet: every page draws a skeleton until its
+        // own key arrives, rather than the empty states below.
+        "read": {},
         "engine": {
             "status": "unreachable",
             "version": "",

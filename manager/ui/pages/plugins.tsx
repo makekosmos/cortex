@@ -21,7 +21,8 @@ import {
   picking,
   same,
 } from "./plugin-fields";
-import { Page } from "../page";
+import { Page, Pending } from "../page";
+import { isRead } from "../state";
 import { note } from "../modal";
 import { HotkeyRecorder } from "./plugin-hotkey";
 import { AvailableRow, InstalledRow } from "./plugin-rows";
@@ -70,6 +71,7 @@ export function PluginsPage(props: PageProps) {
   };
   return (
     <Page colors={props.colors} title="Плагины">
+      <Pending cold={!isRead(props.state(), "plugins.installed")} colors={props.colors} rows={1} avatar>
       <View>
         <SectionLabel colors={props.colors}>Установленные</SectionLabel>
         <Card colors={props.colors}>
@@ -149,6 +151,7 @@ export function PluginsPage(props: PageProps) {
         ) : null}
       </View>
       )}
+      </Pending>
     </Page>
   );
 }
