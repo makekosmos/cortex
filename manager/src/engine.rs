@@ -257,7 +257,10 @@ pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>
     std::thread::spawn(move || {
         let mut last: Option<(Value, Value)> = None;
         loop {
-            let engine_state = probe(&engine);
+            let probe = probe(&engine);
+            // An Engine the user stopped on purpose is not a broken connection:
+            // the answer says "stopped" while the health surface stays quiet.
+            let engine_state = settle(probe, previous_status(&state));
             // Pairing is app-wide: a request must reach the modal on whatever
             // page the user is on, so the snapshot is polled here and not with
             // the Devices page. A failed read keeps the previous answer: the
@@ -291,6 +294,31 @@ pub fn watch(engine: Engine, context: ComponentContext, state: Arc<Mutex<Value>>
 /// What the pages show while no snapshot has arrived.
 fn no_sync() -> Value {
     json!({ "running": false, "incoming": [], "peers": [] })
+}
+
+/// The status the state holds right now, before this poll replaces it.
+fn previous_status(state: &Arc<Mutex<Value>>) -> Option<String> {
+    state
+        .lock()
+        .ok()?
+        .get("engine")
+        .and_then(|engine| engine.get("status"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+/// A probe result, adjusted for what the user asked the Engine to do: after a
+/// stop, "unreachable" is the expected state and reads as "stopped". A start
+/// that never comes up is not a state — it falls back to the honest "no
+/// connection".
+fn settle(mut probe: Value, previous: Option<String>) -> Value {
+    if probe.get("status").and_then(Value::as_str) != Some("unreachable") {
+        return probe;
+    }
+    if matches!(previous.as_deref(), Some("stopped")) {
+        probe["status"] = json!("stopped");
+    }
+    probe
 }
 
 /// The snapshot replaces `sync`, except for the pairing code the user asked to
@@ -347,6 +375,25 @@ mod tests {
         let state = probe(&engine);
         assert_eq!(state["status"], "unreachable");
         assert_eq!(state["port"], 0);
+    }
+
+    /// Stopped on purpose is a state the page can show and offer «Запустить»
+    /// from; a start that never came up is not, and must not pretend to be.
+    #[test]
+    fn an_engine_the_user_stopped_keeps_saying_so() {
+        let quiet = json!({ "status": "unreachable", "version": "", "port": 0 });
+        assert_eq!(settle(quiet.clone(), Some("stopped".into()))["status"], "stopped");
+        assert_eq!(
+            settle(quiet.clone(), Some("starting".into()))["status"],
+            "unreachable"
+        );
+        assert_eq!(settle(quiet, None)["status"], "unreachable");
+    }
+
+    #[test]
+    fn a_running_engine_clears_the_stopped_state() {
+        let up = json!({ "status": "running", "version": "0.11.0", "port": 49152 });
+        assert_eq!(settle(up, Some("stopped".into()))["status"], "running");
     }
 
     /// The pairing code the user asked to see outlives the poll that follows it:

@@ -5,6 +5,7 @@
 //! bottom center, 163 points up, 192×96, transparent, and it does not take
 //! the pointer. It only exists while there is something to draw.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,8 +28,10 @@ const CENTER_FROM_BOTTOM: f32 = 163.;
 /// pinned it to (a slower ask showed on Windows as a visibly choppy pill).
 const FRAME: Duration = Duration::from_millis(6);
 /// Off screen nothing is drawn, so the frame slot is only checked for
-/// something new — rarely enough to keep an idle pill off a CPU.
-const IDLE: Duration = Duration::from_millis(120);
+/// something new. Short enough that the first frame of a session is not the
+/// delay the person sees after the hotkey: an idle pill still costs ~40 wakeups
+/// a second, which is nothing next to the window it belongs to.
+const IDLE: Duration = Duration::from_millis(25);
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
@@ -40,14 +43,38 @@ struct Plate {
 
 impl Plate {
     fn set(&mut self, image: Arc<RenderImage>, plate: (f32, f32), window: &mut Window) {
+        // A plate that comes back from hidden has no region left: the shape has to
+        // be given to the window again, and the window has to be shown, not only
+        // when the size changes.
+        let returning = self.image.is_none();
         #[cfg(target_os = "windows")]
-        if self.plate != plate {
+        if self.plate != plate || returning {
             self.plate = plate;
             windows::shape(window, plate);
+        }
+        #[cfg(target_os = "windows")]
+        if returning {
+            windows::show(window);
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = returning;
+            self.plate = plate;
         }
         if let Some(previous) = self.image.replace(image) {
             let _ = window.drop_image(previous);
         }
+    }
+
+    /// Back to nothing to draw: the image goes, and on Windows the region goes
+    /// with it — a plate-less window there is DWM's milky rectangle.
+    fn clear(&mut self, window: &mut Window) {
+        if let Some(image) = self.image.take() {
+            let _ = window.drop_image(image);
+        }
+        self.plate = (0., 0.);
+        #[cfg(target_os = "windows")]
+        windows::hide(window);
     }
 }
 
@@ -137,9 +164,33 @@ fn draw_of(frame: &Value) -> Option<Draw> {
     })
 }
 
-/// Watches the Engine's frames and shows the pill while there is something to
-/// draw. The process stays up between dictations — it is started by the Engine
-/// and hidden whenever the scope has nothing to show.
+/// Where the pill writes what it did, when: `%LOCALAPPDATA%\Mundus\logs\dictation.log`.
+/// A pill that appears late is measured against these lines, so each one carries
+/// epoch milliseconds — the same clock a script or the Engine's own log uses.
+pub(crate) fn log(what: &str) {
+    use std::io::Write as _;
+    let Some(dir) = std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("Mundus\\logs")) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis())
+        .unwrap_or_default();
+    let path = dir.join("dictation.log");
+    // Two lines per dictation add up over months: past a quarter of a megabyte
+    // the log starts again, which is all a delay report ever needs.
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 256 * 1024) {
+        let _ = std::fs::remove_file(&path);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{ms} {what}");
+    }
+}
+
+/// Watches the Engine's frames and draws them into a window that is created
+/// once and kept: the process stays up between dictations, started by the
+/// Engine, and its window only loses the plate when there is nothing to show.
 pub fn start(cx: &mut App, frames: Frames) {
     cx.spawn(async move |cx: &mut AsyncApp| {
         let renderer = cx
@@ -150,31 +201,72 @@ pub fn start(cx: &mut App, frames: Frames) {
             eprintln!("dictation: GPU renderer did not start");
             return;
         };
-        let mut window: Option<gpui::WindowHandle<Plate>> = None;
+        // Creating the window costs about a second (GPUI's first window on
+        // Windows), and paying that after the hotkey was the delay the pill had:
+        // the window is made here, blank and shapeless, and a session only fills
+        // it and gives it a region. A different display under the pointer is the
+        // one case that still opens a window.
+        let mut placed = cx.update(|app| placed_on(app));
+        let mut window = cx.update(open);
+        let mut shown = false;
         loop {
-            let tick = if window.is_some() { FRAME } else { IDLE };
-            cx.background_executor().timer(tick).await;
+            cx.background_executor()
+                .timer(if shown { FRAME } else { IDLE })
+                .await;
             let draw = frames.take().as_ref().and_then(draw_of);
             let image = draw.as_ref().and_then(|draw| renderer.render(draw).ok());
             let plate = draw
                 .as_ref()
                 .map_or((0., 0.), |draw| (draw.width * draw.scale, draw.height * draw.scale));
-            cx.update(|app| match image {
-                Some(image) => match window {
-                    Some(handle) => {
-                        let drawn = plate;
-                        let _ = handle.update(app, |plate, window, cx| {
+            if image.is_some() && !shown {
+                let display = cx.update(|app| placed_on(app));
+                if window.is_none() || (display.is_some() && display != placed) {
+                    if window.is_some() {
+                        close(&mut window, cx);
+                    }
+                    placed = display;
+                    window = cx.update(open);
+                }
+            }
+            let Some(handle) = window else {
+                continue;
+            };
+            match image {
+                Some(image) => {
+                    let drawn = plate;
+                    let _ = cx.update(|app| {
+                        handle.update(app, |plate, window, cx| {
                             plate.set(image, drawn, window);
                             cx.notify();
-                        });
+                        })
+                    });
+                    if !shown {
+                        shown = true;
+                        log(&format!("pill shown {:.0}x{:.0}", drawn.0, drawn.1));
                     }
-                    None => window = open(app, image, plate),
-                },
-                None => close(&mut window, app),
-            });
+                }
+                None if shown => {
+                    shown = false;
+                    let _ = cx.update(|app| handle.update(app, |plate, window, _| plate.clear(window)));
+                    log("pill hidden");
+                }
+                None => {}
+            }
         }
     })
     .detach();
+}
+
+/// Which display the pill belongs on: the one the pointer is on.
+fn placed_on(cx: &App) -> Option<(f32, f32, f32, f32)> {
+    let display = under_pointer(cx).or_else(|| cx.primary_display())?;
+    let area = display.visible_bounds();
+    Some((
+        f32::from(area.origin.x),
+        f32::from(area.origin.y),
+        f32::from(area.size.width),
+        f32::from(area.size.height),
+    ))
 }
 
 /// The display the pointer is on, in the points GPUI lays its displays out in.
@@ -195,7 +287,7 @@ fn under_pointer(_cx: &App) -> Option<std::rc::Rc<dyn gpui::PlatformDisplay>> {
     None
 }
 
-fn open(cx: &mut App, image: Arc<RenderImage>, plate: (f32, f32)) -> Option<gpui::WindowHandle<Plate>> {
+fn open(cx: &mut App) -> Option<gpui::WindowHandle<Plate>> {
     // The person dictates where they work: a second screen gets its own pill
     // instead of one that opens on the main display.
     let display = under_pointer(cx).or_else(|| cx.primary_display())?;
@@ -227,29 +319,29 @@ fn open(cx: &mut App, image: Arc<RenderImage>, plate: (f32, f32)) -> Option<gpui
             move |window, cx| {
                 overlay(window);
                 #[cfg(target_os = "windows")]
-                windows::shape(window, plate);
+                windows::hide(window);
                 cx.new(|_| Plate {
-                    image: Some(image),
-                    plate,
+                    image: None,
+                    plate: (0., 0.),
                 })
             },
         )
         .ok()?;
-    eprintln!("dictation: pill shown {:.0}x{:.0}", plate.0, plate.1);
+    log("pill window created");
     Some(handle)
 }
 
-fn close(window: &mut Option<gpui::WindowHandle<Plate>>, cx: &mut App) {
+fn close(window: &mut Option<gpui::WindowHandle<Plate>>, cx: &mut AsyncApp) {
     let Some(handle) = window.take() else {
         return;
     };
-    let _ = handle.update(cx, |plate, window, _| {
-        if let Some(image) = plate.image.take() {
-            let _ = window.drop_image(image);
-        }
-        window.remove_window();
+    let _ = cx.update(|app| {
+        handle.update(app, |plate, window, _| {
+            plate.clear(window);
+            window.remove_window();
+        })
     });
-    eprintln!("dictation: pill hidden");
+    log("pill window closed");
 }
 
 /// A HUD, not a window: no pointer, no shadow, above the Dock, on every space.
@@ -284,6 +376,32 @@ mod windows {
             return None;
         };
         Some(win32.hwnd.get() as *mut c_void)
+    }
+
+    /// Nothing to draw: an empty region, which is no visible area and no
+    /// hit-testing, and the window itself hidden.
+    pub fn hide(window: &Window) {
+        let Some(hwnd) = hwnd(window) else {
+            return;
+        };
+        unsafe {
+            let region = CreateRectRgn(0, 0, 0, 0);
+            if region != 0 && SetWindowRgn(hwnd, region, 1) == 0 {
+                DeleteObject(region);
+            }
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+
+    /// Back on screen without taking the focus: `SW_SHOWNA` is "show, do not
+    /// activate" — the pill must never pull the person out of what they type in.
+    pub fn show(window: &Window) {
+        let Some(hwnd) = hwnd(window) else {
+            return;
+        };
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNA);
+        }
     }
 
     pub fn shape(window: &Window, plate: (f32, f32)) {
@@ -321,10 +439,17 @@ mod windows {
     #[link(name = "user32")]
     extern "system" {
         fn SetWindowRgn(window: *mut c_void, region: isize, redraw: i32) -> i32;
+        fn ShowWindow(window: *mut c_void, command: i32) -> i32;
     }
+
+    /// Hide with no animation and no activation bookkeeping.
+    const SW_HIDE: i32 = 0;
+    /// Show without activating: the pill never takes the person's focus.
+    const SW_SHOWNA: i32 = 8;
 
     #[link(name = "gdi32")]
     extern "system" {
+        fn CreateRectRgn(left: i32, top: i32, right: i32, bottom: i32) -> isize;
         fn CreateRoundRectRgn(
             left: i32,
             top: i32,

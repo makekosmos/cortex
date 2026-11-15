@@ -120,6 +120,27 @@ impl ManagerBridge {
         self.publish();
     }
 
+    /// Runs one Engine lifecycle step on its own thread and publishes what came
+    /// of it: a step that fails says nothing about the Engine itself, so the
+    /// status falls back to what the poller will report.
+    fn engine_step(&self, step: impl FnOnce() -> Result<(), String> + Send + 'static, done: &'static str) {
+        let state = Arc::clone(&self.state);
+        let context = self.context.clone();
+        std::thread::spawn(move || {
+            let outcome = step();
+            if let Err(error) = &outcome {
+                tracing::warn!(error = %error, "engine lifecycle step failed");
+            }
+            if let Ok(mut state) = state.lock() {
+                if let Some(engine) = state.get_mut("engine").and_then(Value::as_object_mut) {
+                    let status = if outcome.is_ok() { done } else { "unreachable" };
+                    engine.insert("status".into(), json!(status));
+                }
+                context.emit("state", state.clone());
+            }
+        });
+    }
+
     fn id(args: &Value) -> String {
         args.get("id")
             .or_else(|| args.get("value"))
@@ -227,19 +248,21 @@ impl NativeComponent for ManagerBridge {
             // confirmation first; nothing is assumed here, the poller reports.
             "server.start" => {
                 self.status("starting");
-                std::thread::spawn(|| {
-                    if let Err(error) = boot::ensure_engine() {
-                        tracing::warn!(error = %error, "engine start failed");
-                    }
-                });
+                self.engine_step(boot::ensure_engine, "running");
             }
             "server.stop" => {
                 self.status("stopping");
-                std::thread::spawn(|| {
-                    if let Err(error) = boot::stop_engine() {
-                        tracing::warn!(error = %error, "engine stop failed");
-                    }
-                });
+                self.engine_step(boot::stop_engine, "stopped");
+            }
+            // Stop, then start again: the Engine answers `--shutdown` before its
+            // core is gone, and `stop_engine` waits for the health surface to go
+            // quiet, so the two run in this order, not racing.
+            "server.restart" => {
+                self.status("stopping");
+                self.engine_step(
+                    || boot::stop_engine().and_then(|()| boot::ensure_engine()),
+                    "running",
+                );
             }
 
             // Pairing decisions (KOS-369): the Engine closes the handshake.

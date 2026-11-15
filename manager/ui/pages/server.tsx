@@ -1,5 +1,5 @@
 import { Text, View } from "nsh";
-import { Card, CardRow, FieldRow, PillButton, SectionLabel } from "@makekosmos/imago-nsh";
+import { Card, CardRow, FieldRow, PillButton, SectionLabel, Switch } from "@makekosmos/imago-nsh";
 import type { PageProps } from "../commands";
 import { productVersion, statusLabel } from "../state";
 import { Page } from "../page";
@@ -9,9 +9,19 @@ import { updateAction } from "./updates";
 export function ServerPage(props: PageProps) {
   const state = () => props.state();
   const code = state().sync.ownCode;
+  const engineRunning = () => state().engine.status === "running";
+  const engineBusy = () =>
+    state().engine.status === "starting" || state().engine.status === "stopping";
+  // The Engine, named and versioned, as its subtitle: the header says what the
+  // product is, this row says what runs under it.
+  const engineSubtitle = () => {
+    const engine = state().engine;
+    return engine.version
+      ? `${statusLabel(engine.status)} · ${engine.version}`
+      : statusLabel(engine.status);
+  };
   // The header's one button is the release: download it, or install it once it
-  // is ready (green). The Engine keeps running either way — stopping it is not
-  // something this window offers.
+  // is ready (green). The Engine's own lifetime lives in the card below.
   const releaseWaiting = () => {
     const updates = state().updates;
     return (
@@ -41,6 +51,52 @@ export function ServerPage(props: PageProps) {
           }
         />
       </Card>
+
+      <View>
+        <SectionLabel colors={props.colors}>Движок</SectionLabel>
+        <Card colors={props.colors}>
+          <CardRow
+            colors={props.colors}
+            icon="pulse"
+            title="Engine"
+            subtitle={engineSubtitle()}
+            right={
+              <View class="flex-row items-center gap-2">
+                <PillButton
+                  colors={props.colors}
+                  tone={engineRunning() ? "danger" : "accent"}
+                  label={engineRunning() ? "Остановить" : "Запустить"}
+                  disabled={engineBusy()}
+                  onPress={() =>
+                    props.onCommand(engineRunning() ? "server.stop" : "server.start")
+                  }
+                />
+                <PillButton
+                  colors={props.colors}
+                  label="Перезапустить"
+                  disabled={engineBusy()}
+                  onPress={() => props.onCommand("server.restart")}
+                />
+              </View>
+            }
+          />
+          <CardRow
+            colors={props.colors}
+            icon="display"
+            title="Запуск при входе"
+            subtitle="Движок поднимается сам при входе в систему — диктовка работает без Manager"
+            last
+            right={
+              <Switch
+                colors={props.colors}
+                value={state().settings.autostart}
+                accessibilityLabel="Запуск при входе"
+                onChange={(value) => props.onCommand("settings.autostart", { value })}
+              />
+            }
+          />
+        </Card>
+      </View>
 
       <View>
         <SectionLabel colors={props.colors}>Коннектор</SectionLabel>

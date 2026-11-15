@@ -12,7 +12,7 @@ import { signal } from "nsh";
 export const hotkeyCaptured = signal("");
 /** What the bridge and the poller report: a stopped Engine simply stops
  * answering, so that is `unreachable`, not a state of its own. */
-export type EngineStatus = "running" | "starting" | "stopping" | "unreachable";
+export type EngineStatus = "running" | "starting" | "stopping" | "stopped" | "unreachable";
 
 export type DeviceRow = {
   id: string;
@@ -298,6 +298,8 @@ export function statusLabel(status: EngineStatus): string {
       return "Запускается";
     case "stopping":
       return "Останавливается";
+    case "stopped":
+      return "Остановлен";
     default:
       return "Нет связи";
   }

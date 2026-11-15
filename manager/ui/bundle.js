@@ -1171,6 +1171,7 @@ const demoState = {
 		newVersion: "0.10.27",
 		channel: "production",
 		canInstall: false,
+		installSupported: true,
 		percent: 0
 	},
 	settings: {
@@ -1183,6 +1184,7 @@ function statusLabel(status) {
 		case "running": return "Работает";
 		case "starting": return "Запускается";
 		case "stopping": return "Останавливается";
+		case "stopped": return "Остановлен";
 		default: return "Нет связи";
 	}
 }
@@ -1515,6 +1517,12 @@ function updateAction(props) {
 function ServerPage(props) {
 	const state = () => props.state();
 	const code = state().sync.ownCode;
+	const engineRunning = () => state().engine.status === "running";
+	const engineBusy = () => state().engine.status === "starting" || state().engine.status === "stopping";
+	const engineSubtitle = () => {
+		const engine = state().engine;
+		return engine.version ? `${statusLabel(engine.status)} · ${engine.version}` : statusLabel(engine.status);
+	};
 	const releaseWaiting = () => {
 		const updates = state().updates;
 		return updates.canInstall || !!updates.newVersion || updates.percent > 0 && updates.percent < 100 || updates.state === "error";
@@ -1555,6 +1563,85 @@ function ServerPage(props) {
 				(() => {
 					const __nsh_hv0 = element("view");
 					insert(__nsh_hv0, [component(SectionLabel, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return "Движок";
+						}
+					}), component(Card, {
+						get colors() {
+							return props.colors;
+						},
+						get children() {
+							return [component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								icon: "pulse",
+								title: "Engine",
+								get subtitle() {
+									return engineSubtitle();
+								},
+								get right() {
+									return (() => {
+										const __nsh_hv1 = element("view");
+										prop(__nsh_hv1, "class", "flex-row items-center gap-2");
+										insert(__nsh_hv1, [component(PillButton, {
+											get colors() {
+												return props.colors;
+											},
+											get tone() {
+												return engineRunning() ? "danger" : "accent";
+											},
+											get label() {
+												return engineRunning() ? "Остановить" : "Запустить";
+											},
+											get disabled() {
+												return engineBusy();
+											},
+											onPress: () => props.onCommand(engineRunning() ? "server.stop" : "server.start")
+										}), component(PillButton, {
+											get colors() {
+												return props.colors;
+											},
+											label: "Перезапустить",
+											get disabled() {
+												return engineBusy();
+											},
+											onPress: () => props.onCommand("server.restart")
+										})]);
+										return __nsh_hv1;
+									})();
+								}
+							}), component(CardRow, {
+								get colors() {
+									return props.colors;
+								},
+								icon: "display",
+								title: "Запуск при входе",
+								subtitle: "Движок поднимается сам при входе в систему — диктовка работает без Manager",
+								last: true,
+								get right() {
+									return component(Switch, {
+										get colors() {
+											return props.colors;
+										},
+										get value() {
+											return state().settings.autostart;
+										},
+										accessibilityLabel: "Запуск при входе",
+										onChange: (value) => props.onCommand("settings.autostart", { value })
+									});
+								}
+							})];
+						}
+					})]);
+					return __nsh_hv0;
+				})(),
+				(() => {
+					const __nsh_hv2 = element("view");
+					insert(__nsh_hv2, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1611,13 +1698,13 @@ function ServerPage(props) {
 									label: "Код",
 									get children() {
 										return (() => {
-											const __nsh_hv1 = element("text");
-											bindProp(__nsh_hv1, "style", () => ({
+											const __nsh_hv3 = element("text");
+											bindProp(__nsh_hv3, "style", () => ({
 												fontSize: 11.5,
 												color: props.colors.muted
 											}));
-											insert(__nsh_hv1, code);
-											return __nsh_hv1;
+											insert(__nsh_hv3, code);
+											return __nsh_hv3;
 										})();
 									}
 								}) : null,
@@ -1644,11 +1731,11 @@ function ServerPage(props) {
 							];
 						}
 					})]);
-					return __nsh_hv0;
+					return __nsh_hv2;
 				})(),
 				(() => {
-					const __nsh_hv2 = element("view");
-					insert(__nsh_hv2, [component(SectionLabel, {
+					const __nsh_hv4 = element("view");
+					insert(__nsh_hv4, [component(SectionLabel, {
 						get colors() {
 							return props.colors;
 						},
@@ -1667,13 +1754,13 @@ function ServerPage(props) {
 								label: "Имя",
 								get children() {
 									return (() => {
-										const __nsh_hv3 = element("text");
-										bindProp(__nsh_hv3, "style", () => ({
+										const __nsh_hv5 = element("text");
+										bindProp(__nsh_hv5, "style", () => ({
 											fontSize: 13,
 											color: props.colors.foreground
 										}));
-										insert(__nsh_hv3, () => state().client.name);
-										return __nsh_hv3;
+										insert(__nsh_hv5, () => state().client.name);
+										return __nsh_hv5;
 									})();
 								}
 							}), component(CardRow, {
@@ -1685,19 +1772,19 @@ function ServerPage(props) {
 								last: true,
 								get right() {
 									return (() => {
-										const __nsh_hv4 = element("text");
-										bindProp(__nsh_hv4, "style", () => ({
+										const __nsh_hv6 = element("text");
+										bindProp(__nsh_hv6, "style", () => ({
 											fontSize: 12.5,
 											color: props.colors.muted
 										}));
-										insert(__nsh_hv4, () => state().engine.port || "—");
-										return __nsh_hv4;
+										insert(__nsh_hv6, () => state().engine.port || "—");
+										return __nsh_hv6;
 									})();
 								}
 							})];
 						}
 					})]);
-					return __nsh_hv2;
+					return __nsh_hv4;
 				})()
 			];
 		}
@@ -1823,7 +1910,7 @@ function PreferencesPage(props) {
 								return props.colors;
 							},
 							title: "Запуск при входе",
-							subtitle: "Engine и Manager стартуют вместе с системой",
+							subtitle: "Движок стартует сам при входе — диктовка работает без Manager",
 							get right() {
 								return component(Switch, {
 									get colors() {

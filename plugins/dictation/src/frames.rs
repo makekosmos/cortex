@@ -11,18 +11,23 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tungstenite::Message;
 
 /// How often a missing or restarted Engine is retried.
 const RETRY: Duration = Duration::from_millis(500);
+/// A gap this long between frames means a session ended: the next frame starts
+/// a new one, and is worth a timestamp in the log.
+const QUIET: Duration = Duration::from_millis(400);
 
 /// What the UI thread reads: the newest frame.
 #[derive(Clone)]
 pub struct Frames {
     latest: Arc<Mutex<Option<Value>>>,
+    /// When the last frame arrived, so a gap can be told from a stream.
+    heard: Arc<Mutex<Option<Instant>>>,
 }
 
 impl Frames {
@@ -37,6 +42,7 @@ impl Frames {
     fn new() -> Self {
         Self {
             latest: Arc::new(Mutex::new(None)),
+            heard: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -58,6 +64,17 @@ impl Frames {
     }
 
     fn store(&self, frame: Value) {
+        // The first frame after a quiet stretch is a session start: stamping it is
+        // what tells "the Engine was late" from "the window was late".
+        let now = Instant::now();
+        {
+            let mut heard = self.heard.lock().unwrap_or_else(|error| error.into_inner());
+            let quiet = heard.is_none_or(|at| now.duration_since(at) > QUIET);
+            if quiet {
+                crate::hud::log("first frame after quiet");
+            }
+            *heard = Some(now);
+        }
         *self
             .latest
             .lock()

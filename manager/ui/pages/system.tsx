@@ -62,7 +62,7 @@ export function PreferencesPage(props: PageProps) {
           <CardRow
             colors={props.colors}
             title="Запуск при входе"
-            subtitle="Engine и Manager стартуют вместе с системой"
+            subtitle="Движок стартует сам при входе — диктовка работает без Manager"
             right={
               <Switch
                 colors={props.colors}
