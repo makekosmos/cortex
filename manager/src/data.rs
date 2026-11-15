@@ -58,6 +58,7 @@ fn calls(route: &str) -> Vec<Call> {
         "plugins" => vec![
             ("plugins.catalog", "plugins.catalog", json!({})),
             ("plugins.installed", "plugins.list", json!({})),
+            ("plugins.releases", "plugins.releases", json!({})),
         ],
         "settings" => vec![
             ("settings", "engine.settings.get", json!({})),

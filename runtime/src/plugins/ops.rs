@@ -13,6 +13,9 @@ pub async fn handle_plugin_op(subop: &str, params: Value) -> crate::plugins::OpR
         "catalog" => catalog::fetch().await.and_then(|answer| {
             serde_json::to_value(answer).map_err(|error| PluginError::Catalog(error.to_string()))
         }),
+        // What the registry says each plugin's newest release is: the pages
+        // compare it with the install to name an update.
+        "releases" => releases().await,
         "install" => install(&params).await,
         "remove" => remove(&params),
         "launch" => launch(&params),
@@ -68,6 +71,15 @@ impl From<Result<Value>> for OpResponse {
 /// An install nothing describes is not a plugin: the same catalog installs
 /// native apps, and a page that offered them a settings screen it cannot draw
 /// would be worse than a page that leaves them out.
+/// `plugins.releases`: what the registry says the newest release of each
+/// catalog plugin is. An answer without the registry is an empty map, not an
+/// error: a page that cannot check for updates still has to draw.
+async fn releases() -> Result<Value> {
+    let manifests = catalog::fetch().await?.catalog.plugins;
+    let latest = super::releases::latest(&manifests).await;
+    Ok(serde_json::json!({ "releases": latest }))
+}
+
 async fn list() -> Result<Value> {
     let store = PluginStore::new()?;
     let mut installed = store.installed();

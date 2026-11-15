@@ -10,14 +10,18 @@ function versionLine(plugin: PluginRow): string {
   return parts.join(" · ");
 }
 
-/** A row of the installed list: change its settings, remove it. A plugin is a
- * setting of this program, not a program beside it, so nothing here launches
- * one. */
+/** A row of the installed list: change its settings, take an update, remove
+ * it. A plugin is a setting of this program, not a program beside it, so
+ * nothing here launches one. */
 export function InstalledRow(props: {
   plugin: PluginRow;
   colors: ApplicationTheme;
   last: boolean;
+  /** The newest release the registry names, when it names one newer than the
+   * install — nothing to press otherwise. */
+  latest?: string;
   onConfigure: () => void;
+  onUpdate: () => void;
   onRemove: () => void;
 }) {
   const { colors, plugin } = props;
@@ -28,10 +32,22 @@ export function InstalledRow(props: {
       accent={colors.accent}
       accentTo={colors.accent}
       title={plugin.name}
-      subtitle={versionLine(plugin) || plugin.summary}
+      subtitle={
+        props.latest
+          ? `${versionLine(plugin)} — есть ${props.latest}`
+          : versionLine(plugin) || plugin.summary
+      }
       last={props.last}
       right={
         <View class="flex-row items-center gap-2">
+          {props.latest ? (
+            <PillButton
+              colors={colors}
+              tone="accent"
+              label="Обновить"
+              onPress={props.onUpdate}
+            />
+          ) : null}
           <PillButton colors={colors} label="Настроить" onPress={props.onConfigure} />
           <PillButton colors={colors} tone="danger" label="Удалить" onPress={props.onRemove} />
         </View>

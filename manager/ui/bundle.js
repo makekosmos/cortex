@@ -1178,6 +1178,10 @@ const demoState = {
 			running: false,
 			executable: true
 		}],
+		releases: { "com.kosmos.dictation": {
+			version: "0.5.3",
+			tag: "dictation-v0.5.3"
+		} },
 		current: null
 	},
 	updates: {
@@ -2899,9 +2903,9 @@ function versionLine(plugin) {
 	if (plugin.running) parts.push("запущен");
 	return parts.join(" · ");
 }
-/** A row of the installed list: change its settings, remove it. A plugin is a
-* setting of this program, not a program beside it, so nothing here launches
-* one. */
+/** A row of the installed list: change its settings, take an update, remove
+* it. A plugin is a setting of this program, not a program beside it, so
+* nothing here launches one. */
 function InstalledRow(props) {
 	const { colors, plugin } = props;
 	return component(CardRow, {
@@ -2917,7 +2921,7 @@ function InstalledRow(props) {
 			return plugin.name;
 		},
 		get subtitle() {
-			return versionLine(plugin) || plugin.summary;
+			return props.latest ? `${versionLine(plugin)} — есть ${props.latest}` : versionLine(plugin) || plugin.summary;
 		},
 		get last() {
 			return props.last;
@@ -2926,20 +2930,31 @@ function InstalledRow(props) {
 			return (() => {
 				const __nsh_hv0 = element("view");
 				prop(__nsh_hv0, "class", "flex-row items-center gap-2");
-				insert(__nsh_hv0, [component(PillButton, {
-					colors,
-					label: "Настроить",
-					get onPress() {
-						return props.onConfigure;
-					}
-				}), component(PillButton, {
-					colors,
-					tone: "danger",
-					label: "Удалить",
-					get onPress() {
-						return props.onRemove;
-					}
-				})]);
+				insert(__nsh_hv0, [
+					() => props.latest ? component(PillButton, {
+						colors,
+						tone: "accent",
+						label: "Обновить",
+						get onPress() {
+							return props.onUpdate;
+						}
+					}) : null,
+					component(PillButton, {
+						colors,
+						label: "Настроить",
+						get onPress() {
+							return props.onConfigure;
+						}
+					}),
+					component(PillButton, {
+						colors,
+						tone: "danger",
+						label: "Удалить",
+						get onPress() {
+							return props.onRemove;
+						}
+					})
+				]);
 				return __nsh_hv0;
 			})();
 		}
@@ -3055,6 +3070,12 @@ function StatsBlock(props) {
 
 //#endregion
 //#region pages/plugins.tsx
+/** Whether the registry names a release the install is not on. A plugin with
+* no version of its own (a builtin, or an install nothing recorded) has nothing
+* to compare, and an empty answer is no answer. */
+function hasNewer(installedVersion, latest) {
+	return !!latest && !!installedVersion && latest !== installedVersion;
+}
 /**
 * The catalog and an install can name one plugin in two id shapes: the id was
 * `com.kosmos.…` before the product's brand moved, and a catalog served from
@@ -3079,6 +3100,15 @@ function PluginsPage(props) {
 	const available = () => state().catalog.available;
 	const isInstalled = (id) => installed().some((plugin) => samePlugin(plugin.id, id));
 	const rest = () => available().filter((plugin) => !isInstalled(plugin.id));
+	/** The newer release a row can take, or nothing: the registry's version only
+	* counts when it differs from the installed one, so a plugin on the newest
+	* release has no button about it. */
+	const newer = (plugin) => {
+		const releases = state().releases ?? {};
+		const key = Object.keys(releases).find((id) => samePlugin(id, plugin.id));
+		const latest = key ? releases[key]?.version : "";
+		return hasNewer(plugin.version, latest) ? latest : void 0;
+	};
 	return component(Page, {
 		get colors() {
 			return props.colors;
@@ -3110,7 +3140,11 @@ function PluginsPage(props) {
 							get last() {
 								return index === installed().length - 1;
 							},
+							get latest() {
+								return newer(plugin);
+							},
 							onConfigure: () => props.onCommand("route", { route: `plugin/${plugin.id}` }),
+							onUpdate: () => props.onCommand("plugins.install", { id: plugin.id }),
 							onRemove: () => props.onCommand("plugins.remove", { id: plugin.id })
 						})) : component(CardRow, {
 							get colors() {

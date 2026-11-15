@@ -27,6 +27,13 @@ import { HotkeyRecorder } from "./plugin-hotkey";
 import { AvailableRow, InstalledRow } from "./plugin-rows";
 import { StatsBlock } from "./plugin-stats";
 
+/** Whether the registry names a release the install is not on. A plugin with
+ * no version of its own (a builtin, or an install nothing recorded) has nothing
+ * to compare, and an empty answer is no answer. */
+export function hasNewer(installedVersion: string, latest?: string): boolean {
+  return !!latest && !!installedVersion && latest !== installedVersion;
+}
+
 /**
  * The catalog and an install can name one plugin in two id shapes: the id was
  * `com.kosmos.…` before the product's brand moved, and a catalog served from
@@ -52,6 +59,15 @@ export function PluginsPage(props: PageProps) {
   const available = () => state().catalog.available;
   const isInstalled = (id: string) => installed().some((plugin) => samePlugin(plugin.id, id));
   const rest = () => available().filter((plugin) => !isInstalled(plugin.id));
+  /** The newer release a row can take, or nothing: the registry's version only
+   * counts when it differs from the installed one, so a plugin on the newest
+   * release has no button about it. */
+  const newer = (plugin: { id: string; version: string }): string | undefined => {
+    const releases = state().releases ?? {};
+    const key = Object.keys(releases).find((id) => samePlugin(id, plugin.id));
+    const latest = key ? releases[key]?.version : "";
+    return hasNewer(plugin.version, latest) ? latest : undefined;
+  };
   return (
     <Page colors={props.colors} title="Плагины">
       <View>
@@ -64,7 +80,9 @@ export function PluginsPage(props: PageProps) {
                 plugin={plugin}
                 colors={props.colors}
                 last={index === installed().length - 1}
+                latest={newer(plugin)}
                 onConfigure={() => props.onCommand("route", { route: `plugin/${plugin.id}` })}
+                onUpdate={() => props.onCommand("plugins.install", { id: plugin.id })}
                 onRemove={() => props.onCommand("plugins.remove", { id: plugin.id })}
               />
             ))

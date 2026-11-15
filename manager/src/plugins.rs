@@ -24,6 +24,12 @@ pub(crate) fn shape(key: &str, data: &Value) -> Option<Value> {
         "plugins.installed" => {
             Value::Array(array(data, &["/plugins"]).iter().map(plugin_row).collect())
         }
+        // The registry's word on each plugin's newest release, keyed by id:
+        // the page compares it with the install to name an update.
+        "plugins.releases" => data
+            .get("releases")
+            .cloned()
+            .unwrap_or_else(|| json!({})),
         "plugins.current" => json!({
             "id": text(data, &["/id"]).unwrap_or_default(),
             "manifest": data.get("manifest").cloned().unwrap_or(Value::Null),

@@ -39,6 +39,7 @@ pub mod manifest;
 pub mod ops;
 pub mod pill;
 pub mod release;
+pub mod releases;
 #[cfg(test)]
 mod tests;
 

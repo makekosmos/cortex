@@ -118,6 +118,10 @@ export type PluginsState = {
   /** What can be installed. `stale` says the Engine kept yesterday's copy. */
   catalog: { available: PluginRow[]; stale: boolean; url: string };
   installed: PluginRow[];
+  /** The newest release the registry names, per plugin id: what an installed
+   * plugin is compared with to name an update. Absent for a builtin, and empty
+   * while the Engine has not asked the registry. */
+  releases: Record<string, { version: string; tag: string }>;
   /** The plugin whose page is open: its manifest and stored settings. */
   current: {
     id: string;
@@ -276,6 +280,9 @@ export const demoState: ManagerState = {
         executable: true,
       },
     ],
+    // Demo only: an older install than the registry's newest, so the pages in
+    // `nsh dev` have an update to draw.
+    releases: { "com.kosmos.dictation": { version: "0.5.3", tag: "dictation-v0.5.3" } },
     current: null,
   },
   updates: {
