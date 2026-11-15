@@ -36,10 +36,12 @@ const IDLE: Duration = Duration::from_millis(25);
 
 struct Plate {
     image: Option<Arc<RenderImage>>,
-    /// The plate's size in whole points, as the window was last shaped to it.
+    /// The plate's size in whole points the window region was last shaped to.
     /// Whole points because the region is a hard, unantialiased rectangle: a
     /// fractional step changes nothing on screen but does make DWM composite
     /// the window again, which reads as the pill twitching.
+    shaped: (f32, f32),
+    /// The plate's size the previous frame asked for.
     plate: (f32, f32),
 }
 
@@ -49,10 +51,18 @@ impl Plate {
         // be given to the window again, and the window has to be shown, not only
         // when the size changes.
         let returning = self.image.is_none();
-        let shaped = (plate.0.round(), plate.1.round());
+        // The region is applied at once, but the picture it clips is the one
+        // already composited — the frame being handed over now arrives with the
+        // next composite. Shaping to the newest size cut the plate's edge for
+        // one frame on every step of the shrink, which reads as another, smaller
+        // window taking this one's place. So the region keeps the larger of this
+        // frame and the last: it never cuts the plate it is showing.
+        let target = (plate.0.max(self.plate.0), plate.1.max(self.plate.1));
+        self.plate = plate;
+        let shaped = (target.0.round(), target.1.round());
         #[cfg(target_os = "windows")]
-        if self.plate != shaped || returning {
-            self.plate = shaped;
+        if self.shaped != shaped || returning {
+            self.shaped = shaped;
             windows::shape(window, shaped);
         }
         #[cfg(target_os = "windows")]
@@ -62,7 +72,7 @@ impl Plate {
         #[cfg(not(target_os = "windows"))]
         {
             let _ = returning;
-            self.plate = plate;
+            self.shaped = target;
         }
         if let Some(previous) = self.image.replace(image) {
             let _ = window.drop_image(previous);
@@ -75,6 +85,7 @@ impl Plate {
         if let Some(image) = self.image.take() {
             let _ = window.drop_image(image);
         }
+        self.shaped = (0., 0.);
         self.plate = (0., 0.);
         #[cfg(target_os = "windows")]
         windows::hide(window);
@@ -354,6 +365,7 @@ fn open(cx: &mut App) -> Option<gpui::WindowHandle<Plate>> {
                 windows::hide(window);
                 cx.new(|_| Plate {
                     image: None,
+                    shaped: (0., 0.),
                     plate: (0., 0.),
                 })
             },
