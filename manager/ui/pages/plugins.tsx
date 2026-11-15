@@ -28,6 +28,17 @@ import { AvailableRow, InstalledRow } from "./plugin-rows";
 import { StatsBlock } from "./plugin-stats";
 
 /**
+ * The catalog and an install can name one plugin in two id shapes: the id was
+ * `com.kosmos.…` before the product's brand moved, and a catalog served from
+ * before that move still lists it. A plugin that is installed must not appear
+ * under «Доступные» because its old name is still in the catalog.
+ */
+function samePlugin(a: string, b: string): boolean {
+  const bare = (id: string) => id.replace(/^(com\.kosmos|computer\.mundus)\./, "");
+  return a === b || bare(a) === bare(b);
+}
+
+/**
  * What Mundus can gain and what it already has.
  *
  * The catalog is the Engine's (`plugins.catalog`), the install is its too
@@ -39,7 +50,7 @@ export function PluginsPage(props: PageProps) {
   const state = () => props.state().plugins;
   const installed = () => state().installed;
   const available = () => state().catalog.available;
-  const isInstalled = (id: string) => installed().some((plugin) => plugin.id === id);
+  const isInstalled = (id: string) => installed().some((plugin) => samePlugin(plugin.id, id));
   const rest = () => available().filter((plugin) => !isInstalled(plugin.id));
   return (
     <Page colors={props.colors} title="Плагины">

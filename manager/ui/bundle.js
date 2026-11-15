@@ -517,7 +517,8 @@ function PillButton(props) {
 			paddingTop: 4,
 			paddingBottom: 4,
 			backgroundColor: background,
-			opacity: props.disabled ? .5 : 1
+			opacity: props.disabled ? .5 : 1,
+			cursor: props.disabled ? "default" : "pointer"
 		}));
 		const __nsh_hv33 = element("text");
 		prop(__nsh_hv33, "style", {
@@ -533,6 +534,8 @@ function PillButton(props) {
 }
 function Switch(props) {
 	const off = !props.value;
+	const SIDE = 2;
+	const KNOB = 18;
 	return (() => {
 		const __nsh_hv34 = element("view");
 		prop(__nsh_hv34, "onPress", () => props.onChange(!props.value));
@@ -543,22 +546,34 @@ function Switch(props) {
 		bindProp(__nsh_hv34, "style", () => ({
 			width: 44,
 			height: 22,
-			marginTop: 1,
 			borderRadius: 11,
 			backgroundColor: props.value ? props.colors.accent : props.colors.input ?? props.colors.raised,
-			borderWidth: off ? 1 : 0,
-			borderColor: "#2f3543"
+			boxShadow: off ? [{
+				x: 0,
+				y: 0,
+				spread: 1,
+				color: "#2f3543",
+				inset: true
+			}] : void 0,
+			cursor: "pointer",
+			transitionProperty: "background-color",
+			transitionDuration: 160,
+			transitionTimingFunction: "ease-out"
 		}));
 		const __nsh_hv35 = element("view");
 		bindProp(__nsh_hv35, "style", () => ({
 			position: "absolute",
-			width: 24,
-			height: 18,
-			borderRadius: 9,
-			left: props.value ? 18 : 1,
-			top: 1,
+			width: KNOB,
+			height: KNOB,
+			borderRadius: KNOB / 2,
+			left: SIDE,
+			top: SIDE,
 			backgroundColor: "#ffffff",
-			boxShadow: "0 1px 1.75px #00000038"
+			boxShadow: "0 1px 1.75px #00000038",
+			transform: `translateX(${props.value ? 22 : 0}px)`,
+			transitionProperty: "transform",
+			transitionDuration: 160,
+			transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)"
 		}));
 		append(__nsh_hv34, __nsh_hv35);
 		insert(__nsh_hv34, () => off ? (() => {
@@ -572,7 +587,7 @@ function Switch(props) {
 				borderColor: "#ffffff",
 				opacity: .75,
 				left: 32,
-				top: 7
+				top: 8
 			});
 			return __nsh_hv36;
 		})() : null);
@@ -1535,7 +1550,7 @@ function ServerPage(props) {
 						return props.colors;
 					},
 					get children() {
-						return component(CardRow, {
+						return [component(CardRow, {
 							get colors() {
 								return props.colors;
 							},
@@ -1572,7 +1587,25 @@ function ServerPage(props) {
 									return __nsh_hv0;
 								})();
 							}
-						});
+						}), component(CardRow, {
+							get colors() {
+								return props.colors;
+							},
+							title: "Запуск при входе",
+							last: true,
+							get right() {
+								return component(Switch, {
+									get colors() {
+										return props.colors;
+									},
+									get value() {
+										return state().settings.autostart;
+									},
+									accessibilityLabel: "Запуск при входе",
+									onChange: (value) => props.onCommand("settings.autostart", { value })
+								});
+							}
+						})];
 					}
 				}),
 				(() => {
@@ -1683,7 +1716,7 @@ function ServerPage(props) {
 							return props.colors;
 						},
 						get children() {
-							return [component(FieldRow, {
+							return component(FieldRow, {
 								get colors() {
 									return props.colors;
 								},
@@ -1699,27 +1732,7 @@ function ServerPage(props) {
 										return __nsh_hv4;
 									})();
 								}
-							}), component(CardRow, {
-								get colors() {
-									return props.colors;
-								},
-								icon: "display",
-								title: "Запуск при входе",
-								subtitle: "Движок поднимается сам при входе в систему — диктовка работает без Manager",
-								last: true,
-								get right() {
-									return component(Switch, {
-										get colors() {
-											return props.colors;
-										},
-										get value() {
-											return state().settings.autostart;
-										},
-										accessibilityLabel: "Запуск при входе",
-										onChange: (value) => props.onCommand("settings.autostart", { value })
-									});
-								}
-							})];
+							});
 						}
 					})]);
 					return __nsh_hv3;
@@ -3043,6 +3056,16 @@ function StatsBlock(props) {
 //#endregion
 //#region pages/plugins.tsx
 /**
+* The catalog and an install can name one plugin in two id shapes: the id was
+* `com.kosmos.…` before the product's brand moved, and a catalog served from
+* before that move still lists it. A plugin that is installed must not appear
+* under «Доступные» because its old name is still in the catalog.
+*/
+function samePlugin(a, b) {
+	const bare = (id) => id.replace(/^(com\.kosmos|computer\.mundus)\./, "");
+	return a === b || bare(a) === bare(b);
+}
+/**
 * What Mundus can gain and what it already has.
 *
 * The catalog is the Engine's (`plugins.catalog`), the install is its too
@@ -3054,7 +3077,7 @@ function PluginsPage(props) {
 	const state = () => props.state().plugins;
 	const installed = () => state().installed;
 	const available = () => state().catalog.available;
-	const isInstalled = (id) => installed().some((plugin) => plugin.id === id);
+	const isInstalled = (id) => installed().some((plugin) => samePlugin(plugin.id, id));
 	const rest = () => available().filter((plugin) => !isInstalled(plugin.id));
 	return component(Page, {
 		get colors() {

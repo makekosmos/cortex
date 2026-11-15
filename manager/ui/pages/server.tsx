@@ -52,6 +52,19 @@ export function ServerPage(props: PageProps) {
             </View>
           }
         />
+        <CardRow
+          colors={props.colors}
+          title="Запуск при входе"
+          last
+          right={
+            <Switch
+              colors={props.colors}
+              value={state().settings.autostart}
+              accessibilityLabel="Запуск при входе"
+              onChange={(value) => props.onCommand("settings.autostart", { value })}
+            />
+          }
+        />
       </Card>
 
       <View>
@@ -118,21 +131,6 @@ export function ServerPage(props: PageProps) {
               {state().client.name}
             </Text>
           </FieldRow>
-          <CardRow
-            colors={props.colors}
-            icon="display"
-            title="Запуск при входе"
-            subtitle="Движок поднимается сам при входе в систему — диктовка работает без Manager"
-            last
-            right={
-              <Switch
-                colors={props.colors}
-                value={state().settings.autostart}
-                accessibilityLabel="Запуск при входе"
-                onChange={(value) => props.onCommand("settings.autostart", { value })}
-              />
-            }
-          />
         </Card>
       </View>
     </Page>
