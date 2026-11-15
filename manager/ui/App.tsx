@@ -227,7 +227,17 @@ function App() {
           connectHost((name) => node.command(name, {}));
         }}
         route={route()}
-        onState={(next: ManagerState) => state.set(next)}
+        onState={(next: ManagerState) => {
+          // A page that read the Engine while it was down holds defaults, not
+          // answers — the autostart switch read "off" after a reboot although
+          // the Engine had started itself. When it comes up, the page asks
+          // again.
+          const before = state().engine.status;
+          state.set(next);
+          if (before !== "running" && next.engine.status === "running") {
+            dispatch("route.reload");
+          }
+        }}
         onNavigate={(event: { route: string }) => go(event.route)}
         onHotkey={(event: { accelerator?: string }) => {
           if (event.accelerator) hotkeyCaptured.set(event.accelerator);

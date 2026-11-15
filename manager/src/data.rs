@@ -48,8 +48,13 @@ fn calls(route: &str) -> Vec<Call> {
             json!({ "range_days": 21, "top_apps_limit": 8 }),
         )],
         "integrations" => vec![("connectors", "integrations.list", json!({}))],
-        // The server page owns the update card, so it reads the status too.
-        "server" => vec![("updates", "updater.status", json!({}))],
+        // The server page owns the update card, so it reads the status too,
+        // and the autostart switch on it: a setting read only where another
+        // page asked for it is a switch that shows its default.
+        "server" => vec![
+            ("updates", "updater.status", json!({})),
+            ("settings.autostart", "engine.autostart.get", json!({})),
+        ],
         "plugins" => vec![
             ("plugins.catalog", "plugins.catalog", json!({})),
             ("plugins.installed", "plugins.list", json!({})),

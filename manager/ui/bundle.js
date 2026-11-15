@@ -10,7 +10,7 @@ setup(null, null, null, null, "{\"id\":\"computer.mundus.app\",\"name\":\"Mundus
 //#region ../../../imago/.fix-worktrees/nsh-051/crates/imago-nsh/ui/types.ts
 /** Metrics of the settings shell the Manager and NSH preference panes wear. */
 const settingsMetrics = {
-	sidebarWidth: 282,
+	sidebarWidth: 240,
 	sidebarPadding: 8,
 	sidebarTop: 16,
 	searchHeight: 32,
@@ -4189,7 +4189,11 @@ function App() {
 			get route() {
 				return currentRoute();
 			},
-			onState: (next) => state.set(next),
+			onState: (next) => {
+				const before = state().engine.status;
+				state.set(next);
+				if (before !== "running" && next.engine.status === "running") dispatch("route.reload");
+			},
 			onNavigate: (event) => go(event.route),
 			onHotkey: (event) => {
 				if (event.accelerator) hotkeyCaptured.set(event.accelerator);
