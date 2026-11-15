@@ -113,7 +113,14 @@ impl UpdaterService {
 
     fn status_json(&self, status: &UpdaterStatus) -> Value {
         let mut value = status.to_json();
-        value["canInstall"] = self.install_supported.into();
+        // Two different questions, two flags. `canInstall` answers "a package is
+        // here and pressing install would do something"; `installSupported`
+        // answers "this platform can install at all". They used to be one field,
+        // which lit the Manager's install button on every Windows machine — with
+        // nothing to install.
+        value["canInstall"] =
+            (self.install_supported && matches!(status.phase, Phase::Downloaded)).into();
+        value["installSupported"] = self.install_supported.into();
         if !self.install_supported {
             value["installUnavailableReason"] =
                 "Автоматическая установка обновлений для этого пакета пока не поддерживается."

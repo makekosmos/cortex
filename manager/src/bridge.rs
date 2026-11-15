@@ -470,6 +470,7 @@ fn snapshot() -> Value {
             "newVersion": "",
             "channel": "",
             "canInstall": false,
+            "installSupported": false,
             "percent": 0.0,
         },
         "settings": { "autostart": false, "telemetry": false },

@@ -167,7 +167,10 @@ export type ManagerState = {
     currentVersion: string;
     newVersion: string;
     channel: string;
+    /// A package is downloaded and ready to install — not "this platform can
+    /// install at all" (that is `installSupported`).
     canInstall: boolean;
+    installSupported: boolean;
     percent: number;
   };
   settings: { autostart: boolean; telemetry: boolean };
@@ -281,6 +284,7 @@ export const demoState: ManagerState = {
     newVersion: "0.10.27",
     channel: "production",
     canInstall: false,
+    installSupported: true,
     percent: 0,
   },
   settings: { autostart: true, telemetry: false },
