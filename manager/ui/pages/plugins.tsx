@@ -82,6 +82,10 @@ export function PluginsPage(props: PageProps) {
         </Card>
       </View>
 
+      {/* Everything the catalog lists is already installed: the section has
+          nothing to offer, and «Всё установлено» is not news — so it is not
+          drawn at all, not even its label. */}
+      {available().length && !rest().length ? null : (
       <View>
         <SectionLabel
           colors={props.colors}
@@ -112,12 +116,8 @@ export function PluginsPage(props: PageProps) {
               icon="check"
               iconFill={props.colors.raised}
               accent={props.colors.muted}
-              title={available().length ? "Всё установлено" : "Список пуст"}
-              subtitle={
-                available().length
-                  ? "Новые плагины появятся здесь сами"
-                  : "Engine не получил каталог плагинов"
-              }
+              title="Список пуст"
+              subtitle="Engine не получил каталог плагинов"
               last
             />
           )}
@@ -130,6 +130,7 @@ export function PluginsPage(props: PageProps) {
           </View>
         ) : null}
       </View>
+      )}
     </Page>
   );
 }

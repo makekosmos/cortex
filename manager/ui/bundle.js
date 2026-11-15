@@ -3130,7 +3130,7 @@ function PluginsPage(props) {
 					}
 				})]);
 				return __nsh_hv0;
-			})(), (() => {
+			})(), () => available().length && !rest().length ? null : (() => {
 				const __nsh_hv1 = element("view");
 				insert(__nsh_hv1, [
 					component(SectionLabel, {
@@ -3181,12 +3181,8 @@ function PluginsPage(props) {
 								get accent() {
 									return props.colors.muted;
 								},
-								get title() {
-									return available().length ? "Всё установлено" : "Список пуст";
-								},
-								get subtitle() {
-									return available().length ? "Новые плагины появятся здесь сами" : "Engine не получил каталог плагинов";
-								},
+								title: "Список пуст",
+								subtitle: "Engine не получил каталог плагинов",
 								last: true
 							});
 						}
