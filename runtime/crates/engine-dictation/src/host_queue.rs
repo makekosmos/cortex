@@ -696,6 +696,11 @@ pub(super) async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
 }
 
 pub(super) async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
+    // A new attempt throws away what the previous one saw, so a stale answer
+    // cannot land in the page.
+    if let Ok(mut slot) = host.last_capture.lock() {
+        *slot = None;
+    }
     #[cfg(windows)]
     {
         hotkey_hook::set_capture_mode(true, Some(host.events_tx.clone()));

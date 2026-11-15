@@ -22,7 +22,10 @@ use tokio::sync::broadcast;
 use super::pill_scope::{palette, Frame, Scope, Stage, Tuning};
 
 /// One display frame, the cadence the app's pill ran at.
-const TICK: Duration = Duration::from_millis(16);
+/// How often the scope is stepped. The scope advances by elapsed time, so the
+/// tick is only the sampling rate; 6 ms keeps a 165 Hz display fed instead of
+/// the ~60 Hz a 16 ms tick pinned the pill to.
+const TICK: Duration = Duration::from_millis(6);
 /// The app passed this floor for a microphone at talking distance.
 /// The scope treats everything under this as silence. A voice a hand's width
 /// from the microphone sits near -43 dBFS, so a -42 floor swallowed ordinary

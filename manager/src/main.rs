@@ -11,8 +11,7 @@ mod chrome;
 mod data;
 mod engine;
 mod gpu_scope;
-mod handover;
-mod hotkey;
+mod hotkey_view;
 mod identity;
 mod lifecycle;
 mod log;
@@ -203,7 +202,6 @@ fn main() {
             std::process::exit(0);
         }
         pill::start(cx);
-        hotkey::start();
         boot_trace(&boot, "pill+hotkey");
         let opened = cx.open_window(options, |window, cx| {
             window.set_window_title(title.as_str());

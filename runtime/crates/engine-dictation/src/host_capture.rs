@@ -349,6 +349,13 @@ pub(super) async fn op_insert_text(params: Value, host: &DictationHost) -> Dicta
 /// или не установлен.
 pub async fn handle_engine_trigger(host: &Arc<DictationHost>, event: &Value) {
     match event.get("event").and_then(Value::as_str) {
+        // What the settings page is waiting for. The hook lives here, so the
+        // answer is kept here too and the page polls `hotkey_status` for it.
+        Some("dictation_capture_key") | Some("dictation_capture_cancelled") => {
+            if let Ok(mut slot) = host.last_capture.lock() {
+                *slot = Some(event.clone());
+            }
+        }
         Some("dictation_escape_cancel") | Some("dictation_capture_cancelled") => {
             let _ = op_cancel(host).await;
         }

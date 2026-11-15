@@ -66,6 +66,11 @@ pub struct DictationHost {
     /// The pill's dot scope, stepped on the display's cadence while a session
     /// runs. Frames go out as `dictation_pill_frame`; see `pill_frame.rs`.
     pub(super) pill: Arc<crate::pill_frame::PillTicker>,
+    /// The last thing the hotkey capture saw: `{accelerator}` or
+    /// `{cancelled, reason}`. The settings page polls it through
+    /// `hotkey_status`; the Engine owns the hook, so the answer has to come
+    /// from here rather than from a UI process.
+    pub(super) last_capture: std::sync::Mutex<Option<Value>>,
 }
 
 impl DictationHost {
@@ -125,6 +130,7 @@ impl DictationHost {
             contract_events: std::sync::atomic::AtomicBool::new(false),
             downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
             pill: Arc::new(crate::pill_frame::PillTicker::new()),
+            last_capture: std::sync::Mutex::new(None),
         });
         // Активируем PTT hook соответственно текущему trigger_mode.
         apply_ptt_hook(&cfg, &events_tx);
@@ -158,6 +164,7 @@ impl DictationHost {
             contract_events: std::sync::atomic::AtomicBool::new(false),
             downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
             pill: Arc::new(crate::pill_frame::PillTicker::new()),
+            last_capture: std::sync::Mutex::new(None),
         })
     }
 

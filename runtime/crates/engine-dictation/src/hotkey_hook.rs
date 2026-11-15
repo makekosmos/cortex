@@ -35,6 +35,7 @@
 
 use std::sync::{Mutex, OnceLock};
 use std::thread;
+use std::time::Duration;
 
 use serde_json::json;
 use tokio::sync::broadcast;
@@ -268,6 +269,10 @@ fn handle_capture(vk: u32, is_down: bool) -> bool {
                 "shift": shift,
                 "alt": alt,
                 "win": win,
+                // The string `dictation-config.json` stores, built here so the
+                // Engine can hand a finished answer to any page instead of
+                // making a UI rebuild the same table.
+                "accelerator": accelerator(vk, ctrl, shift, alt, win),
             }));
         }
         // Auto-deactivate — одно валидное нажатие = одна capture session.
@@ -549,12 +554,23 @@ fn ensure_thread_started() {
                 // отменяем троттлинг на весь процесс.
                 opt_out_of_power_throttling();
                 let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-                let mut hook = match SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), None, 0)
-                {
-                    Ok(h) => h,
-                    Err(e) => {
-                        eprintln!("[dictation::hotkey_hook] SetWindowsHookExW failed: {e}");
-                        return;
+                // Установка повторяется до успеха: одна неудачная попытка
+                // (гонка с входом в сессию, эксклюзивный fullscreen) раньше
+                // убивала хоткей до перезапуска процесса — поток просто
+                // выходил, а `HOOK_THREAD_STARTED` не давал его поднять заново.
+                let mut hook = loop {
+                    match SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), None, 0) {
+                        Ok(h) => {
+                            tracing::info!(target: "dictation::hotkey", "hotkey hook installed");
+                            break h;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "dictation::hotkey",
+                                "hotkey hook install failed: {e}; retrying"
+                            );
+                            thread::sleep(Duration::from_secs(2));
+                        }
                     }
                 };
                 // `SetTimer(None, …)` кладёт WM_TIMER в очередь этого потока:
@@ -623,10 +639,50 @@ pub fn set_active(
         Ok(g) => g,
         Err(p) => p.into_inner(),
     };
+    let was = g.matcher.is_some();
     g.matcher = matcher;
     g.sender = sender;
     g.mode = mode;
     g.pressed = false;
+    let now = g.matcher.is_some();
+    drop(g);
+    if was != now {
+        tracing::info!(target: "dictation::hotkey", armed = now, "hotkey matcher");
+    }
+}
+
+/// Whether a combination is installed: the key does something.
+pub fn is_armed() -> bool {
+    match state_mtx().lock() {
+        Ok(g) => g.matcher.is_some(),
+        Err(p) => p.into_inner().matcher.is_some(),
+    }
+}
+
+/// Whether the settings page is waiting for the next press.
+pub fn is_capturing() -> bool {
+    match state_mtx().lock() {
+        Ok(g) => g.capture_active,
+        Err(p) => p.into_inner().capture_active,
+    }
+}
+
+/// The modifiers held right now, for the page's keycaps.
+pub fn held_modifiers() -> Vec<&'static str> {
+    let mut held = Vec::new();
+    if check_mod(true, VK_CONTROL.0) {
+        held.push("Ctrl");
+    }
+    if check_mod(true, VK_SHIFT.0) {
+        held.push("Shift");
+    }
+    if check_mod(true, VK_MENU.0) {
+        held.push("Alt");
+    }
+    if check_mod(true, VK_LWIN.0) || check_mod(true, VK_RWIN.0) {
+        held.push("Win");
+    }
+    held
 }
 
 /// Parse Electron-style accelerator string в Matcher. Поддерживает
@@ -664,6 +720,74 @@ pub fn parse_accelerator(s: &str) -> Option<Matcher> {
         alt,
         win,
     })
+}
+
+/// The accelerator string for a captured key, in the same vocabulary
+/// [`parse_accelerator`] reads back: `Ctrl+Shift+;`, `Alt+D`, `F12`.
+pub fn accelerator(vk: u32, ctrl: bool, shift: bool, alt: bool, win: bool) -> Option<String> {
+    let key = vk_to_key(vk)?;
+    let mut parts: Vec<&str> = Vec::with_capacity(5);
+    if ctrl {
+        parts.push("Ctrl");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    if alt {
+        parts.push("Alt");
+    }
+    if win {
+        parts.push("Super");
+    }
+    let mut out = parts.join("+");
+    if !out.is_empty() {
+        out.push('+');
+    }
+    out.push_str(&key);
+    Some(out)
+}
+
+/// The inverse of [`key_to_vk`], for the names that function accepts.
+fn vk_to_key(vk: u32) -> Option<String> {
+    if (0x41..=0x5A).contains(&vk) {
+        return Some(char::from_u32(vk)?.to_string());
+    }
+    if (0x30..=0x39).contains(&vk) {
+        return Some(char::from_u32(vk)?.to_string());
+    }
+    if (0x70..=0x87).contains(&vk) {
+        return Some(format!("F{}", vk - 0x6F));
+    }
+    let named = match vk {
+        0xBA => ";",
+        0xBB => "=",
+        0xBC => ",",
+        0xBD => "-",
+        0xBE => ".",
+        0xBF => "/",
+        0xC0 => "`",
+        0xDB => "[",
+        0xDC => "\\",
+        0xDD => "]",
+        0xDE => "'",
+        0x20 => "Space",
+        0x09 => "Tab",
+        0x0D => "Enter",
+        0x1B => "Esc",
+        0x08 => "Backspace",
+        0x2E => "Delete",
+        0x2D => "Insert",
+        0x24 => "Home",
+        0x23 => "End",
+        0x21 => "PageUp",
+        0x22 => "PageDown",
+        0x25 => "Left",
+        0x26 => "Up",
+        0x27 => "Right",
+        0x28 => "Down",
+        _ => return None,
+    };
+    Some(named.to_owned())
 }
 
 fn key_to_vk(key: &str) -> Option<u32> {

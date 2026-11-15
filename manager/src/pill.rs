@@ -22,10 +22,10 @@ use crate::gpu_scope::{Draw, Renderer, HEIGHT, WIDTH};
 const CENTER_FROM_BOTTOM: f32 = 163.;
 
 /// How often the Engine is asked for a frame while the pill is on screen. The
-/// Engine steps the scope per ask, so this is the animation's rate: ~60 Hz,
-/// the same cadence GPUI paints at. Asking less (it used to be 33 ms) shows on
-/// Windows as a visibly choppy pill, because every ask also costs a round trip.
-const FRAME: Duration = Duration::from_millis(16);
+/// scope advances by elapsed time, so this is the sampling rate, not the speed:
+/// a 165 Hz display is fed at ~6 ms instead of the 16 ms a 60 Hz assumption
+/// pinned it to (a slower ask showed on Windows as a visibly choppy pill).
+const FRAME: Duration = Duration::from_millis(6);
 /// Off screen nothing is drawn, so the Engine is only asked whether a
 /// dictation started — rarely enough to keep an idle Manager off a CPU.
 const IDLE: Duration = Duration::from_millis(120);

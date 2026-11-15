@@ -45,19 +45,9 @@ pub fn install(cx: &mut App) {
         },
     ]);
     cx.on_action(|_: &QuitApp, cx: &mut App| cx.quit());
-    // Whoever starts the quit — the menu item, AppKit's own terminate, a
-    // window close — the Engine takes the hotkey back, so dictation keeps
-    // working with only the menu bar icon left. The handler outlives this call,
-    // so its subscription is kept rather than dropped.
-    let subscription = cx.on_app_quit(|cx| {
-        let task = cx
-            .background_executor()
-            .spawn(async { crate::handover::to_engine(crate::hotkey::listening()) });
-        async move {
-            task.await;
-        }
-    });
-    KEPT.with(|kept| kept.borrow_mut().push(subscription));
+    // Nothing is handed over on quit: the global hotkey is the Engine's for the
+    // life of the session, so dictation keeps working with only the tray icon
+    // left and needs no word from this window.
     cx.on_action(|_: &HideApp, cx: &mut App| cx.hide());
     cx.on_action(|_: &MinimizeWindow, cx: &mut App| {
         if let Some(handle) = cx.active_window() {

@@ -74,9 +74,9 @@ impl ManagerBridge {
         // The sidebar lists installed plugins on every page, not only on the
         // one that installs them, so that is read from the start.
         loader.open("plugins");
-        // The global hotkey is heard by this process, so the tap reports what
-        // it sees to these pages.
-        crate::hotkey::attach(context.clone());
+        // The global hotkey is the Engine's; this window only mirrors what it
+        // reports, so closing the pages leaves the key working.
+        crate::hotkey_view::attach(context.clone());
         Self {
             context,
             state,
@@ -87,7 +87,7 @@ impl ManagerBridge {
     }
 
     fn publish(&self) {
-        let hotkey = crate::hotkey::status();
+        let hotkey = crate::hotkey_view::status();
         let state = {
             let mut state = self.state.lock().expect("the state lock");
             if let Some(object) = state.as_object_mut() {
@@ -395,21 +395,22 @@ impl NativeComponent for ManagerBridge {
             // The window's bar and its sidebar: a press there moves the window,
             // which the host has to start itself (`chrome::start_move`).
             "window.drag" => crate::chrome::start_move(window, cx),
-            // The settings page asks for a combination and the tap reads the
-            // next press. A cancel leaves the stored hotkey as it was.
+            // The settings page asks for a combination; the Engine's hook reads
+            // the next press. A cancel leaves the stored hotkey as it was.
             "hotkey.capture" => {
-                crate::hotkey::arm();
+                crate::hotkey_view::capture();
                 self.publish();
             }
             "hotkey.cancel" => {
-                crate::hotkey::disarm();
+                crate::hotkey_view::cancel();
                 self.publish();
             }
             // macOS keeps the grant in the Input Monitoring pane; the page
-            // cannot open it, so the Manager does — and asks again, because a
-            // row appears there only after the app requests the access.
+            // cannot open it, so the Manager does — and asks the Engine for the
+            // access again, because a row appears there only after the app that
+            // holds the tap requests it.
             "hotkey.settings" => {
-                crate::hotkey::request_access();
+                crate::hotkey_view::request_access();
                 // Windows has no pane to open: its hotkey is a hook, not a
                 // permission, so the request alone is the whole job.
                 #[cfg(target_os = "macos")]
@@ -442,11 +443,11 @@ fn snapshot() -> Value {
         // never stands in for it.
         "product": { "bundleId": crate::identity::BUNDLE_ID },
         "sync": { "running": false, "incoming": [], "peers": [] },
-        // The global hotkey: what the Manager's own event tap can do, which
-        // macOS decides in System Settings, not the Manager.
+        // The global hotkey: the Engine's, reported by it, because the Engine is
+        // the process that outlives this window.
         "hotkey": {
             "running": false,
-            "listenAccess": false,
+            "listenAccess": true,
             "capturing": false,
             "held": [],
         },

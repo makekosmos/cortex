@@ -95,6 +95,32 @@ pub async fn handle_dictation_op(
                 "loudness": host.pill.loudness(),
             }))
         }
+        // The settings page asks who owns the key and what the capture saw. The
+        // Engine owns the global hook, so both answers come from here: a UI
+        // process is not allowed to hold the tap, and it must be able to ask
+        // even when it only just started.
+        "hotkey_status" => {
+            let captured = host
+                .last_capture
+                .lock()
+                .ok()
+                .and_then(|slot| slot.clone());
+            DictationResponse::ok(json!({
+                "running": hotkey_hook::is_armed(),
+                "capturing": hotkey_hook::is_capturing(),
+                "held": hotkey_hook::held_modifiers(),
+                // Windows needs no grant; macOS keeps it in the Input
+                // Monitoring pane and the Engine is the app that holds it.
+                "listenAccess": cfg!(not(target_os = "macos")),
+                "captured": captured,
+            }))
+        }
+        // The pill's dot scope used to be stepped by asking, once per frame,
+        // from a UI process. The cadence is the display's business, so the
+        // Engine steps it and the overlay only draws what it finds.
+        "hotkey_settings" => {
+            DictationResponse::ok(json!({}))
+        }
         // The Manager's own event tap reads key codes; this turns one into the
         // accelerator string the config stores, so the two tables cannot drift.
         "accelerator" => DictationResponse::ok(json!({
